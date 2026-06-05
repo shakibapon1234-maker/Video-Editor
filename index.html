@@ -1,0 +1,361 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Antigravity Premium Video Editor | FB & Reels Studio</title>
+    <link rel="stylesheet" href="style.css">
+    <!-- Google Fonts for Modern Typography -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <!-- FontAwesome for Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body>
+    <div class="app-container">
+        <!-- Sidebar Navigation / Workflow Tracker -->
+        <aside class="sidebar">
+            <div class="brand">
+                <i class="fa-solid fa-video brand-icon"></i>
+                <div class="brand-text">
+                    <h2>Studio Flow</h2>
+                    <span>Facebook & Reels Editor</span>
+                </div>
+            </div>
+            
+            <nav class="nav-steps">
+                <div class="step-item active" data-step="1" id="step-btn-1">
+                    <div class="step-number">1</div>
+                    <div class="step-info">
+                        <h3>Media Import</h3>
+                        <p>Upload Video & Logo</p>
+                    </div>
+                </div>
+                <div class="step-item" data-step="2" id="step-btn-2">
+                    <div class="step-number">2</div>
+                    <div class="step-info">
+                        <h3>Trim & Layout</h3>
+                        <p>Cut video & adjust aspect</p>
+                    </div>
+                </div>
+                <div class="step-item" data-step="3" id="step-btn-3">
+                    <div class="step-number">3</div>
+                    <div class="step-info">
+                        <h3>Audio & Voice</h3>
+                        <p>Noise cancel & voiceover</p>
+                    </div>
+                </div>
+                <div class="step-item" data-step="4" id="step-btn-4">
+                    <div class="step-number">4</div>
+                    <div class="step-info">
+                        <h3>Export Studio</h3>
+                        <p>Render & Download</p>
+                    </div>
+                </div>
+            </nav>
+
+            <div class="sidebar-footer">
+                <p>100% Free & Local</p>
+                <small>No server required</small>
+            </div>
+        </aside>
+
+        <!-- Main Workspace -->
+        <main class="workspace">
+            <header class="workspace-header">
+                <div class="header-title">
+                    <h1 id="current-step-title">Media Import</h1>
+                    <p id="current-step-subtitle">Start by uploading your video clip and branding logo</p>
+                </div>
+                <div class="header-actions">
+                    <button id="prev-btn" class="btn btn-secondary" disabled>
+                        <i class="fa-solid fa-arrow-left"></i> Back
+                    </button>
+                    <button id="next-btn" class="btn btn-primary" disabled>
+                        Next <i class="fa-solid fa-arrow-right"></i>
+                    </button>
+                </div>
+            </header>
+
+            <div class="workspace-body">
+                <!-- Preview Panel (Sticky/Always visible on larger screens) -->
+                <div class="preview-panel">
+                    <div class="canvas-container" id="canvas-container">
+                        <!-- Canvas for video rendering + logo overlay -->
+                        <canvas id="editor-canvas"></canvas>
+                        
+                        <!-- Drag-and-drop placeholder when no video -->
+                        <div class="upload-placeholder" id="video-dropzone">
+                            <i class="fa-solid fa-cloud-arrow-up upload-icon"></i>
+                            <h3>Drag & Drop Video Here</h3>
+                            <p>Or click to browse files (MP4, WebM, MOV)</p>
+                            <span class="file-spec">Support up to 1080p recommendation</span>
+                            <input type="file" id="video-input" accept="video/*" style="display: none;">
+                        </div>
+
+                        <!-- Video playhead/timeline overlay (subtle) -->
+                        <div class="canvas-overlay-controls" style="display: none;">
+                            <span id="canvas-time-display">00:00 / 00:00</span>
+                        </div>
+                    </div>
+
+                    <!-- Custom Timeline Control -->
+                    <div class="timeline-bar" style="display: none;" id="timeline-controls">
+                        <button id="play-pause-btn" class="btn-play">
+                            <i class="fa-solid fa-play"></i>
+                        </button>
+                        <div class="timeline-slider-container">
+                            <!-- Dual range slider for trimming -->
+                            <div class="slider-track-bg"></div>
+                            <div class="slider-track-fill" id="trim-fill"></div>
+                            <input type="range" id="trim-start" class="trim-slider" min="0" max="100" value="0" step="0.01">
+                            <input type="range" id="trim-end" class="trim-slider" min="0" max="100" value="100" step="0.01">
+                            <div class="playhead" id="playhead-indicator"></div>
+                        </div>
+                        <div class="time-inputs">
+                            <div class="time-field">
+                                <label>Start</label>
+                                <input type="text" id="start-time-val" value="00:00.0">
+                            </div>
+                            <div class="time-field">
+                                <label>End</label>
+                                <input type="text" id="end-time-val" value="00:00.0">
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Step Panels (Changes based on selected step) -->
+                <div class="control-panel">
+                    <!-- Step 1: Media Import -->
+                    <div class="step-panel active" id="panel-1">
+                        <div class="card">
+                            <div class="card-header">
+                                <i class="fa-solid fa-video card-icon"></i>
+                                <h3>1. Video Source</h3>
+                            </div>
+                            <div class="card-body">
+                                <div class="file-selector-box" id="select-video-trigger">
+                                    <i class="fa-solid fa-file-video"></i>
+                                    <span id="selected-video-name">No video loaded</span>
+                                    <button class="btn btn-sm btn-outline">Change Video</button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="card mt-4">
+                            <div class="card-header">
+                                <i class="fa-solid fa-square-poll-horizontal card-icon"></i>
+                                <h3>2. Branding Logo (PNG recommended)</h3>
+                            </div>
+                            <div class="card-body">
+                                <div class="logo-upload-container">
+                                    <div class="upload-placeholder-sm" id="logo-dropzone">
+                                        <i class="fa-solid fa-image"></i>
+                                        <p>Click to add watermark/logo</p>
+                                        <input type="file" id="logo-input" accept="image/*" style="display: none;">
+                                    </div>
+                                    <div class="logo-preview-box" id="logo-preview-box" style="display: none;">
+                                        <img id="logo-img-preview" src="" alt="logo">
+                                        <div class="logo-meta">
+                                            <span id="logo-filename">logo.png</span>
+                                            <button id="remove-logo-btn" class="btn-text-danger"><i class="fa-solid fa-trash"></i> Remove</button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Step 2: Trim & Layout -->
+                    <div class="step-panel" id="panel-2">
+                        <div class="card">
+                            <div class="card-header">
+                                <i class="fa-solid fa-crop card-icon"></i>
+                                <h3>Canvas Format (Facebook & Reels)</h3>
+                            </div>
+                            <div class="card-body">
+                                <div class="aspect-ratio-selector">
+                                    <button class="aspect-btn active" data-ratio="original">
+                                        <i class="fa-solid fa-expand"></i>
+                                        <span>Original</span>
+                                    </button>
+                                    <button class="aspect-btn" data-ratio="1-1">
+                                        <i class="fa-solid fa-square"></i>
+                                        <span>1:1 Square (FB Post)</span>
+                                    </button>
+                                    <button class="aspect-btn" data-ratio="9-16">
+                                        <i class="fa-solid fa-mobile-screen"></i>
+                                        <span>9:16 vertical (Reels)</span>
+                                    </button>
+                                    <button class="aspect-btn" data-ratio="16-9">
+                                        <i class="fa-solid fa-desktop"></i>
+                                        <span>16:9 Landscape (YouTube)</span>
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="card mt-4" id="logo-control-card" style="display: none;">
+                            <div class="card-header">
+                                <i class="fa-solid fa-sliders card-icon"></i>
+                                <h3>Logo Position & Settings</h3>
+                            </div>
+                            <div class="card-body">
+                                <p class="help-text">You can drag the logo around the preview screen directly.</p>
+                                <div class="control-group">
+                                    <label>Logo Size (% of canvas)</label>
+                                    <div class="slider-val-container">
+                                        <input type="range" id="logo-size-slider" min="5" max="50" value="15">
+                                        <span id="logo-size-val">15%</span>
+                                    </div>
+                                </div>
+                                <div class="control-group mt-3">
+                                    <label>Logo Opacity (Transparency)</label>
+                                    <div class="slider-val-container">
+                                        <input type="range" id="logo-opacity-slider" min="10" max="100" value="100">
+                                        <span id="logo-opacity-val">100%</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Step 3: Audio & Voice -->
+                    <div class="step-panel" id="panel-3">
+                        <div class="card">
+                            <div class="card-header">
+                                <i class="fa-solid fa-wand-magic-sparkles card-icon"></i>
+                                <h3>Audio Enhancement</h3>
+                            </div>
+                            <div class="card-body">
+                                <div class="toggle-control">
+                                    <div class="toggle-label">
+                                        <h4>Noise Cancellation (নয়েজ ফিল্টার)</h4>
+                                        <p>Reduce fan hums and low frequency static hiss</p>
+                                    </div>
+                                    <label class="switch">
+                                        <input type="checkbox" id="noise-cancel-toggle">
+                                        <span class="slider round"></span>
+                                    </label>
+                                </div>
+                                <div class="control-group mt-3" id="noise-level-container" style="display: none;">
+                                    <label>Noise Suppression Power</label>
+                                    <div class="slider-val-container">
+                                        <input type="range" id="noise-gate-threshold" min="-80" max="-20" value="-50" step="1">
+                                        <span id="noise-gate-val">-50 dB</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="card mt-4">
+                            <div class="card-header">
+                                <i class="fa-solid fa-microphone-lines card-icon"></i>
+                                <h3>Voiceover Recording (ভয়েস ওভার)</h3>
+                            </div>
+                            <div class="card-body">
+                                <div class="voiceover-section">
+                                    <div class="mic-status-bar" id="mic-status">
+                                        <i class="fa-solid fa-microphone-slash"></i>
+                                        <span>Microphone access needed</span>
+                                    </div>
+                                    
+                                    <div class="record-controls mt-3">
+                                        <button id="record-voice-btn" class="btn btn-record" disabled>
+                                            <i class="fa-solid fa-microphone"></i> Record Voiceover
+                                        </button>
+                                        <button id="stop-record-btn" class="btn btn-danger" style="display: none;">
+                                            <i class="fa-solid fa-stop"></i> Stop Recording
+                                        </button>
+                                    </div>
+                                    
+                                    <div class="voiceover-playback-box mt-3" id="voiceover-preview-box" style="display: none;">
+                                        <div class="voiceover-meta">
+                                            <span><i class="fa-solid fa-circle-check text-success"></i> Voiceover Recorded</span>
+                                            <button id="delete-voice-btn" class="btn-text-danger"><i class="fa-solid fa-trash-can"></i> Delete</button>
+                                        </div>
+                                        <audio id="voiceover-audio-preview" controls class="mt-2 w-full"></audio>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="card mt-4">
+                            <div class="card-header">
+                                <i class="fa-solid fa-volume-high card-icon"></i>
+                                <h3>Volume Mixer</h3>
+                            </div>
+                            <div class="card-body">
+                                <div class="control-group">
+                                    <label>Original Video Volume</label>
+                                    <div class="slider-val-container">
+                                        <input type="range" id="video-volume-slider" min="0" max="150" value="100">
+                                        <span id="video-volume-val">100%</span>
+                                    </div>
+                                </div>
+                                <div class="control-group mt-3" id="voiceover-volume-container" style="display: none;">
+                                    <label>Voiceover Volume</label>
+                                    <div class="slider-val-container">
+                                        <input type="range" id="voiceover-volume-slider" min="0" max="150" value="100">
+                                        <span id="voiceover-volume-val">100%</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Step 4: Export Studio -->
+                    <div class="step-panel" id="panel-4">
+                        <div class="card">
+                            <div class="card-header">
+                                <i class="fa-solid fa-download card-icon"></i>
+                                <h3>Render Final Video</h3>
+                            </div>
+                            <div class="card-body">
+                                <p class="help-text">Click below to start blending your video, logo, and audio. Do not close the browser while rendering.</p>
+                                
+                                <button id="render-btn" class="btn btn-primary btn-lg btn-block mt-3">
+                                    <i class="fa-solid fa-wand-magic-sparkles"></i> Render & Export Video
+                                </button>
+
+                                <!-- Rendering Progress -->
+                                <div class="render-progress-box mt-4" id="render-progress-box" style="display: none;">
+                                    <div class="progress-info">
+                                        <span id="render-status-text">Processing frames...</span>
+                                        <span id="render-percentage">0%</span>
+                                    </div>
+                                    <div class="progress-bar-container">
+                                        <div class="progress-bar-fill" id="render-progress-fill"></div>
+                                    </div>
+                                </div>
+
+                                <!-- Success & Download -->
+                                <div class="render-success-box mt-4" id="render-success-box" style="display: none;">
+                                    <div class="success-icon-container">
+                                        <i class="fa-solid fa-circle-check"></i>
+                                    </div>
+                                    <h3>Rendering Complete!</h3>
+                                    <p>Your video is ready for Facebook.</p>
+                                    <a id="download-link" href="#" download="facebook-ready-video.webm" class="btn btn-success btn-block mt-3">
+                                        <i class="fa-solid fa-download"></i> Download Video
+                                    </a>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- Hidden Video element for decoding/playing the original video source -->
+    <video id="hidden-video" style="display: none;" crossOrigin="anonymous"></video>
+
+    <!-- JS Scripts -->
+    <script src="audio.js"></script>
+    <script src="editor.js"></script>
+    <script src="exporter.js"></script>
+</body>
+</html>
