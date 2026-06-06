@@ -165,7 +165,7 @@ document.addEventListener('DOMContentLoaded', () => {
         };
         
         mediaRecorder.onstop = () => {
-            state.voiceoverBlob = new Blob(recordedChunks, { type: 'audio/webm' });
+            state.voiceoverBlob = new Blob(recordedChunks, { type: mediaRecorder.mimeType || 'audio/webm' });
             state.voiceoverUrl = URL.createObjectURL(state.voiceoverBlob);
             
             // Show preview player

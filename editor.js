@@ -36,6 +36,31 @@ window.VideoEditor = {
     isNoiseCancelActive: false,
     noiseGateThreshold: -50,
     
+    // Facebook Banner Headline state
+    bannerStyle: 'none',
+    headerText: '',
+    footerText: '',
+    bannerFontFamily: 'Hind Siliguri',
+    bannerFontSize: 28,
+    bannerTextColor: '#ffffff',
+    bannerBgColor: '#4f46e5',
+    bannerHeightPercent: 12,
+    
+    // Facebook Visual Progress Bar state
+    enableProgressBar: false,
+    progressBarColor: '#10b981',
+    progressBarHeight: 4,
+    progressBarPosition: 'bottom-canvas',
+    
+    // Visual filter & image adjustments
+    filterPreset: 'normal',
+    brightness: 100,
+    contrast: 100,
+    saturation: 100,
+    
+    // Video layout mode
+    layoutMode: 'fit',
+
     // Navigation Step
     currentStep: 1
 };
@@ -275,6 +300,155 @@ document.addEventListener('DOMContentLoaded', () => {
             drawFrame();
         });
     });
+
+    // --- Facebook Banners & Headlines Bindings ---
+    const bannerStyleSelect = document.getElementById('banner-style-select');
+    const bannerInputsContainer = document.getElementById('banner-inputs-container');
+    const headerTextGroup = document.getElementById('header-text-group');
+    const footerTextGroup = document.getElementById('footer-text-group');
+    const headerTextInput = document.getElementById('header-text-input');
+    const footerTextInput = document.getElementById('footer-text-input');
+    const bannerFontSelect = document.getElementById('banner-font-select');
+    const bannerFontSizeSlider = document.getElementById('banner-font-size-slider');
+    const bannerFontSizeVal = document.getElementById('banner-font-size-val');
+    const bannerTextColor = document.getElementById('banner-text-color');
+    const bannerTextColorVal = document.getElementById('banner-text-color-val');
+    const bannerBgColor = document.getElementById('banner-bg-color');
+    const bannerBgColorVal = document.getElementById('banner-bg-color-val');
+    const bannerHeightSlider = document.getElementById('banner-height-slider');
+    const bannerHeightVal = document.getElementById('banner-height-val');
+
+    bannerStyleSelect.addEventListener('change', (e) => {
+        state.bannerStyle = e.target.value;
+        if (state.bannerStyle === 'none') {
+            bannerInputsContainer.style.display = 'none';
+        } else {
+            bannerInputsContainer.style.display = 'block';
+            headerTextGroup.style.display = (state.bannerStyle === 'bottom') ? 'none' : 'block';
+            footerTextGroup.style.display = (state.bannerStyle === 'top') ? 'none' : 'block';
+        }
+        drawFrame();
+    });
+
+    headerTextInput.addEventListener('input', (e) => {
+        state.headerText = e.target.value;
+        drawFrame();
+    });
+
+    footerTextInput.addEventListener('input', (e) => {
+        state.footerText = e.target.value;
+        drawFrame();
+    });
+
+    bannerFontSelect.addEventListener('change', (e) => {
+        state.bannerFontFamily = e.target.value;
+        drawFrame();
+    });
+
+    bannerFontSizeSlider.addEventListener('input', (e) => {
+        state.bannerFontSize = parseInt(e.target.value);
+        bannerFontSizeVal.innerText = state.bannerFontSize + 'px';
+        drawFrame();
+    });
+
+    bannerTextColor.addEventListener('input', (e) => {
+        state.bannerTextColor = e.target.value;
+        bannerTextColorVal.innerText = e.target.value.toUpperCase();
+        drawFrame();
+    });
+
+    bannerBgColor.addEventListener('input', (e) => {
+        state.bannerBgColor = e.target.value;
+        bannerBgColorVal.innerText = e.target.value.toUpperCase();
+        drawFrame();
+    });
+
+    bannerHeightSlider.addEventListener('input', (e) => {
+        state.bannerHeightPercent = parseInt(e.target.value);
+        bannerHeightVal.innerText = state.bannerHeightPercent + '%';
+        drawFrame();
+    });
+
+    // --- Facebook Video Progress Bar Bindings ---
+    const progressBarToggle = document.getElementById('progress-bar-toggle');
+    const progressBarOptionsContainer = document.getElementById('progress-bar-options-container');
+    const progressBarPos = document.getElementById('progress-bar-pos');
+    const progressBarColor = document.getElementById('progress-bar-color');
+    const progressBarColorVal = document.getElementById('progress-bar-color-val');
+    const progressBarHeight = document.getElementById('progress-bar-height');
+    const progressBarHeightVal = document.getElementById('progress-bar-height-val');
+
+    progressBarToggle.addEventListener('change', (e) => {
+        state.enableProgressBar = e.target.checked;
+        progressBarOptionsContainer.style.display = state.enableProgressBar ? 'block' : 'none';
+        drawFrame();
+    });
+
+    progressBarPos.addEventListener('change', (e) => {
+        state.progressBarPosition = e.target.value;
+        drawFrame();
+    });
+
+    progressBarColor.addEventListener('input', (e) => {
+        state.progressBarColor = e.target.value;
+        progressBarColorVal.innerText = e.target.value.toUpperCase();
+        drawFrame();
+    });
+
+    progressBarHeight.addEventListener('input', (e) => {
+        state.progressBarHeight = parseInt(e.target.value);
+        progressBarHeightVal.innerText = state.progressBarHeight + 'px';
+        drawFrame();
+    });
+
+    // --- Cinematic Filters & Adjustments Bindings ---
+    const brightnessSlider = document.getElementById('brightness-slider');
+    const brightnessVal = document.getElementById('brightness-val');
+    const contrastSlider = document.getElementById('contrast-slider');
+    const contrastVal = document.getElementById('contrast-val');
+    const saturationSlider = document.getElementById('saturation-slider');
+    const saturationVal = document.getElementById('saturation-val');
+    const filterPresetBtns = document.querySelectorAll('.filter-preset-btn');
+
+    brightnessSlider.addEventListener('input', (e) => {
+        state.brightness = parseInt(e.target.value);
+        brightnessVal.innerText = state.brightness + '%';
+        drawFrame();
+    });
+
+    contrastSlider.addEventListener('input', (e) => {
+        state.contrast = parseInt(e.target.value);
+        contrastVal.innerText = state.contrast + '%';
+        drawFrame();
+    });
+
+    saturationSlider.addEventListener('input', (e) => {
+        state.saturation = parseInt(e.target.value);
+        saturationVal.innerText = state.saturation + '%';
+        drawFrame();
+    });
+
+    filterPresetBtns.forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            filterPresetBtns.forEach(b => b.classList.remove('active'));
+            const target = e.currentTarget;
+            target.classList.add('active');
+            state.filterPreset = target.dataset.filter;
+            drawFrame();
+        });
+    });
+
+    // Layout Mode (Fit vs Fill) selector
+    const layoutModeBtns = document.querySelectorAll('.layout-mode-btn');
+    layoutModeBtns.forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            layoutModeBtns.forEach(b => b.classList.remove('active'));
+            const targetBtn = e.currentTarget;
+            targetBtn.classList.add('active');
+            state.layoutMode = targetBtn.dataset.mode;
+            drawFrame();
+        });
+    });
     
     function updateCanvasDimensions() {
         if (!state.duration) return;
@@ -294,6 +468,11 @@ document.addEventListener('DOMContentLoaded', () => {
                 // Square
                 targetWidth = Math.max(videoWidth, videoHeight);
                 targetHeight = targetWidth;
+                break;
+            case '4-5':
+                // Portrait 4:5 (FB Feed)
+                targetHeight = Math.max(videoWidth, videoHeight);
+                targetWidth = (targetHeight * 4) / 5;
                 break;
             case '9-16':
                 // Reels Vertical
@@ -481,6 +660,32 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
+    // Wrap text utility to render multi-line text inside banners
+    function drawWrappedText(ctx, text, x, y, maxWidth, lineHeight) {
+        const words = text.split(' ');
+        let line = '';
+        const lines = [];
+        
+        for (let n = 0; n < words.length; n++) {
+            let testLine = line + words[n] + ' ';
+            let metrics = ctx.measureText(testLine);
+            let testWidth = metrics.width;
+            if (testWidth > maxWidth && n > 0) {
+                lines.push(line);
+                line = words[n] + ' ';
+            } else {
+                line = testLine;
+            }
+        }
+        lines.push(line.trim());
+        
+        // Draw lines centered vertically around y
+        const startY = y - ((lines.length - 1) * lineHeight) / 2;
+        for (let i = 0; i < lines.length; i++) {
+            ctx.fillText(lines[i], x, startY + i * lineHeight);
+        }
+    }
+
     // --- Drawing the Canvas frame ---
     function drawFrame() {
         if (!state.duration) return;
@@ -494,7 +699,7 @@ document.addEventListener('DOMContentLoaded', () => {
         state.ctx.fillStyle = '#000000';
         state.ctx.fillRect(0, 0, canvasW, canvasH);
         
-        // Draw Centered contained video frame
+        // Draw video frame according to Fit or Fill/Crop layout mode
         const videoAspect = videoW / videoH;
         const canvasAspect = canvasW / canvasH;
         
@@ -503,27 +708,123 @@ document.addEventListener('DOMContentLoaded', () => {
         let drawX = 0;
         let drawY = 0;
         
-        if (videoAspect > canvasAspect) {
-            // Video wider than canvas container (bars top and bottom)
-            drawH = canvasW / videoAspect;
-            drawY = (canvasH - drawH) / 2;
-        } else if (videoAspect < canvasAspect) {
-            // Video taller than canvas container (bars left and right)
-            drawW = canvasH * videoAspect;
-            drawX = (canvasW - drawW) / 2;
+        if (state.layoutMode === 'fill') {
+            if (videoAspect > canvasAspect) {
+                // Video is wider than canvas container -> fill height, crop sides
+                drawH = canvasH;
+                drawW = canvasH * videoAspect;
+                drawX = (canvasW - drawW) / 2;
+                drawY = 0;
+            } else {
+                // Video is taller than canvas container -> fill width, crop top/bottom
+                drawW = canvasW;
+                drawH = canvasW / videoAspect;
+                drawX = 0;
+                drawY = (canvasH - drawH) / 2;
+            }
+        } else {
+            // Fit mode (default contain with black bars)
+            if (videoAspect > canvasAspect) {
+                drawH = canvasW / videoAspect;
+                drawY = (canvasH - drawH) / 2;
+            } else if (videoAspect < canvasAspect) {
+                drawW = canvasH * videoAspect;
+                drawX = (canvasW - drawW) / 2;
+            }
         }
         
-        // Draw current video frame
-        state.ctx.drawImage(state.video, drawX, drawY, drawW, drawH);
+        // --- Step A: Apply Cinematic Filters & Color Adjustments ---
+        state.ctx.save();
         
-        // Draw Watermark Logo
+        let filterVal = '';
+        let bVal = state.brightness;
+        let cVal = state.contrast;
+        let sVal = state.saturation;
+        let sepiaVal = 0;
+        let grayscaleVal = 0;
+        let hueVal = 0;
+        
+        switch (state.filterPreset) {
+            case 'cinematic':
+                bVal = bVal * 1.05;
+                cVal = cVal * 1.25;
+                sVal = sVal * 1.35;
+                break;
+            case 'warm':
+                sepiaVal = 30;
+                sVal = sVal * 1.15;
+                break;
+            case 'cool':
+                hueVal = 200;
+                sVal = sVal * 0.9;
+                break;
+            case 'vintage':
+                sepiaVal = 80;
+                cVal = cVal * 0.9;
+                bVal = bVal * 0.95;
+                break;
+            case 'bw':
+                grayscaleVal = 100;
+                cVal = cVal * 1.25;
+                break;
+        }
+        
+        filterVal += `brightness(${bVal}%) `;
+        filterVal += `contrast(${cVal}%) `;
+        filterVal += `saturate(${sVal}%) `;
+        if (sepiaVal > 0) filterVal += `sepia(${sepiaVal}%) `;
+        if (grayscaleVal > 0) filterVal += `grayscale(${grayscaleVal}%) `;
+        if (hueVal > 0) filterVal += `hue-rotate(${hueVal}deg) `;
+        
+        state.ctx.filter = filterVal;
+        
+        // Draw current video frame with filters applied
+        state.ctx.drawImage(state.video, drawX, drawY, drawW, drawH);
+        state.ctx.restore();
+        
+        // --- Step B: Draw Facebook Top & Bottom Banners ---
+        if (state.bannerStyle !== 'none') {
+            const bannerH = canvasH * (state.bannerHeightPercent / 100);
+            state.ctx.save();
+            state.ctx.fillStyle = state.bannerBgColor;
+            
+            // Draw Banner shapes
+            if (state.bannerStyle === 'top' || state.bannerStyle === 'both') {
+                state.ctx.fillRect(0, 0, canvasW, bannerH);
+            }
+            if (state.bannerStyle === 'bottom' || state.bannerStyle === 'both') {
+                state.ctx.fillRect(0, canvasH - bannerH, canvasW, bannerH);
+            }
+            
+            // Render Text on Banners
+            state.ctx.fillStyle = state.bannerTextColor;
+            state.ctx.textAlign = 'center';
+            state.ctx.textBaseline = 'middle';
+            state.ctx.font = `bold ${state.bannerFontSize}px "${state.bannerFontFamily}", "Plus Jakarta Sans", sans-serif`;
+            
+            const textPadding = 40;
+            const maxWidth = canvasW - textPadding;
+            const lineHeight = state.bannerFontSize * 1.3;
+            
+            if ((state.bannerStyle === 'top' || state.bannerStyle === 'both') && state.headerText) {
+                drawWrappedText(state.ctx, state.headerText, canvasW / 2, bannerH / 2, maxWidth, lineHeight);
+            }
+            
+            if ((state.bannerStyle === 'bottom' || state.bannerStyle === 'both') && state.footerText) {
+                drawWrappedText(state.ctx, state.footerText, canvasW / 2, canvasH - (bannerH / 2), maxWidth, lineHeight);
+            }
+            
+            state.ctx.restore();
+        }
+        
+        // --- Step C: Draw Watermark Logo ---
         if (state.logoImg) {
             const logoW = canvasW * (state.logoSize / 100);
             const logoH = logoW * (state.logoImg.naturalHeight / state.logoImg.naturalWidth);
             
-            // Convert normalized coordinates to absolute canvas pixels
-            const x = state.logoX * (canvasW - logoW);
-            const y = state.logoY * (canvasH - logoH);
+            // Convert normalized top-left coordinates to absolute canvas pixels (keeps anchor steady on resize)
+            const x = state.logoX * canvasW;
+            const y = state.logoY * canvasH;
             
             state.ctx.save();
             state.ctx.globalAlpha = state.logoOpacity;
@@ -540,6 +841,31 @@ document.addEventListener('DOMContentLoaded', () => {
                 state.ctx.fillRect(x + logoW - 6, y + logoH - 6, 12, 12);
                 state.ctx.strokeStyle = '#4f46e5';
                 state.ctx.strokeRect(x + logoW - 6, y + logoH - 6, 12, 12);
+            }
+            state.ctx.restore();
+        }
+        
+        // --- Step D: Draw Visual Progress Bar ---
+        if (state.enableProgressBar) {
+            const progress = state.video.currentTime / state.duration;
+            const barThickness = state.progressBarHeight;
+            
+            state.ctx.save();
+            state.ctx.fillStyle = state.progressBarColor;
+            
+            switch (state.progressBarPosition) {
+                case 'top-canvas':
+                    state.ctx.fillRect(0, 0, canvasW * progress, barThickness);
+                    break;
+                case 'bottom-canvas':
+                    state.ctx.fillRect(0, canvasH - barThickness, canvasW * progress, barThickness);
+                    break;
+                case 'top-video':
+                    state.ctx.fillRect(drawX, drawY, drawW * progress, barThickness);
+                    break;
+                case 'bottom-video':
+                    state.ctx.fillRect(drawX, drawY + drawH - barThickness, drawW * progress, barThickness);
+                    break;
             }
             state.ctx.restore();
         }
@@ -568,8 +894,8 @@ document.addEventListener('DOMContentLoaded', () => {
         const canvasH = state.canvas.height;
         const logoW = canvasW * (state.logoSize / 100);
         const logoH = logoW * (state.logoImg.naturalHeight / state.logoImg.naturalWidth);
-        const lx = state.logoX * (canvasW - logoW);
-        const ly = state.logoY * (canvasH - logoH);
+        const lx = state.logoX * canvasW;
+        const ly = state.logoY * canvasH;
         
         // Check resize anchor box (bottom-right: 15px pad)
         const inResizeAnchor = (
@@ -599,8 +925,8 @@ document.addEventListener('DOMContentLoaded', () => {
         const canvasH = state.canvas.height;
         const logoW = canvasW * (state.logoSize / 100);
         const logoH = logoW * (state.logoImg.naturalHeight / state.logoImg.naturalWidth);
-        const lx = state.logoX * (canvasW - logoW);
-        const ly = state.logoY * (canvasH - logoH);
+        const lx = state.logoX * canvasW;
+        const ly = state.logoY * canvasH;
         
         if (check.isResize) {
             state.isResizingLogo = true;
@@ -649,8 +975,8 @@ document.addEventListener('DOMContentLoaded', () => {
             newLy = Math.max(0, Math.min(canvasH - logoH, newLy));
             
             // Convert back to normalized coordinates (0 to 1)
-            state.logoX = newLx / (canvasW - logoW);
-            state.logoY = newLy / (canvasH - logoH);
+            state.logoX = newLx / canvasW;
+            state.logoY = newLy / canvasH;
             
             drawFrame();
         } else if (state.isResizingLogo) {

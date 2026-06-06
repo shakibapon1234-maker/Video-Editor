@@ -8,7 +8,7 @@
     <!-- Google Fonts for Modern Typography -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=Hind+Siliguri:wght@400;500;600;700&family=Galada&display=swap" rel="stylesheet">
     <!-- FontAwesome for Icons -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 </head>
@@ -185,13 +185,37 @@
                                         <i class="fa-solid fa-square"></i>
                                         <span>1:1 Square (FB Post)</span>
                                     </button>
+                                    <button class="aspect-btn" data-ratio="4-5">
+                                        <i class="fa-solid fa-rectangle-ad" style="transform: rotate(90deg);"></i>
+                                        <span>4:5 Portrait (FB Feed)</span>
+                                    </button>
                                     <button class="aspect-btn" data-ratio="9-16">
                                         <i class="fa-solid fa-mobile-screen"></i>
-                                        <span>9:16 vertical (Reels)</span>
+                                        <span>9:16 Vertical (Reels)</span>
                                     </button>
                                     <button class="aspect-btn" data-ratio="16-9">
                                         <i class="fa-solid fa-desktop"></i>
                                         <span>16:9 Landscape (YouTube)</span>
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Scaling & Crop Layout -->
+                        <div class="card mt-4">
+                            <div class="card-header">
+                                <i class="fa-solid fa-crop card-icon"></i>
+                                <h3>Video Scaling & Crop (ফিটিং ও ক্রপ)</h3>
+                            </div>
+                            <div class="card-body">
+                                <div class="layout-mode-selector">
+                                    <button class="layout-mode-btn active" data-mode="fit">
+                                        <i class="fa-solid fa-compress"></i>
+                                        <span>Fit (কালো বারসহ ফিট)</span>
+                                    </button>
+                                    <button class="layout-mode-btn" data-mode="fill">
+                                        <i class="fa-solid fa-expand"></i>
+                                        <span>Fill & Crop (ক্রপ করে পুরো স্ক্রিন)</span>
                                     </button>
                                 </div>
                             </div>
@@ -216,6 +240,163 @@
                                     <div class="slider-val-container">
                                         <input type="range" id="logo-opacity-slider" min="10" max="100" value="100">
                                         <span id="logo-opacity-val">100%</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Facebook Text Banners -->
+                        <div class="card mt-4">
+                            <div class="card-header">
+                                <i class="fa-solid fa-heading card-icon"></i>
+                                <h3>Banners & Headlines (হেডার ও ফুটার ব্যানার)</h3>
+                            </div>
+                            <div class="card-body">
+                                <div class="control-group">
+                                    <label>Banner Position</label>
+                                    <select id="banner-style-select" class="form-select">
+                                        <option value="none">None (No Banners)</option>
+                                        <option value="top">Top Banner Only</option>
+                                        <option value="bottom">Bottom Banner Only</option>
+                                        <option value="both">Top & Bottom Banners</option>
+                                    </select>
+                                </div>
+                                <div class="banner-inputs mt-3" id="banner-inputs-container" style="display: none;">
+                                    <div class="control-group" id="header-text-group">
+                                         <label>Header Text (টপ হেডার টেক্সট)</label>
+                                         <input type="text" id="header-text-input" class="form-input" placeholder="এখানে আকর্ষণীয় হেডলাইন লিখুন">
+                                    </div>
+                                    <div class="control-group mt-3" id="footer-text-group">
+                                         <label>Footer Text (বটম ফুটার টেক্সট)</label>
+                                         <input type="text" id="footer-text-input" class="form-input" placeholder="ভিডিওটি ভালো লাগলে শেয়ার করুন">
+                                    </div>
+                                    <div class="control-group mt-3">
+                                         <label>Font Family</label>
+                                         <select id="banner-font-select" class="form-select">
+                                             <option value="Hind Siliguri">Hind Siliguri (Bengali Clean Sans)</option>
+                                             <option value="Galada">Galada (Bengali Stylized)</option>
+                                             <option value="Outfit">Outfit (English Bold)</option>
+                                             <option value="Plus Jakarta Sans">Plus Jakarta Sans</option>
+                                         </select>
+                                    </div>
+                                    <div class="control-group mt-3">
+                                         <label>Font Size</label>
+                                         <div class="slider-val-container">
+                                             <input type="range" id="banner-font-size-slider" min="16" max="72" value="28">
+                                             <span id="banner-font-size-val">28px</span>
+                                         </div>
+                                    </div>
+                                    <div class="color-pickers-row mt-3">
+                                         <div class="control-group color-select-group">
+                                             <label>Text Color</label>
+                                             <div class="color-picker-wrapper">
+                                                 <input type="color" id="banner-text-color" value="#ffffff">
+                                                 <span class="color-value-text" id="banner-text-color-val">#ffffff</span>
+                                             </div>
+                                         </div>
+                                         <div class="control-group color-select-group mt-2">
+                                             <label>Banner Background Color</label>
+                                             <div class="color-picker-wrapper">
+                                                 <input type="color" id="banner-bg-color" value="#4f46e5">
+                                                 <span class="color-value-text" id="banner-bg-color-val">#4f46e5</span>
+                                             </div>
+                                         </div>
+                                    </div>
+                                    <div class="control-group mt-3">
+                                         <label>Banner Height (% of canvas height)</label>
+                                         <div class="slider-val-container">
+                                             <input type="range" id="banner-height-slider" min="8" max="25" value="12">
+                                             <span id="banner-height-val">12%</span>
+                                         </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Video Progress Bar -->
+                        <div class="card mt-4">
+                            <div class="card-header">
+                                <i class="fa-solid fa-square-minus card-icon"></i>
+                                <h3>Video Progress Bar (প্রগ্রেস বার)</h3>
+                            </div>
+                            <div class="card-body">
+                                <div class="toggle-control">
+                                    <div class="toggle-label">
+                                        <h4>Enable Progress Bar</h4>
+                                        <p>Show timeline progress directly on the video</p>
+                                    </div>
+                                    <label class="switch">
+                                        <input type="checkbox" id="progress-bar-toggle">
+                                        <span class="slider round"></span>
+                                    </label>
+                                </div>
+                                <div class="progress-bar-options mt-3" id="progress-bar-options-container" style="display: none;">
+                                    <div class="control-group">
+                                         <label>Position</label>
+                                         <select id="progress-bar-pos" class="form-select">
+                                             <option value="bottom-canvas">Bottom of Canvas</option>
+                                             <option value="top-canvas">Top of Canvas</option>
+                                             <option value="bottom-video">Bottom of Video Frame</option>
+                                             <option value="top-video">Top of Video Frame</option>
+                                         </select>
+                                    </div>
+                                    <div class="control-group mt-3">
+                                         <label>Progress Color</label>
+                                         <div class="color-picker-wrapper">
+                                             <input type="color" id="progress-bar-color" value="#10b981">
+                                             <span class="color-value-text" id="progress-bar-color-val">#10b981</span>
+                                         </div>
+                                    </div>
+                                    <div class="control-group mt-3">
+                                         <label>Height (Thickness)</label>
+                                         <div class="slider-val-container">
+                                             <input type="range" id="progress-bar-height" min="2" max="15" value="4">
+                                             <span id="progress-bar-height-val">4px</span>
+                                         </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Cinematic Filters & Adjustments -->
+                        <div class="card mt-4">
+                            <div class="card-header">
+                                <i class="fa-solid fa-sliders card-icon"></i>
+                                <h3>Cinematic Filters & Adjustments</h3>
+                            </div>
+                            <div class="card-body">
+                                <div class="control-group">
+                                    <label>Preset Filters</label>
+                                    <div class="filter-presets-grid">
+                                        <button class="filter-preset-btn active" data-filter="normal">Normal</button>
+                                        <button class="filter-preset-btn" data-filter="cinematic">Cinematic</button>
+                                        <button class="filter-preset-btn" data-filter="warm">Warm Glow</button>
+                                        <button class="filter-preset-btn" data-filter="cool">Cool Breeze</button>
+                                        <button class="filter-preset-btn" data-filter="vintage">Vintage Sepia</button>
+                                        <button class="filter-preset-btn" data-filter="bw">B&W Film</button>
+                                    </div>
+                                </div>
+                                <div class="adjustments-group mt-4">
+                                    <div class="control-group">
+                                        <label>Brightness</label>
+                                        <div class="slider-val-container">
+                                            <input type="range" id="brightness-slider" min="50" max="150" value="100">
+                                            <span id="brightness-val">100%</span>
+                                        </div>
+                                    </div>
+                                    <div class="control-group mt-3">
+                                        <label>Contrast</label>
+                                        <div class="slider-val-container">
+                                            <input type="range" id="contrast-slider" min="50" max="150" value="100">
+                                            <span id="contrast-val">100%</span>
+                                        </div>
+                                    </div>
+                                    <div class="control-group mt-3">
+                                        <label>Saturation</label>
+                                        <div class="slider-val-container">
+                                            <input type="range" id="saturation-slider" min="0" max="200" value="100">
+                                            <span id="saturation-val">100%</span>
+                                        </div>
                                     </div>
                                 </div>
                             </div>
@@ -341,6 +522,38 @@
                                     <a id="download-link" href="#" download="facebook-ready-video.webm" class="btn btn-success btn-block mt-3">
                                         <i class="fa-solid fa-download"></i> Download Video
                                     </a>
+                                </div>
+                        </div>
+
+                        <!-- Facebook Posting checklist -->
+                        <div class="card mt-4">
+                            <div class="card-header">
+                                <i class="fa-brands fa-facebook card-icon" style="color: #1877f2;"></i>
+                                <h3>Facebook Post Optimizer</h3>
+                            </div>
+                            <div class="card-body">
+                                <div class="fb-tips-container">
+                                    <div class="fb-tip-item">
+                                        <i class="fa-solid fa-check-double text-success"></i>
+                                        <div class="fb-tip-content">
+                                            <h4>Colored Bangla Headlines (Hooks)</h4>
+                                            <p>85%+ of Facebook users watch videos without sound. The colored top/bottom text banners you added will capture user attention within the first 3 seconds.</p>
+                                        </div>
+                                    </div>
+                                    <div class="fb-tip-item mt-3">
+                                        <i class="fa-solid fa-check-double text-success"></i>
+                                        <div class="fb-tip-content">
+                                            <h4>Choose 1:1 or 4:5 for standard feeds</h4>
+                                            <p>These aspect ratios take up to 60% more vertical screen real estate in mobile feeds than standard widescreen (16:9), boosting your click-through rates.</p>
+                                        </div>
+                                    </div>
+                                    <div class="fb-tip-item mt-3">
+                                        <i class="fa-solid fa-check-double text-success"></i>
+                                        <div class="fb-tip-content">
+                                            <h4>Trim & Keep it punchy</h4>
+                                            <p>For Facebook Reels, keep your video under 90 seconds. For in-stream video posts, try to hook users in the first 5 seconds to maximize standard monetization eligibility.</p>
+                                        </div>
+                                    </div>
                                 </div>
                             </div>
                         </div>

@@ -76,11 +76,20 @@ document.addEventListener('DOMContentLoaded', () => {
 
         // Choose best supported format
         let mimeType = 'video/webm;codecs=vp9,opus';
-        if (!MediaRecorder.isTypeSupported(mimeType)) {
-            mimeType = 'video/webm;codecs=vp8,opus';
-        }
-        if (!MediaRecorder.isTypeSupported(mimeType)) {
-            mimeType = 'video/webm';
+        const candidateTypes = [
+            'video/mp4;codecs=h264,aac',
+            'video/mp4;codecs=h264',
+            'video/mp4',
+            'video/webm;codecs=vp9,opus',
+            'video/webm;codecs=vp8,opus',
+            'video/webm;codecs=h264,opus',
+            'video/webm'
+        ];
+        for (const candidate of candidateTypes) {
+            if (MediaRecorder.isTypeSupported(candidate)) {
+                mimeType = candidate;
+                break;
+            }
         }
 
         const recorder = new MediaRecorder(canvasStream, {
@@ -177,7 +186,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
         // Suggest a human-readable filename
         const timestamp = new Date().toISOString().slice(0, 16).replace('T', '_').replace(':', '-');
-        const filename = `facebook-video-${timestamp}.webm`;
+        const ext = mimeType.toLowerCase().includes('mp4') ? 'mp4' : 'webm';
+        const filename = `facebook-video-${timestamp}.${ext}`;
 
         downloadLink.href = downloadURL;
         downloadLink.download = filename;
