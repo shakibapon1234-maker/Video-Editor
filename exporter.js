@@ -113,12 +113,13 @@ document.addEventListener('DOMContentLoaded', () => {
         video.currentTime = state.startTime;
         video.volume = 0; // Mute speaker output during export (audio goes to MediaRecorder only)
 
-        // Start voiceover buffer source in the audio context (synchronized with video)
+        // Play video first, THEN start voiceover so they stay in sync
+        await video.play();
+
+        // Start voiceover buffer source right after video playback begins
         if (audioMixResult && audioMixResult.startVoiceover) {
             await audioMixResult.startVoiceover();
         }
-
-        await video.play();
 
         // Render loop — drives the canvas frame drawing and tracks progress
         await new Promise((resolve, reject) => {
@@ -172,6 +173,10 @@ document.addEventListener('DOMContentLoaded', () => {
         // Cleanup audio routing
         if (audioMixResult && audioMixResult.cleanup) {
             audioMixResult.cleanup();
+        }
+        // Remove the injected audio track from canvas stream
+        if (audioTrack) {
+            try { canvasStream.removeTrack(audioTrack); } catch(e) {}
         }
 
         // Restore video volume for normal playback

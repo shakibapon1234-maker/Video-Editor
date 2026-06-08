@@ -272,47 +272,59 @@ document.addEventListener('DOMContentLoaded', () => {
     window.getMixedAudioDestinationStream = function() {
         if (!audioCtx) return null;
         
-        // Create destination node
+        // Resume context if suspended (browser autoplay policy)
+        if (audioCtx.state === 'suspended') {
+            audioCtx.resume();
+        }
+        
+        // Create destination node for MediaRecorder to capture
         const dest = audioCtx.createMediaStreamDestination();
         
-        // Disconnect video chain from speakers and connect to destination node during export
+        // Disconnect video chain from speakers and route into export destination
         compressorNode.disconnect(audioCtx.destination);
         compressorNode.connect(dest);
         
-        // If voiceover exists, set up an AudioNode node for it and connect to destination
+        // Pre-create gain node for voiceover mixing
         let voiceoverSource = null;
         let voiceoverGain = null;
         
         if (state.voiceoverRecorded && state.voiceoverBlob) {
-            // We need a helper to play the voiceover arrayBuffer directly in context
             voiceoverGain = audioCtx.createGain();
-            voiceoverGain.gain.setValueAtTime(state.voiceoverVolume, 0);
-            voiceoverGain.connect(dest);
+            voiceoverGain.gain.setValueAtTime(Math.min(1.0, state.voiceoverVolume), audioCtx.currentTime);
+            voiceoverGain.connect(dest); // Connect voiceover gain directly to export destination
         }
         
         return {
             stream: dest.stream,
-            // Restore connection function to speaker when done exporting
+            // Restore speaker connection after export finishes
             cleanup: function() {
-                compressorNode.disconnect(dest);
+                try { compressorNode.disconnect(dest); } catch(e) {}
                 compressorNode.connect(audioCtx.destination);
                 
                 if (voiceoverSource) {
-                    try { voiceoverSource.stop(); } catch(e){}
+                    try { voiceoverSource.stop(); } catch(e) {}
+                    try { voiceoverSource.disconnect(); } catch(e) {}
+                }
+                if (voiceoverGain) {
+                    try { voiceoverGain.disconnect(); } catch(e) {}
                 }
             },
-            // Call this right when video playback starts for export to play the buffer
+            // Called immediately AFTER video.play() resolves to keep audio in sync
             startVoiceover: async function() {
-                if (state.voiceoverRecorded && state.voiceoverBlob) {
-                    const arrayBuffer = await state.voiceoverBlob.arrayBuffer();
-                    const audioBuffer = await audioCtx.decodeAudioData(arrayBuffer);
-                    
-                    voiceoverSource = audioCtx.createBufferSource();
-                    voiceoverSource.buffer = audioBuffer;
-                    voiceoverSource.connect(voiceoverGain);
-                    
-                    // Start playing at 0 delay (synchronized with the start of export playback)
-                    voiceoverSource.start(0);
+                if (state.voiceoverRecorded && state.voiceoverBlob && voiceoverGain) {
+                    try {
+                        const arrayBuffer = await state.voiceoverBlob.arrayBuffer();
+                        const audioBuffer = await audioCtx.decodeAudioData(arrayBuffer);
+                        
+                        voiceoverSource = audioCtx.createBufferSource();
+                        voiceoverSource.buffer = audioBuffer;
+                        voiceoverSource.connect(voiceoverGain);
+                        
+                        // Start immediately, synchronized with video playback
+                        voiceoverSource.start(audioCtx.currentTime);
+                    } catch(e) {
+                        console.error('Voiceover export mix error:', e);
+                    }
                 }
             }
         };

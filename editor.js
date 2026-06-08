@@ -499,13 +499,15 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         }
         
-        state.canvas.width = targetWidth;
-        state.canvas.height = targetHeight;
+        state.canvas.width = Math.round(targetWidth);
+        state.canvas.height = Math.round(targetHeight);
         
         // Update container height dynamically to respect aspect ratio in CSS
         const container = document.getElementById('canvas-container');
-        const containerWidth = container.clientWidth;
-        container.style.height = (containerWidth * (targetHeight / targetWidth)) + 'px';
+        const containerWidth = container.offsetWidth || container.clientWidth || 640;
+        if (containerWidth > 0) {
+            container.style.height = Math.round(containerWidth * (targetHeight / targetWidth)) + 'px';
+        }
     }
     
     // --- Timeline Playing & Trimming ---
@@ -566,6 +568,23 @@ document.addEventListener('DOMContentLoaded', () => {
         requestAnimationFrame(updateLoop);
     }
     
+    // Standalone single-frame redraw for when video is paused (seeking, slider changes, etc.)
+    function redrawPausedFrame() {
+        if (!state.isPlaying && state.duration) {
+            updatePlayhead();
+            drawFrame();
+        }
+    }
+    window.redrawPausedFrame = redrawPausedFrame;
+    
+    // Redraw canvas whenever the video's current frame changes while paused (e.g. after seek)
+    state.video.addEventListener('seeked', () => {
+        if (!state.isPlaying) {
+            updatePlayhead();
+            drawFrame();
+        }
+    });
+    
     // Update playhead UI position
     function updatePlayhead() {
         const current = state.video.currentTime;
@@ -593,9 +612,8 @@ document.addEventListener('DOMContentLoaded', () => {
             state.startTime = val;
         }
         startVal.value = formatTime(state.startTime);
-        state.video.currentTime = state.startTime;
+        state.video.currentTime = state.startTime; // triggers 'seeked' event → redraws canvas
         updatePlayhead();
-        drawFrame();
     });
     
     trimEnd.addEventListener('input', (e) => {
@@ -607,9 +625,8 @@ document.addEventListener('DOMContentLoaded', () => {
             state.endTime = val;
         }
         endVal.value = formatTime(state.endTime);
-        state.video.currentTime = state.endTime;
+        state.video.currentTime = state.endTime; // triggers 'seeked' event → redraws canvas
         updatePlayhead();
-        drawFrame();
     });
     
     // Video volume mix slider
