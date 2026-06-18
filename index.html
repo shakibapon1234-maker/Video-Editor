@@ -69,10 +69,10 @@
                     <p id="current-step-subtitle">Start by uploading your video clip and branding logo</p>
                 </div>
                 <div class="header-actions">
-                    <button id="prev-btn" class="btn btn-secondary" disabled>
+                    <button id="prev-btn" class="btn btn-secondary" disabled data-tooltip="পূর্ববর্তী ধাপে ফিরে যান (Go back to previous step)">
                         <i class="fa-solid fa-arrow-left"></i> Back
                     </button>
-                    <button id="next-btn" class="btn btn-primary" disabled>
+                    <button id="next-btn" class="btn btn-primary" disabled data-tooltip="পরবর্তী ধাপে এগিয়ে যান (Go to next step)">
                         Next <i class="fa-solid fa-arrow-right"></i>
                     </button>
                 </div>
@@ -177,23 +177,23 @@
                             </div>
                             <div class="card-body">
                                 <div class="aspect-ratio-selector">
-                                    <button class="aspect-btn active" data-ratio="original">
+                                    <button class="aspect-btn active" data-ratio="original" data-tooltip="ভিডিওর আদিম ফরম্যাট বজায় রাখুন (Keep original aspect ratio)">
                                         <i class="fa-solid fa-expand"></i>
                                         <span>Original</span>
                                     </button>
-                                    <button class="aspect-btn" data-ratio="1-1">
+                                    <button class="aspect-btn" data-ratio="1-1" data-tooltip="ফেসবুক ফিড পোস্টের জন্য স্কয়ার ফরম্যাট (1:1 Square for Facebook Feed)">
                                         <i class="fa-solid fa-square"></i>
                                         <span>1:1 Square (FB Post)</span>
                                     </button>
-                                    <button class="aspect-btn" data-ratio="4-5">
+                                    <button class="aspect-btn" data-ratio="4-5" data-tooltip="ফেসবুক ফিড ভিডিওর জন্য পোর্ট্রেট ফরম্যাট (4:5 Portrait for Facebook Feed)">
                                         <i class="fa-solid fa-rectangle-ad" style="transform: rotate(90deg);"></i>
                                         <span>4:5 Portrait (FB Feed)</span>
                                     </button>
-                                    <button class="aspect-btn" data-ratio="9-16">
+                                    <button class="aspect-btn" data-ratio="9-16" data-tooltip="ফেসবুক ও ইনস্টাগ্রাম রিলসের জন্য ভার্টিক্যাল ফরম্যাট (9:16 Vertical for Reels)">
                                         <i class="fa-solid fa-mobile-screen"></i>
                                         <span>9:16 Vertical (Reels)</span>
                                     </button>
-                                    <button class="aspect-btn" data-ratio="16-9">
+                                    <button class="aspect-btn" data-ratio="16-9" data-tooltip="ইউটিউব ও ডেক্সটপ ভিউয়ের জন্য ল্যান্ডস্কেপ ফরম্যাট (16:9 Landscape for Desktop)">
                                         <i class="fa-solid fa-desktop"></i>
                                         <span>16:9 Landscape (YouTube)</span>
                                     </button>
@@ -209,11 +209,11 @@
                             </div>
                             <div class="card-body">
                                 <div class="layout-mode-selector">
-                                    <button class="layout-mode-btn active" data-mode="fit">
+                                    <button class="layout-mode-btn active" data-mode="fit" data-tooltip="ভিডিওটি কালো বারসহ স্ক্রিনে ফিট করুন (Fit video inside canvas with black bars)">
                                         <i class="fa-solid fa-compress"></i>
                                         <span>Fit (কালো বারসহ ফিট)</span>
                                     </button>
-                                    <button class="layout-mode-btn" data-mode="fill">
+                                    <button class="layout-mode-btn" data-mode="fill" data-tooltip="ভিডিওটি পুরো স্ক্রিন জুড়ে ক্রপ করে ফিট করুন (Fill video to canvas by cropping)">
                                         <i class="fa-solid fa-expand"></i>
                                         <span>Fill & Crop (ক্রপ করে পুরো স্ক্রিন)</span>
                                     </button>
@@ -234,13 +234,13 @@
                                         <h4>Adjust Crop (ক্রপ করুন)</h4>
                                         <p>Enable crop overlay on the video</p>
                                     </div>
-                                    <label class="switch">
+                                    <label class="switch" data-tooltip="ভিডিও ক্রপ এরিয়া এডজাস্ট করতে এটি অন করুন। ক্যানভাসে মাউস দিয়ে টেনে ক্রপ করুন। (Toggle to adjust crop area by dragging on preview)">
                                         <input type="checkbox" id="crop-tool-toggle">
                                         <span class="slider round"></span>
                                     </label>
                                 </div>
                                 <div class="crop-actions mt-3" id="crop-actions-container" style="display: none;">
-                                    <button id="reset-crop-btn" class="btn btn-sm btn-danger">
+                                    <button id="reset-crop-btn" class="btn btn-sm btn-danger" data-tooltip="ক্রপ এরিয়া রিসেট করে স্বাভাবিক অবস্থায় ফিরিয়ে আনুন (Reset crop area to full video)">
                                         <i class="fa-solid fa-arrow-rotate-left"></i> Reset Crop
                                     </button>
                                     <div class="crop-info mt-2">

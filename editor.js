@@ -848,22 +848,28 @@ document.addEventListener('DOMContentLoaded', () => {
             state.ctx.save();
             
             // Draw dark semi-transparent overlay outside the crop box
-            state.ctx.fillStyle = 'rgba(0, 0, 0, 0.6)';
+            state.ctx.fillStyle = 'rgba(0, 0, 0, 0.65)';
             state.ctx.beginPath();
             state.ctx.rect(0, 0, canvasW, canvasH);
             state.ctx.rect(cropPixelX, cropPixelY, cropPixelW, cropPixelH);
             state.ctx.fill('evenodd');
 
-            // Draw crop box border
+            // Draw crop box border (dashed line for premium look)
             state.ctx.strokeStyle = '#4f46e5';
             state.ctx.lineWidth = 2.5;
+            state.ctx.setLineDash([8, 5]);
             state.ctx.strokeRect(cropPixelX, cropPixelY, cropPixelW, cropPixelH);
+            state.ctx.setLineDash([]); // Reset line dash
 
-            // Draw corner handles (8x8 white square with dark border)
-            state.ctx.fillStyle = '#ffffff';
-            state.ctx.strokeStyle = '#4f46e5';
-            state.ctx.lineWidth = 1.5;
-            const hs = 10; // handle size
+            // Draw corner handles (Circular with purple core, white border, and drop shadow)
+            state.ctx.shadowColor = 'rgba(0, 0, 0, 0.5)';
+            state.ctx.shadowBlur = 6;
+            state.ctx.shadowOffsetY = 2;
+            
+            state.ctx.fillStyle = '#4f46e5';
+            state.ctx.strokeStyle = '#ffffff';
+            state.ctx.lineWidth = 2;
+            const radius = 8; // 16px diameter
             
             const corners = [
                 [cropPixelX, cropPixelY],
@@ -873,8 +879,10 @@ document.addEventListener('DOMContentLoaded', () => {
             ];
             
             corners.forEach(([cx, cy]) => {
-                state.ctx.fillRect(cx - hs/2, cy - hs/2, hs, hs);
-                state.ctx.strokeRect(cx - hs/2, cy - hs/2, hs, hs);
+                state.ctx.beginPath();
+                state.ctx.arc(cx, cy, radius, 0, Math.PI * 2);
+                state.ctx.fill();
+                state.ctx.stroke();
             });
 
             state.ctx.restore();
@@ -1360,6 +1368,50 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         return parseFloat(timeStr);
     }
+    
+    // --- Premium Tooltip Engine ---
+    const tooltipEl = document.createElement('div');
+    tooltipEl.className = 'premium-tooltip';
+    document.body.appendChild(tooltipEl);
+
+    document.addEventListener('mouseover', (e) => {
+        const target = e.target.closest('[data-tooltip]');
+        if (!target) return;
+        
+        const text = target.getAttribute('data-tooltip');
+        if (!text) return;
+        
+        tooltipEl.innerText = text;
+        tooltipEl.classList.add('show');
+        
+        const rect = target.getBoundingClientRect();
+        const tooltipRect = tooltipEl.getBoundingClientRect();
+        
+        let left = rect.left + (rect.width - tooltipRect.width) / 2;
+        let top = rect.top - tooltipRect.height - 8;
+        
+        if (left < 8) left = 8;
+        if (left + tooltipRect.width > window.innerWidth - 8) {
+            left = window.innerWidth - tooltipRect.width - 8;
+        }
+        if (top < 8) {
+            top = rect.bottom + 8;
+        }
+        
+        tooltipEl.style.left = `${left + window.scrollX}px`;
+        tooltipEl.style.top = `${top + window.scrollY}px`;
+    });
+    
+    document.addEventListener('mouseout', (e) => {
+        const target = e.target.closest('[data-tooltip]');
+        if (target) {
+            tooltipEl.classList.remove('show');
+        }
+    });
+    
+    document.addEventListener('click', () => {
+        tooltipEl.classList.remove('show');
+    });
     
     // Bind global trigger to allow re-render on demands
     window.triggerCanvasRedraw = drawFrame;
