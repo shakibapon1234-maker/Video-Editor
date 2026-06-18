@@ -45,6 +45,7 @@
   [DONE] Video Export (MediaRecorder -> WebM/MP4)         - exporter.js
   [DONE] 4-Step Wizard navigation                          - editor.js
   [DONE] Mobile Responsive layout                          - style.css
+  [DONE] Visual Crop Tool (canvas region select & crop)   - editor.js
 
 
 -----------------------------------------------------
@@ -78,6 +79,14 @@ Bug 3 - Mobile Layout Break (style.css + editor.js)
            আসে। offsetWidth দিয়ে canvas height calculation ঠিক
            করা হয়েছে।
 
+v1.2 - Crop Tool & Recovery (সম্পন্ন)
+---------------------------
+  - zero-padded / corrupted JS/CSS ফাইলগুলো git history থেকে
+    restore করা হয়েছে।
+  - Phase 2A (Visual Crop Tool) যোগ করা হয়েছে: প্রিভিউ স্ক্রিনে
+    drag করে ক্রপ সিলেক্ট করা যায় এবং toggle button দিয়ে dynamic
+    contain/fit zoom render করা হয়।
+
 
 -----------------------------------------------------
 পরবর্তী কাজের পূর্ণ পরিকল্পনা
@@ -86,7 +95,7 @@ Bug 3 - Mobile Layout Break (style.css + editor.js)
 PHASE 2 - VIDEO EDITING CORE (পরবর্তী প্রায়োরিটি)
 ====================================================
 
-2A - Visual Crop Tool   [TODO]
+2A - Visual Crop Tool   [DONE]
 --------------------------------
 কী করতে হবে:
   - editor.js-এ cropState যোগ করতে হবে:
@@ -257,7 +266,7 @@ Export-এ audio mixing এখানে হয়। নতুন audio track (b
 -----------------------------------------------------
 
   1. [DONE] Bug Fix v1.1 (সম্পন্ন)
-  2. [TODO] Phase 2A - Crop Tool
+  2. [DONE] Phase 2A - Crop Tool
   3. [TODO] Phase 3A - Background Music
   4. [TODO] Phase 2C - Text Overlay
   5. [TODO] Phase 5B - Thumbnail Generator
@@ -278,5 +287,5 @@ Export-এ audio mixing এখানে হয়। নতুন audio track (b
 
 
 =====================================================
- শেষ আপডেট: v1.1 - Bug Fix Release
+ শেষ আপডেট: v1.2 - Crop Tool Release
 =====================================================

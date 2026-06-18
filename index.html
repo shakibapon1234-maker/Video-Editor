@@ -221,6 +221,35 @@
                             </div>
                         </div>
 
+                        <!-- Video Crop Tool Card -->
+                        <div class="card mt-4">
+                            <div class="card-header">
+                                <i class="fa-solid fa-crop card-icon"></i>
+                                <h3>Video Crop Tool (ক্রপ টুল)</h3>
+                            </div>
+                            <div class="card-body">
+                                <p class="help-text">ভিডিওর নির্দিষ্ট অংশ ক্রপ করতে নিচের বাটনটি অন করুন এবং প্রিভিউ স্ক্রিনে ড্র্যাগ করে এরিয়া সিলেক্ট করুন।</p>
+                                <div class="toggle-control">
+                                    <div class="toggle-label">
+                                        <h4>Adjust Crop (ক্রপ করুন)</h4>
+                                        <p>Enable crop overlay on the video</p>
+                                    </div>
+                                    <label class="switch">
+                                        <input type="checkbox" id="crop-tool-toggle">
+                                        <span class="slider round"></span>
+                                    </label>
+                                </div>
+                                <div class="crop-actions mt-3" id="crop-actions-container" style="display: none;">
+                                    <button id="reset-crop-btn" class="btn btn-sm btn-danger">
+                                        <i class="fa-solid fa-arrow-rotate-left"></i> Reset Crop
+                                    </button>
+                                    <div class="crop-info mt-2">
+                                        <span class="help-text">Crop Area: <span id="crop-dimensions-val">100% x 100%</span></span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
                         <div class="card mt-4" id="logo-control-card" style="display: none;">
                             <div class="card-header">
                                 <i class="fa-solid fa-sliders card-icon"></i>
