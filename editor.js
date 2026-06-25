@@ -980,22 +980,50 @@ document.addEventListener('DOMContentLoaded', () => {
     // --- Mouse Drag and Resize Interactive System on Canvas ---
     function getCanvasCoords(e) {
         const rect = state.canvas.getBoundingClientRect();
-        const scaleX = state.canvas.width / rect.width;
-        const scaleY = state.canvas.height / rect.height;
         
         // Handle touch events
         const clientX = e.touches ? e.touches[0].clientX : e.clientX;
         const clientY = e.touches ? e.touches[0].clientY : e.clientY;
         
+        const w_canvas = state.canvas.width;
+        const h_canvas = state.canvas.height;
+        const w_rect = rect.width;
+        const h_rect = rect.height;
+        
+        if (w_rect === 0 || h_rect === 0) {
+            return { x: 0, y: 0 };
+        }
+        
+        const r_canvas = w_canvas / h_canvas;
+        const r_rect = w_rect / h_rect;
+        
+        let w_render = w_rect;
+        let h_render = h_rect;
+        let x_offset = 0;
+        let y_offset = 0;
+        
+        // Adjust for object-fit: contain letterboxing/pillarboxing inside DOM element
+        if (r_canvas > r_rect) {
+            h_render = w_rect / r_canvas;
+            y_offset = (h_rect - h_render) / 2;
+        } else {
+            w_render = h_rect * r_canvas;
+            x_offset = (w_rect - w_render) / 2;
+        }
+        
+        const x_relative = clientX - rect.left - x_offset;
+        const y_relative = clientY - rect.top - y_offset;
+        
         return {
-            x: (clientX - rect.left) * scaleX,
-            y: (clientY - rect.top) * scaleY
+            x: x_relative * (w_canvas / w_render),
+            y: y_relative * (h_canvas / h_render)
         };
     }
     
     function isPointerOnLogo(coords) {
         if (!state.logoImg) return { isOver: false, isResize: false };
         
+        const rect = state.canvas.getBoundingClientRect();
         const canvasW = state.canvas.width;
         const canvasH = state.canvas.height;
         const logoW = canvasW * (state.logoSize / 100);
@@ -1003,10 +1031,29 @@ document.addEventListener('DOMContentLoaded', () => {
         const lx = state.logoX * canvasW;
         const ly = state.logoY * canvasH;
         
-        // Check resize anchor box (bottom-right: 15px pad)
+        const w_rect = rect.width;
+        const h_rect = rect.height;
+        if (w_rect === 0 || h_rect === 0) return { isOver: false, isResize: false };
+        
+        const r_canvas = canvasW / canvasH;
+        const r_rect = w_rect / h_rect;
+        
+        let w_render = w_rect;
+        let h_render = h_rect;
+        if (r_canvas > r_rect) {
+            h_render = w_rect / r_canvas;
+        } else {
+            w_render = h_rect * r_canvas;
+        }
+        
+        // Target a consistent 20px hit-area on screen for easy click/drag/touch
+        const padX = 20 * (canvasW / w_render);
+        const padY = 20 * (canvasH / h_render);
+        
+        // Check resize anchor box (bottom-right: 20px pad)
         const inResizeAnchor = (
-            coords.x >= lx + logoW - 12 && coords.x <= lx + logoW + 12 &&
-            coords.y >= ly + logoH - 12 && coords.y <= ly + logoH + 12
+            coords.x >= lx + logoW - padX && coords.x <= lx + logoW + padX &&
+            coords.y >= ly + logoH - padY && coords.y <= ly + logoH + padY
         );
         
         // Check core image box
@@ -1054,7 +1101,15 @@ document.addEventListener('DOMContentLoaded', () => {
                 const cropPixelW = state.cropW * drawW;
                 const cropPixelH = state.cropH * drawH;
                 
-                const handleSize = 15; // 15px radius for tolerance
+                // Target a consistent 20px hit-area on screen for handles
+                const rect = state.canvas.getBoundingClientRect();
+                const w_rect = rect.width;
+                const h_rect = rect.height;
+                const r_canvas = canvasW / canvasH;
+                const r_rect = w_rect / h_rect;
+                const w_render = (r_canvas > r_rect) ? w_rect : h_rect * r_canvas;
+                const handleSize = 20 * (canvasW / w_render);
+                
                 const isNear = (x, y) => Math.hypot(coords.x - x, coords.y - y) < handleSize;
                 
                 if (isNear(cropPixelX, cropPixelY)) {
@@ -1142,7 +1197,15 @@ document.addEventListener('DOMContentLoaded', () => {
             
             // Update cursor style
             if (!state.isResizingCrop && !state.isDraggingCrop && !state.isDrawingNewCrop) {
-                const handleSize = 15;
+                // Target a consistent 20px hit-area on screen for handles
+                const rect = state.canvas.getBoundingClientRect();
+                const w_rect = rect.width;
+                const h_rect = rect.height;
+                const r_canvas = canvasW / canvasH;
+                const r_rect = w_rect / h_rect;
+                const w_render = (r_canvas > r_rect) ? w_rect : h_rect * r_canvas;
+                const handleSize = 20 * (canvasW / w_render);
+                
                 const isNear = (x, y) => Math.hypot(coords.x - x, coords.y - y) < handleSize;
                 
                 if (isNear(cropPixelX, cropPixelY) || isNear(cropPixelX + cropPixelW, cropPixelY + cropPixelH)) {
