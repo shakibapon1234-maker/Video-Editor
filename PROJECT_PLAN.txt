@@ -46,6 +46,7 @@
   [DONE] 4-Step Wizard navigation                          - editor.js
   [DONE] Mobile Responsive layout                          - style.css
   [DONE] Visual Crop Tool (canvas region select & crop)   - editor.js
+  [DONE] Background Music (upload, loop, volume, ducking) - audio.js
 
 
 -----------------------------------------------------
@@ -87,6 +88,23 @@ v1.2 - Crop Tool & Recovery (সম্পন্ন)
     drag করে ক্রপ সিলেক্ট করা যায় এবং toggle button দিয়ে dynamic
     contain/fit zoom render করা হয়।
 
+v1.3 - Background Music (সম্পন্ন)
+---------------------------
+  - Phase 3A (Background Music) সম্পন্ন হয়েছে:
+      - index.html-এ Step 3 panel-এ "Background Music" card যোগ
+        করা হয়েছে (MP3/WAV upload, drag&drop সাপোর্ট সহ)
+      - audio.js-এ state.bgMusicBlob, bgMusicUrl, bgMusicVolume,
+        bgMusicDuckingEnabled যোগ করা হয়েছে
+      - Preview playback-এ bgMusicAudioPreview video-র সাথে loop
+        হয়ে sync থাকে (play/pause/seek সব অবস্থায়)
+      - getMixedAudioDestinationStream()-এ bgMusicGain node
+        connect করা হয়েছে, export-এর সময় AudioBufferSourceNode
+        loop=true করে পুরো trim duration জুড়ে মিউজিক বাজে
+      - Phase 3B (Audio Ducking)-ও একসাথে implement করা হয়েছে:
+        voiceover রেকর্ডিং চলাকালীন (preview ও export দুই
+        জায়গাতেই) bgMusic volume স্বয়ংক্রিয়ভাবে ~25%-এ কমে যায়,
+        toggle switch দিয়ে on/off করা যায়
+
 
 -----------------------------------------------------
 পরবর্তী কাজের পূর্ণ পরিকল্পনা
@@ -107,48 +125,64 @@ PHASE 2 - VIDEO EDITING CORE (পরবর্তী প্রায়োরি�
   - Reset crop button যোগ করতে হবে
   - HTML: Step 2 panel-এ "Crop" card যোগ করতে হবে
 
-2B - Multi-Clip Timeline   [TODO]
+2B - Multi-Clip Timeline   [DONE]
 ------------------------------------
-কী করতে হবে:
-  - state.clips array তৈরি করতে হবে প্রতিটি clip-এর জন্য
-      file, url, start, end, duration
-  - Timeline UI-তে multiple clip block দেখাতে হবে
-    (drag to reorder)
-  - Export pipeline-এ clips sequential play করতে হবে
-  - জটিলতা: HIGH - বড় refactor দরকার
+সম্পন্ন হয়েছে (v2.0):
+  - state.clips array যুক্ত হয়েছে, প্রতিটি item-এ: id, file, url,
+    name, duration, start, end। প্রথম uploaded ভিডিও স্বয়ংক্রিয়ভাবে
+    clips[0] হয়ে যায়
+  - Step 2-এর ট্রিম বার-এর নিচে "Clip Timeline" UI যুক্ত হয়েছে:
+      - "Add Another Clip" বাটনে নতুন ভিডিও আপলোড করে timeline-এ
+        যুক্ত করা যায়
+      - প্রতিটি clip block-এ ক্লিক করলে সেই clip active হয়ে যায়
+        (video.src swap হয়ে যায়, trim slider সেই clip-এর own
+        start/end লোড করে)
+      - প্রতিটি clip-এর trim আলাদাভাবে সেট করা যায় (syncActiveClipTrim
+        প্রতিটি trim slider/input change-এ active clip-এ সেভ করে)
+      - drag & drop দিয়ে clip reorder করা যায়
+      - clip remove বাটন আছে (সর্বনিম্ন ১টা clip থাকতেই হবে)
+  - exporter.js সম্পূর্ণ refactor করা হয়েছে: একই MediaRecorder
+    session-এর মধ্যে for-loop দিয়ে state.clips-এর প্রতিটি clip
+    সিকোয়েন্সিয়ালি video.src swap করে নিজ নিজ trim range অনুযায়ী
+    play করানো হয় এবং canvas-এ render করা হয়
+      - voiceover/bg music শুধু প্রথম clip শুরুর সময় একবার start
+        হয়, পুরো stitched টাইমলাইন জুড়ে চলে
+      - progress bar পুরো সিকোয়েন্সের total duration অনুযায়ী
+        হিসাব হয় (ক্লিপ ১, ক্লিপ ২... ক্রমান্বয়ে)
+      - export শেষে editor স্বয়ংক্রিয়ভাবে যেই clip active ছিল
+        সেটিতে ফিরিয়ে আনা হয়
+  - নোট: overlay/crop/banner/logo এডিটিং বর্তমানে globally প্রযোজ্য
+    (active clip-এর প্রিভিউ-তে যা দেখা যায় তা সব clip-এই বার্ন-ইন
+    হয়), per-clip আলাদা overlay সাপোর্ট ভবিষ্যতে আলাদা কাজ হিসেবে
+    যুক্ত করা যেতে পারে
 
-2C - Text Overlay (উন্নত)   [TODO]
+2C - Text Overlay (উন্নত)   [DONE]
 --------------------------------------
-কী করতে হবে:
-  - state.textOverlays array তৈরি করতে হবে
-  - প্রতিটি text overlay-এর জন্য:
+সম্পন্ন হয়েছে (v1.4):
+  - state.textOverlays array যোগ করা হয়েছে, প্রতিটি item-এ:
       text, x, y, fontSize, color, font, startSec, endSec
-  - Canvas-এ drag করে text position করার সুবিধা
-  - বাংলা font support (Hind Siliguri already loaded)
-  - drawFrame() ফাংশনে text overlay render করতে হবে
+  - Step 2 প্যানেলে "Text Overlay" card যুক্ত হয়েছে (text input,
+    font size slider, color picker, Add Text বাটন, list, এবং
+    start/end সময় নির্ধারণের ইনপুট)
+  - drawFrame()-এ Step E হিসেবে রেন্ডার লজিক যুক্ত হয়েছে: stroke
+    + fill টেক্সট আঁকা হয় (outline দিয়ে readability বাড়ানো), এবং
+    startSec-endSec এর বাইরে গেলে টেক্সট স্বয়ংক্রিয়ভাবে হাইড হয়
+  - handlePointerDown/Move/Up-এ canvas-এ drag করে text position
+    পরিবর্তনের সুবিধা যুক্ত হয়েছে (logo drag-এর মতই architecture,
+    নিচে লেয়ার priority: crop > logo > text)
+  - বাংলা font support (Hind Siliguri) ব্যবহার করা হয়েছে
 
 
 PHASE 3 - AUDIO উন্নতি
 ========================
 
-3A - Background Music   [TODO]
+3A - Background Music   [DONE]
 ----------------------------------
-কী করতে হবে:
-  - index.html-এ Step 3 panel-এ "Background Music" card
-    যোগ করতে হবে
-  - MP3/WAV file input যোগ করতে হবে
-  - audio.js-এ bgMusicBuffer, bgMusicGain node তৈরি
-    করতে হবে
-  - getMixedAudioDestinationStream() ফাংশনে bgMusicGain
-    connect করতে হবে
-  - Preview playback-এ also bgMusic sync করতে হবে
+সম্পন্ন হয়েছে (দেখুন v1.3 বাগ ফিক্স/ফিচার ইতিহাসে বিস্তারিত)
 
-3B - Audio Ducking   [TODO]
+3B - Audio Ducking   [DONE]
 --------------------------------
-কী করতে হবে:
-  - audio.js-এ voiceover চলার সময় bgMusicGain automatically
-    কমানোর logic যোগ করতে হবে
-  - Toggle checkbox দিয়ে enable/disable করা
+সম্পন্ন হয়েছে — 3A এর সাথেই একসাথে implement করা হয়েছে
 
 
 PHASE 4 - VISUAL EFFECTS
@@ -162,13 +196,20 @@ PHASE 4 - VISUAL EFFECTS
   - Canvas drag & resize (same system as logo)
   - drawFrame()-এ sticker render
 
-4B - Blur/Mosaic Tool   [TODO]
+4B - Blur/Mosaic Tool   [DONE]
 -----------------------------------
-কী করতে হবে:
-  - state.blurRegions array - x, y, w, h (normalized)
-  - Canvas selection দিয়ে blur region আঁকা
-  - drawFrame()-এ: region clip -> ctx.filter blur
-    -> drawImage -> restore
+সম্পন্ন হয়েছে (v1.8):
+  - state.blurRegions array যুক্ত হয়েছে (x, y, w, h normalized,
+    intensity, id) এবং isAddingBlur toggle flag
+  - Step 2-এ "Blur Tool" card: টগল অন করে প্রিভিউতে ড্র্যাগ করে
+    নতুন region আঁকা যায়, ক্লিক করে select, কোণা ড্র্যাগ করে resize,
+    এবং region-ভিত্তিক intensity slider + remove বাটন
+  - drawFrame()-এ region clip() -> ctx.filter = blur(Npx) ->
+    video frame পুনরায় drawImage -> filter reset -> restore
+    প্যাটার্ন অনুসরণ করা হয়েছে, ফলে ব্লার শুধু ওই rectangle-এ প্রভাব
+    ফেলে, বাকি ভিডিও স্বাভাবিক থাকে
+  - এটি Banner/Logo/B-roll/Text-এর আগে render হয় (video frame
+    layer-এর ঠিক উপরে), ফলে export-এও সঠিকভাবে বার্ন-ইন হয়
 
 4C - Color Grading (LUT)   [TODO]
 --------------------------------------
@@ -182,23 +223,38 @@ PHASE 4 - VISUAL EFFECTS
 PHASE 5 - FACEBOOK/SOCIAL MEDIA SPECIFIC
 ===========================================
 
-5A - Auto Subtitle   [TODO]
+5A - Auto Subtitle   [DONE]
 --------------------------------
-কী করতে হবে:
-  - Web Speech API (SpeechRecognition) দিয়ে video audio থেকে
-    transcript নেওয়া
-  - state.subtitles array - text, startSec, endSec
-  - drawFrame()-এ current time অনুযায়ী subtitle render করা
-  - সীমাবদ্ধতা: Web Speech API শুধু live audio-তে কাজ করে,
-    recorded video-তে করে না। Workaround: video play করতে
-    করতে speech recognition চালানো।
+সম্পন্ন হয়েছে (v1.9):
+  - Step 3-এ "Auto Subtitle" card যুক্ত হয়েছে: "Listen & Generate"
+    বাটনে ক্লিক করলে ব্রাউজারের SpeechRecognition (bn-BD) চালু হয়ে
+    video.currentTime অনুযায়ী timestamp করে state.subtitles-এ
+    পুশ করে (প্রতিটি item: text, startSec, endSec)
+  - workaround অনুযায়ীই করা হয়েছে: video play করা অবস্থায় live
+    recognition চালানো হয়, recorded blob থেকে সরাসরি না
+  - onend handler দিয়ে recognition auto-restart করা হয় (ব্রাউজার
+    মাঝে মাঝে নিজে session বন্ধ করে দেয়), video pause হলে recognition
+    বন্ধ হয়ে যায়
+  - drawFrame()-এ Step G হিসেবে render যুক্ত হয়েছে: current
+    time-এর active subtitle ক্যাপশন-স্টাইল ব্যাকগ্রাউন্ড pill সহ
+    নিচে দেখানো হয়, toggle দিয়ে on/off করা যায়
+  - Speech Recognition সাপোর্ট না থাকলে বাটন disable হয়ে যায় ও
+    সতর্কতা বার্তা দেখানো হয়
+  - সীমাবদ্ধতা (অপরিবর্তিত): ব্রাউজার সাপোর্ট প্রয়োজন (Chrome সবচেয়ে
+    ভালো কাজ করে), রেকর্ড করা ভিডিও blob থেকে সরাসরি transcript
+    নেওয়া যায় না
 
-5B - Thumbnail Generator   [TODO]
+5B - Thumbnail Generator   [DONE]
 --------------------------------------
-কী করতে হবে:
-  - Step 4-এ "Generate Thumbnail" button
-  - Current canvas frame -> canvas.toBlob() -> PNG download
-  - Custom text/logo overlay যোগ করার option
+সম্পন্ন হয়েছে (v1.6):
+  - Step 4-এ "Generate Thumbnail" card যুক্ত হয়েছে (Render card ও
+    Facebook Optimizer card-এর মাঝে)
+  - বাটনে ক্লিক করলে drawFrame() কল হয়ে canvas-কে বর্তমান অবস্থায়
+    আপডেট করে, তারপর canvas.toBlob('image/png') দিয়ে PNG বানানো হয়
+  - সব overlay (logo, banner, text, B-roll PiP) ইতিমধ্যে canvas-এ
+    আঁকা থাকে, তাই আলাদা কিছু করার দরকার হয়নি — "custom text/logo
+    option" ইতিমধ্যেই বিদ্যমান overlay system দিয়ে কভার হয়ে গেছে
+  - প্রিভিউ ইমেজ ও ডাউনলোড লিংক (object URL) দেখানো হয়
 
 5C - Intro/Outro Template   [TODO]
 ---------------------------------------
@@ -207,19 +263,47 @@ PHASE 5 - FACEBOOK/SOCIAL MEDIA SPECIFIC
     animate করবে
   - requestAnimationFrame দিয়ে 2-3 second intro animate করা
 
+5D - Topic/B-roll Image Overlay   [DONE]
+----------------------------------------------
+পরিচিতি: ভিডিওতে কথা বলার সময় টপিক-সম্পর্কিত ছবি কিছুক্ষণের জন্য
+দেখানো এবং পরে সরে যাওয়াকে "B-roll" বলা হয় (cutaway/insert shot)।
+
+সম্পন্ন হয়েছে (v1.5):
+  - state.brollOverlays array যোগ করা হয়েছে, প্রতিটি item-এ:
+      imageImg, imageUrl, mode (fullscreen/pip), size, x, y,
+      startSec, endSec
+  - Step 2 প্যানেলে "B-roll / Topic Image" card যুক্ত হয়েছে:
+      ছবি আপলোড (drag&drop সহ), Display Mode select
+      (Fullscreen/PiP), PiP হলে size slider, item list, এবং
+      start/end সময় নির্ধারণের ইনপুট
+  - drawFrame()-এ Step E হিসেবে রেন্ডার লজিক যুক্ত হয়েছে:
+      - fullscreen mode: video frame-এর জায়গায় পুরো ছবি drawImage
+        দিয়ে (aspect ratio বজায় রেখে cover/crop করে) আঁকা হয়
+      - pip mode: কোণায় ছোট বক্সে ছবি বসে, drag করে position
+        পরিবর্তন করা যায় (handlePointerDown/Move/Up-এ যুক্ত)
+      - startSec-endSec range-এর শুরু/শেষে 0.4s fade in/out
+        transition যুক্ত হয়েছে (globalAlpha animate করে)
+      - range শেষ হলে স্বয়ংক্রিয়ভাবে মূল video frame ফিরে আসে
+      - Step F (Text Overlay)-এর আগে আঁকা হয়, ফলে টেক্সট সবসময়
+        উপরে থাকে
+
 
 PHASE 6 - EXPORT উন্নতি
 ==========================
 
-6A - Quality Selector   [TODO]
+6A - Quality Selector   [DONE]
 -----------------------------------
-কী করতে হবে:
-  - index.html Step 4-এ resolution dropdown
-    (480p / 720p / 1080p)
-  - exporter.js-এ: export শুরুর আগে canvas.width/height
-    resize করা
-  - videoBitsPerSecond quality অনুযায়ী change করা
+সম্পন্ন হয়েছে (v1.7):
+  - index.html Step 4-এ resolution dropdown যুক্ত হয়েছে
+    (480p / 720p / 1080p, default: 720p)
+  - exporter.js-এ QUALITY_PRESETS object তৈরি করা হয়েছে
     (480p: 2Mbps, 720p: 5Mbps, 1080p: 8Mbps)
+  - লাইভ প্রিভিউ canvas-এর আসল সাইজ পরিবর্তন না করে (যেটা UI
+    নষ্ট করতো), বরং captureStream() থেকে পাওয়া videoTrack-এর উপর
+    applyConstraints() দিয়ে output resolution scale down করা
+    হয়েছে — preset.maxDim-এর চেয়ে বড় হলেই স্কেল হবে
+  - MediaRecorder-এর videoBitsPerSecond preset অনুযায়ী সেট হয়
+  - রেন্ডারিং চলাকালীন quality dropdown disable থাকে
 
 6B - Export Progress UX   [TODO]
 -------------------------------------
@@ -236,10 +320,11 @@ state object (editor.js-এ window.VideoEditor)
 -----------------------------------------------
 নতুন ফিচার যোগ করতে এখানে নতুন property যোগ করতে হবে। যেমন:
   cropX, cropY, cropW, cropH      -> Phase 2A
-  textOverlays                     -> Phase 2C
-  bgMusicBlob, bgMusicVolume       -> Phase 3A
+  textOverlays                     -> Phase 2C (সম্পন্ন)
+  bgMusicBlob, bgMusicVolume       -> Phase 3A (সম্পন্ন)
   stickers                          -> Phase 4A
   blurRegions                       -> Phase 4B
+  brollOverlays                     -> Phase 5D (সম্পন্ন)
 
 drawFrame() ফাংশন (editor.js)
 ---------------------------------
@@ -267,13 +352,14 @@ Export-এ audio mixing এখানে হয়। নতুন audio track (b
 
   1. [DONE] Bug Fix v1.1 (সম্পন্ন)
   2. [DONE] Phase 2A - Crop Tool
-  3. [TODO] Phase 3A - Background Music
-  4. [TODO] Phase 2C - Text Overlay
-  5. [TODO] Phase 5B - Thumbnail Generator
-  6. [TODO] Phase 6A - Quality Selector
-  7. [TODO] Phase 4B - Blur Tool
-  8. [TODO] Phase 5A - Auto Subtitle
-  9. [TODO] Phase 2B - Multi-Clip (সবচেয়ে জটিল, শেষে)
+  3. [DONE] Phase 3A & 3B - Background Music + Ducking
+  4. [DONE] Phase 2C - Text Overlay
+  5. [DONE] Phase 5D - Topic/B-roll Image Overlay
+  6. [DONE] Phase 5B - Thumbnail Generator
+  7. [DONE] Phase 6A - Quality Selector
+  8. [DONE] Phase 4B - Blur Tool
+  9. [DONE] Phase 5A - Auto Subtitle
+  10. [DONE] Phase 2B - Multi-Clip Timeline (সবচেয়ে জটিল ছিল)
 
 
 -----------------------------------------------------
@@ -287,5 +373,5 @@ Export-এ audio mixing এখানে হয়। নতুন audio track (b
 
 
 =====================================================
- শেষ আপডেট: v1.2 - Crop Tool Release
+ শেষ আপডেট: v2.0 - Multi-Clip Timeline Release (সব Phase সম্পন্ন)
 =====================================================

@@ -123,6 +123,18 @@
                                 <input type="text" id="end-time-val" value="00:00.0">
                             </div>
                         </div>
+
+                        <!-- Multi-Clip Timeline (Phase 2B) -->
+                        <div class="clip-timeline-container mt-3">
+                            <div class="clip-timeline-list" id="clip-timeline-list">
+                                <!-- Dynamically populated clip blocks -->
+                            </div>
+                            <div class="file-selector-box" id="add-clip-dropzone" style="padding: 10px; margin-top: 8px;">
+                                <i class="fa-solid fa-plus"></i>
+                                <span>Add Another Clip (আরেকটি ক্লিপ যোগ করুন)</span>
+                                <input type="file" id="add-clip-input" accept="video/*" style="display: none;">
+                            </div>
+                        </div>
                     </div>
                 </div>
 
@@ -250,6 +262,45 @@
                             </div>
                         </div>
 
+                        <!-- Blur/Mosaic Tool (Phase 4B) -->
+                        <div class="card mt-4">
+                            <div class="card-header">
+                                <i class="fa-solid fa-eye-slash card-icon"></i>
+                                <h3>Blur Tool (মুখ/তথ্য ব্লার করুন)</h3>
+                            </div>
+                            <div class="card-body">
+                                <p class="help-text">ভিডিওর কোনো অংশ (যেমনঃ মুখ বা সেন্সিটিভ তথ্য) ঢেকে রাখতে নিচের বাটনটি অন করে প্রিভিউ স্ক্রিনে ড্র্যাগ করে এরিয়া আঁকুন।</p>
+                                <div class="toggle-control">
+                                    <div class="toggle-label">
+                                        <h4>Add Blur Region (ব্লার যুক্ত করুন)</h4>
+                                        <p>Enable blur drawing on the video</p>
+                                    </div>
+                                    <label class="switch">
+                                        <input type="checkbox" id="blur-tool-toggle">
+                                        <span class="slider round"></span>
+                                    </label>
+                                </div>
+
+                                <div class="blur-actions mt-3" id="blur-actions-container" style="display: none;">
+                                    <div class="control-group">
+                                        <label>Blur Intensity</label>
+                                        <div class="slider-val-container">
+                                            <input type="range" id="blur-intensity-slider" min="2" max="40" value="15">
+                                            <span id="blur-intensity-val">15px</span>
+                                        </div>
+                                    </div>
+
+                                    <div class="blur-region-list mt-3" id="blur-region-list">
+                                        <!-- Dynamically populated list of blur regions -->
+                                    </div>
+
+                                    <button id="delete-blur-region-btn" class="btn-text-danger mt-2" style="display: none;">
+                                        <i class="fa-solid fa-trash-can"></i> Remove Selected Region
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+
                         <div class="card mt-4" id="logo-control-card" style="display: none;">
                             <div class="card-header">
                                 <i class="fa-solid fa-sliders card-icon"></i>
@@ -338,6 +389,114 @@
                                              <span id="banner-height-val">12%</span>
                                          </div>
                                     </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Text Overlay (Phase 2C) -->
+                        <div class="card mt-4">
+                            <div class="card-header">
+                                <i class="fa-solid fa-font card-icon"></i>
+                                <h3>Text Overlay (টেক্সট ওভারলে)</h3>
+                            </div>
+                            <div class="card-body">
+                                <p class="help-text">টেক্সট লিখে "Add Text" চাপুন, তারপর প্রিভিউ স্ক্রিনে ড্র্যাগ করে এর অবস্থান ঠিক করুন।</p>
+
+                                <div class="control-group">
+                                    <label>Text Content</label>
+                                    <input type="text" id="text-overlay-input" class="form-input" placeholder="যেমনঃ আজকের অফার মাত্র ৫০০ টাকা!" maxlength="120">
+                                </div>
+
+                                <div class="control-group mt-3">
+                                    <label>Font Size</label>
+                                    <div class="slider-val-container">
+                                        <input type="range" id="text-overlay-fontsize" min="14" max="100" value="32">
+                                        <span id="text-overlay-fontsize-val">32px</span>
+                                    </div>
+                                </div>
+
+                                <div class="control-group mt-3">
+                                    <label>Text Color</label>
+                                    <div class="color-picker-wrapper">
+                                        <input type="color" id="text-overlay-color" value="#ffffff">
+                                        <span class="color-value-text" id="text-overlay-color-val">#ffffff</span>
+                                    </div>
+                                </div>
+
+                                <button id="add-text-overlay-btn" class="btn btn-primary mt-3">
+                                    <i class="fa-solid fa-plus"></i> Add Text
+                                </button>
+
+                                <div class="text-overlay-list mt-4" id="text-overlay-list">
+                                    <!-- Dynamically populated list of added text overlays -->
+                                </div>
+
+                                <div class="text-overlay-timing mt-3" id="text-overlay-timing-container" style="display: none;">
+                                    <p class="help-text">এই টেক্সটটি ভিডিওর কোন সময় থেকে কোন সময় পর্যন্ত দেখাবে তা নির্ধারণ করুন।</p>
+                                    <div class="control-group">
+                                        <label>Show From (সেকেন্ড)</label>
+                                        <input type="number" id="text-overlay-start" class="form-input" min="0" step="0.1" value="0">
+                                    </div>
+                                    <div class="control-group mt-2">
+                                        <label>Show Until (সেকেন্ড)</label>
+                                        <input type="number" id="text-overlay-end" class="form-input" min="0" step="0.1" value="5">
+                                    </div>
+                                    <button id="delete-text-overlay-btn" class="btn-text-danger mt-2">
+                                        <i class="fa-solid fa-trash-can"></i> Remove This Text
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- B-roll / Topic Image Overlay (Phase 5D) -->
+                        <div class="card mt-4">
+                            <div class="card-header">
+                                <i class="fa-solid fa-images card-icon"></i>
+                                <h3>B-roll / Topic Image (টপিক ছবি ওভারলে)</h3>
+                            </div>
+                            <div class="card-body">
+                                <p class="help-text">আপনি যেই টপিক নিয়ে কথা বলছেন, সেই সম্পর্কিত ছবি নির্দিষ্ট সময়ে স্ক্রিনে দেখান (যেমনঃ airlines নিয়ে কথা বললে প্লেনের ছবি)। এটি ভিডিও এডিটিং-এ "B-roll" নামে পরিচিত।</p>
+
+                                <div class="file-selector-box" id="broll-dropzone">
+                                    <i class="fa-solid fa-file-image"></i>
+                                    <span>Add Topic Image</span>
+                                    <button class="btn btn-sm btn-outline">Browse</button>
+                                    <input type="file" id="broll-input" accept="image/*" style="display: none;">
+                                </div>
+
+                                <div class="control-group mt-3">
+                                    <label>Display Mode</label>
+                                    <select id="broll-mode-select" class="form-select">
+                                        <option value="fullscreen">Fullscreen (পুরো স্ক্রিন)</option>
+                                        <option value="pip">Picture-in-Picture (কোণায় ছোট বক্স)</option>
+                                    </select>
+                                </div>
+
+                                <div class="control-group mt-3" id="broll-size-container" style="display: none;">
+                                    <label>PiP Size (% of canvas width)</label>
+                                    <div class="slider-val-container">
+                                        <input type="range" id="broll-size-slider" min="15" max="60" value="35">
+                                        <span id="broll-size-val">35%</span>
+                                    </div>
+                                </div>
+
+                                <div class="broll-list mt-4" id="broll-list">
+                                    <!-- Dynamically populated list of added B-roll items -->
+                                </div>
+
+                                <div class="broll-timing mt-3" id="broll-timing-container" style="display: none;">
+                                    <p class="help-text">এই ছবিটি ভিডিওর কোন সময় থেকে কোন সময় পর্যন্ত দেখাবে তা নির্ধারণ করুন।</p>
+                                    <div class="control-group">
+                                        <label>Show From (সেকেন্ড)</label>
+                                        <input type="number" id="broll-start" class="form-input" min="0" step="0.1" value="0">
+                                    </div>
+                                    <div class="control-group mt-2">
+                                        <label>Show Until (সেকেন্ড)</label>
+                                        <input type="number" id="broll-end" class="form-input" min="0" step="0.1" value="3">
+                                    </div>
+                                    <button id="delete-broll-btn" class="btn-text-danger mt-2">
+                                        <i class="fa-solid fa-trash-can"></i> Remove This Image
+                                    </button>
                                 </div>
                             </div>
                         </div>
@@ -462,6 +621,50 @@
 
                         <div class="card mt-4">
                             <div class="card-header">
+                                <i class="fa-solid fa-music card-icon"></i>
+                                <h3>Background Music (ব্যাকগ্রাউন্ড মিউজিক)</h3>
+                            </div>
+                            <div class="card-body">
+                                <p class="help-text">MP3 অথবা WAV ফাইল আপলোড করুন, এটি পুরো ভিডিওর সাথে লুপ হয়ে বাজবে।</p>
+
+                                <div class="file-selector-box" id="bgmusic-dropzone">
+                                    <i class="fa-solid fa-file-audio"></i>
+                                    <span id="bgmusic-filename">No music added</span>
+                                    <button class="btn btn-sm btn-outline">Add Music</button>
+                                    <input type="file" id="bgmusic-input" accept="audio/*" style="display: none;">
+                                </div>
+
+                                <div class="bgmusic-controls mt-3" id="bgmusic-controls-container" style="display: none;">
+                                    <div class="control-group">
+                                        <label>Music Volume</label>
+                                        <div class="slider-val-container">
+                                            <input type="range" id="bgmusic-volume-slider" min="0" max="100" value="40">
+                                            <span id="bgmusic-volume-val">40%</span>
+                                        </div>
+                                    </div>
+
+                                    <div class="toggle-control mt-3">
+                                        <div class="toggle-label">
+                                            <h4>Auto Ducking (ভয়েস এলে মিউজিক কমবে)</h4>
+                                            <p>Voiceover চলাকালীন ব্যাকগ্রাউন্ড মিউজিকের ভলিউম স্বয়ংক্রিয়ভাবে কমে যাবে</p>
+                                        </div>
+                                        <label class="switch">
+                                            <input type="checkbox" id="bgmusic-ducking-toggle" checked>
+                                            <span class="slider round"></span>
+                                        </label>
+                                    </div>
+
+                                    <audio id="bgmusic-audio-preview" class="mt-3 w-full" controls></audio>
+
+                                    <button id="remove-bgmusic-btn" class="btn-text-danger mt-2">
+                                        <i class="fa-solid fa-trash-can"></i> Remove Music
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="card mt-4">
+                            <div class="card-header">
                                 <i class="fa-solid fa-microphone-lines card-icon"></i>
                                 <h3>Voiceover Recording (ভয়েস ওভার)</h3>
                             </div>
@@ -514,6 +717,40 @@
                                 </div>
                             </div>
                         </div>
+
+                        <!-- Auto Subtitle (Phase 5A) -->
+                        <div class="card mt-4">
+                            <div class="card-header">
+                                <i class="fa-solid fa-closed-captioning card-icon"></i>
+                                <h3>Auto Subtitle (অটো সাবটাইটেল)</h3>
+                            </div>
+                            <div class="card-body">
+                                <p class="help-text">ভিডিও প্লে করার সাথে সাথে আপনার কথা শুনে স্বয়ংক্রিয়ভাবে সাবটাইটেল তৈরি হবে (ব্রাউজারের Speech Recognition ব্যবহার করে)। ভিডিও Play করুন এবং কথা শুনুন — তৈরি হওয়া সাবটাইটেল নিচে লিস্টে দেখা যাবে।</p>
+
+                                <button id="generate-subtitle-btn" class="btn btn-secondary btn-block mt-3">
+                                    <i class="fa-solid fa-closed-captioning"></i> Listen & Generate (ভিডিও থেকে শোনা শুরু করুন)
+                                </button>
+
+                                <div class="toggle-control mt-3">
+                                    <div class="toggle-label">
+                                        <h4>Show Subtitles on Preview</h4>
+                                        <p>প্রিভিউ ও এক্সপোর্টে সাবটাইটেল দেখাবে</p>
+                                    </div>
+                                    <label class="switch">
+                                        <input type="checkbox" id="subtitle-enabled-toggle" checked>
+                                        <span class="slider round"></span>
+                                    </label>
+                                </div>
+
+                                <div class="subtitle-list mt-4" id="subtitle-list">
+                                    <!-- Dynamically populated transcript list -->
+                                </div>
+
+                                <p class="help-text mt-2" id="subtitle-browser-warning" style="display: none; color: #f87171;">
+                                    আপনার ব্রাউজার Speech Recognition সাপোর্ট করে না। Chrome ব্যবহার করার চেষ্টা করুন।
+                                </p>
+                            </div>
+                        </div>
                     </div>
 
                     <!-- Step 4: Export Studio -->
@@ -525,7 +762,16 @@
                             </div>
                             <div class="card-body">
                                 <p class="help-text">Click below to start blending your video, logo, and audio. Do not close the browser while rendering.</p>
-                                
+
+                                <div class="control-group mt-3">
+                                    <label>Export Quality (এক্সপোর্ট কোয়ালিটি)</label>
+                                    <select id="quality-select" class="form-select">
+                                        <option value="480p">480p (ছোট সাইজ, দ্রুত)</option>
+                                        <option value="720p" selected>720p (স্ট্যান্ডার্ড)</option>
+                                        <option value="1080p">1080p (সর্বোচ্চ কোয়ালিটি)</option>
+                                    </select>
+                                </div>
+
                                 <button id="render-btn" class="btn btn-primary btn-lg btn-block mt-3">
                                     <i class="fa-solid fa-wand-magic-sparkles"></i> Render & Export Video
                                 </button>
@@ -552,6 +798,28 @@
                                         <i class="fa-solid fa-download"></i> Download Video
                                     </a>
                                 </div>
+                        </div>
+
+                        <!-- Thumbnail Generator (Phase 5B) -->
+                        <div class="card mt-4">
+                            <div class="card-header">
+                                <i class="fa-solid fa-image card-icon"></i>
+                                <h3>Thumbnail Generator (থাম্বনেইল তৈরি করুন)</h3>
+                            </div>
+                            <div class="card-body">
+                                <p class="help-text">প্রিভিউ স্ক্রিনে এখন যেই ফ্রেম দেখা যাচ্ছে (সব overlay/logo/banner সহ), সেটাই থাম্বনেইল হিসেবে PNG ছবি বানিয়ে ডাউনলোড করুন। ভিডিও সিক করে পছন্দের ফ্রেমে নিয়ে তারপর বাটনে ক্লিক করুন।</p>
+
+                                <button id="generate-thumbnail-btn" class="btn btn-secondary btn-block mt-3">
+                                    <i class="fa-solid fa-camera"></i> Generate Thumbnail (এই ফ্রেম থেকে)
+                                </button>
+
+                                <div class="thumbnail-preview-box mt-4" id="thumbnail-preview-box" style="display: none;">
+                                    <img id="thumbnail-preview-img" alt="Generated thumbnail preview" style="max-width: 100%; border-radius: var(--radius-sm); border: 1px solid var(--border-color);">
+                                    <a id="thumbnail-download-link" href="#" download="thumbnail.png" class="btn btn-success btn-block mt-3">
+                                        <i class="fa-solid fa-download"></i> Download Thumbnail (PNG)
+                                    </a>
+                                </div>
+                            </div>
                         </div>
 
                         <!-- Facebook Posting checklist -->

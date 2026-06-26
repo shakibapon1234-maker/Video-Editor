@@ -528,6 +528,12 @@ body {
     background-color: rgba(79, 70, 229, 0.03);
 }
 
+.file-selector-box.drag-over {
+    border-color: var(--primary);
+    background-color: rgba(79, 70, 229, 0.08);
+    border-style: solid;
+}
+
 .file-selector-box i {
     font-size: 32px;
     color: var(--text-secondary);

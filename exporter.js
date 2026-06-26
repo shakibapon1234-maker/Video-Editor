@@ -9,24 +9,41 @@ document.addEventListener('DOMContentLoaded', () => {
     const renderStatusText = document.getElementById('render-status-text');
     const renderSuccessBox = document.getElementById('render-success-box');
     const downloadLink = document.getElementById('download-link');
+    const qualitySelect = document.getElementById('quality-select');
+
+    const QUALITY_PRESETS = {
+        '480p': { maxDim: 480, bitrate: 2_000_000 },
+        '720p': { maxDim: 720, bitrate: 5_000_000 },
+        '1080p': { maxDim: 1080, bitrate: 8_000_000 }
+    };
 
     renderBtn.addEventListener('click', startExport);
 
     async function startExport() {
-        if (!state.duration) {
+        if (!state.duration || !state.clips || state.clips.length === 0) {
             alert('Please load a video first before exporting.');
             return;
         }
 
-        const trimDuration = state.endTime - state.startTime;
+        // Ensure the currently active clip's in-progress trim edits are saved before reading totals
+        if (window.renderClipTimeline) {
+            const activeClip = state.clips.find(c => c.id === state.activeClipId);
+            if (activeClip) {
+                activeClip.start = state.startTime;
+                activeClip.end = state.endTime;
+            }
+        }
 
-        if (trimDuration <= 0) {
+        const totalDuration = state.clips.reduce((sum, c) => sum + Math.max(0, c.end - c.start), 0);
+
+        if (totalDuration <= 0) {
             alert('Trim duration is invalid. Please set the trim range in Step 2.');
             return;
         }
 
         // Show progress box
         renderBtn.disabled = true;
+        if (qualitySelect) qualitySelect.disabled = true;
         renderBtn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Rendering...';
         renderProgressBox.style.display = 'block';
         renderSuccessBox.style.display = 'none';
@@ -34,18 +51,26 @@ document.addEventListener('DOMContentLoaded', () => {
         setProgress(0);
 
         try {
-            await runExportPipeline(trimDuration);
+            await runExportPipeline(totalDuration);
         } catch (err) {
             console.error('Export failed:', err);
             alert('Export failed. Please try again with a shorter or simpler video.');
             renderBtn.disabled = false;
+            if (qualitySelect) qualitySelect.disabled = false;
             renderBtn.innerHTML = '<i class="fa-solid fa-wand-magic-sparkles"></i> Render & Export Video';
         }
     }
 
-    async function runExportPipeline(trimDuration) {
+    async function runExportPipeline(totalDuration) {
         const canvas = state.canvas;
         const video = state.video;
+
+        // Remember which clip was active in the editor so we can restore it after export finishes
+        const originalActiveClipId = state.activeClipId;
+        const originalSrc = video.src;
+        const originalStartTime = state.startTime;
+        const originalEndTime = state.endTime;
+        const originalDuration = state.duration;
 
         // --- Step A: Set up canvas capture stream ---
         renderStatusText.innerText = 'Capturing canvas stream...';
@@ -53,6 +78,26 @@ document.addEventListener('DOMContentLoaded', () => {
 
         // Capture canvas at 30fps
         const canvasStream = canvas.captureStream(30);
+
+        // Apply quality preset: scale down captured resolution if canvas exceeds the target max dimension
+        const qualityKey = qualitySelect ? qualitySelect.value : '720p';
+        const preset = QUALITY_PRESETS[qualityKey] || QUALITY_PRESETS['720p'];
+
+        const videoTrack = canvasStream.getVideoTracks()[0];
+        if (videoTrack) {
+            const canvasMaxDim = Math.max(canvas.width, canvas.height);
+            if (canvasMaxDim > preset.maxDim) {
+                const scale = preset.maxDim / canvasMaxDim;
+                try {
+                    await videoTrack.applyConstraints({
+                        width: Math.round(canvas.width * scale),
+                        height: Math.round(canvas.height * scale)
+                    });
+                } catch (err) {
+                    console.warn('Resolution constraint not supported, exporting at native canvas size:', err);
+                }
+            }
+        }
 
         // --- Step B: Set up mixed audio ---
         renderStatusText.innerText = 'Mixing audio tracks...';
@@ -94,7 +139,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         const recorder = new MediaRecorder(canvasStream, {
             mimeType,
-            videoBitsPerSecond: 8_000_000 // 8 Mbps for good quality
+            videoBitsPerSecond: preset.bitrate
         });
 
         const chunks = [];
@@ -105,61 +150,91 @@ document.addEventListener('DOMContentLoaded', () => {
         };
 
         recorder.start(100); // Collect data every 100ms
+        video.volume = 0; // Mute speaker output during export (audio goes to MediaRecorder only)
 
-        // --- Step D: Play video through the trim range while recording ---
+        // --- Step D: Play through every clip sequentially while recording ---
         renderStatusText.innerText = 'Rendering video frames...';
         setProgress(20);
 
-        video.currentTime = state.startTime;
-        video.volume = 0; // Mute speaker output during export (audio goes to MediaRecorder only)
+        let elapsedBeforeCurrentClip = 0;
+        let voiceoverStarted = false;
 
-        // Play video first, THEN start voiceover so they stay in sync
-        await video.play();
+        for (let clipIndex = 0; clipIndex < state.clips.length; clipIndex++) {
+            const clip = state.clips[clipIndex];
+            const clipTrimStart = clip.start;
+            const clipTrimEnd = clip.end;
+            const clipTrimDuration = Math.max(0, clipTrimEnd - clipTrimStart);
+            if (clipTrimDuration <= 0) continue;
 
-        // Start voiceover buffer source right after video playback begins
-        if (audioMixResult && audioMixResult.startVoiceover) {
-            await audioMixResult.startVoiceover();
-        }
+            // Load this clip into the shared video element if it isn't already active
+            if (video.src !== clip.url) {
+                await new Promise((resolve) => {
+                    video.onloadedmetadata = () => resolve();
+                    video.src = clip.url;
+                    video.load();
+                });
+            }
 
-        // Render loop — drives the canvas frame drawing and tracks progress
-        await new Promise((resolve, reject) => {
-            let lastRenderTime = performance.now();
+            state.duration = clip.duration;
+            state.startTime = clipTrimStart;
+            state.endTime = clipTrimEnd;
+            state.activeClipId = clip.id;
 
-            function renderLoop() {
-                const currentTime = video.currentTime;
-                const elapsed = currentTime - state.startTime;
-                const progressPercent = Math.min(100, (elapsed / trimDuration) * 100);
+            video.currentTime = clipTrimStart;
+            video.volume = 0;
+            await video.play();
 
-                // Draw current frame with logo overlay
-                if (window.drawEditorFrame) {
-                    window.drawEditorFrame();
+            // Start voiceover & background music once, right after the very first clip begins playing,
+            // so they stay in sync with the start of the full stitched timeline.
+            if (!voiceoverStarted) {
+                voiceoverStarted = true;
+                if (audioMixResult && audioMixResult.startVoiceover) {
+                    await audioMixResult.startVoiceover();
                 }
+                if (audioMixResult && audioMixResult.startBgMusic) {
+                    await audioMixResult.startBgMusic();
+                }
+            }
 
-                // Update progress bar (maps video progress from 20% to 95%)
-                const uiProgress = 20 + (progressPercent * 0.75);
-                setProgress(Math.round(uiProgress));
-                renderStatusText.innerText = `Rendering ${Math.round(progressPercent)}% of video...`;
+            const clipElapsedBase = elapsedBeforeCurrentClip;
 
-                // Check if we've reached the trim end
-                if (currentTime >= state.endTime || video.ended) {
-                    video.pause();
-                    resolve();
-                    return;
+            await new Promise((resolve) => {
+                function renderLoop() {
+                    const currentTime = video.currentTime;
+                    const elapsedInClip = currentTime - clipTrimStart;
+                    const totalElapsed = clipElapsedBase + elapsedInClip;
+                    const progressPercent = Math.min(100, (totalElapsed / totalDuration) * 100);
+
+                    if (window.drawEditorFrame) {
+                        window.drawEditorFrame();
+                    }
+
+                    const uiProgress = 20 + (progressPercent * 0.75);
+                    setProgress(Math.round(uiProgress));
+                    renderStatusText.innerText = `Rendering clip ${clipIndex + 1}/${state.clips.length}... ${Math.round(progressPercent)}%`;
+
+                    if (currentTime >= clipTrimEnd || video.ended) {
+                        video.pause();
+                        resolve();
+                        return;
+                    }
+
+                    requestAnimationFrame(renderLoop);
                 }
 
                 requestAnimationFrame(renderLoop);
-            }
 
-            requestAnimationFrame(renderLoop);
+                // Safety timeout per-clip (max 10 minutes per clip)
+                setTimeout(() => {
+                    if (!video.paused) {
+                        video.pause();
+                        resolve();
+                    }
+                }, 600_000);
+            });
 
-            // Safety timeout (max 10 minutes)
-            setTimeout(() => {
-                if (!video.paused) {
-                    video.pause();
-                    resolve();
-                }
-            }, 600_000);
-        });
+            elapsedBeforeCurrentClip += clipTrimDuration;
+        }
 
         // --- Step E: Stop recorder and finalize ---
         renderStatusText.innerText = 'Finalizing video file...';
@@ -179,8 +254,21 @@ document.addEventListener('DOMContentLoaded', () => {
             try { canvasStream.removeTrack(audioTrack); } catch(e) {}
         }
 
-        // Restore video volume for normal playback
+        // Restore the editor back to whichever clip/trim was active before export started
+        if (video.src !== originalSrc) {
+            await new Promise((resolve) => {
+                video.onloadedmetadata = () => resolve();
+                video.src = originalSrc;
+                video.load();
+            });
+        }
+        state.activeClipId = originalActiveClipId;
+        state.duration = originalDuration;
+        state.startTime = originalStartTime;
+        state.endTime = originalEndTime;
+        video.currentTime = state.startTime;
         video.volume = Math.min(1.0, state.videoVolume);
+        if (window.drawEditorFrame) window.drawEditorFrame();
 
         // --- Step F: Create download blob ---
         renderStatusText.innerText = 'Preparing download...';
@@ -206,6 +294,7 @@ document.addEventListener('DOMContentLoaded', () => {
             renderProgressBox.style.display = 'none';
             renderSuccessBox.style.display = 'block';
             renderBtn.disabled = false;
+            if (qualitySelect) qualitySelect.disabled = false;
             renderBtn.innerHTML = '<i class="fa-solid fa-wand-magic-sparkles"></i> Render Again';
         }, 500);
     }

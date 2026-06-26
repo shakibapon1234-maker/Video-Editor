@@ -19,6 +19,17 @@ document.addEventListener('DOMContentLoaded', () => {
     const voiceoverVolumeContainer = document.getElementById('voiceover-volume-container');
     const voiceoverVolumeSlider = document.getElementById('voiceover-volume-slider');
     const voiceoverVolumeVal = document.getElementById('voiceover-volume-val');
+
+    // Background Music UI selectors (Phase 3A)
+    const bgMusicDropzone = document.getElementById('bgmusic-dropzone');
+    const bgMusicInput = document.getElementById('bgmusic-input');
+    const bgMusicFilename = document.getElementById('bgmusic-filename');
+    const bgMusicControlsContainer = document.getElementById('bgmusic-controls-container');
+    const bgMusicVolumeSlider = document.getElementById('bgmusic-volume-slider');
+    const bgMusicVolumeVal = document.getElementById('bgmusic-volume-val');
+    const bgMusicDuckingToggle = document.getElementById('bgmusic-ducking-toggle');
+    const bgMusicAudioPreview = document.getElementById('bgmusic-audio-preview');
+    const removeBgMusicBtn = document.getElementById('remove-bgmusic-btn');
     
     // Web Audio Variables
     let audioCtx = null;
@@ -193,6 +204,7 @@ document.addEventListener('DOMContentLoaded', () => {
         mediaRecorder.start();
         isRecording = true;
         window.isRecordingVoiceover = true;
+        if (window.applyDuckingToBgMusicPreview) window.applyDuckingToBgMusicPreview();
         
         // Update UI
         micStatus.classList.add('recording');
@@ -211,6 +223,7 @@ document.addEventListener('DOMContentLoaded', () => {
         
         isRecording = false;
         window.isRecordingVoiceover = false;
+        if (window.applyDuckingToBgMusicPreview) window.applyDuckingToBgMusicPreview();
     });
     
     deleteVoiceBtn.addEventListener('click', () => {
@@ -230,8 +243,72 @@ document.addEventListener('DOMContentLoaded', () => {
         // Update preview player element volume
         voiceoverAudioPreview.volume = Math.min(1.0, state.voiceoverVolume);
     });
+
+    // --- 4B. Background Music (Phase 3A) ---
+    bgMusicDropzone.addEventListener('click', () => bgMusicInput.click());
+
+    bgMusicInput.addEventListener('change', (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+        loadBgMusicFile(file);
+    });
+
+    // Allow drag & drop onto the dropzone too, consistent with video/logo dropzones
+    bgMusicDropzone.addEventListener('dragover', (e) => {
+        e.preventDefault();
+        bgMusicDropzone.classList.add('drag-over');
+    });
+    bgMusicDropzone.addEventListener('dragleave', () => {
+        bgMusicDropzone.classList.remove('drag-over');
+    });
+    bgMusicDropzone.addEventListener('drop', (e) => {
+        e.preventDefault();
+        bgMusicDropzone.classList.remove('drag-over');
+        const file = e.dataTransfer.files[0];
+        if (file && file.type.startsWith('audio/')) {
+            loadBgMusicFile(file);
+        }
+    });
+
+    function loadBgMusicFile(file) {
+        state.bgMusicBlob = file;
+        state.bgMusicUrl = URL.createObjectURL(file);
+        state.bgMusicAdded = true;
+
+        bgMusicFilename.innerText = file.name;
+        bgMusicAudioPreview.src = state.bgMusicUrl;
+        bgMusicAudioPreview.loop = true;
+        bgMusicAudioPreview.volume = state.bgMusicVolume;
+        bgMusicControlsContainer.style.display = 'block';
+    }
+
+    removeBgMusicBtn.addEventListener('click', () => {
+        bgMusicAudioPreview.pause();
+        if (state.bgMusicUrl) URL.revokeObjectURL(state.bgMusicUrl);
+        state.bgMusicBlob = null;
+        state.bgMusicUrl = null;
+        state.bgMusicAdded = false;
+
+        bgMusicFilename.innerText = 'No music added';
+        bgMusicAudioPreview.src = '';
+        bgMusicInput.value = '';
+        bgMusicControlsContainer.style.display = 'none';
+    });
+
+    bgMusicVolumeSlider.addEventListener('input', (e) => {
+        state.bgMusicVolume = parseInt(e.target.value) / 100;
+        bgMusicVolumeVal.innerText = e.target.value + '%';
+        // Only reflect base volume on preview element when NOT actively ducking during preview playback
+        if (!(state.bgMusicDuckingEnabled && window.isRecordingVoiceover)) {
+            bgMusicAudioPreview.volume = Math.min(1.0, state.bgMusicVolume);
+        }
+    });
+
+    bgMusicDuckingToggle.addEventListener('change', (e) => {
+        state.bgMusicDuckingEnabled = e.target.checked;
+    });
     
-    // --- 5. Sync Voiceover playing during preview playback ---
+    // --- 5. Sync Voiceover & Background Music playing during preview playback ---
     window.onPlaybackStart = function() {
         if (state.voiceoverRecorded && state.voiceoverUrl) {
             // Seek and play voiceover preview synced to current playback time relative to trim start
@@ -247,13 +324,38 @@ document.addEventListener('DOMContentLoaded', () => {
                 });
             }
         }
+
+        if (state.bgMusicAdded && state.bgMusicUrl) {
+            const musicOffset = (state.video.currentTime - state.startTime) % (bgMusicAudioPreview.duration || Infinity);
+            if (musicOffset >= 0 && isFinite(musicOffset)) {
+                bgMusicAudioPreview.currentTime = musicOffset;
+            }
+            applyDuckingToBgMusicPreview();
+            bgMusicAudioPreview.play().catch(err => {
+                console.log("Auto-play blocked for background music", err);
+            });
+        }
     };
     
     window.onPlaybackStop = function() {
         if (state.voiceoverRecorded) {
             voiceoverAudioPreview.pause();
         }
+        if (state.bgMusicAdded) {
+            bgMusicAudioPreview.pause();
+        }
     };
+
+    // Lower bg music volume while voiceover recording is in progress (auto-ducking)
+    function applyDuckingToBgMusicPreview() {
+        if (!state.bgMusicAdded) return;
+        if (state.bgMusicDuckingEnabled && window.isRecordingVoiceover) {
+            bgMusicAudioPreview.volume = Math.min(1.0, state.bgMusicVolume * 0.25);
+        } else {
+            bgMusicAudioPreview.volume = Math.min(1.0, state.bgMusicVolume);
+        }
+    }
+    window.applyDuckingToBgMusicPreview = applyDuckingToBgMusicPreview;
     
     // Track video seeking and align voiceover
     state.video.addEventListener('seeking', () => {
@@ -265,10 +367,16 @@ document.addEventListener('DOMContentLoaded', () => {
                 voiceoverAudioPreview.currentTime = 0;
             }
         }
+        if (state.bgMusicAdded && bgMusicAudioPreview.duration) {
+            const musicOffset = (state.video.currentTime - state.startTime) % bgMusicAudioPreview.duration;
+            if (musicOffset >= 0 && isFinite(musicOffset)) {
+                bgMusicAudioPreview.currentTime = musicOffset;
+            }
+        }
     });
     
     // --- 6. Export Mixing Node function ---
-    // This exposes a mixed AudioNode stream of BOTH the video sound & voiceover for recorder output
+    // This exposes a mixed AudioNode stream of BOTH the video sound & voiceover & bg music for recorder output
     window.getMixedAudioDestinationStream = function() {
         if (!audioCtx) return null;
         
@@ -293,6 +401,21 @@ document.addEventListener('DOMContentLoaded', () => {
             voiceoverGain.gain.setValueAtTime(Math.min(1.0, state.voiceoverVolume), audioCtx.currentTime);
             voiceoverGain.connect(dest); // Connect voiceover gain directly to export destination
         }
+
+        // Pre-create gain node for background music mixing (Phase 3A)
+        let bgMusicSource = null;
+        let bgMusicGain = null;
+
+        if (state.bgMusicAdded && state.bgMusicBlob) {
+            bgMusicGain = audioCtx.createGain();
+            // If voiceover is also present and ducking is enabled, start at the ducked level
+            // since both tracks begin together at export start.
+            const duckedLevel = Math.min(1.0, state.bgMusicVolume * 0.25);
+            const fullLevel = Math.min(1.0, state.bgMusicVolume);
+            const shouldDuckThroughout = state.bgMusicDuckingEnabled && state.voiceoverRecorded && state.voiceoverBlob;
+            bgMusicGain.gain.setValueAtTime(shouldDuckThroughout ? duckedLevel : fullLevel, audioCtx.currentTime);
+            bgMusicGain.connect(dest);
+        }
         
         return {
             stream: dest.stream,
@@ -307,6 +430,13 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
                 if (voiceoverGain) {
                     try { voiceoverGain.disconnect(); } catch(e) {}
+                }
+                if (bgMusicSource) {
+                    try { bgMusicSource.stop(); } catch(e) {}
+                    try { bgMusicSource.disconnect(); } catch(e) {}
+                }
+                if (bgMusicGain) {
+                    try { bgMusicGain.disconnect(); } catch(e) {}
                 }
             },
             // Called immediately AFTER video.play() resolves to keep audio in sync
@@ -326,7 +456,178 @@ document.addEventListener('DOMContentLoaded', () => {
                         console.error('Voiceover export mix error:', e);
                     }
                 }
+            },
+            // Called immediately AFTER video.play() resolves to keep music in sync; loops for full trim duration
+            startBgMusic: async function() {
+                if (state.bgMusicAdded && state.bgMusicBlob && bgMusicGain) {
+                    try {
+                        const arrayBuffer = await state.bgMusicBlob.arrayBuffer();
+                        const audioBuffer = await audioCtx.decodeAudioData(arrayBuffer);
+                        
+                        bgMusicSource = audioCtx.createBufferSource();
+                        bgMusicSource.buffer = audioBuffer;
+                        bgMusicSource.loop = true; // Loop music across the whole exported clip
+                        bgMusicSource.connect(bgMusicGain);
+                        
+                        bgMusicSource.start(audioCtx.currentTime);
+                    } catch(e) {
+                        console.error('Background music export mix error:', e);
+                    }
+                }
             }
         };
     };
+
+    // --- 7. Auto Subtitle (Phase 5A) ---
+    const generateSubtitleBtn = document.getElementById('generate-subtitle-btn');
+    const subtitleEnabledToggle = document.getElementById('subtitle-enabled-toggle');
+    const subtitleListEl = document.getElementById('subtitle-list');
+    const subtitleBrowserWarning = document.getElementById('subtitle-browser-warning');
+
+    const SpeechRecognitionImpl = window.SpeechRecognition || window.webkitSpeechRecognition;
+    let speechRecognizer = null;
+    let subtitleSegmentStartTime = 0;
+
+    if (subtitleEnabledToggle) {
+        subtitleEnabledToggle.addEventListener('change', (e) => {
+            state.subtitlesEnabled = e.target.checked;
+            if (window.drawEditorFrame) window.drawEditorFrame();
+        });
+    }
+
+    if (generateSubtitleBtn) {
+        if (!SpeechRecognitionImpl) {
+            generateSubtitleBtn.disabled = true;
+            if (subtitleBrowserWarning) subtitleBrowserWarning.style.display = 'block';
+        } else {
+            generateSubtitleBtn.addEventListener('click', () => {
+                if (state.isSubtitleRecognitionActive) {
+                    stopSubtitleRecognition();
+                } else {
+                    startSubtitleRecognition();
+                }
+            });
+        }
+    }
+
+    function startSubtitleRecognition() {
+        if (!state.duration) {
+            alert('Please load a video first before generating subtitles.');
+            return;
+        }
+
+        speechRecognizer = new SpeechRecognitionImpl();
+        speechRecognizer.continuous = true;
+        speechRecognizer.interimResults = false;
+        speechRecognizer.lang = 'bn-BD'; // Bangla recognition; falls back gracefully if unsupported
+
+        subtitleSegmentStartTime = state.video.currentTime;
+
+        speechRecognizer.onresult = (event) => {
+            const result = event.results[event.results.length - 1];
+            if (!result.isFinal) return;
+
+            const transcriptText = result[0].transcript.trim();
+            if (!transcriptText) return;
+
+            const endTime = state.video.currentTime;
+            const startTime = Math.max(subtitleSegmentStartTime, endTime - 4); // cap a single line to ~4s if recognition was slow
+
+            state.subtitles.push({
+                id: Date.now(),
+                text: transcriptText,
+                startSec: startTime,
+                endSec: Math.max(startTime + 0.5, endTime)
+            });
+
+            subtitleSegmentStartTime = endTime;
+            renderSubtitleList();
+        };
+
+        speechRecognizer.onerror = (event) => {
+            console.warn('Speech recognition error:', event.error);
+            if (event.error === 'no-speech') return; // keep listening through silence
+            stopSubtitleRecognition();
+        };
+
+        speechRecognizer.onend = () => {
+            // Browsers auto-stop recognition periodically; restart while still actively listening and video still playing
+            if (state.isSubtitleRecognitionActive && !state.video.paused) {
+                try { speechRecognizer.start(); } catch (e) { /* already started */ }
+            }
+        };
+
+        try {
+            speechRecognizer.start();
+            state.isSubtitleRecognitionActive = true;
+            generateSubtitleBtn.innerHTML = '<i class="fa-solid fa-stop"></i> Stop Listening (থামান)';
+
+            if (state.video.paused) {
+                state.video.play();
+            }
+        } catch (e) {
+            console.error('Could not start speech recognition:', e);
+            alert('Speech recognition শুরু করা যায়নি। মাইক্রোফোন পারমিশন দিয়েছেন কিনা চেক করুন।');
+        }
+    }
+
+    function stopSubtitleRecognition() {
+        state.isSubtitleRecognitionActive = false;
+        if (speechRecognizer) {
+            try { speechRecognizer.stop(); } catch (e) {}
+        }
+        if (generateSubtitleBtn) {
+            generateSubtitleBtn.innerHTML = '<i class="fa-solid fa-closed-captioning"></i> Listen & Generate (ভিডিও থেকে শোনা শুরু করুন)';
+        }
+    }
+
+    function renderSubtitleList() {
+        if (!subtitleListEl) return;
+        subtitleListEl.innerHTML = '';
+        state.subtitles.forEach((sub) => {
+            const row = document.createElement('div');
+            row.style.display = 'flex';
+            row.style.alignItems = 'center';
+            row.style.justifyContent = 'space-between';
+            row.style.gap = '8px';
+            row.style.padding = '8px 12px';
+            row.style.borderRadius = '6px';
+            row.style.marginBottom = '6px';
+            row.style.background = 'rgba(255,255,255,0.04)';
+
+            const label = document.createElement('span');
+            label.innerText = sub.text;
+            label.style.fontSize = '13px';
+            label.style.flex = '1';
+
+            const timeLabel = document.createElement('span');
+            timeLabel.innerText = `${sub.startSec.toFixed(1)}s`;
+            timeLabel.style.fontSize = '11px';
+            timeLabel.style.opacity = '0.6';
+
+            const removeBtn = document.createElement('button');
+            removeBtn.innerHTML = '<i class="fa-solid fa-xmark"></i>';
+            removeBtn.style.background = 'transparent';
+            removeBtn.style.border = 'none';
+            removeBtn.style.color = '#f87171';
+            removeBtn.style.cursor = 'pointer';
+            removeBtn.addEventListener('click', () => {
+                state.subtitles = state.subtitles.filter(s => s.id !== sub.id);
+                renderSubtitleList();
+                if (window.drawEditorFrame) window.drawEditorFrame();
+            });
+
+            row.appendChild(label);
+            row.appendChild(timeLabel);
+            row.appendChild(removeBtn);
+            subtitleListEl.appendChild(row);
+        });
+    }
+
+    // Stop listening automatically once the trimmed playback range ends or video is paused
+    state.video.addEventListener('pause', () => {
+        if (state.isSubtitleRecognitionActive) {
+            stopSubtitleRecognition();
+        }
+    });
 });
