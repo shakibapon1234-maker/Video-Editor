@@ -50,6 +50,7 @@ window.VideoEditor = {
     voiceoverBlob: null,
     voiceoverUrl: null,
     voiceoverRecorded: false,
+    voiceoverProfile: 'none',
     isNoiseCancelActive: false,
     noiseGateThreshold: -50,
 

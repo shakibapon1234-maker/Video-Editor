@@ -1,4 +1,323 @@
 // Audio Processing Engine
+
+// Jungle Pitch Shifter Implementation (Copyright 2012, Google Inc.)
+function createFadeBuffer(context, activeTime, fadeTime) {
+    const length1 = activeTime * context.sampleRate;
+    const length2 = (activeTime - 2 * fadeTime) * context.sampleRate;
+    const length = length1 + length2;
+    const buffer = context.createBuffer(1, length, context.sampleRate);
+    const p = buffer.getChannelData(0);
+    const fadeLength = fadeTime * context.sampleRate;
+    const fadeIndex1 = fadeLength;
+    const fadeIndex2 = length1 - fadeLength;
+    
+    for (let i = 0; i < length1; ++i) {
+        let value;
+        if (i < fadeIndex1) {
+            value = Math.sqrt(i / fadeLength);
+        } else if (i >= fadeIndex2) {
+            value = Math.sqrt(1 - (i - fadeIndex2) / fadeLength);
+        } else {
+            value = 1;
+        }
+        p[i] = value;
+    }
+    for (let i = length1; i < length; ++i) {
+        p[i] = 0;
+    }
+    return buffer;
+}
+
+function createDelayTimeBuffer(context, activeTime, fadeTime, shiftUp) {
+    const length1 = activeTime * context.sampleRate;
+    const length2 = (activeTime - 2 * fadeTime) * context.sampleRate;
+    const length = length1 + length2;
+    const buffer = context.createBuffer(1, length, context.sampleRate);
+    const p = buffer.getChannelData(0);
+
+    for (let i = 0; i < length1; ++i) {
+        if (shiftUp) {
+            p[i] = (length1 - i) / length;
+        } else {
+            p[i] = i / length1;
+        }
+    }
+    for (let i = length1; i < length; ++i) {
+        p[i] = 0;
+    }
+    return buffer;
+}
+
+class Jungle {
+    constructor(context) {
+        this.context = context;
+        this.input = context.createGain();
+        this.output = context.createGain();
+        
+        this.delayTimeValue = 0.100;
+        this.fadeTimeValue = 0.050;
+        this.bufferTimeValue = 0.100;
+        
+        const mod1 = context.createBufferSource();
+        const mod2 = context.createBufferSource();
+        const mod3 = context.createBufferSource();
+        const mod4 = context.createBufferSource();
+        
+        this.shiftDownBuffer = createDelayTimeBuffer(context, this.bufferTimeValue, this.fadeTimeValue, false);
+        this.shiftUpBuffer = createDelayTimeBuffer(context, this.bufferTimeValue, this.fadeTimeValue, true);
+        
+        mod1.buffer = this.shiftDownBuffer;
+        mod2.buffer = this.shiftDownBuffer;
+        mod3.buffer = this.shiftUpBuffer;
+        mod4.buffer = this.shiftUpBuffer;
+        
+        mod1.loop = true;
+        mod2.loop = true;
+        mod3.loop = true;
+        mod4.loop = true;
+
+        const mod1Gain = context.createGain();
+        const mod2Gain = context.createGain();
+        const mod3Gain = context.createGain();
+        mod3Gain.gain.value = 0;
+        const mod4Gain = context.createGain();
+        mod4Gain.gain.value = 0;
+
+        mod1.connect(mod1Gain);
+        mod2.connect(mod2Gain);
+        mod3.connect(mod3Gain);
+        mod4.connect(mod4Gain);
+
+        const modGain1 = context.createGain();
+        const modGain2 = context.createGain();
+
+        const delay1 = context.createDelay();
+        const delay2 = context.createDelay();
+        
+        mod1Gain.connect(modGain1);
+        mod2Gain.connect(modGain2);
+        mod3Gain.connect(modGain1);
+        mod4Gain.connect(modGain2);
+        
+        modGain1.connect(delay1.delayTime);
+        modGain2.connect(delay2.delayTime);
+
+        const fade1 = context.createBufferSource();
+        const fade2 = context.createBufferSource();
+        const fadeBuffer = createFadeBuffer(context, this.bufferTimeValue, this.fadeTimeValue);
+        fade1.buffer = fadeBuffer;
+        fade2.buffer = fadeBuffer;
+        fade1.loop = true;
+        fade2.loop = true;
+
+        const mix1 = context.createGain();
+        const mix2 = context.createGain();
+        mix1.gain.value = 0;
+        mix2.gain.value = 0;
+
+        fade1.connect(mix1.gain);    
+        fade2.connect(mix2.gain);
+            
+        this.input.connect(delay1);
+        this.input.connect(delay2);    
+        delay1.connect(mix1);
+        delay2.connect(mix2);
+        mix1.connect(this.output);
+        mix2.connect(this.output);
+        
+        const t = context.currentTime + 0.050;
+        const t2 = t + this.bufferTimeValue - this.fadeTimeValue;
+        mod1.start(t);
+        mod2.start(t2);
+        mod3.start(t);
+        mod4.start(t2);
+        fade1.start(t);
+        fade2.start(t2);
+
+        this.mod1 = mod1;
+        this.mod2 = mod2;
+        this.mod1Gain = mod1Gain;
+        this.mod2Gain = mod2Gain;
+        this.mod3Gain = mod3Gain;
+        this.mod4Gain = mod4Gain;
+        this.modGain1 = modGain1;
+        this.modGain2 = modGain2;
+        this.fade1 = fade1;
+        this.fade2 = fade2;
+        this.mix1 = mix1;
+        this.mix2 = mix2;
+        this.delay1 = delay1;
+        this.delay2 = delay2;
+        
+        this.setDelay(this.delayTimeValue);
+    }
+    
+    setDelay(delayTime) {
+        this.modGain1.gain.setTargetAtTime(0.5 * delayTime, 0, 0.010);
+        this.modGain2.gain.setTargetAtTime(0.5 * delayTime, 0, 0.010);
+    }
+    
+    setPitchOffset(mult) {
+        if (mult > 0) { // pitch up
+            this.mod1Gain.gain.setValueAtTime(0, this.context.currentTime);
+            this.mod2Gain.gain.setValueAtTime(0, this.context.currentTime);
+            this.mod3Gain.gain.setValueAtTime(1, this.context.currentTime);
+            this.mod4Gain.gain.setValueAtTime(1, this.context.currentTime);
+        } else { // pitch down
+            this.mod1Gain.gain.setValueAtTime(1, this.context.currentTime);
+            this.mod2Gain.gain.setValueAtTime(1, this.context.currentTime);
+            this.mod3Gain.gain.setValueAtTime(0, this.context.currentTime);
+            this.mod4Gain.gain.setValueAtTime(0, this.context.currentTime);
+        }
+        this.setDelay(this.delayTimeValue * Math.abs(mult));
+    }
+}
+
+class VoiceChangerEffect {
+    constructor(context) {
+        this.context = context;
+        this.input = context.createGain();
+        this.output = context.createGain();
+        
+        // Pitch Shifter Node
+        this.pitchShifter = new Jungle(context);
+        
+        // Equalizer/Filter Nodes
+        this.highpass = context.createBiquadFilter();
+        this.highpass.type = 'highpass';
+        this.highpass.frequency.setValueAtTime(80, context.currentTime);
+        
+        this.peaking = context.createBiquadFilter();
+        this.peaking.type = 'peaking';
+        this.peaking.frequency.setValueAtTime(2500, context.currentTime);
+        this.peaking.Q.setValueAtTime(1.0, context.currentTime);
+        this.peaking.gain.setValueAtTime(0, context.currentTime);
+        
+        this.lowpass = context.createBiquadFilter();
+        this.lowpass.type = 'lowpass';
+        this.lowpass.frequency.setValueAtTime(15000, context.currentTime);
+
+        // Robotic Modulation Oscillator and Gain
+        this.robotOsc = context.createOscillator();
+        this.robotOsc.type = 'sawtooth';
+        this.robotOsc.frequency.setValueAtTime(55, context.currentTime);
+        
+        this.robotGain = context.createGain();
+        this.robotGain.gain.setValueAtTime(0, context.currentTime);
+        
+        // Ring modulation node
+        this.ringModNode = context.createGain();
+        this.ringModNode.gain.setValueAtTime(1.0, context.currentTime);
+        
+        // Connect robot modulator: Osc -> Gain -> ringModNode.gain
+        this.robotOsc.connect(this.robotGain);
+        this.robotGain.connect(this.ringModNode.gain);
+        this.robotOsc.start();
+
+        // Echo delay line
+        this.echoDelay = context.createDelay();
+        this.echoDelay.delayTime.setValueAtTime(0.18, context.currentTime);
+        
+        this.echoFeedback = context.createGain();
+        this.echoFeedback.gain.setValueAtTime(0.25, context.currentTime);
+        
+        // Connect echo feedback loop: Delay -> Feedback -> Delay
+        this.echoDelay.connect(this.echoFeedback);
+        this.echoFeedback.connect(this.echoDelay);
+        
+        this.echoGain = context.createGain();
+        this.echoGain.gain.setValueAtTime(0, context.currentTime);
+        
+        // Connect Graph:
+        // input -> highpass -> peaking -> lowpass -> pitchShifter -> ringModNode -> output
+        this.input.connect(this.highpass);
+        this.highpass.connect(this.peaking);
+        this.peaking.connect(this.lowpass);
+        this.lowpass.connect(this.pitchShifter.input);
+        this.pitchShifter.output.connect(this.ringModNode);
+        this.ringModNode.connect(this.output);
+        
+        // Connect parallel echo path: peaking -> echoDelay -> echoGain -> output
+        this.peaking.connect(this.echoDelay);
+        this.echoDelay.connect(this.echoGain);
+        this.echoGain.connect(this.output);
+        
+        this.setProfile('none');
+    }
+    
+    setProfile(profileName) {
+        this.profile = profileName;
+        const now = this.context.currentTime;
+        
+        // Reset defaults
+        this.pitchShifter.setPitchOffset(0);
+        this.highpass.frequency.setValueAtTime(80, now);
+        this.lowpass.frequency.setValueAtTime(15000, now);
+        this.peaking.gain.setValueAtTime(0, now);
+        this.robotGain.gain.setValueAtTime(0, now);
+        this.echoGain.gain.setValueAtTime(0, now);
+        
+        switch (profileName) {
+            case 'female_sweet': // Sweet female voice
+                this.pitchShifter.setPitchOffset(0.46);
+                this.highpass.frequency.setValueAtTime(190, now); 
+                this.peaking.frequency.setValueAtTime(3200, now);
+                this.peaking.gain.setValueAtTime(5, now);
+                break;
+                
+            case 'female_warm': // Warm female voice
+                this.pitchShifter.setPitchOffset(0.35);
+                this.highpass.frequency.setValueAtTime(160, now);
+                this.peaking.frequency.setValueAtTime(1200, now);
+                this.peaking.gain.setValueAtTime(4, now);
+                break;
+                
+            case 'male_deep': // Deep marketing male voice
+                this.pitchShifter.setPitchOffset(-0.25);
+                this.highpass.frequency.setValueAtTime(95, now);
+                this.peaking.frequency.setValueAtTime(170, now);
+                this.peaking.gain.setValueAtTime(5, now);
+                break;
+                
+            case 'male_bold': // Bold presenter male voice
+                this.pitchShifter.setPitchOffset(-0.15);
+                this.highpass.frequency.setValueAtTime(110, now);
+                this.peaking.frequency.setValueAtTime(2600, now);
+                this.peaking.gain.setValueAtTime(4, now);
+                break;
+                
+            case 'cartoon': // Chipmunk / Cartoon
+                this.pitchShifter.setPitchOffset(0.75);
+                this.highpass.frequency.setValueAtTime(220, now);
+                break;
+                
+            case 'monster': // Monster
+                this.pitchShifter.setPitchOffset(-0.5);
+                this.highpass.frequency.setValueAtTime(65, now);
+                this.peaking.frequency.setValueAtTime(110, now);
+                this.peaking.gain.setValueAtTime(6, now);
+                break;
+                
+            case 'robot': // Robotic
+                this.pitchShifter.setPitchOffset(0);
+                this.highpass.frequency.setValueAtTime(120, now);
+                this.lowpass.frequency.setValueAtTime(8000, now);
+                this.robotGain.gain.setValueAtTime(0.85, now);
+                break;
+                
+            case 'echo_ambient': // Ambient Echo
+                this.pitchShifter.setPitchOffset(0);
+                this.highpass.frequency.setValueAtTime(120, now);
+                this.echoGain.gain.setValueAtTime(0.35, now);
+                break;
+                
+            case 'none':
+            default:
+                break;
+        }
+    }
+}
+
 document.addEventListener('DOMContentLoaded', () => {
     const state = window.VideoEditor;
     
@@ -19,6 +338,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const voiceoverVolumeContainer = document.getElementById('voiceover-volume-container');
     const voiceoverVolumeSlider = document.getElementById('voiceover-volume-slider');
     const voiceoverVolumeVal = document.getElementById('voiceover-volume-val');
+    const voiceChangerSelect = document.getElementById('voice-changer-select');
 
     // Background Music UI selectors (Phase 3A)
     const bgMusicDropzone = document.getElementById('bgmusic-dropzone');
@@ -40,6 +360,11 @@ document.addEventListener('DOMContentLoaded', () => {
     let highpassNode = null;
     let lowpassNode = null;
     let compressorNode = null;
+    
+    // Voiceover Web Audio nodes
+    let voiceoverMediaSource = null;
+    let voiceoverVoiceChanger = null;
+    let voiceoverVolumeGain = null;
     
     // Voiceover Audio elements
     let micStream = null;
@@ -94,6 +419,33 @@ document.addEventListener('DOMContentLoaded', () => {
             highpassNode.connect(lowpassNode);
             lowpassNode.connect(compressorNode);
             compressorNode.connect(audioCtx.destination);
+            
+            // Route recorded voiceover preview element through AudioContext
+            const voiceoverAudioPreviewEl = document.getElementById('voiceover-audio-preview');
+            if (voiceoverAudioPreviewEl) {
+                voiceoverMediaSource = audioCtx.createMediaElementSource(voiceoverAudioPreviewEl);
+                voiceoverVoiceChanger = new VoiceChangerEffect(audioCtx);
+                voiceoverVolumeGain = audioCtx.createGain();
+                
+                voiceoverVolumeGain.gain.setValueAtTime(state.voiceoverVolume, 0);
+                voiceoverVoiceChanger.setProfile(state.voiceoverProfile || 'none');
+                
+                // Connect preview stream: voiceoverAudioPreviewEl -> voiceoverMediaSource -> VoiceChanger -> VolumeGain -> Destination
+                voiceoverMediaSource.connect(voiceoverVoiceChanger.input);
+                voiceoverVoiceChanger.output.connect(voiceoverVolumeGain);
+                voiceoverVolumeGain.connect(audioCtx.destination);
+                
+                // Expose to window for external adjustments
+                window.voiceoverVoiceChanger = voiceoverVoiceChanger;
+                window.voiceoverVolumeGain = voiceoverVolumeGain;
+                
+                // Ensure audio context resumes when voiceover preview starts playing
+                voiceoverAudioPreviewEl.addEventListener('play', () => {
+                    if (audioCtx && audioCtx.state === 'suspended') {
+                        audioCtx.resume();
+                    }
+                });
+            }
             
             // Try requesting Mic access early for step 3 prep
             requestMicrophoneAccess();
@@ -255,7 +607,23 @@ document.addEventListener('DOMContentLoaded', () => {
         
         // Update preview player element volume
         voiceoverAudioPreview.volume = Math.min(1.0, state.voiceoverVolume);
+        
+        // Also update the Web Audio Gain Node to stay in sync
+        if (window.voiceoverVolumeGain && audioCtx) {
+            window.voiceoverVolumeGain.gain.setValueAtTime(state.voiceoverVolume, audioCtx.currentTime);
+        }
     });
+
+    // Voice Changer Select Controls
+    if (voiceChangerSelect) {
+        voiceChangerSelect.value = state.voiceoverProfile || 'none';
+        voiceChangerSelect.addEventListener('change', (e) => {
+            state.voiceoverProfile = e.target.value;
+            if (window.voiceoverVoiceChanger) {
+                window.voiceoverVoiceChanger.setProfile(state.voiceoverProfile);
+            }
+        });
+    }
 
     // --- 4B. Background Music (Phase 3A) ---
     bgMusicDropzone.addEventListener('click', () => bgMusicInput.click());
@@ -461,7 +829,15 @@ document.addEventListener('DOMContentLoaded', () => {
                         
                         voiceoverSource = audioCtx.createBufferSource();
                         voiceoverSource.buffer = audioBuffer;
-                        voiceoverSource.connect(voiceoverGain);
+                        
+                        if (state.voiceoverProfile && state.voiceoverProfile !== 'none') {
+                            const exportVoiceChanger = new VoiceChangerEffect(audioCtx);
+                            exportVoiceChanger.setProfile(state.voiceoverProfile);
+                            voiceoverSource.connect(exportVoiceChanger.input);
+                            exportVoiceChanger.output.connect(voiceoverGain);
+                        } else {
+                            voiceoverSource.connect(voiceoverGain);
+                        }
                         
                         // Start immediately, synchronized with video playback
                         voiceoverSource.start(audioCtx.currentTime);

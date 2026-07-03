@@ -47,6 +47,7 @@
   [DONE] Mobile Responsive layout                          - style.css
   [DONE] Visual Crop Tool (canvas region select & crop)   - editor.js
   [DONE] Background Music (upload, loop, volume, ducking) - audio.js
+  [DONE] Voice Changer Presets (Female, Male, Robot, Echo) - audio.js
 
 
 -----------------------------------------------------
