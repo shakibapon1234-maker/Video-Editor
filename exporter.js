@@ -150,7 +150,11 @@ document.addEventListener('DOMContentLoaded', () => {
         };
 
         recorder.start(100); // Collect data every 100ms
-        video.volume = 0; // Mute speaker output during export (audio goes to MediaRecorder only)
+        // Mute speaker output during export without muting the Web Audio graph
+        // (video.volume = 0 would silence the MediaRecorder's audio tap too in Chrome)
+        if (!window.setSpeakerMuted || !window.setSpeakerMuted(true)) {
+            video.volume = 0;
+        }
 
         // --- Step D: Play through every clip sequentially while recording ---
         renderStatusText.innerText = 'Rendering video frames...';
@@ -181,7 +185,9 @@ document.addEventListener('DOMContentLoaded', () => {
             state.activeClipId = clip.id;
 
             video.currentTime = clipTrimStart;
-            video.volume = 0;
+            if (!window.setSpeakerMuted || !window.setSpeakerMuted(true)) {
+                video.volume = 0;
+            }
             await video.play();
 
             // Start voiceover & background music once, right after the very first clip begins playing,
@@ -267,7 +273,9 @@ document.addEventListener('DOMContentLoaded', () => {
         state.startTime = originalStartTime;
         state.endTime = originalEndTime;
         video.currentTime = state.startTime;
-        video.volume = Math.min(1.0, state.videoVolume);
+        if (!window.setSpeakerMuted || !window.setSpeakerMuted(false)) {
+            video.volume = Math.min(1.0, state.videoVolume);
+        }
         if (window.drawEditorFrame) window.drawEditorFrame();
 
         // --- Step F: Create download blob ---

@@ -101,6 +101,19 @@ document.addEventListener('DOMContentLoaded', () => {
             console.error("Failed to initialize Web Audio API", e);
         }
     };
+
+    // Mute/unmute the video's audio via the Web Audio gain node instead of
+    // HTMLMediaElement.volume. Setting video.volume = 0 while the element is
+    // routed through createMediaElementSource() silences the audio graph
+    // entirely in Chrome, which was killing the exported video's sound.
+    // This mutes only what goes to the speakers; the MediaRecorder tap
+    // (post-gain in the chain) keeps receiving full audio either way.
+    window.setSpeakerMuted = function(muted) {
+        if (!videoGainNode || !audioCtx) return false; // caller should fall back to video.volume
+        const targetGain = muted ? 0 : state.videoVolume;
+        videoGainNode.gain.setValueAtTime(targetGain, audioCtx.currentTime);
+        return true;
+    };
     
     // Resume audio context when playing
     state.video.addEventListener('play', () => {
