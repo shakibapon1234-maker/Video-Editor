@@ -55,8 +55,8 @@ class Jungle {
         this.output = context.createGain();
         
         this.delayTimeValue = 0.100;
-        this.fadeTimeValue = 0.050;
-        this.bufferTimeValue = 0.100;
+        this.fadeTimeValue = 0.035;
+        this.bufferTimeValue = 0.085;
         
         const mod1 = context.createBufferSource();
         const mod2 = context.createBufferSource();
@@ -192,7 +192,18 @@ class VoiceChangerEffect {
         this.peaking.frequency.setValueAtTime(2500, context.currentTime);
         this.peaking.Q.setValueAtTime(1.0, context.currentTime);
         this.peaking.gain.setValueAtTime(0, context.currentTime);
-        
+
+        // Second formant band: shifting pitch alone doesn't move a voice's
+        // formants (throat/mouth resonance), which is why a pitched-up male
+        // voice can still sound male or robotic. This second peaking filter
+        // boosts the higher formant region so female presets read as
+        // brighter/female instead of just "higher pitched male".
+        this.peaking2 = context.createBiquadFilter();
+        this.peaking2.type = 'peaking';
+        this.peaking2.frequency.setValueAtTime(2800, context.currentTime);
+        this.peaking2.Q.setValueAtTime(1.1, context.currentTime);
+        this.peaking2.gain.setValueAtTime(0, context.currentTime);
+
         this.lowpass = context.createBiquadFilter();
         this.lowpass.type = 'lowpass';
         this.lowpass.frequency.setValueAtTime(15000, context.currentTime);
@@ -229,10 +240,11 @@ class VoiceChangerEffect {
         this.echoGain.gain.setValueAtTime(0, context.currentTime);
         
         // Connect Graph:
-        // input -> highpass -> peaking -> lowpass -> pitchShifter -> ringModNode -> output
+        // input -> highpass -> peaking -> peaking2 -> lowpass -> pitchShifter -> ringModNode -> output
         this.input.connect(this.highpass);
         this.highpass.connect(this.peaking);
-        this.peaking.connect(this.lowpass);
+        this.peaking.connect(this.peaking2);
+        this.peaking2.connect(this.lowpass);
         this.lowpass.connect(this.pitchShifter.input);
         this.pitchShifter.output.connect(this.ringModNode);
         this.ringModNode.connect(this.output);
@@ -254,22 +266,27 @@ class VoiceChangerEffect {
         this.highpass.frequency.setValueAtTime(80, now);
         this.lowpass.frequency.setValueAtTime(15000, now);
         this.peaking.gain.setValueAtTime(0, now);
+        this.peaking2.gain.setValueAtTime(0, now);
         this.robotGain.gain.setValueAtTime(0, now);
         this.echoGain.gain.setValueAtTime(0, now);
         
         switch (profileName) {
             case 'female_sweet': // Sweet female voice
-                this.pitchShifter.setPitchOffset(0.46);
-                this.highpass.frequency.setValueAtTime(190, now); 
-                this.peaking.frequency.setValueAtTime(3200, now);
+                this.pitchShifter.setPitchOffset(0.40); // slightly less than before to reduce warble artifacts
+                this.highpass.frequency.setValueAtTime(210, now); // strip more chest/male resonance
+                this.peaking.frequency.setValueAtTime(3000, now);
                 this.peaking.gain.setValueAtTime(5, now);
+                this.peaking2.frequency.setValueAtTime(4200, now); // adds airy female "presence"
+                this.peaking2.gain.setValueAtTime(4, now);
                 break;
                 
             case 'female_warm': // Warm female voice
-                this.pitchShifter.setPitchOffset(0.35);
-                this.highpass.frequency.setValueAtTime(160, now);
-                this.peaking.frequency.setValueAtTime(1200, now);
-                this.peaking.gain.setValueAtTime(4, now);
+                this.pitchShifter.setPitchOffset(0.30);
+                this.highpass.frequency.setValueAtTime(180, now);
+                this.peaking.frequency.setValueAtTime(1400, now);
+                this.peaking.gain.setValueAtTime(3, now);
+                this.peaking2.frequency.setValueAtTime(3200, now); // keeps it from sounding muddy/male
+                this.peaking2.gain.setValueAtTime(3, now);
                 break;
                 
             case 'male_deep': // Deep marketing male voice
@@ -360,6 +377,7 @@ document.addEventListener('DOMContentLoaded', () => {
     let highpassNode = null;
     let lowpassNode = null;
     let compressorNode = null;
+    let makeupGainNode = null; // Auto-compensates volume lost to the noise-cancel compressor
     
     // Voiceover Web Audio nodes
     let voiceoverMediaSource = null;
@@ -413,12 +431,41 @@ document.addEventListener('DOMContentLoaded', () => {
             compressorNode.attack.setValueAtTime(0.003, 0);
             compressorNode.release.setValueAtTime(0.25, 0);
             
-            // Link DSP chain: Source -> Volume -> Highpass -> Lowpass -> Compressor -> Destination
+            // Makeup gain: automatically restores the loudness the compressor
+            // takes away when Noise Cancellation is on. Without this, a low
+            // gate threshold + high ratio crushes the entire voice signal
+            // down near-silence with no way to bring the level back up.
+            makeupGainNode = audioCtx.createGain();
+            makeupGainNode.gain.setValueAtTime(1, 0);
+
+            // Link DSP chain: Source -> Volume -> Highpass -> Lowpass -> Compressor -> MakeupGain -> Destination
             videoSourceNode.connect(videoGainNode);
             videoGainNode.connect(highpassNode);
             highpassNode.connect(lowpassNode);
             lowpassNode.connect(compressorNode);
-            compressorNode.connect(audioCtx.destination);
+            compressorNode.connect(makeupGainNode);
+            makeupGainNode.connect(audioCtx.destination);
+
+            // Continuously read how much the compressor is reducing the signal
+            // (compressorNode.reduction, always <= 0 dB) and add that loudness
+            // back via makeupGainNode. This is what keeps Noise Cancellation
+            // from silencing the audio: the filters/gate still cut hiss and
+            // low-level noise, but real speech gets its volume restored.
+            (function pumpMakeupGain() {
+                if (compressorNode && makeupGainNode && audioCtx) {
+                    if (state.isNoiseCancelActive) {
+                        const reductionDb = compressorNode.reduction || 0; // negative dB
+                        // Cap compensation at +14dB (~5x) so we don't also blast
+                        // residual background noise back up to full volume.
+                        const compensationDb = Math.min(14, -reductionDb);
+                        const targetGain = Math.pow(10, compensationDb / 20);
+                        makeupGainNode.gain.setTargetAtTime(targetGain, audioCtx.currentTime, 0.08);
+                    } else {
+                        makeupGainNode.gain.setTargetAtTime(1, audioCtx.currentTime, 0.08);
+                    }
+                }
+                requestAnimationFrame(pumpMakeupGain);
+            })();
             
             // Route recorded voiceover preview element through AudioContext
             const voiceoverAudioPreviewEl = document.getElementById('voiceover-audio-preview');
@@ -769,9 +816,11 @@ document.addEventListener('DOMContentLoaded', () => {
         // Create destination node for MediaRecorder to capture
         const dest = audioCtx.createMediaStreamDestination();
         
-        // Disconnect video chain from speakers and route into export destination
-        compressorNode.disconnect(audioCtx.destination);
-        compressorNode.connect(dest);
+        // Disconnect video chain from speakers and route into export destination.
+        // Tap AFTER makeupGainNode so the exported file gets the same
+        // noise-cancel volume compensation as the live preview does.
+        makeupGainNode.disconnect(audioCtx.destination);
+        makeupGainNode.connect(dest);
         
         // Pre-create gain node for voiceover mixing
         let voiceoverSource = null;
@@ -802,8 +851,8 @@ document.addEventListener('DOMContentLoaded', () => {
             stream: dest.stream,
             // Restore speaker connection after export finishes
             cleanup: function() {
-                try { compressorNode.disconnect(dest); } catch(e) {}
-                compressorNode.connect(audioCtx.destination);
+                try { makeupGainNode.disconnect(dest); } catch(e) {}
+                makeupGainNode.connect(audioCtx.destination);
                 
                 if (voiceoverSource) {
                     try { voiceoverSource.stop(); } catch(e) {}

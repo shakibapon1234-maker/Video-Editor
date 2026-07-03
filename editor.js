@@ -957,6 +957,15 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // --- Drawing the Canvas frame ---
+    // Cartoon-style overshoot easing: eases toward 1 but briefly overshoots
+    // past it before settling, giving B-roll PiP images a bouncy "pop" feel
+    // instead of a flat linear slide.
+    function easeOutBackOvershoot(x) {
+        const c1 = 1.70158;
+        const c3 = c1 + 1;
+        return 1 + c3 * Math.pow(x - 1, 3) + c1 * Math.pow(x - 1, 2);
+    }
+
     function drawFrame() {
         if (!state.duration) return;
         
@@ -1259,21 +1268,24 @@ document.addEventListener('DOMContentLoaded', () => {
                     : (currentTime >= item.startSec && currentTime <= item.endSec);
                 if (!inRange) return;
 
-                // Fade in/out over 0.4s at the edges of the range for a smoother transition
-                let alpha = 1;
-                if (state.currentStep !== 2) {
-                    const fadeDur = 0.4;
-                    const tIn = currentTime - item.startSec;
-                    const tOut = item.endSec - currentTime;
-                    if (tIn < fadeDur) alpha = Math.max(0, tIn / fadeDur);
-                    if (tOut < fadeDur) alpha = Math.min(alpha, Math.max(0, tOut / fadeDur));
-                }
-
-                state.ctx.save();
-                state.ctx.globalAlpha = alpha;
+                const tIn = currentTime - item.startSec;
+                const tOut = item.endSec - currentTime;
 
                 if (item.mode === 'fullscreen') {
-                    // Cover the entire video frame area, preserving aspect ratio (fill/crop)
+                    // Fade in/out over 0.4s at the edges of the range
+                    let alpha = 1;
+                    if (state.currentStep !== 2) {
+                        const fadeDur = 0.4;
+                        if (tIn < fadeDur) alpha = Math.max(0, tIn / fadeDur);
+                        if (tOut < fadeDur) alpha = Math.min(alpha, Math.max(0, tOut / fadeDur));
+                    }
+
+                    state.ctx.save();
+                    state.ctx.globalAlpha = alpha;
+
+                    // Cover the entire video frame area, preserving aspect ratio (fill/crop),
+                    // with a slow continuous "Ken Burns" zoom-in so a still photo feels alive
+                    // instead of sitting frozen on screen.
                     const imgAspect = item.imageImg.naturalWidth / item.imageImg.naturalHeight;
                     const boxAspect = drawW / drawH;
                     let sx, sy, sw, sh;
@@ -1288,28 +1300,72 @@ document.addEventListener('DOMContentLoaded', () => {
                         sx = 0;
                         sy = (item.imageImg.naturalHeight - sh) / 2;
                     }
+                    if (state.currentStep !== 2) {
+                        const totalDur = Math.max(0.01, item.endSec - item.startSec);
+                        const zoomProgress = Math.max(0, Math.min(1, tIn / totalDur));
+                        const zoom = 1 + 0.08 * zoomProgress; // grows to 8% zoomed-in by the end
+                        const newSw = sw / zoom, newSh = sh / zoom;
+                        sx += (sw - newSw) / 2;
+                        sy += (sh - newSh) / 2;
+                        sw = newSw; sh = newSh;
+                    }
                     state.ctx.drawImage(item.imageImg, sx, sy, sw, sh, drawX, drawY, drawW, drawH);
+                    state.ctx.restore();
                 } else {
-                    // Picture-in-picture: positioned box sized relative to canvas width
+                    // Picture-in-picture with a cartoon-style slide-in/pop entrance and
+                    // slide-out exit. Each clip gets its own entry direction (assigned when
+                    // the image was added) so a sequence of B-roll images doesn't always
+                    // enter from the same corner.
                     const pipW = canvasW * (item.size / 100);
                     const pipH = pipW * (item.imageImg.naturalHeight / item.imageImg.naturalWidth);
-                    const px = item.x * canvasW;
-                    const py = item.y * canvasH;
+                    const targetX = item.x * canvasW;
+                    const targetY = item.y * canvasH;
+
+                    let progress = 1;
+                    if (state.currentStep !== 2) {
+                        const animDur = 0.45;
+                        const enter = tIn < animDur ? Math.max(0, tIn / animDur) : 1;
+                        const exit = tOut < animDur ? Math.max(0, tOut / animDur) : 1;
+                        progress = Math.max(0, Math.min(1, Math.min(enter, exit)));
+                    }
+                    const eased = easeOutBackOvershoot(progress);
+
+                    const dir = item.entryDirection || 'bottom';
+                    let offX = 0, offY = 0;
+                    if (dir === 'left') offX = -(targetX + pipW);
+                    else if (dir === 'right') offX = (canvasW - targetX);
+                    else if (dir === 'top') offY = -(targetY + pipH);
+                    else offY = (canvasH - targetY);
+
+                    const drawXpip = targetX + offX * (1 - eased);
+                    const drawYpip = targetY + offY * (1 - eased);
+                    const scale = 0.7 + 0.3 * eased; // pops in from 70% to 100% size
+                    const wobble = (1 - eased) * (dir === 'left' || dir === 'top' ? -0.10 : 0.10);
+
+                    state.ctx.save();
+                    state.ctx.globalAlpha = Math.max(0.15, Math.min(1, eased));
+
+                    const cx = drawXpip + pipW / 2;
+                    const cy = drawYpip + pipH / 2;
+                    state.ctx.translate(cx, cy);
+                    state.ctx.rotate(wobble);
+                    state.ctx.scale(scale, scale);
+                    state.ctx.translate(-pipW / 2, -pipH / 2);
 
                     state.ctx.fillStyle = 'rgba(0,0,0,0.25)';
-                    state.ctx.fillRect(px - 4, py - 4, pipW + 8, pipH + 8);
-                    state.ctx.drawImage(item.imageImg, px, py, pipW, pipH);
+                    state.ctx.fillRect(-4, -4, pipW + 8, pipH + 8);
+                    state.ctx.drawImage(item.imageImg, 0, 0, pipW, pipH);
 
                     if (state.currentStep === 2 && item.id === state.selectedBrollId) {
                         state.ctx.strokeStyle = 'rgba(79, 70, 229, 0.9)';
                         state.ctx.lineWidth = 2;
                         state.ctx.setLineDash([6, 4]);
-                        state.ctx.strokeRect(px, py, pipW, pipH);
+                        state.ctx.strokeRect(0, 0, pipW, pipH);
                         state.ctx.setLineDash([]);
                     }
-                }
 
-                state.ctx.restore();
+                    state.ctx.restore();
+                }
             });
         }
 
@@ -2359,7 +2415,10 @@ document.addEventListener('DOMContentLoaded', () => {
                 x: 0.05,
                 y: 0.6,
                 startSec: state.video.currentTime || 0,
-                endSec: Math.min(state.duration || 5, (state.video.currentTime || 0) + 3)
+                endSec: Math.min(state.duration || 5, (state.video.currentTime || 0) + 3),
+                // Each B-roll clip enters from a different side so a sequence
+                // of images doesn't always pop in from the same corner
+                entryDirection: ['left', 'right', 'top', 'bottom'][Math.floor(Math.random() * 4)]
             };
             state.brollOverlays.push(newItem);
             state.selectedBrollId = newItem.id;

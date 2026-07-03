@@ -111,6 +111,55 @@ v1.3 - Background Music (সম্পন্ন)
 পরবর্তী কাজের পূর্ণ পরিকল্পনা
 -----------------------------------------------------
 
+v2.1 - Bug Fixes & Polish (সম্পন্ন)
+--------------------------------------
+
+Bug 4 - Noise Cancellation Silences Exported Audio (audio.js)
+  সমস্যা : Noise Cancellation ON করলে DynamicsCompressorNode-এর
+           threshold অনেক নিচে (-50dB) আর ratio অনেক বেশি (16:1)
+           সেট হতো, কোনো makeup gain ছাড়াই। যেহেতু কথা বলার প্রায়
+           পুরো সিগন্যালই -50dB-এর উপরে থাকে, পুরো ভয়েসটাই ভারী
+           কম্প্রেশনে চাপা পড়ে প্রায় নিঃশব্দ হয়ে যেত — export করা
+           ফাইলে সাউন্ড প্রায় শোনাই যেত না।
+  সমাধান: compressorNode-এর পরে একটা makeupGainNode যোগ করা হয়েছে।
+           প্রতি ফ্রেমে compressorNode.reduction (কত dB কমানো হচ্ছে)
+           পড়ে ঠিক ততটাই makeupGainNode দিয়ে ভলিউম ফিরিয়ে আনা হয়
+           (সর্বোচ্চ +14dB পর্যন্ত)। ফলে হিস/নয়েজ ফিল্টার হয়ে যায়
+           কিন্তু আসল কণ্ঠস্বর স্বাভাবিক ভলিউমেই থাকে। Export
+           mixing (getMixedAudioDestinationStream)-ও makeupGainNode
+           দিয়ে ট্যাপ করা হয়, যাতে প্রিভিউ আর ডাউনলোড করা ফাইলে
+           একই ভলিউম থাকে।
+
+Bug 5 - Female Voice Changer Sounds Off (audio.js)
+  সমস্যা : Voice Changer-এ শুধু pitch shift করা হতো, formant
+           (গলা/মুখের রেজোনেন্স) শিফট হতো না — ফলে পিচ বাড়ানো
+           পুরুষ কণ্ঠ আসলে মেয়েলি না শুনিয়ে রোবোটিক/অদ্ভুত শোনাত।
+           পিচ শিফট (0.46) বেশি হওয়ায় warble artifact-ও বেশি ছিল।
+  সমাধান: দ্বিতীয় peaking EQ ব্যান্ড (peaking2) যোগ করে দুই-ব্যান্ড
+           formant shaping করা হয়েছে। female_sweet/female_warm
+           প্রোফাইলে pitch shift কিছুটা কমিয়ে (0.40/0.30) আর
+           highpass বাড়িয়ে/উচ্চ-ফ্রিকোয়েন্সি প্রেজেন্স বাড়িয়ে
+           কণ্ঠটা আরও স্পষ্ট মেয়েলি করার চেষ্টা করা হয়েছে। Jungle
+           pitch shifter-এর grain window কিছুটা ছোট করা হয়েছে
+           (bufferTime 0.085s, fadeTime 0.035s) কম warble-এর জন্য।
+  সীমাবদ্ধতা (অপরিবর্তিত): এটি pure browser-based pitch/EQ shifting,
+           কোনো ML/AI voice-cloning API নয়, তাই ফলাফল কখনোই
+           ElevenLabs/Descript-এর মতো নিখুঁত হবে না — শুধু আগের
+           চেয়ে পরিষ্কার ও বেশি মেয়েলি শোনানোর চেষ্টা করা হয়েছে।
+
+Bug 6 - B-roll PiP Image Static/Boring (editor.js)
+  সমস্যা : B-roll PiP ছবি শুধু fade in/out করে একটা নির্দিষ্ট
+           জায়গায় স্থির হয়ে থাকত, কোনো মুভমেন্ট/অ্যানিমেশন ছিল না।
+  সমাধান: প্রতিটি B-roll আইটেমে একটি র‍্যান্ডম entryDirection
+           (left/right/top/bottom) অ্যাসাইন করা হয় লোড করার সময়।
+           drawFrame()-এ PiP মোডে easeOutBack ("cartoon pop")
+           ইজিং দিয়ে সেই দিক থেকে স্লাইড-ইন + হালকা scale bounce +
+           সামান্য rotation wobble অ্যানিমেশন যোগ করা হয়েছে, এবং
+           শেষে একই দিক দিয়ে স্লাইড-আউট হয়। Fullscreen B-roll-এ
+           ধীরগতির continuous "Ken Burns" zoom-in (৮% পর্যন্ত) যোগ
+           করা হয়েছে যাতে স্থির ছবিও প্রাণবন্ত লাগে।
+
+
 PHASE 2 - VIDEO EDITING CORE (পরবর্তী প্রায়োরিটি)
 ====================================================
 
