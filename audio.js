@@ -378,6 +378,7 @@ document.addEventListener('DOMContentLoaded', () => {
     let lowpassNode = null;
     let compressorNode = null;
     let makeupGainNode = null; // Auto-compensates volume lost to the noise-cancel compressor
+    let speakerMuteGain = null; // Isolated speaker on/off switch that never touches the export tap
     
     // Voiceover Web Audio nodes
     let voiceoverMediaSource = null;
@@ -438,13 +439,22 @@ document.addEventListener('DOMContentLoaded', () => {
             makeupGainNode = audioCtx.createGain();
             makeupGainNode.gain.setValueAtTime(1, 0);
 
-            // Link DSP chain: Source -> Volume -> Highpass -> Lowpass -> Compressor -> MakeupGain -> Destination
+            // Speaker-only mute switch. This sits AFTER makeupGainNode so it only
+            // affects what comes out of the computer speakers during export/preview
+            // muting. The export tap in getMixedAudioDestinationStream connects
+            // directly off makeupGainNode (bypassing this node entirely), so muting
+            // the speaker can never silence the recorded/exported audio again.
+            speakerMuteGain = audioCtx.createGain();
+            speakerMuteGain.gain.setValueAtTime(1, 0);
+
+            // Link DSP chain: Source -> Volume -> Highpass -> Lowpass -> Compressor -> MakeupGain -> SpeakerMute -> Destination
             videoSourceNode.connect(videoGainNode);
             videoGainNode.connect(highpassNode);
             highpassNode.connect(lowpassNode);
             lowpassNode.connect(compressorNode);
             compressorNode.connect(makeupGainNode);
-            makeupGainNode.connect(audioCtx.destination);
+            makeupGainNode.connect(speakerMuteGain);
+            speakerMuteGain.connect(audioCtx.destination);
 
             // Continuously read how much the compressor is reducing the signal
             // (compressorNode.reduction, always <= 0 dB) and add that loudness
@@ -501,16 +511,16 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     };
 
-    // Mute/unmute the video's audio via the Web Audio gain node instead of
-    // HTMLMediaElement.volume. Setting video.volume = 0 while the element is
-    // routed through createMediaElementSource() silences the audio graph
-    // entirely in Chrome, which was killing the exported video's sound.
-    // This mutes only what goes to the speakers; the MediaRecorder tap
-    // (post-gain in the chain) keeps receiving full audio either way.
+    // Mute/unmute ONLY the live speaker output, completely isolated from the
+    // export/recording tap. Previously this toggled videoGainNode directly —
+    // but videoGainNode sits upstream of the same path the exporter taps for
+    // recording, so muting the speaker during export was silencing the
+    // recorded video audio too (while separately-routed bg music/voiceover
+    // stayed audible). speakerMuteGain sits AFTER the export tap point, so
+    // muting it now only affects what comes out of the speakers.
     window.setSpeakerMuted = function(muted) {
-        if (!videoGainNode || !audioCtx) return false; // caller should fall back to video.volume
-        const targetGain = muted ? 0 : state.videoVolume;
-        videoGainNode.gain.setValueAtTime(targetGain, audioCtx.currentTime);
+        if (!speakerMuteGain || !audioCtx) return false; // caller should fall back to video.volume
+        speakerMuteGain.gain.setValueAtTime(muted ? 0 : 1, audioCtx.currentTime);
         return true;
     };
     
@@ -816,10 +826,11 @@ document.addEventListener('DOMContentLoaded', () => {
         // Create destination node for MediaRecorder to capture
         const dest = audioCtx.createMediaStreamDestination();
         
-        // Disconnect video chain from speakers and route into export destination.
-        // Tap AFTER makeupGainNode so the exported file gets the same
-        // noise-cancel volume compensation as the live preview does.
-        makeupGainNode.disconnect(audioCtx.destination);
+        // Add a parallel tap off makeupGainNode straight into the export
+        // destination. This does NOT touch makeupGainNode's existing
+        // connection to speakerMuteGain/speakers — Web Audio nodes can fan
+        // out to multiple destinations at once — so muting the speaker
+        // during export can never affect what gets recorded here.
         makeupGainNode.connect(dest);
         
         // Pre-create gain node for voiceover mixing
@@ -852,7 +863,6 @@ document.addEventListener('DOMContentLoaded', () => {
             // Restore speaker connection after export finishes
             cleanup: function() {
                 try { makeupGainNode.disconnect(dest); } catch(e) {}
-                makeupGainNode.connect(audioCtx.destination);
                 
                 if (voiceoverSource) {
                     try { voiceoverSource.stop(); } catch(e) {}
