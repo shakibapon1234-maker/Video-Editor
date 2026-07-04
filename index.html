@@ -430,6 +430,81 @@
                             </div>
                         </div>
 
+                        <!-- News Ticker (Breaking News style scrolling strip) -->
+                        <div class="card mt-4">
+                            <div class="card-header">
+                                <i class="fa-solid fa-rss card-icon"></i>
+                                <h3>News Ticker (নিউজ স্ক্রলিং টেক্সট)</h3>
+                            </div>
+                            <div class="card-body">
+                                <p class="help-text">টিভি চ্যানেলের মতো নিচে (বা উপরে) ডান থেকে বামে চলমান লেখা যোগ করুন।</p>
+                                <div class="toggle-control">
+                                    <div class="toggle-label">
+                                        <h4>Enable News Ticker</h4>
+                                        <p>নিচে/উপরে চলমান স্ক্রলিং টেক্সট চালু করুন</p>
+                                    </div>
+                                    <label class="switch">
+                                        <input type="checkbox" id="ticker-enable-toggle">
+                                        <span class="slider round"></span>
+                                    </label>
+                                </div>
+                                <div class="ticker-inputs mt-3" id="ticker-inputs-container" style="display: none;">
+                                    <div class="control-group">
+                                        <label>Ticker Text (স্ক্রল হওয়া লেখা)</label>
+                                        <input type="text" id="ticker-text-input" class="form-input" placeholder="যেমনঃ সর্বশেষ সংবাদ: আজকের বড় খবর এখানে লিখুন...">
+                                    </div>
+                                    <div class="control-group mt-3">
+                                        <label>Fixed Label / Tag (ঐচ্ছিক, যেমনঃ BREAKING)</label>
+                                        <input type="text" id="ticker-label-input" class="form-input" placeholder="যেমনঃ ব্রেকিং নিউজ">
+                                    </div>
+                                    <div class="control-group mt-3">
+                                        <label>Position</label>
+                                        <select id="ticker-position-select" class="form-select">
+                                            <option value="bottom">Bottom (নিচে)</option>
+                                            <option value="top">Top (উপরে)</option>
+                                        </select>
+                                    </div>
+                                    <div class="control-group mt-3">
+                                        <label>Scroll Speed</label>
+                                        <div class="slider-val-container">
+                                            <input type="range" id="ticker-speed-slider" min="30" max="220" value="90">
+                                            <span id="ticker-speed-val">90</span>
+                                        </div>
+                                    </div>
+                                    <div class="control-group mt-3">
+                                        <label>Font Size</label>
+                                        <div class="slider-val-container">
+                                            <input type="range" id="ticker-font-size-slider" min="14" max="48" value="24">
+                                            <span id="ticker-font-size-val">24px</span>
+                                        </div>
+                                    </div>
+                                    <div class="color-pickers-row mt-3">
+                                        <div class="control-group color-select-group">
+                                            <label>Text Color</label>
+                                            <div class="color-picker-wrapper">
+                                                <input type="color" id="ticker-text-color" value="#ffffff">
+                                                <span class="color-value-text" id="ticker-text-color-val">#ffffff</span>
+                                            </div>
+                                        </div>
+                                        <div class="control-group color-select-group mt-2">
+                                            <label>Strip Background Color</label>
+                                            <div class="color-picker-wrapper">
+                                                <input type="color" id="ticker-bg-color" value="#dc2626">
+                                                <span class="color-value-text" id="ticker-bg-color-val">#dc2626</span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="control-group mt-3">
+                                        <label>Strip Height (% of canvas height)</label>
+                                        <div class="slider-val-container">
+                                            <input type="range" id="ticker-height-slider" min="4" max="18" value="8">
+                                            <span id="ticker-height-val">8%</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
                         <!-- Text Overlay (Phase 2C) -->
                         <div class="card mt-4">
                             <div class="card-header">
@@ -801,7 +876,12 @@
                                         </label>
                                     </div>
 
-                                    <audio id="bgmusic-audio-preview" class="mt-3 w-full" controls></audio>
+                                    <!-- No native `controls` here on purpose: this element is played/volume-controlled
+                                         entirely by the app (Music Volume slider + Auto Ducking above). The native
+                                         browser volume knob used to sit right under our own slider and silently
+                                         fight it — every animation frame the ducking engine re-applies the app's
+                                         intended volume, so dragging the native knob looked like it "did nothing". -->
+                                    <audio id="bgmusic-audio-preview" class="mt-3 w-full" style="display: none;"></audio>
 
                                     <button id="remove-bgmusic-btn" class="btn-text-danger mt-2">
                                         <i class="fa-solid fa-trash-can"></i> Remove Music

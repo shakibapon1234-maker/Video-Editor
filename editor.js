@@ -70,6 +70,17 @@ window.VideoEditor = {
     bannerTextColor: '#ffffff',
     bannerBgColor: '#4f46e5',
     bannerHeightPercent: 12,
+
+    // News Ticker / Breaking-News scrolling text strip state
+    tickerEnabled: false,
+    tickerText: '',
+    tickerPosition: 'bottom', // 'top' or 'bottom'
+    tickerSpeed: 90, // pixels per second, right-to-left
+    tickerFontSize: 24,
+    tickerTextColor: '#ffffff',
+    tickerBgColor: '#dc2626',
+    tickerHeightPercent: 8,
+    tickerLabel: '', // optional fixed "BREAKING" style tag drawn at the leading edge
     
     // Facebook Visual Progress Bar state
     enableProgressBar: false,
@@ -467,6 +478,92 @@ document.addEventListener('DOMContentLoaded', () => {
         bannerHeightVal.innerText = state.bannerHeightPercent + '%';
         drawFrame();
     });
+
+    // --- News Ticker Bindings ---
+    const tickerEnableToggle = document.getElementById('ticker-enable-toggle');
+    const tickerInputsContainer = document.getElementById('ticker-inputs-container');
+    const tickerTextInput = document.getElementById('ticker-text-input');
+    const tickerLabelInput = document.getElementById('ticker-label-input');
+    const tickerPositionSelect = document.getElementById('ticker-position-select');
+    const tickerSpeedSlider = document.getElementById('ticker-speed-slider');
+    const tickerSpeedVal = document.getElementById('ticker-speed-val');
+    const tickerFontSizeSlider = document.getElementById('ticker-font-size-slider');
+    const tickerFontSizeVal = document.getElementById('ticker-font-size-val');
+    const tickerTextColor = document.getElementById('ticker-text-color');
+    const tickerTextColorVal = document.getElementById('ticker-text-color-val');
+    const tickerBgColor = document.getElementById('ticker-bg-color');
+    const tickerBgColorVal = document.getElementById('ticker-bg-color-val');
+    const tickerHeightSlider = document.getElementById('ticker-height-slider');
+    const tickerHeightVal = document.getElementById('ticker-height-val');
+
+    if (tickerEnableToggle) {
+        tickerEnableToggle.addEventListener('change', (e) => {
+            state.tickerEnabled = e.target.checked;
+            tickerInputsContainer.style.display = state.tickerEnabled ? 'block' : 'none';
+            drawFrame();
+        });
+    }
+
+    if (tickerTextInput) {
+        tickerTextInput.addEventListener('input', (e) => {
+            state.tickerText = e.target.value;
+            drawFrame();
+        });
+    }
+
+    if (tickerLabelInput) {
+        tickerLabelInput.addEventListener('input', (e) => {
+            state.tickerLabel = e.target.value;
+            drawFrame();
+        });
+    }
+
+    if (tickerPositionSelect) {
+        tickerPositionSelect.addEventListener('change', (e) => {
+            state.tickerPosition = e.target.value;
+            drawFrame();
+        });
+    }
+
+    if (tickerSpeedSlider) {
+        tickerSpeedSlider.addEventListener('input', (e) => {
+            state.tickerSpeed = parseInt(e.target.value);
+            tickerSpeedVal.innerText = state.tickerSpeed;
+            drawFrame();
+        });
+    }
+
+    if (tickerFontSizeSlider) {
+        tickerFontSizeSlider.addEventListener('input', (e) => {
+            state.tickerFontSize = parseInt(e.target.value);
+            tickerFontSizeVal.innerText = state.tickerFontSize + 'px';
+            drawFrame();
+        });
+    }
+
+    if (tickerTextColor) {
+        tickerTextColor.addEventListener('input', (e) => {
+            state.tickerTextColor = e.target.value;
+            tickerTextColorVal.innerText = e.target.value.toUpperCase();
+            drawFrame();
+        });
+    }
+
+    if (tickerBgColor) {
+        tickerBgColor.addEventListener('input', (e) => {
+            state.tickerBgColor = e.target.value;
+            tickerBgColorVal.innerText = e.target.value.toUpperCase();
+            drawFrame();
+        });
+    }
+
+    if (tickerHeightSlider) {
+        tickerHeightSlider.addEventListener('input', (e) => {
+            state.tickerHeightPercent = parseInt(e.target.value);
+            tickerHeightVal.innerText = state.tickerHeightPercent + '%';
+            drawFrame();
+        });
+    }
 
     // --- Facebook Video Progress Bar Bindings ---
     const progressBarToggle = document.getElementById('progress-bar-toggle');
@@ -1327,7 +1424,67 @@ document.addEventListener('DOMContentLoaded', () => {
             
             state.ctx.restore();
         }
-        
+
+        // --- Step B2: Draw News Ticker (right-to-left scrolling headline strip) ---
+        if (state.tickerEnabled && (state.tickerText || state.tickerLabel)) {
+            const tickerH = Math.max(24, canvasH * (state.tickerHeightPercent / 100));
+            const tickerY = state.tickerPosition === 'top' ? 0 : canvasH - tickerH;
+
+            state.ctx.save();
+
+            // Background strip
+            state.ctx.fillStyle = state.tickerBgColor;
+            state.ctx.fillRect(0, tickerY, canvasW, tickerH);
+
+            // Optional fixed "BREAKING" style tag on the left edge, on top of the
+            // scrolling text so it never moves while the headline scrolls under it.
+            let labelW = 0;
+            if (state.tickerLabel) {
+                state.ctx.font = `bold ${Math.round(state.tickerFontSize * 0.95)}px "Hind Siliguri", "Plus Jakarta Sans", sans-serif`;
+                const metrics = state.ctx.measureText(state.tickerLabel);
+                labelW = metrics.width + tickerH * 0.7;
+                state.ctx.fillStyle = 'rgba(0,0,0,0.35)';
+                state.ctx.fillRect(0, tickerY, labelW, tickerH);
+                state.ctx.fillStyle = state.tickerTextColor;
+                state.ctx.textAlign = 'left';
+                state.ctx.textBaseline = 'middle';
+                state.ctx.fillText(state.tickerLabel, tickerH * 0.35, tickerY + tickerH / 2);
+            }
+
+            // Scrolling headline text, clipped to the remaining strip area so it
+            // never spills over the fixed label. Time-driven (not frame-driven),
+            // so scroll speed stays identical in preview and in exported video.
+            if (state.tickerText) {
+                state.ctx.beginPath();
+                state.ctx.rect(labelW, tickerY, canvasW - labelW, tickerH);
+                state.ctx.clip();
+
+                state.ctx.font = `600 ${state.tickerFontSize}px "Hind Siliguri", "Plus Jakarta Sans", sans-serif`;
+                state.ctx.fillStyle = state.tickerTextColor;
+                state.ctx.textAlign = 'left';
+                state.ctx.textBaseline = 'middle';
+
+                const textW = state.ctx.measureText(state.tickerText).width;
+                const gap = Math.max(60, canvasW * 0.15); // blank space between repeated loops
+                const cycleW = textW + gap;
+                const speed = Math.max(10, state.tickerSpeed || 90);
+                const elapsed = state.video.currentTime || 0;
+                // Right-to-left continuous scroll: one copy starts just off the right
+                // edge and marches left; once it's fully passed, the next copy (spaced
+                // by cycleW) is already lined up behind it, so the loop is seamless.
+                const offset = (elapsed * speed) % cycleW;
+                let x = canvasW - offset;
+                while (x + textW > labelW) {
+                    if (x < canvasW) {
+                        state.ctx.fillText(state.tickerText, x, tickerY + tickerH / 2);
+                    }
+                    x -= cycleW;
+                }
+            }
+
+            state.ctx.restore();
+        }
+
         // --- Step C: Draw Watermark Logo ---
         if (state.logoImg) {
             const logoW = canvasW * (state.logoSize / 100);
@@ -1567,11 +1724,13 @@ document.addEventListener('DOMContentLoaded', () => {
                         if (brollAnimActive && (style === 'zoom' || style === 'zoom-out')) {
                             const totalDur = Math.max(0.01, item.endSec - item.startSec);
                             const zoomProgress = Math.max(0, Math.min(1, tIn / totalDur));
-                            // 'zoom' grows to 8% zoomed-in by the end; 'zoom-out' starts
-                            // 8% zoomed-in and eases back down to normal.
+                            // 'zoom' grows to 18% zoomed-in by the end; 'zoom-out' starts
+                            // 18% zoomed-in and eases back down to normal. (Bumped up from
+                            // an earlier 8% which read as too subtle/static next to
+                            // PowerPoint-style zoom transitions.)
                             const zoom = style === 'zoom-out'
-                                ? (1.08 - 0.08 * zoomProgress)
-                                : (1 + 0.08 * zoomProgress);
+                                ? (1.18 - 0.18 * zoomProgress)
+                                : (1 + 0.18 * zoomProgress);
                             const newSw = sw / zoom, newSh = sh / zoom;
                             sx += (sw - newSw) / 2;
                             sy += (sh - newSh) / 2;

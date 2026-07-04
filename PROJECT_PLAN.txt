@@ -48,6 +48,7 @@
   [DONE] Visual Crop Tool (canvas region select & crop)   - editor.js
   [DONE] Background Music (upload, loop, volume, ducking) - audio.js
   [DONE] Voice Changer Presets (Female, Male, Robot, Echo) - audio.js
+  [DONE] News Ticker / Breaking-News Scrolling Text (top/bottom) - editor.js
 
 
 -----------------------------------------------------
@@ -180,6 +181,56 @@ Bug 6 - B-roll PiP Image Static/Boring (editor.js)
            ধীরগতির continuous "Ken Burns" zoom-in (৮% পর্যন্ত) যোগ
            করা হয়েছে যাতে স্থির ছবিও প্রাণবন্ত লাগে।
 
+
+v2.2 - News Ticker + Audio/Animation Fixes (সম্পন্ন)
+-----------------------------------------------------
+
+Feature - News Ticker / Breaking-News Scrolling Text (editor.js + index.html)
+  কী যোগ হলো: টিভি নিউজ চ্যানেলের মতো ডান থেকে বামে ক্রমাগত স্ক্রল
+           হওয়া টেক্সট স্ট্রিপ (উপরে বা নিচে) যোগ করা হয়েছে।
+  Implementation:
+    - state-এ tickerEnabled, tickerText, tickerLabel, tickerPosition,
+      tickerSpeed, tickerFontSize, tickerTextColor, tickerBgColor,
+      tickerHeightPercent যোগ করা হয়েছে (editor.js)
+    - Step 3-এ "News Ticker" card যোগ (Banners & Headlines কার্ডের
+      ঠিক নিচে) - enable toggle, text input, fixed label input,
+      position, speed, font size, color, height controls
+    - drawFrame()-এ banner draw করার ঠিক পরে (Step B2) ticker রেন্ডার
+      হয় - state.video.currentTime দিয়ে scroll offset হিসাব করা হয়
+      (frame-count না, তাই preview ও export-এ scroll speed একই থাকে)
+    - Export-এও কাজ করে কারণ exporter.js প্রতি রেন্ডার-টিকে
+      window.drawEditorFrame() কল করে, যা state.video.currentTime
+      পড়ে - কোনো আলাদা export-সাইড কাজ লাগেনি
+
+Bug 7 - Background Music Volume Slider "কাজ করছিল না" মনে হওয়া (index.html)
+  সমস্যা : #bgmusic-audio-preview <audio> element-এ native browser
+           `controls` attribute থাকায় তার নিজস্ব volume knob দেখাত,
+           যেটা আসলে app-এর নিজস্ব "Music Volume" slider আর
+           duckingTick()-এর সাথে সরাসরি সাংঘর্ষিক ছিল -
+           duckingTick() প্রতি animation frame-এ bgMusicAudioPreview.
+           volume-কে state.bgMusicVolume অনুযায়ী রিসেট করে দিত, তাই
+           কেউ native knob টানলেও সাথে সাথেই সেটা ওভাররাইট হয়ে
+           যেত - মনে হতো ভলিউম "কাজ করছে না"।
+           (মূল custom slider #bgmusic-volume-slider ও state ঠিকই
+           কাজ করছিল - bug logic-এ ছিল না, ছিল duplicate/confusing UI-তে)
+  সমাধান: <audio id="bgmusic-audio-preview">-এর `controls`
+           attribute সরিয়ে ফেলা হয়েছে (display:none), যাতে শুধু
+           app-এর নিজস্ব একটামাত্র volume control থাকে এবং কোনো
+           সাংঘর্ষিক UI না থাকে।
+
+Improvement - Fullscreen B-roll "Zoom" Ken Burns আরও স্পষ্ট করা (editor.js)
+  সমস্যা : Zoom In/Zoom Out অ্যানিমেশন মাত্র ৮% পর্যন্ত জুম করত,
+           যেটা PowerPoint-এর Zoom transition-এর তুলনায় অনেক কম
+           লক্ষণীয় ছিল - অনেকটা স্থির ছবির মতো লাগত।
+  সমাধান: জুম রেঞ্জ ৮% থেকে বাড়িয়ে ১৮% করা হয়েছে, ফলে zoom in/out
+           প্রভাব এখন অনেক বেশি স্পষ্ট বোঝা যায়।
+  নোট   : বাকি animation style গুলো (Wipe Reveal, Rotate In, Bounce In,
+           Pan, Slide, Blur Focus, PiP পপ effects) কোড রিভিউ করে
+           লজিক ঠিক পাওয়া গেছে - timing (tIn/tOut/animDur), easing
+           ফাংশন, ক্লিপ/ট্রান্সফর্ম সব সঠিকভাবে কাজ করছে। কোনো
+           নির্দিষ্ট effect-এ যদি এখনো সমস্যা মনে হয়, ঠিক কোন
+           effect-এ (নাম) এবং কী রকম আচরণ হচ্ছে তা জানালে সেটা
+           টার্গেট করে ঠিক করা যাবে।
 
 PHASE 2 - VIDEO EDITING CORE (পরবর্তী প্রায়োরিটি)
 ====================================================
