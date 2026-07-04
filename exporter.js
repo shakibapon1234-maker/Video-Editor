@@ -71,6 +71,10 @@ document.addEventListener('DOMContentLoaded', () => {
         const originalStartTime = state.startTime;
         const originalEndTime = state.endTime;
         const originalDuration = state.duration;
+        const originalCropX = state.cropX;
+        const originalCropY = state.cropY;
+        const originalCropW = state.cropW;
+        const originalCropH = state.cropH;
 
         // --- Step A: Set up canvas capture stream ---
         renderStatusText.innerText = 'Capturing canvas stream...';
@@ -184,6 +188,12 @@ document.addEventListener('DOMContentLoaded', () => {
             state.endTime = clipTrimEnd;
             state.activeClipId = clip.id;
 
+            // Apply this clip's own crop area (each clip can have a different crop).
+            state.cropX = clip.cropX || 0;
+            state.cropY = clip.cropY || 0;
+            state.cropW = (clip.cropW !== undefined) ? clip.cropW : 1;
+            state.cropH = (clip.cropH !== undefined) ? clip.cropH : 1;
+
             video.currentTime = clipTrimStart;
             if (!window.setSpeakerMuted || !window.setSpeakerMuted(true)) {
                 video.volume = 0;
@@ -272,6 +282,10 @@ document.addEventListener('DOMContentLoaded', () => {
         state.duration = originalDuration;
         state.startTime = originalStartTime;
         state.endTime = originalEndTime;
+        state.cropX = originalCropX;
+        state.cropY = originalCropY;
+        state.cropW = originalCropW;
+        state.cropH = originalCropH;
         video.currentTime = state.startTime;
         if (!window.setSpeakerMuted || !window.setSpeakerMuted(false)) {
             video.volume = Math.min(1.0, state.videoVolume);

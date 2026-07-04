@@ -247,7 +247,11 @@ document.addEventListener('DOMContentLoaded', () => {
                 name: file.name,
                 duration: state.duration,
                 start: 0,
-                end: state.duration
+                end: state.duration,
+                cropX: 0,
+                cropY: 0,
+                cropW: 1,
+                cropH: 1
             };
             state.clips = [firstClip];
             state.activeClipId = firstClip.id;
@@ -699,6 +703,19 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
+    // Save the current global crop values onto whichever clip is active,
+    // so each clip in the multi-clip timeline can keep its own crop area.
+    function syncCropToActiveClip() {
+        const clip = state.clips.find(c => c.id === state.activeClipId);
+        if (clip) {
+            clip.cropX = state.cropX;
+            clip.cropY = state.cropY;
+            clip.cropW = state.cropW;
+            clip.cropH = state.cropH;
+        }
+    }
+    window.syncCropToActiveClip = syncCropToActiveClip;
+
     // --- Multi-Clip Timeline (Phase 2B) ---
     const addClipDropzone = document.getElementById('add-clip-dropzone');
     const addClipInput = document.getElementById('add-clip-input');
@@ -740,7 +757,11 @@ document.addEventListener('DOMContentLoaded', () => {
                 name: file.name,
                 duration: probe.duration,
                 start: 0,
-                end: probe.duration
+                end: probe.duration,
+                cropX: 0,
+                cropY: 0,
+                cropW: 1,
+                cropH: 1
             };
             state.clips.push(newClip);
             renderClipTimeline();
@@ -751,6 +772,9 @@ document.addEventListener('DOMContentLoaded', () => {
         const clip = state.clips.find(c => c.id === clipId);
         if (!clip || clip.id === state.activeClipId) return;
 
+        // Persist the outgoing clip's crop area before switching away from it.
+        syncCropToActiveClip();
+
         state.video.pause();
         state.isPlaying = false;
         const playPauseBtnEl = document.getElementById('play-pause-btn');
@@ -759,6 +783,12 @@ document.addEventListener('DOMContentLoaded', () => {
         state.activeClipId = clip.id;
         state.video.src = clip.url;
         state.video.load();
+
+        // Load this clip's own crop area (falls back to full-frame if it was created before this feature existed).
+        state.cropX = clip.cropX || 0;
+        state.cropY = clip.cropY || 0;
+        state.cropW = (clip.cropW !== undefined) ? clip.cropW : 1;
+        state.cropH = (clip.cropH !== undefined) ? clip.cropH : 1;
 
         state.video.onloadedmetadata = () => {
             state.duration = clip.duration;
@@ -775,6 +805,7 @@ document.addEventListener('DOMContentLoaded', () => {
             updateCanvasDimensions();
             state.video.currentTime = state.startTime;
             updatePlayhead();
+            updateCropDimensionsDisplay();
             drawFrame();
             renderClipTimeline();
         };
@@ -1263,7 +1294,9 @@ document.addEventListener('DOMContentLoaded', () => {
             state.brollOverlays.forEach((item) => {
                 if (!item.imageImg) return;
 
-                const inRange = state.currentStep === 2
+                // While paused in Step 2 we always show the overlay so it can be positioned/sized.
+                // Once playing (in any step), respect the real start/end timing so preview matches export.
+                const inRange = (state.currentStep === 2 && !state.isPlaying)
                     ? true
                     : (currentTime >= item.startSec && currentTime <= item.endSec);
                 if (!inRange) return;
@@ -2079,6 +2112,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 state.cropW = 1;
                 state.cropH = 1;
             }
+            syncCropToActiveClip();
             updateCropDimensionsDisplay();
             updateCanvasDimensions();
             drawFrame();
@@ -2220,6 +2254,7 @@ document.addEventListener('DOMContentLoaded', () => {
         state.cropY = 0;
         state.cropW = 1;
         state.cropH = 1;
+        syncCropToActiveClip();
         updateCropDimensionsDisplay();
         updateCanvasDimensions();
         drawFrame();
