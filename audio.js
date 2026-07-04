@@ -393,6 +393,69 @@ document.addEventListener('DOMContentLoaded', () => {
     
     // Voiceover play source during normal preview playback
     let voiceoverAudioNode = null; 
+
+    // --- Dynamic Auto-Ducking Engine ---
+    // Instead of a flat "always duck while X" switch, this continuously measures
+    // real speech energy (video dialogue, recorded voiceover playback, and live mic
+    // input while recording) and smoothly lowers/raises the background music to match —
+    // ducks the instant someone talks, eases back up the instant they go quiet.
+    let videoDialogueAnalyser = null;
+    let voiceoverPreviewAnalyser = null;
+    let micAnalyser = null;
+    let exportVoiceoverAnalyser = null; // set per-export inside getMixedAudioDestinationStream
+    let exportBgMusicGain = null;       // set per-export inside getMixedAudioDestinationStream
+    let duckAmount = 0; // 0 = full bg music volume, 1 = fully ducked
+    const DUCK_RMS_THRESHOLD = 0.018;
+    const DUCK_ATTACK = 0.35;  // how fast it ducks down when talking starts
+    const DUCK_RELEASE = 0.05; // how fast it eases back up when talking stops
+    const DUCK_DEPTH = 0.25;   // ducked level = bgMusicVolume * DUCK_DEPTH
+
+    function isDuckingActive() {
+        return duckAmount > 0.05;
+    }
+
+    function measureRms(analyser) {
+        if (!analyser) return 0;
+        const buffer = new Float32Array(analyser.fftSize);
+        analyser.getFloatTimeDomainData(buffer);
+        let sum = 0;
+        for (let i = 0; i < buffer.length; i++) sum += buffer[i] * buffer[i];
+        return Math.sqrt(sum / buffer.length);
+    }
+
+    function duckingTick() {
+        if (!state.bgMusicDuckingEnabled || !state.bgMusicAdded) {
+            requestAnimationFrame(duckingTick);
+            return;
+        }
+
+        const rms = Math.max(
+            measureRms(videoDialogueAnalyser),
+            measureRms(voiceoverPreviewAnalyser),
+            measureRms(micAnalyser),
+            measureRms(exportVoiceoverAnalyser)
+        );
+        const talking = rms > DUCK_RMS_THRESHOLD;
+
+        duckAmount += talking ? (1 - duckAmount) * DUCK_ATTACK : (0 - duckAmount) * DUCK_RELEASE;
+        if (duckAmount < 0.001) duckAmount = 0;
+
+        const fullLevel = Math.min(1.0, state.bgMusicVolume);
+        const duckedLevel = fullLevel * DUCK_DEPTH;
+        const targetVolume = fullLevel - (fullLevel - duckedLevel) * duckAmount;
+
+        // Live preview element (plain <audio>, not routed through Web Audio)
+        if (state.bgMusicAdded && !bgMusicAudioPreview.paused) {
+            bgMusicAudioPreview.volume = Math.min(1.0, targetVolume);
+        }
+        // Export mix (Web Audio gain node)
+        if (exportBgMusicGain && audioCtx) {
+            exportBgMusicGain.gain.setValueAtTime(targetVolume, audioCtx.currentTime);
+        }
+
+        requestAnimationFrame(duckingTick);
+    }
+    requestAnimationFrame(duckingTick);
     
     // Expose Node references to window
     window.videoGainNode = null;
@@ -456,6 +519,12 @@ document.addEventListener('DOMContentLoaded', () => {
             makeupGainNode.connect(speakerMuteGain);
             speakerMuteGain.connect(audioCtx.destination);
 
+            // Analyser tap for the auto-ducking engine (video's own dialogue).
+            // Pure fan-out — does not touch the speaker/export routing above.
+            videoDialogueAnalyser = audioCtx.createAnalyser();
+            videoDialogueAnalyser.fftSize = 512;
+            makeupGainNode.connect(videoDialogueAnalyser);
+
             // Continuously read how much the compressor is reducing the signal
             // (compressorNode.reduction, always <= 0 dB) and add that loudness
             // back via makeupGainNode. This is what keeps Noise Cancellation
@@ -491,6 +560,11 @@ document.addEventListener('DOMContentLoaded', () => {
                 voiceoverMediaSource.connect(voiceoverVoiceChanger.input);
                 voiceoverVoiceChanger.output.connect(voiceoverVolumeGain);
                 voiceoverVolumeGain.connect(audioCtx.destination);
+
+                // Analyser tap for the auto-ducking engine (recorded voiceover during preview)
+                voiceoverPreviewAnalyser = audioCtx.createAnalyser();
+                voiceoverPreviewAnalyser.fftSize = 512;
+                voiceoverVolumeGain.connect(voiceoverPreviewAnalyser);
                 
                 // Expose to window for external adjustments
                 window.voiceoverVoiceChanger = voiceoverVoiceChanger;
@@ -571,6 +645,19 @@ document.addEventListener('DOMContentLoaded', () => {
     async function requestMicrophoneAccess() {
         try {
             micStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+
+            // Analyser tap for the auto-ducking engine (live mic input while recording).
+            // Connected for analysis only — never routed to any destination, so it can't cause feedback.
+            if (audioCtx) {
+                try {
+                    const micSourceNode = audioCtx.createMediaStreamSource(micStream);
+                    micAnalyser = audioCtx.createAnalyser();
+                    micAnalyser.fftSize = 512;
+                    micSourceNode.connect(micAnalyser);
+                } catch (e) {
+                    console.warn('Could not attach mic analyser for auto-ducking', e);
+                }
+            }
             
             // Update UI
             micStatus.classList.add('active');
@@ -626,7 +713,6 @@ document.addEventListener('DOMContentLoaded', () => {
         mediaRecorder.start();
         isRecording = true;
         window.isRecordingVoiceover = true;
-        if (window.applyDuckingToBgMusicPreview) window.applyDuckingToBgMusicPreview();
         
         // Update UI
         micStatus.classList.add('recording');
@@ -645,7 +731,6 @@ document.addEventListener('DOMContentLoaded', () => {
         
         isRecording = false;
         window.isRecordingVoiceover = false;
-        if (window.applyDuckingToBgMusicPreview) window.applyDuckingToBgMusicPreview();
     });
     
     deleteVoiceBtn.addEventListener('click', () => {
@@ -718,6 +803,7 @@ document.addEventListener('DOMContentLoaded', () => {
         bgMusicAudioPreview.loop = true;
         bgMusicAudioPreview.volume = state.bgMusicVolume;
         bgMusicControlsContainer.style.display = 'block';
+        if (window.syncBgMusicVolumeStep2) window.syncBgMusicVolumeStep2();
     }
 
     removeBgMusicBtn.addEventListener('click', () => {
@@ -731,15 +817,17 @@ document.addEventListener('DOMContentLoaded', () => {
         bgMusicAudioPreview.src = '';
         bgMusicInput.value = '';
         bgMusicControlsContainer.style.display = 'none';
+        if (window.syncBgMusicVolumeStep2) window.syncBgMusicVolumeStep2();
     });
 
     bgMusicVolumeSlider.addEventListener('input', (e) => {
         state.bgMusicVolume = parseInt(e.target.value) / 100;
         bgMusicVolumeVal.innerText = e.target.value + '%';
         // Only reflect base volume on preview element when NOT actively ducking during preview playback
-        if (!(state.bgMusicDuckingEnabled && window.isRecordingVoiceover)) {
+        if (!isDuckingActive()) {
             bgMusicAudioPreview.volume = Math.min(1.0, state.bgMusicVolume);
         }
+        if (window.syncBgMusicVolumeStep2) window.syncBgMusicVolumeStep2();
     });
 
     bgMusicDuckingToggle.addEventListener('change', (e) => {
@@ -768,7 +856,7 @@ document.addEventListener('DOMContentLoaded', () => {
             if (musicOffset >= 0 && isFinite(musicOffset)) {
                 bgMusicAudioPreview.currentTime = musicOffset;
             }
-            applyDuckingToBgMusicPreview();
+            bgMusicAudioPreview.volume = Math.min(1.0, state.bgMusicVolume);
             bgMusicAudioPreview.play().catch(err => {
                 console.log("Auto-play blocked for background music", err);
             });
@@ -783,17 +871,6 @@ document.addEventListener('DOMContentLoaded', () => {
             bgMusicAudioPreview.pause();
         }
     };
-
-    // Lower bg music volume while voiceover recording is in progress (auto-ducking)
-    function applyDuckingToBgMusicPreview() {
-        if (!state.bgMusicAdded) return;
-        if (state.bgMusicDuckingEnabled && window.isRecordingVoiceover) {
-            bgMusicAudioPreview.volume = Math.min(1.0, state.bgMusicVolume * 0.25);
-        } else {
-            bgMusicAudioPreview.volume = Math.min(1.0, state.bgMusicVolume);
-        }
-    }
-    window.applyDuckingToBgMusicPreview = applyDuckingToBgMusicPreview;
     
     // Track video seeking and align voiceover
     state.video.addEventListener('seeking', () => {
@@ -841,6 +918,12 @@ document.addEventListener('DOMContentLoaded', () => {
             voiceoverGain = audioCtx.createGain();
             voiceoverGain.gain.setValueAtTime(Math.min(1.0, state.voiceoverVolume), audioCtx.currentTime);
             voiceoverGain.connect(dest); // Connect voiceover gain directly to export destination
+
+            // Analyser tap for the auto-ducking engine — lets export dynamically
+            // duck the bg music exactly when the voiceover is actually speaking.
+            exportVoiceoverAnalyser = audioCtx.createAnalyser();
+            exportVoiceoverAnalyser.fftSize = 512;
+            voiceoverGain.connect(exportVoiceoverAnalyser);
         }
 
         // Pre-create gain node for background music mixing (Phase 3A)
@@ -849,13 +932,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
         if (state.bgMusicAdded && state.bgMusicBlob) {
             bgMusicGain = audioCtx.createGain();
-            // If voiceover is also present and ducking is enabled, start at the ducked level
-            // since both tracks begin together at export start.
-            const duckedLevel = Math.min(1.0, state.bgMusicVolume * 0.25);
-            const fullLevel = Math.min(1.0, state.bgMusicVolume);
-            const shouldDuckThroughout = state.bgMusicDuckingEnabled && state.voiceoverRecorded && state.voiceoverBlob;
-            bgMusicGain.gain.setValueAtTime(shouldDuckThroughout ? duckedLevel : fullLevel, audioCtx.currentTime);
+            bgMusicGain.gain.setValueAtTime(Math.min(1.0, state.bgMusicVolume), audioCtx.currentTime);
             bgMusicGain.connect(dest);
+            // Hand this off to the duckingTick loop so it dynamically rides the
+            // gain up/down in real time as the export renders, instead of a flat duck.
+            exportBgMusicGain = bgMusicGain;
         }
         
         return {
@@ -878,6 +959,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (bgMusicGain) {
                     try { bgMusicGain.disconnect(); } catch(e) {}
                 }
+                exportVoiceoverAnalyser = null;
+                exportBgMusicGain = null;
             },
             // Called immediately AFTER video.play() resolves to keep audio in sync
             startVoiceover: async function() {

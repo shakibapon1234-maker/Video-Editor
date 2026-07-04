@@ -239,8 +239,8 @@ body {
 .canvas-container {
     position: relative;
     width: 100%;
-    max-width: 640px;
-    height: 480px;
+    max-width: 960px;
+    height: min(70vh, 640px);
     background-color: #000;
     border-radius: var(--radius-lg);
     border: 1px solid var(--border-color);
@@ -323,12 +323,18 @@ body {
 /* --- Timeline controls --- */
 .timeline-bar {
     width: 100%;
-    max-width: 640px;
-    margin-top: 24px;
+    max-width: 960px;
+    margin-top: 20px;
     background-color: var(--bg-surface);
     border-radius: var(--radius-md);
     border: 1px solid var(--border-color);
-    padding: 16px;
+    padding: 18px 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.timeline-bar-top-row {
     display: flex;
     align-items: center;
     gap: 16px;
@@ -361,6 +367,86 @@ body {
     height: 24px;
     display: flex;
     align-items: center;
+}
+
+/* --- Dedicated seek/scrub bar (separate from the trim-start/trim-end handles) --- */
+.seek-bar-container {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.seek-time-label {
+    font-size: 12px;
+    font-family: var(--font-heading);
+    color: var(--text-secondary);
+    min-width: 58px;
+    text-align: center;
+    flex-shrink: 0;
+}
+
+.seek-slider-wrapper {
+    position: relative;
+    flex-grow: 1;
+    height: 20px;
+    display: flex;
+    align-items: center;
+}
+
+.seek-track-bg {
+    position: absolute;
+    width: 100%;
+    height: 10px;
+    background-color: var(--bg-surface-elevated);
+    border-radius: 5px;
+    pointer-events: none;
+}
+
+.seek-track-fill {
+    position: absolute;
+    height: 10px;
+    background: linear-gradient(90deg, var(--primary), var(--primary-hover));
+    border-radius: 5px;
+    pointer-events: none;
+    width: 0%;
+}
+
+.seek-slider {
+    position: relative;
+    width: 100%;
+    background: none;
+    -webkit-appearance: none;
+    appearance: none;
+    height: 100%;
+    margin: 0;
+    cursor: pointer;
+}
+
+.seek-slider::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    background-color: #ffffff;
+    border: 2px solid var(--primary);
+    cursor: pointer;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.5);
+    transition: var(--transition-smooth);
+}
+
+.seek-slider::-webkit-slider-thumb:hover {
+    transform: scale(1.15);
+    background-color: var(--primary-hover);
+}
+
+.seek-slider::-moz-range-thumb {
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    background-color: #ffffff;
+    border: 2px solid var(--primary);
+    cursor: pointer;
 }
 
 .slider-track-bg {
@@ -1296,4 +1382,71 @@ input:checked + .slider:before {
 .premium-tooltip.show {
     opacity: 1;
     transform: translateY(0);
+}
+
+/* Position Preset Grid (Text Overlay & B-roll) */
+.position-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 40px);
+    grid-template-rows: repeat(3, 40px);
+    gap: 6px;
+}
+.position-grid .pos-btn {
+    width: 40px;
+    height: 40px;
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--border-color);
+    background: rgba(255, 255, 255, 0.04);
+    color: var(--text-secondary);
+    font-size: 16px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease, transform 0.1s ease;
+}
+.position-grid .pos-btn:hover {
+    background: rgba(79, 70, 229, 0.15);
+    border-color: var(--primary);
+    color: #ffffff;
+}
+.position-grid .pos-btn:active {
+    transform: scale(0.92);
+}
+.position-grid .pos-btn.active {
+    background: var(--primary);
+    border-color: var(--primary);
+    color: #ffffff;
+}
+
+/* Segmented Toggle (e.g. B-roll Content Type: Image / Text) */
+.segmented-toggle {
+    display: flex;
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-sm);
+    overflow: hidden;
+    width: fit-content;
+}
+.segmented-toggle .segmented-btn {
+    padding: 8px 16px;
+    background: transparent;
+    border: none;
+    color: var(--text-secondary);
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    transition: background 0.15s ease, color 0.15s ease;
+}
+.segmented-toggle .segmented-btn:not(:last-child) {
+    border-right: 1px solid var(--border-color);
+}
+.segmented-toggle .segmented-btn.active {
+    background: var(--primary);
+    color: #ffffff;
+}
+.segmented-toggle .segmented-btn:hover:not(.active) {
+    background: rgba(255, 255, 255, 0.06);
 }

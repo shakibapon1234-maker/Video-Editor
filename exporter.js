@@ -2,6 +2,32 @@
 document.addEventListener('DOMContentLoaded', () => {
     const state = window.VideoEditor;
 
+    // requestAnimationFrame is throttled/paused by the browser when the tab is
+    // backgrounded (minimized, switched away from) to save power. That silently
+    // breaks export in two ways at once: the canvas stops getting redrawn (so
+    // MediaRecorder just repeats the last/blank frame) AND the "has this clip
+    // finished playing?" check stops running (so the recorder doesn't stop on
+    // time) — the wall-clock time spent away from the tab gets baked into the
+    // exported file as extra, blank duration. A tiny Web Worker timer is exempt
+    // from this throttling, so we drive the render loop from worker "ticks"
+    // instead of requestAnimationFrame. This keeps export correct even if the
+    // person switches to another window (e.g. to check the file in a player)
+    // while it's running.
+    let tickerWorker = null;
+    function getTickerWorker() {
+        if (tickerWorker) return tickerWorker;
+        const workerCode = 'setInterval(() => postMessage(1), 33);'; // ~30fps, matches capture rate
+        const blob = new Blob([workerCode], { type: 'application/javascript' });
+        tickerWorker = new Worker(URL.createObjectURL(blob));
+        return tickerWorker;
+    }
+    function stopTickerWorker() {
+        if (tickerWorker) {
+            tickerWorker.terminate();
+            tickerWorker = null;
+        }
+    }
+
     const renderBtn = document.getElementById('render-btn');
     const renderProgressBox = document.getElementById('render-progress-box');
     const renderProgressFill = document.getElementById('render-progress-fill');
@@ -50,6 +76,20 @@ document.addEventListener('DOMContentLoaded', () => {
         renderStatusText.innerText = 'Setting up render pipeline...';
         setProgress(0);
 
+        // Reassure the user if they switch tabs/windows mid-export — the Worker-driven
+        // render loop keeps working correctly now, but the browser can still visibly
+        // pause video playback rendering, so a short note avoids confusion.
+        let originalStatusPrefix = '';
+        function handleVisibilityChange() {
+            if (document.hidden) {
+                originalStatusPrefix = renderStatusText.innerText;
+                renderStatusText.innerText = '⚠️ ট্যাব থেকে সরে গেছেন — এক্সপোর্ট চলছে, ফিরে আসার পর প্রোগ্রেস দেখতে পাবেন...';
+            } else if (originalStatusPrefix) {
+                originalStatusPrefix = '';
+            }
+        }
+        document.addEventListener('visibilitychange', handleVisibilityChange);
+
         try {
             await runExportPipeline(totalDuration);
         } catch (err) {
@@ -58,6 +98,9 @@ document.addEventListener('DOMContentLoaded', () => {
             renderBtn.disabled = false;
             if (qualitySelect) qualitySelect.disabled = false;
             renderBtn.innerHTML = '<i class="fa-solid fa-wand-magic-sparkles"></i> Render & Export Video';
+        } finally {
+            stopTickerWorker();
+            document.removeEventListener('visibilitychange', handleVisibilityChange);
         }
     }
 
@@ -213,9 +256,10 @@ document.addEventListener('DOMContentLoaded', () => {
             }
 
             const clipElapsedBase = elapsedBeforeCurrentClip;
+            const worker = getTickerWorker();
 
             await new Promise((resolve) => {
-                function renderLoop() {
+                function renderTick() {
                     const currentTime = video.currentTime;
                     const elapsedInClip = currentTime - clipTrimStart;
                     const totalElapsed = clipElapsedBase + elapsedInClip;
@@ -231,19 +275,20 @@ document.addEventListener('DOMContentLoaded', () => {
 
                     if (currentTime >= clipTrimEnd || video.ended) {
                         video.pause();
+                        worker.removeEventListener('message', renderTick);
+                        clearTimeout(safetyTimer);
                         resolve();
                         return;
                     }
-
-                    requestAnimationFrame(renderLoop);
                 }
 
-                requestAnimationFrame(renderLoop);
+                worker.addEventListener('message', renderTick);
 
                 // Safety timeout per-clip (max 10 minutes per clip)
-                setTimeout(() => {
+                const safetyTimer = setTimeout(() => {
                     if (!video.paused) {
                         video.pause();
+                        worker.removeEventListener('message', renderTick);
                         resolve();
                     }
                 }, 600_000);

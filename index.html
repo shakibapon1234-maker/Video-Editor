@@ -102,25 +102,38 @@
 
                     <!-- Custom Timeline Control -->
                     <div class="timeline-bar" style="display: none;" id="timeline-controls">
-                        <button id="play-pause-btn" class="btn-play">
-                            <i class="fa-solid fa-play"></i>
-                        </button>
-                        <div class="timeline-slider-container">
-                            <!-- Dual range slider for trimming -->
-                            <div class="slider-track-bg"></div>
-                            <div class="slider-track-fill" id="trim-fill"></div>
-                            <input type="range" id="trim-start" class="trim-slider" min="0" max="100" value="0" step="0.01">
-                            <input type="range" id="trim-end" class="trim-slider" min="0" max="100" value="100" step="0.01">
-                            <div class="playhead" id="playhead-indicator"></div>
-                        </div>
-                        <div class="time-inputs">
-                            <div class="time-field">
-                                <label>Start</label>
-                                <input type="text" id="start-time-val" value="00:00.0">
+                        <!-- Seek/scrub bar — freely move the playhead forward/back without changing the trim range -->
+                        <div class="seek-bar-container">
+                            <span class="seek-time-label" id="seek-current-time">00:00.0</span>
+                            <div class="seek-slider-wrapper">
+                                <div class="seek-track-bg"></div>
+                                <div class="seek-track-fill" id="seek-fill"></div>
+                                <input type="range" id="seek-slider" min="0" max="100" value="0" step="0.01">
                             </div>
-                            <div class="time-field">
-                                <label>End</label>
-                                <input type="text" id="end-time-val" value="00:00.0">
+                            <span class="seek-time-label" id="seek-total-time">00:00.0</span>
+                        </div>
+
+                        <div class="timeline-bar-top-row">
+                            <button id="play-pause-btn" class="btn-play">
+                                <i class="fa-solid fa-play"></i>
+                            </button>
+                            <div class="timeline-slider-container">
+                                <!-- Dual range slider for trimming -->
+                                <div class="slider-track-bg"></div>
+                                <div class="slider-track-fill" id="trim-fill"></div>
+                                <input type="range" id="trim-start" class="trim-slider" min="0" max="100" value="0" step="0.01">
+                                <input type="range" id="trim-end" class="trim-slider" min="0" max="100" value="100" step="0.01">
+                                <div class="playhead" id="playhead-indicator"></div>
+                            </div>
+                            <div class="time-inputs">
+                                <div class="time-field">
+                                    <label>Start</label>
+                                    <input type="text" id="start-time-val" value="00:00.0">
+                                </div>
+                                <div class="time-field">
+                                    <label>End</label>
+                                    <input type="text" id="end-time-val" value="00:00.0">
+                                </div>
                             </div>
                         </div>
 
@@ -183,6 +196,30 @@
                     <!-- Step 2: Trim & Layout -->
                     <div class="step-panel" id="panel-2">
                         <div class="card">
+                            <div class="card-header">
+                                <i class="fa-solid fa-volume-high card-icon"></i>
+                                <h3>Quick Volume (ভলিউম কন্ট্রোল)</h3>
+                            </div>
+                            <div class="card-body">
+                                <div class="control-group">
+                                    <label>Original Video Volume</label>
+                                    <div class="slider-val-container">
+                                        <input type="range" id="video-volume-slider-step2" min="0" max="150" value="100">
+                                        <span id="video-volume-val-step2">100%</span>
+                                    </div>
+                                </div>
+                                <div class="control-group mt-3" id="bgmusic-volume-container-step2" style="display: none;">
+                                    <label>Background Music Volume</label>
+                                    <div class="slider-val-container">
+                                        <input type="range" id="bgmusic-volume-slider-step2" min="0" max="100" value="40">
+                                        <span id="bgmusic-volume-val-step2">40%</span>
+                                    </div>
+                                </div>
+                                <p class="help-text mt-2">Voiceover Volume ও Auto-Ducking অপশন পাবেন Step 3: Audio &amp; Voice-এ।</p>
+                            </div>
+                        </div>
+
+                        <div class="card mt-4">
                             <div class="card-header">
                                 <i class="fa-solid fa-crop card-icon"></i>
                                 <h3>Canvas Format (Facebook & Reels)</h3>
@@ -441,6 +478,21 @@
                                         <label>Show Until (সেকেন্ড)</label>
                                         <input type="number" id="text-overlay-end" class="form-input" min="0" step="0.1" value="5">
                                     </div>
+                                    <div class="control-group mt-3">
+                                        <label>Position (অবস্থান সিলেক্ট করুন)</label>
+                                        <div class="position-grid" id="text-overlay-position-grid">
+                                            <button type="button" class="pos-btn" data-pos="top-left" title="Top Left">↖</button>
+                                            <button type="button" class="pos-btn" data-pos="top-center" title="Top Center">↑</button>
+                                            <button type="button" class="pos-btn" data-pos="top-right" title="Top Right">↗</button>
+                                            <button type="button" class="pos-btn" data-pos="middle-left" title="Middle Left">←</button>
+                                            <button type="button" class="pos-btn" data-pos="middle-center" title="Center">•</button>
+                                            <button type="button" class="pos-btn" data-pos="middle-right" title="Middle Right">→</button>
+                                            <button type="button" class="pos-btn" data-pos="bottom-left" title="Bottom Left">↙</button>
+                                            <button type="button" class="pos-btn" data-pos="bottom-center" title="Bottom Center">↓</button>
+                                            <button type="button" class="pos-btn" data-pos="bottom-right" title="Bottom Right">↘</button>
+                                        </div>
+                                        <p class="help-text mt-1">বাটনে ক্লিক করলে সাথে সাথে পজিশনে চলে যাবে, চাইলে প্রিভিউতে ড্র্যাগ করেও ঠিক করতে পারেন।</p>
+                                    </div>
                                     <button id="delete-text-overlay-btn" class="btn-text-danger mt-2">
                                         <i class="fa-solid fa-trash-can"></i> Remove This Text
                                     </button>
@@ -448,20 +500,54 @@
                             </div>
                         </div>
 
-                        <!-- B-roll / Topic Image Overlay (Phase 5D) -->
+                        <!-- B-roll / Topic Image or Text Overlay (Phase 5D) -->
                         <div class="card mt-4">
                             <div class="card-header">
                                 <i class="fa-solid fa-images card-icon"></i>
                                 <h3>B-roll / Topic Image (টপিক ছবি ওভারলে)</h3>
                             </div>
                             <div class="card-body">
-                                <p class="help-text">আপনি যেই টপিক নিয়ে কথা বলছেন, সেই সম্পর্কিত ছবি নির্দিষ্ট সময়ে স্ক্রিনে দেখান (যেমনঃ airlines নিয়ে কথা বললে প্লেনের ছবি)। এটি ভিডিও এডিটিং-এ "B-roll" নামে পরিচিত।</p>
+                                <p class="help-text">আপনি যেই টপিক নিয়ে কথা বলছেন, সেই সম্পর্কিত ছবি বা টেক্সট নির্দিষ্ট সময়ে স্ক্রিনে দেখান (যেমনঃ airlines নিয়ে কথা বললে প্লেনের ছবি)। এটি ভিডিও এডিটিং-এ "B-roll" নামে পরিচিত।</p>
 
-                                <div class="file-selector-box" id="broll-dropzone">
-                                    <i class="fa-solid fa-file-image"></i>
-                                    <span>Add Topic Image</span>
-                                    <button class="btn btn-sm btn-outline">Browse</button>
-                                    <input type="file" id="broll-input" accept="image/*" style="display: none;">
+                                <div class="control-group">
+                                    <label>Content Type</label>
+                                    <div class="segmented-toggle" id="broll-type-toggle">
+                                        <button type="button" class="segmented-btn active" data-type="image"><i class="fa-solid fa-image"></i> Image</button>
+                                        <button type="button" class="segmented-btn" data-type="text"><i class="fa-solid fa-font"></i> Text</button>
+                                    </div>
+                                </div>
+
+                                <div id="broll-image-input-section">
+                                    <div class="file-selector-box mt-3" id="broll-dropzone">
+                                        <i class="fa-solid fa-file-image"></i>
+                                        <span>Add Topic Image</span>
+                                        <button class="btn btn-sm btn-outline">Browse</button>
+                                        <input type="file" id="broll-input" accept="image/*" style="display: none;">
+                                    </div>
+                                </div>
+
+                                <div id="broll-text-input-section" style="display: none;">
+                                    <div class="control-group mt-3">
+                                        <label>Text Content</label>
+                                        <input type="text" id="broll-text-input" class="form-input" placeholder="যেমনঃ ঢাকা টু কক্সবাজার" maxlength="120">
+                                    </div>
+                                    <div class="control-group mt-3">
+                                        <label>Font Size</label>
+                                        <div class="slider-val-container">
+                                            <input type="range" id="broll-text-fontsize" min="14" max="120" value="48">
+                                            <span id="broll-text-fontsize-val">48px</span>
+                                        </div>
+                                    </div>
+                                    <div class="control-group mt-3">
+                                        <label>Text Color</label>
+                                        <div class="color-picker-wrapper">
+                                            <input type="color" id="broll-text-color" value="#ffffff">
+                                            <span class="color-value-text" id="broll-text-color-val">#ffffff</span>
+                                        </div>
+                                    </div>
+                                    <button id="add-broll-text-btn" class="btn btn-primary mt-3">
+                                        <i class="fa-solid fa-plus"></i> Add Text B-roll
+                                    </button>
                                 </div>
 
                                 <div class="control-group mt-3">
@@ -485,7 +571,7 @@
                                 </div>
 
                                 <div class="broll-timing mt-3" id="broll-timing-container" style="display: none;">
-                                    <p class="help-text">এই ছবিটি ভিডিওর কোন সময় থেকে কোন সময় পর্যন্ত দেখাবে তা নির্ধারণ করুন।</p>
+                                    <p class="help-text">এই আইটেমটি ভিডিওর কোন সময় থেকে কোন সময় পর্যন্ত দেখাবে তা নির্ধারণ করুন।</p>
                                     <div class="control-group">
                                         <label>Show From (সেকেন্ড)</label>
                                         <input type="number" id="broll-start" class="form-input" min="0" step="0.1" value="0">
@@ -494,8 +580,23 @@
                                         <label>Show Until (সেকেন্ড)</label>
                                         <input type="number" id="broll-end" class="form-input" min="0" step="0.1" value="3">
                                     </div>
+                                    <div class="control-group mt-3" id="broll-position-container" style="display: none;">
+                                        <label>Position (অবস্থান সিলেক্ট করুন)</label>
+                                        <div class="position-grid" id="broll-position-grid">
+                                            <button type="button" class="pos-btn" data-pos="top-left" title="Top Left">↖</button>
+                                            <button type="button" class="pos-btn" data-pos="top-center" title="Top Center">↑</button>
+                                            <button type="button" class="pos-btn" data-pos="top-right" title="Top Right">↗</button>
+                                            <button type="button" class="pos-btn" data-pos="middle-left" title="Middle Left">←</button>
+                                            <button type="button" class="pos-btn" data-pos="middle-center" title="Center">•</button>
+                                            <button type="button" class="pos-btn" data-pos="middle-right" title="Middle Right">→</button>
+                                            <button type="button" class="pos-btn" data-pos="bottom-left" title="Bottom Left">↙</button>
+                                            <button type="button" class="pos-btn" data-pos="bottom-center" title="Bottom Center">↓</button>
+                                            <button type="button" class="pos-btn" data-pos="bottom-right" title="Bottom Right">↘</button>
+                                        </div>
+                                        <p class="help-text mt-1">বাটনে ক্লিক করলে সাথে সাথে পজিশনে চলে যাবে, চাইলে প্রিভিউতে ড্র্যাগ করেও ঠিক করতে পারেন।</p>
+                                    </div>
                                     <button id="delete-broll-btn" class="btn-text-danger mt-2">
-                                        <i class="fa-solid fa-trash-can"></i> Remove This Image
+                                        <i class="fa-solid fa-trash-can"></i> Remove This Item
                                     </button>
                                 </div>
                             </div>

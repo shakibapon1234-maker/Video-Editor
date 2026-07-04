@@ -97,6 +97,7 @@ window.VideoEditor = {
     brollOverlays: [],
     selectedBrollId: null,
     isDraggingBroll: false,
+    isDraggingSeek: false,
     dragBrollOffsetX: 0,
     dragBrollOffsetY: 0,
 
@@ -143,6 +144,10 @@ document.addEventListener('DOMContentLoaded', () => {
     const endVal = document.getElementById('end-time-val');
     const playhead = document.getElementById('playhead-indicator');
     const trimFill = document.getElementById('trim-fill');
+    const seekSlider = document.getElementById('seek-slider');
+    const seekFill = document.getElementById('seek-fill');
+    const seekCurrentTimeEl = document.getElementById('seek-current-time');
+    const seekTotalTimeEl = document.getElementById('seek-total-time');
     
     const prevBtn = document.getElementById('prev-btn');
     const nextBtn = document.getElementById('next-btn');
@@ -160,6 +165,13 @@ document.addEventListener('DOMContentLoaded', () => {
     
     const videoVolumeSlider = document.getElementById('video-volume-slider');
     const videoVolumeVal = document.getElementById('video-volume-val');
+
+    // Step 2 "Quick Volume" mirror controls, kept in sync with the Step 3 sliders above
+    const videoVolumeSliderStep2 = document.getElementById('video-volume-slider-step2');
+    const videoVolumeValStep2 = document.getElementById('video-volume-val-step2');
+    const bgMusicVolumeContainerStep2 = document.getElementById('bgmusic-volume-container-step2');
+    const bgMusicVolumeSliderStep2 = document.getElementById('bgmusic-volume-slider-step2');
+    const bgMusicVolumeValStep2 = document.getElementById('bgmusic-volume-val-step2');
     
     // --- Step Navigation System ---
     function updateNavigation() {
@@ -691,6 +703,15 @@ document.addEventListener('DOMContentLoaded', () => {
         const endPercent = (state.endTime / total) * 100;
         trimFill.style.left = startPercent + '%';
         trimFill.style.width = (endPercent - startPercent) + '%';
+
+        // Dedicated seek/scrub bar
+        if (seekSlider && !state.isDraggingSeek) {
+            seekSlider.max = total || 0;
+            seekSlider.value = current;
+        }
+        if (seekFill) seekFill.style.width = Math.max(0, Math.min(100, percent)) + '%';
+        if (seekCurrentTimeEl) seekCurrentTimeEl.innerText = formatTime(current);
+        if (seekTotalTimeEl) seekTotalTimeEl.innerText = formatTime(total);
     }
     
     // Trim Slider Interaction
@@ -910,19 +931,91 @@ document.addEventListener('DOMContentLoaded', () => {
         updatePlayhead();
         syncActiveClipTrim();
     });
+
+    // Dedicated seek/scrub bar — freely move the playhead without touching the trim range.
+    // Pauses playback while actively dragging (so scrubbing feels responsive), and does NOT
+    // resume automatically on release — matches how most video players' scrub bars behave.
+    let wasPlayingBeforeSeek = false;
+    if (seekSlider) {
+        seekSlider.addEventListener('mousedown', () => {
+            state.isDraggingSeek = true;
+            wasPlayingBeforeSeek = state.isPlaying;
+            if (state.isPlaying) pauseVideo();
+        });
+        seekSlider.addEventListener('touchstart', () => {
+            state.isDraggingSeek = true;
+            wasPlayingBeforeSeek = state.isPlaying;
+            if (state.isPlaying) pauseVideo();
+        });
+
+        seekSlider.addEventListener('input', (e) => {
+            const val = parseFloat(e.target.value) || 0;
+            state.video.currentTime = val; // triggers 'seeked' event → redraws canvas
+            if (seekFill && state.duration) {
+                seekFill.style.width = Math.max(0, Math.min(100, (val / state.duration) * 100)) + '%';
+            }
+            if (seekCurrentTimeEl) seekCurrentTimeEl.innerText = formatTime(val);
+        });
+
+        function finishSeekDrag() {
+            state.isDraggingSeek = false;
+            updatePlayhead();
+        }
+        seekSlider.addEventListener('mouseup', finishSeekDrag);
+        seekSlider.addEventListener('touchend', finishSeekDrag);
+    }
     
-    // Video volume mix slider
-    videoVolumeSlider.addEventListener('input', (e) => {
-        state.videoVolume = parseInt(e.target.value) / 100;
-        videoVolumeVal.innerText = e.target.value + '%';
-        
+    // Video volume mix slider (Step 3 original + Step 2 quick-access copy stay in sync)
+    function applyVideoVolume(newVolumePercent) {
+        state.videoVolume = newVolumePercent / 100;
+        const label = newVolumePercent + '%';
+        videoVolumeVal.innerText = label;
+        videoVolumeSlider.value = newVolumePercent;
+        if (videoVolumeValStep2) videoVolumeValStep2.innerText = label;
+        if (videoVolumeSliderStep2) videoVolumeSliderStep2.value = newVolumePercent;
+
         // Apply to video element directly
         if (window.videoGainNode) {
             window.videoGainNode.gain.setValueAtTime(state.videoVolume, 0);
         } else {
             state.video.volume = Math.min(1.0, state.videoVolume);
         }
+    }
+
+    videoVolumeSlider.addEventListener('input', (e) => {
+        applyVideoVolume(parseInt(e.target.value));
     });
+
+    if (videoVolumeSliderStep2) {
+        videoVolumeSliderStep2.addEventListener('input', (e) => {
+            applyVideoVolume(parseInt(e.target.value));
+        });
+    }
+
+    // Background music volume quick-access copy in Step 2 (main slider lives in audio.js/Step 3)
+    if (bgMusicVolumeSliderStep2) {
+        bgMusicVolumeSliderStep2.addEventListener('input', (e) => {
+            const val = parseInt(e.target.value);
+            bgMusicVolumeValStep2.innerText = val + '%';
+            const mainBgSlider = document.getElementById('bgmusic-volume-slider');
+            if (mainBgSlider) {
+                mainBgSlider.value = val;
+                mainBgSlider.dispatchEvent(new Event('input'));
+            }
+        });
+    }
+
+    // Called from audio.js whenever bg music is added/removed or its volume changes elsewhere,
+    // so the Step 2 copy always reflects the real state.
+    window.syncBgMusicVolumeStep2 = function() {
+        if (!bgMusicVolumeContainerStep2) return;
+        bgMusicVolumeContainerStep2.style.display = state.bgMusicAdded ? 'block' : 'none';
+        if (bgMusicVolumeSliderStep2) {
+            const pct = Math.round((state.bgMusicVolume || 0) * 100);
+            bgMusicVolumeSliderStep2.value = pct;
+            bgMusicVolumeValStep2.innerText = pct + '%';
+        }
+    };
 
     // Handle Manual Typing of Trim fields
     startVal.addEventListener('change', () => {
@@ -1292,7 +1385,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (state.brollOverlays && state.brollOverlays.length > 0) {
             const currentTime = state.video.currentTime;
             state.brollOverlays.forEach((item) => {
-                if (!item.imageImg) return;
+                if (item.type !== 'text' && !item.imageImg) return;
 
                 // While paused in Step 2 we always show the overlay so it can be positioned/sized.
                 // Once playing (in any step), respect the real start/end timing so preview matches export.
@@ -1316,41 +1409,66 @@ document.addEventListener('DOMContentLoaded', () => {
                     state.ctx.save();
                     state.ctx.globalAlpha = alpha;
 
-                    // Cover the entire video frame area, preserving aspect ratio (fill/crop),
-                    // with a slow continuous "Ken Burns" zoom-in so a still photo feels alive
-                    // instead of sitting frozen on screen.
-                    const imgAspect = item.imageImg.naturalWidth / item.imageImg.naturalHeight;
-                    const boxAspect = drawW / drawH;
-                    let sx, sy, sw, sh;
-                    if (imgAspect > boxAspect) {
-                        sh = item.imageImg.naturalHeight;
-                        sw = sh * boxAspect;
-                        sx = (item.imageImg.naturalWidth - sw) / 2;
-                        sy = 0;
+                    if (item.type === 'text') {
+                        // Dark scrim behind the text so it reads over any video content
+                        state.ctx.fillStyle = 'rgba(0,0,0,0.45)';
+                        state.ctx.fillRect(drawX, drawY, drawW, drawH);
+
+                        state.ctx.font = `bold ${item.fontSize}px "Hind Siliguri", "Plus Jakarta Sans", sans-serif`;
+                        state.ctx.fillStyle = item.color;
+                        state.ctx.textAlign = 'center';
+                        state.ctx.textBaseline = 'middle';
+                        state.ctx.lineWidth = Math.max(2, item.fontSize * 0.08);
+                        state.ctx.strokeStyle = 'rgba(0,0,0,0.55)';
+                        const cx = drawX + drawW / 2;
+                        const cy = drawY + drawH / 2;
+                        state.ctx.strokeText(item.text, cx, cy);
+                        state.ctx.fillText(item.text, cx, cy);
                     } else {
-                        sw = item.imageImg.naturalWidth;
-                        sh = sw / boxAspect;
-                        sx = 0;
-                        sy = (item.imageImg.naturalHeight - sh) / 2;
+                        // Cover the entire video frame area, preserving aspect ratio (fill/crop),
+                        // with a slow continuous "Ken Burns" zoom-in so a still photo feels alive
+                        // instead of sitting frozen on screen.
+                        const imgAspect = item.imageImg.naturalWidth / item.imageImg.naturalHeight;
+                        const boxAspect = drawW / drawH;
+                        let sx, sy, sw, sh;
+                        if (imgAspect > boxAspect) {
+                            sh = item.imageImg.naturalHeight;
+                            sw = sh * boxAspect;
+                            sx = (item.imageImg.naturalWidth - sw) / 2;
+                            sy = 0;
+                        } else {
+                            sw = item.imageImg.naturalWidth;
+                            sh = sw / boxAspect;
+                            sx = 0;
+                            sy = (item.imageImg.naturalHeight - sh) / 2;
+                        }
+                        if (state.currentStep !== 2) {
+                            const totalDur = Math.max(0.01, item.endSec - item.startSec);
+                            const zoomProgress = Math.max(0, Math.min(1, tIn / totalDur));
+                            const zoom = 1 + 0.08 * zoomProgress; // grows to 8% zoomed-in by the end
+                            const newSw = sw / zoom, newSh = sh / zoom;
+                            sx += (sw - newSw) / 2;
+                            sy += (sh - newSh) / 2;
+                            sw = newSw; sh = newSh;
+                        }
+                        state.ctx.drawImage(item.imageImg, sx, sy, sw, sh, drawX, drawY, drawW, drawH);
                     }
-                    if (state.currentStep !== 2) {
-                        const totalDur = Math.max(0.01, item.endSec - item.startSec);
-                        const zoomProgress = Math.max(0, Math.min(1, tIn / totalDur));
-                        const zoom = 1 + 0.08 * zoomProgress; // grows to 8% zoomed-in by the end
-                        const newSw = sw / zoom, newSh = sh / zoom;
-                        sx += (sw - newSw) / 2;
-                        sy += (sh - newSh) / 2;
-                        sw = newSw; sh = newSh;
-                    }
-                    state.ctx.drawImage(item.imageImg, sx, sy, sw, sh, drawX, drawY, drawW, drawH);
                     state.ctx.restore();
                 } else {
                     // Picture-in-picture with a cartoon-style slide-in/pop entrance and
                     // slide-out exit. Each clip gets its own entry direction (assigned when
-                    // the image was added) so a sequence of B-roll images doesn't always
+                    // the item was added) so a sequence of B-roll items doesn't always
                     // enter from the same corner.
-                    const pipW = canvasW * (item.size / 100);
-                    const pipH = pipW * (item.imageImg.naturalHeight / item.imageImg.naturalWidth);
+                    let pipW, pipH;
+                    if (item.type === 'text') {
+                        state.ctx.font = `bold ${item.fontSize}px "Hind Siliguri", "Plus Jakarta Sans", sans-serif`;
+                        const metrics = state.ctx.measureText(item.text);
+                        pipW = metrics.width + 32;
+                        pipH = item.fontSize + 24;
+                    } else {
+                        pipW = canvasW * (item.size / 100);
+                        pipH = pipW * (item.imageImg.naturalHeight / item.imageImg.naturalWidth);
+                    }
                     const targetX = item.x * canvasW;
                     const targetY = item.y * canvasH;
 
@@ -1385,9 +1503,25 @@ document.addEventListener('DOMContentLoaded', () => {
                     state.ctx.scale(scale, scale);
                     state.ctx.translate(-pipW / 2, -pipH / 2);
 
-                    state.ctx.fillStyle = 'rgba(0,0,0,0.25)';
-                    state.ctx.fillRect(-4, -4, pipW + 8, pipH + 8);
-                    state.ctx.drawImage(item.imageImg, 0, 0, pipW, pipH);
+                    if (item.type === 'text') {
+                        state.ctx.fillStyle = 'rgba(0,0,0,0.55)';
+                        if (state.ctx.roundRect) {
+                            state.ctx.beginPath();
+                            state.ctx.roundRect(0, 0, pipW, pipH, 10);
+                            state.ctx.fill();
+                        } else {
+                            state.ctx.fillRect(0, 0, pipW, pipH);
+                        }
+                        state.ctx.font = `bold ${item.fontSize}px "Hind Siliguri", "Plus Jakarta Sans", sans-serif`;
+                        state.ctx.fillStyle = item.color;
+                        state.ctx.textAlign = 'center';
+                        state.ctx.textBaseline = 'middle';
+                        state.ctx.fillText(item.text, pipW / 2, pipH / 2);
+                    } else {
+                        state.ctx.fillStyle = 'rgba(0,0,0,0.25)';
+                        state.ctx.fillRect(-4, -4, pipW + 8, pipH + 8);
+                        state.ctx.drawImage(item.imageImg, 0, 0, pipW, pipH);
+                    }
 
                     if (state.currentStep === 2 && item.id === state.selectedBrollId) {
                         state.ctx.strokeStyle = 'rgba(79, 70, 229, 0.9)';
@@ -1406,7 +1540,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (state.textOverlays && state.textOverlays.length > 0) {
             const currentTime = state.video.currentTime;
             state.textOverlays.forEach((item) => {
-                const isVisible = state.currentStep === 2
+                const isVisible = (state.currentStep === 2 && !state.isPlaying)
                     ? true
                     : (currentTime >= item.startSec && currentTime <= item.endSec);
                 if (!isVisible) return;
@@ -1806,9 +1940,19 @@ document.addEventListener('DOMContentLoaded', () => {
         const canvasH = state.canvas.height;
         for (let i = state.brollOverlays.length - 1; i >= 0; i--) {
             const item = state.brollOverlays[i];
-            if (item.mode !== 'pip' || !item.imageImg) continue;
-            const pipW = canvasW * (item.size / 100);
-            const pipH = pipW * (item.imageImg.naturalHeight / item.imageImg.naturalWidth);
+            if (item.mode !== 'pip') continue;
+            if (item.type !== 'text' && !item.imageImg) continue;
+
+            let pipW, pipH;
+            if (item.type === 'text') {
+                state.ctx.font = `bold ${item.fontSize}px "Hind Siliguri", "Plus Jakarta Sans", sans-serif`;
+                const metrics = state.ctx.measureText(item.text);
+                pipW = metrics.width + 32;
+                pipH = item.fontSize + 24;
+            } else {
+                pipW = canvasW * (item.size / 100);
+                pipH = pipW * (item.imageImg.naturalHeight / item.imageImg.naturalWidth);
+            }
             const px = item.x * canvasW;
             const py = item.y * canvasH;
             if (coords.x >= px && coords.x <= px + pipW && coords.y >= py && coords.y <= py + pipH) {
@@ -2399,7 +2543,77 @@ document.addEventListener('DOMContentLoaded', () => {
         showTextOverlayTimingFor(id);
     };
 
+    // --- Shared position-preset helpers (Text Overlay + B-roll) ---
+    // A small margin from the canvas edge so items don't sit flush against the border.
+    const POSITION_MARGIN = 0.06;
+
+    // For center-anchored items (Text Overlay draws with textAlign 'center' / textBaseline 'middle')
+    function presetCenterFrac(presetKey) {
+        const [vPart, hPart] = presetKey.split('-');
+        const xMap = { left: POSITION_MARGIN, center: 0.5, right: 1 - POSITION_MARGIN };
+        const yMap = { top: POSITION_MARGIN, middle: 0.5, bottom: 1 - POSITION_MARGIN };
+        return { x: xMap[hPart], y: yMap[vPart] };
+    }
+
+    // For top-left-anchored items (B-roll PiP boxes), accounting for the box's own size
+    // so "bottom-right" etc. actually tucks the whole box into that corner.
+    function presetTopLeftFrac(presetKey, wFrac, hFrac) {
+        const [vPart, hPart] = presetKey.split('-');
+        const xMap = { left: POSITION_MARGIN, center: 0.5 - wFrac / 2, right: 1 - POSITION_MARGIN - wFrac };
+        const yMap = { top: POSITION_MARGIN, middle: 0.5 - hFrac / 2, bottom: 1 - POSITION_MARGIN - hFrac };
+        return { x: xMap[hPart], y: yMap[vPart] };
+    }
+
+    const textOverlayPositionGrid = document.getElementById('text-overlay-position-grid');
+    if (textOverlayPositionGrid) {
+        textOverlayPositionGrid.addEventListener('click', (e) => {
+            const btn = e.target.closest('.pos-btn');
+            if (!btn) return;
+            const item = state.textOverlays.find(t => t.id === state.selectedTextOverlayId);
+            if (!item) return;
+            const { x, y } = presetCenterFrac(btn.dataset.pos);
+            item.x = x;
+            item.y = y;
+            drawFrame();
+        });
+    }
+
     // --- B-roll / Topic Image Overlay Bindings (Phase 5D) ---
+    const brollTypeToggle = document.getElementById('broll-type-toggle');
+    const brollImageInputSection = document.getElementById('broll-image-input-section');
+    const brollTextInputSection = document.getElementById('broll-text-input-section');
+    const brollTextInput = document.getElementById('broll-text-input');
+    const brollTextFontsizeSlider = document.getElementById('broll-text-fontsize');
+    const brollTextFontsizeVal = document.getElementById('broll-text-fontsize-val');
+    const brollTextColorInput = document.getElementById('broll-text-color');
+    const brollTextColorVal = document.getElementById('broll-text-color-val');
+    const addBrollTextBtn = document.getElementById('add-broll-text-btn');
+    const brollPositionContainer = document.getElementById('broll-position-container');
+    const brollPositionGrid = document.getElementById('broll-position-grid');
+
+    let brollAddType = 'image';
+    if (brollTypeToggle) {
+        brollTypeToggle.addEventListener('click', (e) => {
+            const btn = e.target.closest('.segmented-btn');
+            if (!btn) return;
+            brollAddType = btn.dataset.type;
+            brollTypeToggle.querySelectorAll('.segmented-btn').forEach(b => b.classList.toggle('active', b === btn));
+            if (brollImageInputSection) brollImageInputSection.style.display = brollAddType === 'image' ? 'block' : 'none';
+            if (brollTextInputSection) brollTextInputSection.style.display = brollAddType === 'text' ? 'block' : 'none';
+        });
+    }
+
+    if (brollTextFontsizeSlider) {
+        brollTextFontsizeSlider.addEventListener('input', (e) => {
+            brollTextFontsizeVal.innerText = e.target.value + 'px';
+        });
+    }
+    if (brollTextColorInput) {
+        brollTextColorInput.addEventListener('input', (e) => {
+            brollTextColorVal.innerText = e.target.value;
+        });
+    }
+
     const brollDropzone = document.getElementById('broll-dropzone');
     const brollInput = document.getElementById('broll-input');
     const brollModeSelect = document.getElementById('broll-mode-select');
@@ -2443,6 +2657,7 @@ document.addEventListener('DOMContentLoaded', () => {
         img.onload = () => {
             const newItem = {
                 id: brollIdCounter++,
+                type: 'image',
                 imageImg: img,
                 imageUrl: url,
                 mode: brollModeSelect ? brollModeSelect.value : 'fullscreen',
@@ -2465,6 +2680,67 @@ document.addEventListener('DOMContentLoaded', () => {
         if (brollInput) brollInput.value = '';
     }
 
+    if (addBrollTextBtn) {
+        addBrollTextBtn.addEventListener('click', () => {
+            const text = brollTextInput.value.trim();
+            if (!text) return;
+
+            const newItem = {
+                id: brollIdCounter++,
+                type: 'text',
+                text: text,
+                fontSize: brollTextFontsizeSlider ? parseInt(brollTextFontsizeSlider.value) : 48,
+                color: brollTextColorInput ? brollTextColorInput.value : '#ffffff',
+                mode: brollModeSelect ? brollModeSelect.value : 'fullscreen',
+                size: brollSizeSlider ? parseInt(brollSizeSlider.value) : 35,
+                x: 0.5,
+                y: 0.5,
+                startSec: state.video.currentTime || 0,
+                endSec: Math.min(state.duration || 5, (state.video.currentTime || 0) + 3),
+                entryDirection: ['left', 'right', 'top', 'bottom'][Math.floor(Math.random() * 4)]
+            };
+            state.brollOverlays.push(newItem);
+            state.selectedBrollId = newItem.id;
+            brollTextInput.value = '';
+            renderBrollList();
+            showBrollTimingFor(newItem.id);
+            drawFrame();
+        });
+    }
+
+    // Computes this item's on-screen box size as a fraction of the canvas, used both for
+    // hit-testing drag/click and for placing it correctly via the position-preset grid.
+    function computeBrollBoxFrac(item) {
+        const canvasW = state.canvas.width;
+        const canvasH = state.canvas.height;
+        if (item.type === 'text') {
+            state.ctx.font = `bold ${item.fontSize}px "Hind Siliguri", "Plus Jakarta Sans", sans-serif`;
+            const metrics = state.ctx.measureText(item.text);
+            const boxW = metrics.width + 32;
+            const boxH = item.fontSize + 24;
+            return { wFrac: boxW / canvasW, hFrac: boxH / canvasH };
+        } else if (item.imageImg) {
+            const pipW = canvasW * (item.size / 100);
+            const pipH = pipW * (item.imageImg.naturalHeight / item.imageImg.naturalWidth);
+            return { wFrac: pipW / canvasW, hFrac: pipH / canvasH };
+        }
+        return { wFrac: 0.3, hFrac: 0.15 };
+    }
+
+    if (brollPositionGrid) {
+        brollPositionGrid.addEventListener('click', (e) => {
+            const btn = e.target.closest('.pos-btn');
+            if (!btn) return;
+            const item = state.brollOverlays.find(b => b.id === state.selectedBrollId);
+            if (!item) return;
+            const { wFrac, hFrac } = computeBrollBoxFrac(item);
+            const { x, y } = presetTopLeftFrac(btn.dataset.pos, wFrac, hFrac);
+            item.x = x;
+            item.y = y;
+            drawFrame();
+        });
+    }
+
     function renderBrollList() {
         if (!brollListEl) return;
         brollListEl.innerHTML = '';
@@ -2482,7 +2758,13 @@ document.addEventListener('DOMContentLoaded', () => {
             row.style.border = item.id === state.selectedBrollId ? '1px solid var(--primary)' : '1px solid transparent';
 
             const label = document.createElement('span');
-            label.innerText = item.mode === 'fullscreen' ? '🖼 Fullscreen B-roll' : '🖼 PiP B-roll';
+            const modeLabel = item.mode === 'fullscreen' ? 'Fullscreen' : 'PiP';
+            if (item.type === 'text') {
+                const preview = item.text.length > 18 ? item.text.slice(0, 18) + '…' : item.text;
+                label.innerText = `🔤 ${modeLabel}: "${preview}"`;
+            } else {
+                label.innerText = `🖼 ${modeLabel} B-roll`;
+            }
             label.style.fontSize = '13px';
 
             const timeLabel = document.createElement('span');
@@ -2517,6 +2799,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (brollSizeSlider) brollSizeSlider.value = item.size;
         if (brollSizeVal) brollSizeVal.innerText = item.size + '%';
         if (brollSizeContainer) brollSizeContainer.style.display = item.mode === 'pip' ? 'block' : 'none';
+        if (brollPositionContainer) brollPositionContainer.style.display = item.mode === 'pip' ? 'block' : 'none';
     }
 
     if (brollStartInput) {
@@ -2545,6 +2828,7 @@ document.addEventListener('DOMContentLoaded', () => {
             if (item) {
                 item.mode = e.target.value;
                 if (brollSizeContainer) brollSizeContainer.style.display = item.mode === 'pip' ? 'block' : 'none';
+                if (brollPositionContainer) brollPositionContainer.style.display = item.mode === 'pip' ? 'block' : 'none';
                 drawFrame();
             }
         });
