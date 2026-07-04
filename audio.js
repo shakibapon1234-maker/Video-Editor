@@ -1074,6 +1074,44 @@ document.addEventListener('DOMContentLoaded', () => {
             sfxGain.gain.exponentialRampToValueAtTime(0.0001, now + dur);
             noise.start(now);
             noise.stop(now + dur);
+        } else if (type === 'thud') {
+            // Soft low-pitched impact — pairs well with Bounce In/Drop entrances.
+            const dur = 0.22;
+            const osc = audioCtx.createOscillator();
+            osc.type = 'sine';
+            osc.frequency.setValueAtTime(150, now);
+            osc.frequency.exponentialRampToValueAtTime(45, now + dur);
+            const noise = audioCtx.createBufferSource();
+            noise.buffer = makeNoiseBuffer(0.04);
+            const lp = audioCtx.createBiquadFilter();
+            lp.type = 'lowpass';
+            lp.frequency.setValueAtTime(500, now);
+            noise.connect(lp);
+            lp.connect(sfxGain);
+            osc.connect(sfxGain);
+            sfxGain.gain.linearRampToValueAtTime(0.5, now + 0.01);
+            sfxGain.gain.exponentialRampToValueAtTime(0.0001, now + dur);
+            osc.start(now);
+            osc.stop(now + dur);
+            noise.start(now);
+            noise.stop(now + 0.04);
+        } else if (type === 'chime') {
+            // Bright two-note sparkle — pairs well with Blur Focus / Spin entrances.
+            const dur = 0.5;
+            [880, 1320].forEach((freq, i) => {
+                const osc = audioCtx.createOscillator();
+                osc.type = 'sine';
+                osc.frequency.setValueAtTime(freq, now + i * 0.06);
+                const noteGain = audioCtx.createGain();
+                noteGain.gain.setValueAtTime(0.0001, now + i * 0.06);
+                noteGain.gain.linearRampToValueAtTime(0.28, now + i * 0.06 + 0.02);
+                noteGain.gain.exponentialRampToValueAtTime(0.0001, now + i * 0.06 + dur);
+                osc.connect(noteGain);
+                noteGain.connect(sfxGain);
+                osc.start(now + i * 0.06);
+                osc.stop(now + i * 0.06 + dur);
+            });
+            sfxGain.gain.setValueAtTime(1, now);
         }
 
         // Clean up nodes shortly after the sound finishes to avoid leaking them.

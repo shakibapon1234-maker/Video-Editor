@@ -1418,10 +1418,18 @@ document.addEventListener('DOMContentLoaded', () => {
                     ? (item.entryDirection || 'bottom')
                     : item.exitDirection;
 
+                // Whether animations/sounds should actively play right now. They're only
+                // suppressed when the user is parked in Step 2 WITHOUT playback (so the
+                // overlay sits still and full-opacity for easy positioning/sizing). The
+                // moment playback starts — even while still on Step 2 previewing the
+                // B-roll they just added — animations and sound must run for real,
+                // otherwise "testing" the effect right where you configure it looks broken.
+                const brollAnimActive = !(state.currentStep === 2 && !state.isPlaying);
+
                 // Fire entry/exit sound effects (Web Audio, synthesized — see audio.js)
                 // in real time during actual playback/export, timed to line up with
                 // the visual animation (exit sound starts right as the exit anim begins).
-                if (state.isPlaying && state.currentStep !== 2 && item.soundEffect && item.soundEffect !== 'none') {
+                if (state.isPlaying && item.soundEffect && item.soundEffect !== 'none') {
                     if (!item._sfxEnterPlayed && currentTime >= item.startSec) {
                         item._sfxEnterPlayed = true;
                         if (window.playBrollSfx) window.playBrollSfx(item.soundEffect);
@@ -1436,8 +1444,12 @@ document.addEventListener('DOMContentLoaded', () => {
                     const style = item.animationStyle || 'zoom';
                     let alpha = 1;
                     let slideOffXFrac = 0, slideOffYFrac = 0;
+                    let bounceOffYFrac = 0;
+                    let rotateAmt = 0, scaleAmt = 1;
+                    let blurPx = 0;
+                    let wipeFrac = 1;
 
-                    if (state.currentStep !== 2 && style !== 'none') {
+                    if (brollAnimActive && style !== 'none') {
                         if (style === 'slide') {
                             // Whole frame slides in from the entry edge, holds, then
                             // slides out toward the exit edge — position animates,
@@ -1453,18 +1465,71 @@ document.addEventListener('DOMContentLoaded', () => {
                                 slideOffXFrac = d.x * (1 - eased);
                                 slideOffYFrac = d.y * (1 - eased);
                             }
+                        } else if (style === 'wipe') {
+                            // Directional reveal: a growing clip rectangle wipes the image
+                            // into view from the entry edge, then wipes it away on exit.
+                            if (tIn < animDur) {
+                                wipeFrac = brollEaseOut(tIn / animDur);
+                            } else if (tOut < animDur) {
+                                wipeFrac = brollEaseOut(tOut / animDur);
+                            }
+                        } else if (style === 'rotate-in') {
+                            // Gentle spin-and-scale settle on the way in, mirrored on the way out.
+                            if (tIn < animDur) {
+                                const eased = brollEaseOut(tIn / animDur);
+                                rotateAmt = (1 - eased) * (Math.PI / 10);
+                                scaleAmt = 0.82 + 0.18 * eased;
+                                alpha = Math.max(0, eased);
+                            } else if (tOut < animDur) {
+                                const eased = brollEaseOut(tOut / animDur);
+                                rotateAmt = -(1 - eased) * (Math.PI / 10);
+                                scaleAmt = 0.82 + 0.18 * eased;
+                                alpha = Math.max(0, eased);
+                            }
+                        } else if (style === 'bounce-in') {
+                            // Drops in from off the top edge with a bouncy overshoot landing,
+                            // then bounces back out the same way at the end.
+                            if (tIn < animDur) {
+                                const eased = easeOutBackOvershoot(Math.max(0, Math.min(1, tIn / animDur)));
+                                bounceOffYFrac = -(1 - eased);
+                            } else if (tOut < animDur) {
+                                const eased = easeOutBackOvershoot(Math.max(0, Math.min(1, tOut / animDur)));
+                                bounceOffYFrac = -(1 - eased);
+                            }
                         } else {
-                            // 'fade' and 'zoom' both fade in/out at the edges of the range
+                            // 'fade', 'zoom', 'zoom-out', 'pan' and 'blur-focus' all fade
+                            // in/out at the edges of the range; 'blur-focus' layers a
+                            // sharpen-in/blur-out on top of that same fade envelope.
                             if (tIn < animDur) alpha = Math.max(0, tIn / animDur);
                             if (tOut < animDur) alpha = Math.min(alpha, Math.max(0, tOut / animDur));
+                            if (style === 'blur-focus') {
+                                let blurP = 0;
+                                if (tIn < animDur) blurP = Math.max(blurP, 1 - tIn / animDur);
+                                if (tOut < animDur) blurP = Math.max(blurP, 1 - tOut / animDur);
+                                blurPx = Math.max(0, Math.min(1, blurP)) * 14;
+                            }
                         }
                     }
 
                     const fsDrawX = drawX + slideOffXFrac * canvasW;
-                    const fsDrawY = drawY + slideOffYFrac * canvasH;
+                    const fsDrawY = drawY + (slideOffYFrac + bounceOffYFrac) * canvasH;
 
                     state.ctx.save();
                     state.ctx.globalAlpha = alpha;
+                    if (blurPx > 0.1) state.ctx.filter = `blur(${blurPx.toFixed(1)}px)`;
+                    if (rotateAmt !== 0 || scaleAmt !== 1) {
+                        const rcx = fsDrawX + drawW / 2;
+                        const rcy = fsDrawY + drawH / 2;
+                        state.ctx.translate(rcx, rcy);
+                        state.ctx.rotate(rotateAmt);
+                        state.ctx.scale(scaleAmt, scaleAmt);
+                        state.ctx.translate(-rcx, -rcy);
+                    }
+                    if (wipeFrac < 0.999) {
+                        state.ctx.beginPath();
+                        state.ctx.rect(fsDrawX, fsDrawY, drawW * Math.max(0, wipeFrac), drawH);
+                        state.ctx.clip();
+                    }
 
                     if (item.type === 'text') {
                         // Dark scrim behind the text so it reads over any video content
@@ -1499,14 +1564,32 @@ document.addEventListener('DOMContentLoaded', () => {
                             sx = 0;
                             sy = (item.imageImg.naturalHeight - sh) / 2;
                         }
-                        if (state.currentStep !== 2 && style === 'zoom') {
+                        if (brollAnimActive && (style === 'zoom' || style === 'zoom-out')) {
                             const totalDur = Math.max(0.01, item.endSec - item.startSec);
                             const zoomProgress = Math.max(0, Math.min(1, tIn / totalDur));
-                            const zoom = 1 + 0.08 * zoomProgress; // grows to 8% zoomed-in by the end
+                            // 'zoom' grows to 8% zoomed-in by the end; 'zoom-out' starts
+                            // 8% zoomed-in and eases back down to normal.
+                            const zoom = style === 'zoom-out'
+                                ? (1.08 - 0.08 * zoomProgress)
+                                : (1 + 0.08 * zoomProgress);
                             const newSw = sw / zoom, newSh = sh / zoom;
                             sx += (sw - newSw) / 2;
                             sy += (sh - newSh) / 2;
                             sw = newSw; sh = newSh;
+                        } else if (brollAnimActive && style === 'pan') {
+                            // Ken Burns pan: slides the crop window across whatever slack
+                            // space is left after the aspect-fit crop above, using the
+                            // entry direction to pick which way it pans.
+                            const totalDur = Math.max(0.01, item.endSec - item.startSec);
+                            const panProgress = Math.max(0, Math.min(1, tIn / totalDur));
+                            const dirSign = (item.entryDirection === 'right' || item.entryDirection === 'bottom') ? -1 : 1;
+                            const slackW = item.imageImg.naturalWidth - sw;
+                            const slackH = item.imageImg.naturalHeight - sh;
+                            if (slackW > 1) {
+                                sx = Math.max(0, Math.min(slackW, (slackW / 2) + dirSign * (slackW / 2) * (panProgress * 2 - 1)));
+                            } else if (slackH > 1) {
+                                sy = Math.max(0, Math.min(slackH, (slackH / 2) + dirSign * (slackH / 2) * (panProgress * 2 - 1)));
+                            }
                         }
                         state.ctx.drawImage(item.imageImg, sx, sy, sw, sh, fsDrawX, fsDrawY, drawW, drawH);
                     }
@@ -1531,7 +1614,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     const pipStyle = item.animationStyle || 'slide-pop';
 
                     let progress = 1;
-                    if (state.currentStep !== 2 && pipStyle !== 'none') {
+                    if (brollAnimActive && pipStyle !== 'none') {
                         const enter = tIn < animDur ? Math.max(0, tIn / animDur) : 1;
                         const exit = tOut < animDur ? Math.max(0, tOut / animDur) : 1;
                         progress = Math.max(0, Math.min(1, Math.min(enter, exit)));
@@ -1549,20 +1632,26 @@ document.addEventListener('DOMContentLoaded', () => {
                         else if (dir === 'right') offX = (canvasW - targetX);
                         else if (dir === 'top') offY = -(targetY + pipH);
                         else offY = (canvasH - targetY);
+                    } else if (pipStyle === 'bounce-drop') {
+                        // Always drops in straight from above the frame, regardless of the
+                        // configured entry direction, then bounces back up on exit.
+                        offY = -(targetY + pipH);
                     }
 
                     const drawXpip = targetX + offX * (1 - eased);
                     const drawYpip = targetY + offY * (1 - eased);
-                    // 'zoom' pops purely by scale with no slide; 'fade' and 'none' stay full-size in place.
-                    const scale = (pipStyle === 'slide-pop' || pipStyle === 'zoom')
+                    // Pop-style entrances scale up from smaller; 'fade' and 'none' stay full-size in place.
+                    const scale = (pipStyle === 'slide-pop' || pipStyle === 'zoom' || pipStyle === 'bounce-drop' || pipStyle === 'blur-pop')
                         ? (0.7 + 0.3 * eased)
-                        : 1;
-                    const wobble = (pipStyle === 'slide-pop')
+                        : (pipStyle === 'spin-pop' ? (0.75 + 0.25 * eased) : 1);
+                    const wobble = (pipStyle === 'slide-pop' || pipStyle === 'bounce-drop')
                         ? (1 - eased) * (dir === 'left' || dir === 'top' ? -0.10 : 0.10)
-                        : 0;
+                        : (pipStyle === 'spin-pop' ? (1 - eased) * (Math.PI / 3) : 0);
+                    const pipBlur = (pipStyle === 'blur-pop') ? Math.max(0, 1 - eased) * 10 : 0;
 
                     state.ctx.save();
                     state.ctx.globalAlpha = (pipStyle === 'none') ? 1 : Math.max(0.15, Math.min(1, eased));
+                    if (pipBlur > 0.1) state.ctx.filter = `blur(${pipBlur.toFixed(1)}px)`;
 
                     const cx = drawXpip + pipW / 2;
                     const cy = drawYpip + pipH / 2;
@@ -2701,21 +2790,31 @@ document.addEventListener('DOMContentLoaded', () => {
     const brollAnimSpeedSelect = document.getElementById('broll-anim-speed');
     const brollSoundEffectSelect = document.getElementById('broll-sound-effect');
 
-    // Animation style options differ by display mode: Fullscreen items can Fade,
-    // Zoom (Ken Burns), Slide across the frame, or show with No animation. PiP
-    // items can Slide+Pop in (the classic bouncy corner box), a plain Fade,
-    // a Zoom pop-in with no sliding, or No animation.
+    // Animation style options differ by display mode. Fullscreen items get the
+    // full "Ken Burns" style toolkit (Zoom in/out, Pan, Fade, Slide, Wipe reveal,
+    // Rotate-in, Bounce-in, Blur-focus) or No animation. PiP items keep their
+    // bouncy corner-box repertoire (Slide+Pop, Bounce-drop, Spin-pop, Zoom pop,
+    // Blur-pop, Fade) or No animation.
     const BROLL_ANIM_STYLES = {
         fullscreen: [
-            { value: 'zoom', label: 'Zoom (ধীরে ধীরে জুম হবে)' },
+            { value: 'zoom', label: 'Zoom In (ধীরে ধীরে জুম হবে)' },
+            { value: 'zoom-out', label: 'Zoom Out (জুম আউট হবে)' },
+            { value: 'pan', label: 'Pan (Ken Burns - আস্তে আস্তে সরে যাবে)' },
             { value: 'fade', label: 'Fade (আস্তে আস্তে ভেসে উঠবে)' },
             { value: 'slide', label: 'Slide (এক পাশ থেকে স্লাইড করে আসবে)' },
+            { value: 'wipe', label: 'Wipe Reveal (মুছে মুছে দেখা যাবে)' },
+            { value: 'rotate-in', label: 'Rotate In (ঘুরে ঘুরে আসবে)' },
+            { value: 'bounce-in', label: 'Bounce In (লাফিয়ে লাফিয়ে আসবে)' },
+            { value: 'blur-focus', label: 'Blur Focus (ঝাপসা থেকে স্পষ্ট হবে)' },
             { value: 'none', label: 'কোনো অ্যানিমেশন নেই (সরাসরি দেখাবে)' }
         ],
         pip: [
             { value: 'slide-pop', label: 'Slide + Pop (কোণা থেকে বাউন্স করে আসবে)' },
-            { value: 'fade', label: 'Fade (আস্তে আস্তে ভেসে উঠবে)' },
+            { value: 'bounce-drop', label: 'Bounce Drop (উপর থেকে লাফিয়ে পড়বে)' },
+            { value: 'spin-pop', label: 'Spin Pop (ঘুরতে ঘুরতে আসবে)' },
             { value: 'zoom', label: 'Zoom Pop (জায়গায় থেকে বড় হবে)' },
+            { value: 'blur-pop', label: 'Blur Pop (ঝাপসা থেকে স্পষ্ট হয়ে আসবে)' },
+            { value: 'fade', label: 'Fade (আস্তে আস্তে ভেসে উঠবে)' },
             { value: 'none', label: 'কোনো অ্যানিমেশন নেই (সরাসরি দেখাবে)' }
         ]
     };
@@ -2729,9 +2828,12 @@ document.addEventListener('DOMContentLoaded', () => {
     // Shows/hides the entry/exit direction pickers depending on whether the
     // currently selected animation style actually uses a direction.
     function updateBrollDirectionRowsVisibility(style) {
-        const usesDirection = (style === 'slide' || style === 'slide-pop');
-        if (brollDirectionRow) brollDirectionRow.style.display = usesDirection ? 'block' : 'none';
-        if (brollExitDirectionRow) brollExitDirectionRow.style.display = usesDirection ? 'block' : 'none';
+        // 'pan' only cares about a single pan direction (reuses the entry-direction
+        // picker) and has no separate exit phase, so its exit-direction row stays hidden.
+        const usesEntryDirection = (style === 'slide' || style === 'slide-pop' || style === 'pan');
+        const usesExitDirection = (style === 'slide' || style === 'slide-pop');
+        if (brollDirectionRow) brollDirectionRow.style.display = usesEntryDirection ? 'block' : 'none';
+        if (brollExitDirectionRow) brollExitDirectionRow.style.display = usesExitDirection ? 'block' : 'none';
     }
 
     let brollIdCounter = 1;
