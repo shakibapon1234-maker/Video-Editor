@@ -358,6 +358,38 @@ PHASE 5 - FACEBOOK/SOCIAL MEDIA SPECIFIC
       - Step F (Text Overlay)-এর আগে আঁকা হয়, ফলে টেক্সট সবসময়
         উপরে থাকে
 
+সম্পন্ন হয়েছে (v2.1 - Animation/Sound Control Upgrade):
+  - item-এ নতুন field যুক্ত হয়েছে: entryDirection (এখন UI থেকে
+    সিলেক্ট করা যায়, শুধু random আর নয়), exitDirection ('same'
+    বা আলাদা দিক), animationStyle, animationSpeed, soundEffect
+  - Animation Style dropdown (mode অনুযায়ী option বদলায়):
+      Fullscreen -> Zoom (Ken Burns) / Fade / Slide / None
+      PiP        -> Slide+Pop / Fade / Zoom Pop / None
+  - Entry Direction ও Exit Direction আলাদাভাবে সিলেক্ট করা যায়
+    (left/right/top/bottom), যখন style Slide/Slide+Pop হয় তখনই
+    এই dropdown দুটো দেখা যায়
+  - Animation Speed dropdown: Fast (0.22s) / Normal (0.4s) /
+    Slow (0.75s) — drawFrame()-এর brollSpeedToSec ম্যাপ থেকে
+    রেজল্ভ হয়
+  - drawFrame()-এর B-roll ব্লক পুরোপুরি রিফ্যাক্টর করা হয়েছে
+    animationStyle অনুযায়ী শাখা (branch) নেওয়ার জন্য; PiP-এর
+    entry/exit আলাদা দিক ব্যবহার করে (আগে দুটোই একই dir ব্যবহার
+    করতো)
+  - Sound Effect dropdown: None / Whoosh / Pop / Click — audio.js-এ
+    window.playBrollSfx(type) ফাংশন Web Audio দিয়ে সাউন্ড
+    সিনথেসাইজ করে (কোনো external audio file লাগে না) এবং
+    makeupGainNode বাসে কানেক্ট করে, ফলে প্রিভিউ স্পিকার আর
+    এক্সপোর্ট রেকর্ডিং tap — দুটোতেই একইভাবে শোনা যায়
+  - drawFrame()-এ প্রতিটি item-এর জন্য one-shot enter/exit flag
+    (_sfxEnterPlayed/_sfxExitPlayed) রাখা হয়, currentTime item-এর
+    startSec/endSec ক্রস করলে ঠিক একবার সাউন্ড বাজে, exit সাউন্ড
+    ঠিক এক্সিট অ্যানিমেশন শুরুর মুহূর্তে বাজে
+  - Sound dropdown পরিবর্তন করলেই সাথে সাথে ওই সাউন্ডের একটা
+    quick preview বেজে ওঠে
+  - Backward-compatible: পুরনো item (animationStyle না থাকলে)
+    আগের ডিফল্ট আচরণ (zoom/slide-pop, soundEffect none) বজায়
+    রাখে, তাই আগের এক্সপোর্ট করা প্রজেক্টে কোনো পার্থক্য আসবে না
+
 
 PHASE 6 - EXPORT উন্নতি
 ==========================

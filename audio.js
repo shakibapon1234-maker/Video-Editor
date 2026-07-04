@@ -1009,6 +1009,77 @@ document.addEventListener('DOMContentLoaded', () => {
         };
     };
 
+    // --- 7. B-roll Entry/Exit Sound Effects (Phase 5D+) ---
+    // Synthesized entirely via Web Audio (no external sound files needed) so a
+    // "whoosh" / "pop" / "click" can play exactly when a B-roll item enters or
+    // exits. Routed through makeupGainNode — the same bus both the live speakers
+    // AND the export recording tap (getMixedAudioDestinationStream) read from —
+    // so the sound is audible in preview AND correctly baked into the exported
+    // video's audio track, without any extra export-time wiring.
+    window.playBrollSfx = function(type) {
+        if (!type || type === 'none') return;
+        if (!audioCtx || !makeupGainNode) return; // audio not initialized yet (no video loaded)
+        if (audioCtx.state === 'suspended') audioCtx.resume();
+
+        const now = audioCtx.currentTime;
+        const sfxGain = audioCtx.createGain();
+        sfxGain.gain.setValueAtTime(0.0001, now);
+        sfxGain.connect(makeupGainNode);
+
+        function makeNoiseBuffer(durSec) {
+            const bufferSize = Math.max(1, Math.floor(audioCtx.sampleRate * durSec));
+            const buffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate);
+            const data = buffer.getChannelData(0);
+            for (let i = 0; i < bufferSize; i++) data[i] = Math.random() * 2 - 1;
+            return buffer;
+        }
+
+        if (type === 'whoosh') {
+            const dur = 0.32;
+            const noise = audioCtx.createBufferSource();
+            noise.buffer = makeNoiseBuffer(dur);
+            const bandpass = audioCtx.createBiquadFilter();
+            bandpass.type = 'bandpass';
+            bandpass.Q.setValueAtTime(1.1, now);
+            bandpass.frequency.setValueAtTime(350, now);
+            bandpass.frequency.exponentialRampToValueAtTime(2200, now + dur * 0.55);
+            bandpass.frequency.exponentialRampToValueAtTime(280, now + dur);
+            noise.connect(bandpass);
+            bandpass.connect(sfxGain);
+            sfxGain.gain.linearRampToValueAtTime(0.45, now + dur * 0.15);
+            sfxGain.gain.exponentialRampToValueAtTime(0.0001, now + dur);
+            noise.start(now);
+            noise.stop(now + dur);
+        } else if (type === 'pop') {
+            const dur = 0.16;
+            const osc = audioCtx.createOscillator();
+            osc.type = 'sine';
+            osc.frequency.setValueAtTime(760, now);
+            osc.frequency.exponentialRampToValueAtTime(180, now + dur);
+            osc.connect(sfxGain);
+            sfxGain.gain.linearRampToValueAtTime(0.55, now + 0.012);
+            sfxGain.gain.exponentialRampToValueAtTime(0.0001, now + dur);
+            osc.start(now);
+            osc.stop(now + dur);
+        } else if (type === 'click') {
+            const dur = 0.06;
+            const noise = audioCtx.createBufferSource();
+            noise.buffer = makeNoiseBuffer(dur);
+            const hp = audioCtx.createBiquadFilter();
+            hp.type = 'highpass';
+            hp.frequency.setValueAtTime(1600, now);
+            noise.connect(hp);
+            hp.connect(sfxGain);
+            sfxGain.gain.linearRampToValueAtTime(0.45, now + 0.004);
+            sfxGain.gain.exponentialRampToValueAtTime(0.0001, now + dur);
+            noise.start(now);
+            noise.stop(now + dur);
+        }
+
+        // Clean up nodes shortly after the sound finishes to avoid leaking them.
+        setTimeout(() => { try { sfxGain.disconnect(); } catch (e) {} }, 700);
+    };
+
     // --- 7. Auto Subtitle (Phase 5A) ---
     const generateSubtitleBtn = document.getElementById('generate-subtitle-btn');
     const subtitleEnabledToggle = document.getElementById('subtitle-enabled-toggle');

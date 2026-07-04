@@ -1384,8 +1384,25 @@ document.addEventListener('DOMContentLoaded', () => {
         // --- Step E: Draw B-roll / Topic Image Overlays (Phase 5D) ---
         if (state.brollOverlays && state.brollOverlays.length > 0) {
             const currentTime = state.video.currentTime;
+            const brollSpeedToSec = { fast: 0.22, normal: 0.4, slow: 0.75 };
+            const brollDirVec = (dir) => {
+                if (dir === 'left') return { x: -1, y: 0 };
+                if (dir === 'right') return { x: 1, y: 0 };
+                if (dir === 'top') return { x: 0, y: -1 };
+                return { x: 0, y: 1 }; // 'bottom' (also the fallback default)
+            };
+            const brollEaseOut = (p) => 1 - Math.pow(1 - Math.max(0, Math.min(1, p)), 3);
+
             state.brollOverlays.forEach((item) => {
                 if (item.type !== 'text' && !item.imageImg) return;
+
+                // Reset one-shot sound-effect flags whenever playback is well before
+                // this item's start, so re-playing/looping over it triggers the
+                // whoosh/pop/click again instead of only ever firing once.
+                if (state.isPlaying && currentTime < item.startSec - 0.05) {
+                    item._sfxEnterPlayed = false;
+                    item._sfxExitPlayed = false;
+                }
 
                 // While paused in Step 2 we always show the overlay so it can be positioned/sized.
                 // Once playing (in any step), respect the real start/end timing so preview matches export.
@@ -1396,15 +1413,55 @@ document.addEventListener('DOMContentLoaded', () => {
 
                 const tIn = currentTime - item.startSec;
                 const tOut = item.endSec - currentTime;
+                const animDur = brollSpeedToSec[item.animationSpeed] || 0.4;
+                const resolvedExitDir = (!item.exitDirection || item.exitDirection === 'same')
+                    ? (item.entryDirection || 'bottom')
+                    : item.exitDirection;
+
+                // Fire entry/exit sound effects (Web Audio, synthesized — see audio.js)
+                // in real time during actual playback/export, timed to line up with
+                // the visual animation (exit sound starts right as the exit anim begins).
+                if (state.isPlaying && state.currentStep !== 2 && item.soundEffect && item.soundEffect !== 'none') {
+                    if (!item._sfxEnterPlayed && currentTime >= item.startSec) {
+                        item._sfxEnterPlayed = true;
+                        if (window.playBrollSfx) window.playBrollSfx(item.soundEffect);
+                    }
+                    if (!item._sfxExitPlayed && tOut <= animDur && currentTime < item.endSec) {
+                        item._sfxExitPlayed = true;
+                        if (window.playBrollSfx) window.playBrollSfx(item.soundEffect);
+                    }
+                }
 
                 if (item.mode === 'fullscreen') {
-                    // Fade in/out over 0.4s at the edges of the range
+                    const style = item.animationStyle || 'zoom';
                     let alpha = 1;
-                    if (state.currentStep !== 2) {
-                        const fadeDur = 0.4;
-                        if (tIn < fadeDur) alpha = Math.max(0, tIn / fadeDur);
-                        if (tOut < fadeDur) alpha = Math.min(alpha, Math.max(0, tOut / fadeDur));
+                    let slideOffXFrac = 0, slideOffYFrac = 0;
+
+                    if (state.currentStep !== 2 && style !== 'none') {
+                        if (style === 'slide') {
+                            // Whole frame slides in from the entry edge, holds, then
+                            // slides out toward the exit edge — position animates,
+                            // opacity stays fully visible throughout.
+                            if (tIn < animDur) {
+                                const eased = brollEaseOut(tIn / animDur);
+                                const d = brollDirVec(item.entryDirection || 'bottom');
+                                slideOffXFrac = d.x * (1 - eased);
+                                slideOffYFrac = d.y * (1 - eased);
+                            } else if (tOut < animDur) {
+                                const eased = brollEaseOut(tOut / animDur);
+                                const d = brollDirVec(resolvedExitDir);
+                                slideOffXFrac = d.x * (1 - eased);
+                                slideOffYFrac = d.y * (1 - eased);
+                            }
+                        } else {
+                            // 'fade' and 'zoom' both fade in/out at the edges of the range
+                            if (tIn < animDur) alpha = Math.max(0, tIn / animDur);
+                            if (tOut < animDur) alpha = Math.min(alpha, Math.max(0, tOut / animDur));
+                        }
                     }
+
+                    const fsDrawX = drawX + slideOffXFrac * canvasW;
+                    const fsDrawY = drawY + slideOffYFrac * canvasH;
 
                     state.ctx.save();
                     state.ctx.globalAlpha = alpha;
@@ -1412,7 +1469,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     if (item.type === 'text') {
                         // Dark scrim behind the text so it reads over any video content
                         state.ctx.fillStyle = 'rgba(0,0,0,0.45)';
-                        state.ctx.fillRect(drawX, drawY, drawW, drawH);
+                        state.ctx.fillRect(fsDrawX, fsDrawY, drawW, drawH);
 
                         state.ctx.font = `bold ${item.fontSize}px "Hind Siliguri", "Plus Jakarta Sans", sans-serif`;
                         state.ctx.fillStyle = item.color;
@@ -1420,14 +1477,14 @@ document.addEventListener('DOMContentLoaded', () => {
                         state.ctx.textBaseline = 'middle';
                         state.ctx.lineWidth = Math.max(2, item.fontSize * 0.08);
                         state.ctx.strokeStyle = 'rgba(0,0,0,0.55)';
-                        const cx = drawX + drawW / 2;
-                        const cy = drawY + drawH / 2;
+                        const cx = fsDrawX + drawW / 2;
+                        const cy = fsDrawY + drawH / 2;
                         state.ctx.strokeText(item.text, cx, cy);
                         state.ctx.fillText(item.text, cx, cy);
                     } else {
-                        // Cover the entire video frame area, preserving aspect ratio (fill/crop),
-                        // with a slow continuous "Ken Burns" zoom-in so a still photo feels alive
-                        // instead of sitting frozen on screen.
+                        // Cover the entire video frame area, preserving aspect ratio (fill/crop).
+                        // The 'zoom' style additionally applies a slow continuous "Ken Burns"
+                        // zoom-in so a still photo feels alive instead of sitting frozen on screen.
                         const imgAspect = item.imageImg.naturalWidth / item.imageImg.naturalHeight;
                         const boxAspect = drawW / drawH;
                         let sx, sy, sw, sh;
@@ -1442,7 +1499,7 @@ document.addEventListener('DOMContentLoaded', () => {
                             sx = 0;
                             sy = (item.imageImg.naturalHeight - sh) / 2;
                         }
-                        if (state.currentStep !== 2) {
+                        if (state.currentStep !== 2 && style === 'zoom') {
                             const totalDur = Math.max(0.01, item.endSec - item.startSec);
                             const zoomProgress = Math.max(0, Math.min(1, tIn / totalDur));
                             const zoom = 1 + 0.08 * zoomProgress; // grows to 8% zoomed-in by the end
@@ -1451,7 +1508,7 @@ document.addEventListener('DOMContentLoaded', () => {
                             sy += (sh - newSh) / 2;
                             sw = newSw; sh = newSh;
                         }
-                        state.ctx.drawImage(item.imageImg, sx, sy, sw, sh, drawX, drawY, drawW, drawH);
+                        state.ctx.drawImage(item.imageImg, sx, sy, sw, sh, fsDrawX, fsDrawY, drawW, drawH);
                     }
                     state.ctx.restore();
                 } else {
@@ -1471,30 +1528,41 @@ document.addEventListener('DOMContentLoaded', () => {
                     }
                     const targetX = item.x * canvasW;
                     const targetY = item.y * canvasH;
+                    const pipStyle = item.animationStyle || 'slide-pop';
 
                     let progress = 1;
-                    if (state.currentStep !== 2) {
-                        const animDur = 0.45;
+                    if (state.currentStep !== 2 && pipStyle !== 'none') {
                         const enter = tIn < animDur ? Math.max(0, tIn / animDur) : 1;
                         const exit = tOut < animDur ? Math.max(0, tOut / animDur) : 1;
                         progress = Math.max(0, Math.min(1, Math.min(enter, exit)));
                     }
                     const eased = easeOutBackOvershoot(progress);
 
-                    const dir = item.entryDirection || 'bottom';
+                    // Pick which direction governs the current phase: the entry
+                    // direction while entering, the (independently selectable) exit
+                    // direction while exiting. Once settled (progress===1) this value
+                    // is irrelevant since the offset term below is already zero.
+                    const dir = (tIn < tOut) ? (item.entryDirection || 'bottom') : resolvedExitDir;
                     let offX = 0, offY = 0;
-                    if (dir === 'left') offX = -(targetX + pipW);
-                    else if (dir === 'right') offX = (canvasW - targetX);
-                    else if (dir === 'top') offY = -(targetY + pipH);
-                    else offY = (canvasH - targetY);
+                    if (pipStyle === 'slide-pop') {
+                        if (dir === 'left') offX = -(targetX + pipW);
+                        else if (dir === 'right') offX = (canvasW - targetX);
+                        else if (dir === 'top') offY = -(targetY + pipH);
+                        else offY = (canvasH - targetY);
+                    }
 
                     const drawXpip = targetX + offX * (1 - eased);
                     const drawYpip = targetY + offY * (1 - eased);
-                    const scale = 0.7 + 0.3 * eased; // pops in from 70% to 100% size
-                    const wobble = (1 - eased) * (dir === 'left' || dir === 'top' ? -0.10 : 0.10);
+                    // 'zoom' pops purely by scale with no slide; 'fade' and 'none' stay full-size in place.
+                    const scale = (pipStyle === 'slide-pop' || pipStyle === 'zoom')
+                        ? (0.7 + 0.3 * eased)
+                        : 1;
+                    const wobble = (pipStyle === 'slide-pop')
+                        ? (1 - eased) * (dir === 'left' || dir === 'top' ? -0.10 : 0.10)
+                        : 0;
 
                     state.ctx.save();
-                    state.ctx.globalAlpha = Math.max(0.15, Math.min(1, eased));
+                    state.ctx.globalAlpha = (pipStyle === 'none') ? 1 : Math.max(0.15, Math.min(1, eased));
 
                     const cx = drawXpip + pipW / 2;
                     const cy = drawYpip + pipH / 2;
@@ -2625,6 +2693,46 @@ document.addEventListener('DOMContentLoaded', () => {
     const brollStartInput = document.getElementById('broll-start');
     const brollEndInput = document.getElementById('broll-end');
     const deleteBrollBtn = document.getElementById('delete-broll-btn');
+    const brollAnimStyleSelect = document.getElementById('broll-anim-style');
+    const brollDirectionRow = document.getElementById('broll-direction-row');
+    const brollExitDirectionRow = document.getElementById('broll-exit-direction-row');
+    const brollEntryDirSelect = document.getElementById('broll-entry-dir');
+    const brollExitDirSelect = document.getElementById('broll-exit-dir');
+    const brollAnimSpeedSelect = document.getElementById('broll-anim-speed');
+    const brollSoundEffectSelect = document.getElementById('broll-sound-effect');
+
+    // Animation style options differ by display mode: Fullscreen items can Fade,
+    // Zoom (Ken Burns), Slide across the frame, or show with No animation. PiP
+    // items can Slide+Pop in (the classic bouncy corner box), a plain Fade,
+    // a Zoom pop-in with no sliding, or No animation.
+    const BROLL_ANIM_STYLES = {
+        fullscreen: [
+            { value: 'zoom', label: 'Zoom (ধীরে ধীরে জুম হবে)' },
+            { value: 'fade', label: 'Fade (আস্তে আস্তে ভেসে উঠবে)' },
+            { value: 'slide', label: 'Slide (এক পাশ থেকে স্লাইড করে আসবে)' },
+            { value: 'none', label: 'কোনো অ্যানিমেশন নেই (সরাসরি দেখাবে)' }
+        ],
+        pip: [
+            { value: 'slide-pop', label: 'Slide + Pop (কোণা থেকে বাউন্স করে আসবে)' },
+            { value: 'fade', label: 'Fade (আস্তে আস্তে ভেসে উঠবে)' },
+            { value: 'zoom', label: 'Zoom Pop (জায়গায় থেকে বড় হবে)' },
+            { value: 'none', label: 'কোনো অ্যানিমেশন নেই (সরাসরি দেখাবে)' }
+        ]
+    };
+
+    function populateBrollAnimStyleOptions(mode) {
+        if (!brollAnimStyleSelect) return;
+        const list = BROLL_ANIM_STYLES[mode === 'pip' ? 'pip' : 'fullscreen'];
+        brollAnimStyleSelect.innerHTML = list.map(o => `<option value="${o.value}">${o.label}</option>`).join('');
+    }
+
+    // Shows/hides the entry/exit direction pickers depending on whether the
+    // currently selected animation style actually uses a direction.
+    function updateBrollDirectionRowsVisibility(style) {
+        const usesDirection = (style === 'slide' || style === 'slide-pop');
+        if (brollDirectionRow) brollDirectionRow.style.display = usesDirection ? 'block' : 'none';
+        if (brollExitDirectionRow) brollExitDirectionRow.style.display = usesDirection ? 'block' : 'none';
+    }
 
     let brollIdCounter = 1;
 
@@ -2667,8 +2775,13 @@ document.addEventListener('DOMContentLoaded', () => {
                 startSec: state.video.currentTime || 0,
                 endSec: Math.min(state.duration || 5, (state.video.currentTime || 0) + 3),
                 // Each B-roll clip enters from a different side so a sequence
-                // of images doesn't always pop in from the same corner
-                entryDirection: ['left', 'right', 'top', 'bottom'][Math.floor(Math.random() * 4)]
+                // of images doesn't always pop in from the same corner. This is
+                // just the starting default — fully editable from the panel.
+                entryDirection: ['left', 'right', 'top', 'bottom'][Math.floor(Math.random() * 4)],
+                exitDirection: 'same',
+                animationStyle: brollModeSelect && brollModeSelect.value === 'pip' ? 'slide-pop' : 'zoom',
+                animationSpeed: 'normal',
+                soundEffect: 'none'
             };
             state.brollOverlays.push(newItem);
             state.selectedBrollId = newItem.id;
@@ -2697,7 +2810,11 @@ document.addEventListener('DOMContentLoaded', () => {
                 y: 0.5,
                 startSec: state.video.currentTime || 0,
                 endSec: Math.min(state.duration || 5, (state.video.currentTime || 0) + 3),
-                entryDirection: ['left', 'right', 'top', 'bottom'][Math.floor(Math.random() * 4)]
+                entryDirection: ['left', 'right', 'top', 'bottom'][Math.floor(Math.random() * 4)],
+                exitDirection: 'same',
+                animationStyle: brollModeSelect && brollModeSelect.value === 'pip' ? 'slide-pop' : 'zoom',
+                animationSpeed: 'normal',
+                soundEffect: 'none'
             };
             state.brollOverlays.push(newItem);
             state.selectedBrollId = newItem.id;
@@ -2800,6 +2917,68 @@ document.addEventListener('DOMContentLoaded', () => {
         if (brollSizeVal) brollSizeVal.innerText = item.size + '%';
         if (brollSizeContainer) brollSizeContainer.style.display = item.mode === 'pip' ? 'block' : 'none';
         if (brollPositionContainer) brollPositionContainer.style.display = item.mode === 'pip' ? 'block' : 'none';
+
+        // Sync the animation/direction/speed/sound controls to this item
+        populateBrollAnimStyleOptions(item.mode);
+        const defaultStyle = item.mode === 'pip' ? 'slide-pop' : 'zoom';
+        if (brollAnimStyleSelect) brollAnimStyleSelect.value = item.animationStyle || defaultStyle;
+        if (brollEntryDirSelect) brollEntryDirSelect.value = item.entryDirection || 'bottom';
+        if (brollExitDirSelect) brollExitDirSelect.value = item.exitDirection || 'same';
+        if (brollAnimSpeedSelect) brollAnimSpeedSelect.value = item.animationSpeed || 'normal';
+        if (brollSoundEffectSelect) brollSoundEffectSelect.value = item.soundEffect || 'none';
+        updateBrollDirectionRowsVisibility(item.animationStyle || defaultStyle);
+    }
+
+    if (brollAnimStyleSelect) {
+        brollAnimStyleSelect.addEventListener('change', (e) => {
+            const item = state.brollOverlays.find(b => b.id === state.selectedBrollId);
+            if (item) {
+                item.animationStyle = e.target.value;
+                updateBrollDirectionRowsVisibility(item.animationStyle);
+                drawFrame();
+            }
+        });
+    }
+
+    if (brollEntryDirSelect) {
+        brollEntryDirSelect.addEventListener('change', (e) => {
+            const item = state.brollOverlays.find(b => b.id === state.selectedBrollId);
+            if (item) {
+                item.entryDirection = e.target.value;
+                drawFrame();
+            }
+        });
+    }
+
+    if (brollExitDirSelect) {
+        brollExitDirSelect.addEventListener('change', (e) => {
+            const item = state.brollOverlays.find(b => b.id === state.selectedBrollId);
+            if (item) {
+                item.exitDirection = e.target.value;
+                drawFrame();
+            }
+        });
+    }
+
+    if (brollAnimSpeedSelect) {
+        brollAnimSpeedSelect.addEventListener('change', (e) => {
+            const item = state.brollOverlays.find(b => b.id === state.selectedBrollId);
+            if (item) {
+                item.animationSpeed = e.target.value;
+                drawFrame();
+            }
+        });
+    }
+
+    if (brollSoundEffectSelect) {
+        brollSoundEffectSelect.addEventListener('change', (e) => {
+            const item = state.brollOverlays.find(b => b.id === state.selectedBrollId);
+            if (item) {
+                item.soundEffect = e.target.value;
+                // Let the person hear a quick preview of the chosen sound immediately
+                if (item.soundEffect !== 'none' && window.playBrollSfx) window.playBrollSfx(item.soundEffect);
+            }
+        });
     }
 
     if (brollStartInput) {
@@ -2829,6 +3008,12 @@ document.addEventListener('DOMContentLoaded', () => {
                 item.mode = e.target.value;
                 if (brollSizeContainer) brollSizeContainer.style.display = item.mode === 'pip' ? 'block' : 'none';
                 if (brollPositionContainer) brollPositionContainer.style.display = item.mode === 'pip' ? 'block' : 'none';
+                // Switching mode changes which animation styles are valid, so reset
+                // to that mode's default and refresh the dropdown's option list.
+                item.animationStyle = item.mode === 'pip' ? 'slide-pop' : 'zoom';
+                populateBrollAnimStyleOptions(item.mode);
+                if (brollAnimStyleSelect) brollAnimStyleSelect.value = item.animationStyle;
+                updateBrollDirectionRowsVisibility(item.animationStyle);
                 drawFrame();
             }
         });
