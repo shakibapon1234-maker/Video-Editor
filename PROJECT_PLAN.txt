@@ -46,7 +46,7 @@
   [DONE] 4-Step Wizard navigation                          - editor.js
   [DONE] Mobile Responsive layout                          - style.css
   [DONE] Visual Crop Tool (canvas region select & crop)   - editor.js
-  [DONE] Background Music (upload, loop, volume, ducking) - audio.js
+  [DONE] Background Music (multi-track timeline, per-track loop/once, volume, ducking) - audio.js
   [DONE] Voice Changer Presets (Female, Male, Robot, Echo) - audio.js
   [DONE] News Ticker / Breaking-News Scrolling Text (top/bottom) - editor.js
 
@@ -231,6 +231,40 @@ Improvement - Fullscreen B-roll "Zoom" Ken Burns আরও স্পষ্ট �
            নির্দিষ্ট effect-এ যদি এখনো সমস্যা মনে হয়, ঠিক কোন
            effect-এ (নাম) এবং কী রকম আচরণ হচ্ছে তা জানালে সেটা
            টার্গেট করে ঠিক করা যাবে।
+
+
+v2.3 - Multi-Track Background Music Timeline (সম্পন্ন)
+---------------------------------------------------------
+
+Feature - একাধিক Background Music Track + Loop/Once অপশন (audio.js + editor.js + index.html)
+  কী যোগ হলো: আগে শুধু একটা মিউজিক ফাইল পুরো ভিডিওতে সবসময় লুপ হতো।
+           এখন একাধিক ট্র্যাক যোগ করা যায়, প্রতিটার নিজস্ব Start/End
+           সময়, ভলিউম, এবং Playback Mode (Loop / Play Once) সেট করা
+           যায় - যেমন ০-৫ মিনিট এক গান, ৫-১০ মিনিট আরেকটা গান।
+  State model: state.bgMusicTracks = [{id, blob, url, name, duration,
+           volume, startSec, endSec, loopMode}] (endSec = null মানে
+           ভিডিওর শেষ পর্যন্ত)। পুরনো state.bgMusicBlob/Url/Added/
+           Volume (single-track) সরিয়ে ফেলা হয়েছে।
+  UI      : Step 3-এ "Background Music" কার্ড পুরো নতুন করে সাজানো
+           হয়েছে - track list (ক্লিক করে সিলেক্ট), detail panel-এ
+           Start/End time, Loop Mode dropdown, প্রতি-ট্র্যাক volume,
+           Remove বাটন। Step 2-এর পুরনো "Quick Volume" bg-music
+           slider সরানো হয়েছে (একাধিক ট্র্যাকে একটা "quick" ভ্যালু
+           অর্থবহ না, প্রতিটার volume এখন নিজের row-তেই সেট হয়)।
+  Preview : নতুন bgMusicSyncTick() (audio.js) প্রতি ফ্রেমে চেক করে
+           কোন ট্র্যাক এখন "active" (video.currentTime অনুযায়ী),
+           সেটাকেই play করে বাকিগুলো pause রাখে - তাই টাইমলাইনে
+           যখন এক ট্র্যাকের window শেষ হয়ে আরেকটার শুরু হয়, প্রিভিউ-এ
+           নিজে থেকেই switch হয়ে যায়।
+  Export  : getMixedAudioDestinationStream()-এর startBgMusic() এখন
+           প্রতি ট্র্যাকের জন্য আলাদা AudioBufferSourceNode তৈরি করে,
+           তার নিজস্ব startSec-এ audioCtx.currentTime + startSec-এ
+           schedule করে start() করে এবং endSec-এ stop() করে - loop
+           mode হলে .loop=true (তারপরও endSec-এ কেটে যায়), once
+           mode হলে .loop=false।
+  Ducking : duckingTick() এখন সব ট্র্যাকের উপর loop করে - preview-এ
+           যেই ট্র্যাক বাজছে তার volume ducking অনুযায়ী কমায়/বাড়ায়,
+           export-এ প্রতি ট্র্যাকের gain node আলাদাভাবে ride করে।
 
 PHASE 2 - VIDEO EDITING CORE (পরবর্তী প্রায়োরিটি)
 ====================================================

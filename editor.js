@@ -54,11 +54,12 @@ window.VideoEditor = {
     isNoiseCancelActive: false,
     noiseGateThreshold: -50,
 
-    // Background Music state (Phase 3A)
-    bgMusicBlob: null,
-    bgMusicUrl: null,
-    bgMusicAdded: false,
-    bgMusicVolume: 0.4,
+    // Background Music state (Phase 3A, upgraded to multi-track timeline in v2.3)
+    // Each track: { id, blob, url, name, duration, volume, startSec, endSec, loopMode }
+    // endSec === null means "play until the end of the video".
+    // loopMode: 'loop' (repeat for the whole startSec..endSec window) or 'once' (play through one time, then stay silent for the rest of the window).
+    bgMusicTracks: [],
+    selectedBgMusicTrackId: null,
     bgMusicDuckingEnabled: true,
 
     // Facebook Banner Headline state
@@ -177,12 +178,12 @@ document.addEventListener('DOMContentLoaded', () => {
     const videoVolumeSlider = document.getElementById('video-volume-slider');
     const videoVolumeVal = document.getElementById('video-volume-val');
 
-    // Step 2 "Quick Volume" mirror controls, kept in sync with the Step 3 sliders above
+    // Step 2 "Quick Volume" mirror control, kept in sync with the Step 3 slider above.
+    // (The old Background Music quick-volume mirror here was removed in v2.3 — with
+    // multiple music tracks now possible, a single "quick" slider no longer maps to
+    // one clear value. Each track's volume is set in its own row in Step 3 instead.)
     const videoVolumeSliderStep2 = document.getElementById('video-volume-slider-step2');
     const videoVolumeValStep2 = document.getElementById('video-volume-val-step2');
-    const bgMusicVolumeContainerStep2 = document.getElementById('bgmusic-volume-container-step2');
-    const bgMusicVolumeSliderStep2 = document.getElementById('bgmusic-volume-slider-step2');
-    const bgMusicVolumeValStep2 = document.getElementById('bgmusic-volume-val-step2');
     
     // --- Step Navigation System ---
     function updateNavigation() {
@@ -1088,31 +1089,6 @@ document.addEventListener('DOMContentLoaded', () => {
             applyVideoVolume(parseInt(e.target.value));
         });
     }
-
-    // Background music volume quick-access copy in Step 2 (main slider lives in audio.js/Step 3)
-    if (bgMusicVolumeSliderStep2) {
-        bgMusicVolumeSliderStep2.addEventListener('input', (e) => {
-            const val = parseInt(e.target.value);
-            bgMusicVolumeValStep2.innerText = val + '%';
-            const mainBgSlider = document.getElementById('bgmusic-volume-slider');
-            if (mainBgSlider) {
-                mainBgSlider.value = val;
-                mainBgSlider.dispatchEvent(new Event('input'));
-            }
-        });
-    }
-
-    // Called from audio.js whenever bg music is added/removed or its volume changes elsewhere,
-    // so the Step 2 copy always reflects the real state.
-    window.syncBgMusicVolumeStep2 = function() {
-        if (!bgMusicVolumeContainerStep2) return;
-        bgMusicVolumeContainerStep2.style.display = state.bgMusicAdded ? 'block' : 'none';
-        if (bgMusicVolumeSliderStep2) {
-            const pct = Math.round((state.bgMusicVolume || 0) * 100);
-            bgMusicVolumeSliderStep2.value = pct;
-            bgMusicVolumeValStep2.innerText = pct + '%';
-        }
-    };
 
     // Handle Manual Typing of Trim fields
     startVal.addEventListener('change', () => {

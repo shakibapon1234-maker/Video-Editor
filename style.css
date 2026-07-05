@@ -1080,6 +1080,35 @@ input:checked + .slider:before {
     gap: 12px;
 }
 
+.two-col-row {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 12px;
+}
+
+.bgmusic-track-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 8px 12px;
+    border-radius: 6px;
+    margin-bottom: 6px;
+    cursor: pointer;
+    background: rgba(255,255,255,0.04);
+    border: 1px solid transparent;
+    font-size: 13px;
+}
+
+.bgmusic-track-item.active {
+    background: rgba(79, 70, 229, 0.12);
+    border-color: var(--primary);
+}
+
+.bgmusic-track-item .track-time {
+    font-size: 11px;
+    opacity: 0.6;
+}
+
 .color-picker-wrapper {
     display: flex;
     align-items: center;

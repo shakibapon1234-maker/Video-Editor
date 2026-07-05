@@ -357,17 +357,218 @@ document.addEventListener('DOMContentLoaded', () => {
     const voiceoverVolumeVal = document.getElementById('voiceover-volume-val');
     const voiceChangerSelect = document.getElementById('voice-changer-select');
 
-    // Background Music UI selectors (Phase 3A)
+    // Background Music UI selectors (multi-track timeline, v2.3)
     const bgMusicDropzone = document.getElementById('bgmusic-dropzone');
     const bgMusicInput = document.getElementById('bgmusic-input');
     const bgMusicFilename = document.getElementById('bgmusic-filename');
-    const bgMusicControlsContainer = document.getElementById('bgmusic-controls-container');
-    const bgMusicVolumeSlider = document.getElementById('bgmusic-volume-slider');
-    const bgMusicVolumeVal = document.getElementById('bgmusic-volume-val');
+    const bgMusicTrackListEl = document.getElementById('bgmusic-track-list');
+    const bgMusicTrackDetail = document.getElementById('bgmusic-track-detail');
+    const bgMusicTrackDetailName = document.getElementById('bgmusic-track-detail-name');
+    const bgMusicTrackStartInput = document.getElementById('bgmusic-track-start');
+    const bgMusicTrackEndInput = document.getElementById('bgmusic-track-end');
+    const bgMusicTrackLoopModeSelect = document.getElementById('bgmusic-track-loopmode');
+    const bgMusicTrackVolumeSlider = document.getElementById('bgmusic-track-volume');
+    const bgMusicTrackVolumeVal = document.getElementById('bgmusic-track-volume-val');
+    const removeBgMusicTrackBtn = document.getElementById('remove-bgmusic-track-btn');
     const bgMusicDuckingToggle = document.getElementById('bgmusic-ducking-toggle');
-    const bgMusicAudioPreview = document.getElementById('bgmusic-audio-preview');
-    const removeBgMusicBtn = document.getElementById('remove-bgmusic-btn');
-    
+
+    // One <audio> element per track, created on demand and never inserted into the
+    // DOM (played/volume-controlled entirely by JS below — see Bug 7 in
+    // PROJECT_PLAN.txt for why we stopped using a single native <audio controls>).
+    const bgMusicTrackAudioEls = new Map(); // trackId -> HTMLAudioElement
+
+    function getBgMusicTrackAudioEl(track) {
+        let el = bgMusicTrackAudioEls.get(track.id);
+        if (!el) {
+            el = new Audio();
+            el.src = track.url;
+            el.preload = 'auto';
+            bgMusicTrackAudioEls.set(track.id, el);
+        }
+        return el;
+    }
+
+    function removeBgMusicTrackAudioEl(trackId) {
+        const el = bgMusicTrackAudioEls.get(trackId);
+        if (el) {
+            el.pause();
+            el.src = '';
+            bgMusicTrackAudioEls.delete(trackId);
+        }
+    }
+
+    function getTotalTimelineDuration() {
+        if (state.clips && state.clips.length) {
+            return state.clips.reduce((sum, c) => sum + Math.max(0, c.end - c.start), 0);
+        }
+        return (state.video && isFinite(state.video.duration)) ? state.video.duration : Infinity;
+    }
+
+    // Returns whichever track "owns" this point on the timeline (startSec <= elapsed < endSec),
+    // or null if no track covers it. endSec === null means "runs to the end of the video".
+    function getActiveBgMusicTrack(elapsed) {
+        return state.bgMusicTracks.find(t => {
+            const end = (t.endSec == null) ? Infinity : t.endSec;
+            return elapsed >= t.startSec && elapsed < end;
+        }) || null;
+    }
+
+    function renderBgMusicTrackList() {
+        if (!bgMusicTrackListEl) return;
+        bgMusicTrackListEl.innerHTML = '';
+        state.bgMusicTracks.forEach((t) => {
+            const row = document.createElement('div');
+            row.className = 'bgmusic-track-item' + (t.id === state.selectedBgMusicTrackId ? ' active' : '');
+
+            const label = document.createElement('span');
+            const preview = t.name.length > 22 ? t.name.slice(0, 22) + '…' : t.name;
+            label.innerText = `🎵 ${preview}`;
+
+            const timeLabel = document.createElement('span');
+            timeLabel.className = 'track-time';
+            const endText = (t.endSec == null) ? 'শেষ পর্যন্ত' : t.endSec.toFixed(1) + 's';
+            timeLabel.innerText = `${t.startSec.toFixed(1)}s–${endText} · ${t.loopMode === 'loop' ? 'Loop' : 'Once'}`;
+
+            row.appendChild(label);
+            row.appendChild(timeLabel);
+            row.addEventListener('click', () => {
+                state.selectedBgMusicTrackId = t.id;
+                renderBgMusicTrackList();
+                showBgMusicTrackDetail(t.id);
+            });
+            bgMusicTrackListEl.appendChild(row);
+        });
+    }
+
+    function showBgMusicTrackDetail(id) {
+        const t = state.bgMusicTracks.find(x => x.id === id);
+        if (!t) {
+            if (bgMusicTrackDetail) bgMusicTrackDetail.style.display = 'none';
+            return;
+        }
+        if (bgMusicTrackDetail) bgMusicTrackDetail.style.display = 'block';
+        if (bgMusicTrackDetailName) bgMusicTrackDetailName.innerText = `🎵 ${t.name}`;
+        if (bgMusicTrackStartInput) bgMusicTrackStartInput.value = t.startSec;
+        if (bgMusicTrackEndInput) bgMusicTrackEndInput.value = (t.endSec == null) ? '' : t.endSec;
+        if (bgMusicTrackLoopModeSelect) bgMusicTrackLoopModeSelect.value = t.loopMode;
+        const pct = Math.round(t.volume * 100);
+        if (bgMusicTrackVolumeSlider) bgMusicTrackVolumeSlider.value = pct;
+        if (bgMusicTrackVolumeVal) bgMusicTrackVolumeVal.innerText = pct + '%';
+    }
+
+    function addBgMusicTrack(file) {
+        const track = {
+            id: 'bgm_' + Date.now() + '_' + Math.floor(Math.random() * 1000),
+            blob: file,
+            url: URL.createObjectURL(file),
+            name: file.name,
+            duration: null, // filled in once metadata loads, used for loop-modulo math
+            volume: 0.4,
+            startSec: 0,
+            endSec: null, // null = plays until the end of the video
+            loopMode: 'loop'
+        };
+        // Default a new track's start time to right where the previous track's window
+        // ends, so adding several tracks back-to-back naturally lines them up on the
+        // timeline (e.g. Track 1: 0s–300s, Track 2 defaults to starting at 300s).
+        if (state.bgMusicTracks.length > 0) {
+            const last = state.bgMusicTracks[state.bgMusicTracks.length - 1];
+            if (last.endSec != null) track.startSec = last.endSec;
+        }
+        state.bgMusicTracks.push(track);
+        state.selectedBgMusicTrackId = track.id;
+
+        const probe = new Audio();
+        probe.src = track.url;
+        probe.addEventListener('loadedmetadata', () => {
+            track.duration = probe.duration;
+        });
+
+        renderBgMusicTrackList();
+        showBgMusicTrackDetail(track.id);
+        if (bgMusicFilename) bgMusicFilename.innerText = `${state.bgMusicTracks.length} track(s) added — click "Add Music Track" for more`;
+    }
+
+    function removeBgMusicTrack(id) {
+        const idx = state.bgMusicTracks.findIndex(t => t.id === id);
+        if (idx === -1) return;
+        const t = state.bgMusicTracks[idx];
+        removeBgMusicTrackAudioEl(id);
+        if (t.url) URL.revokeObjectURL(t.url);
+        state.bgMusicTracks.splice(idx, 1);
+        if (state.selectedBgMusicTrackId === id) state.selectedBgMusicTrackId = null;
+        renderBgMusicTrackList();
+        showBgMusicTrackDetail(null);
+        if (bgMusicFilename) {
+            bgMusicFilename.innerText = state.bgMusicTracks.length
+                ? `${state.bgMusicTracks.length} track(s) added — click "Add Music Track" for more`
+                : '+ Add Music Track';
+        }
+    }
+
+    // Continuously runs (independent of the drawFrame/animation-frame loop in
+    // editor.js) and decides, frame by frame, which single music track "owns" the
+    // playhead right now — pausing every other track and playing/seeking the
+    // active one to the right offset. This is what makes multi-track timelines
+    // (e.g. Track A for the first 5 minutes, Track B after that) actually switch
+    // over at the right moment during live preview.
+    let lastActiveBgMusicTrackId = null;
+
+    function bgMusicSyncTick() {
+        const isPlaying = state.video && !state.video.paused && !state.video.ended;
+        if (!isPlaying) {
+            state.bgMusicTracks.forEach(t => {
+                const el = bgMusicTrackAudioEls.get(t.id);
+                if (el && !el.paused) el.pause();
+            });
+            lastActiveBgMusicTrackId = null;
+            requestAnimationFrame(bgMusicSyncTick);
+            return;
+        }
+
+        const elapsed = (state.video.currentTime || 0) - (state.startTime || 0);
+        const active = getActiveBgMusicTrack(elapsed);
+
+        state.bgMusicTracks.forEach(t => {
+            if (!active || t.id !== active.id) {
+                const el = bgMusicTrackAudioEls.get(t.id);
+                if (el && !el.paused) el.pause();
+            }
+        });
+
+        if (active) {
+            const el = getBgMusicTrackAudioEl(active);
+            const localElapsed = elapsed - active.startSec;
+            const dur = el.duration || active.duration || 0;
+
+            if (active.loopMode === 'once') {
+                el.loop = false;
+                if (dur > 0 && localElapsed >= dur) {
+                    // Already played through once inside this window — stay silent
+                    // for the rest of it, exactly like the "Play Once" label promises.
+                    if (!el.paused) el.pause();
+                } else if (el.paused || active.id !== lastActiveBgMusicTrackId) {
+                    el.currentTime = Math.max(0, localElapsed);
+                    el.play().catch(() => {});
+                }
+            } else {
+                el.loop = true;
+                if (dur > 0) {
+                    const target = ((localElapsed % dur) + dur) % dur;
+                    if (active.id !== lastActiveBgMusicTrackId || Math.abs((el.currentTime || 0) - target) > 0.75) {
+                        el.currentTime = target;
+                    }
+                }
+                if (el.paused) el.play().catch(() => {});
+            }
+        }
+
+        lastActiveBgMusicTrackId = active ? active.id : null;
+        requestAnimationFrame(bgMusicSyncTick);
+    }
+    requestAnimationFrame(bgMusicSyncTick);
+
+    // Web Audio Variables
     // Web Audio Variables
     let audioCtx = null;
     let videoSourceNode = null;
@@ -403,7 +604,7 @@ document.addEventListener('DOMContentLoaded', () => {
     let voiceoverPreviewAnalyser = null;
     let micAnalyser = null;
     let exportVoiceoverAnalyser = null; // set per-export inside getMixedAudioDestinationStream
-    let exportBgMusicGain = null;       // set per-export inside getMixedAudioDestinationStream
+    let exportBgMusicGains = [];         // [{gain, track}] set per-export inside getMixedAudioDestinationStream
     let duckAmount = 0; // 0 = full bg music volume, 1 = fully ducked
     const DUCK_RMS_THRESHOLD = 0.018;
     const DUCK_ATTACK = 0.35;  // how fast it ducks down when talking starts
@@ -424,7 +625,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function duckingTick() {
-        if (!state.bgMusicDuckingEnabled || !state.bgMusicAdded) {
+        if (!state.bgMusicDuckingEnabled || state.bgMusicTracks.length === 0) {
             requestAnimationFrame(duckingTick);
             return;
         }
@@ -440,17 +641,26 @@ document.addEventListener('DOMContentLoaded', () => {
         duckAmount += talking ? (1 - duckAmount) * DUCK_ATTACK : (0 - duckAmount) * DUCK_RELEASE;
         if (duckAmount < 0.001) duckAmount = 0;
 
-        const fullLevel = Math.min(1.0, state.bgMusicVolume);
-        const duckedLevel = fullLevel * DUCK_DEPTH;
-        const targetVolume = fullLevel - (fullLevel - duckedLevel) * duckAmount;
+        // Live preview: apply to whichever track element(s) are currently audible.
+        // (Each track keeps its own volume, so ducking scales each one proportionally
+        // to its own level rather than one shared value.)
+        state.bgMusicTracks.forEach(t => {
+            const el = bgMusicTrackAudioEls.get(t.id);
+            if (el && !el.paused) {
+                const fullLevel = Math.min(1.0, t.volume);
+                const duckedLevel = fullLevel * DUCK_DEPTH;
+                el.volume = Math.min(1.0, fullLevel - (fullLevel - duckedLevel) * duckAmount);
+            }
+        });
 
-        // Live preview element (plain <audio>, not routed through Web Audio)
-        if (state.bgMusicAdded && !bgMusicAudioPreview.paused) {
-            bgMusicAudioPreview.volume = Math.min(1.0, targetVolume);
-        }
-        // Export mix (Web Audio gain node)
-        if (exportBgMusicGain && audioCtx) {
-            exportBgMusicGain.gain.setValueAtTime(targetVolume, audioCtx.currentTime);
+        // Export mix: one Web Audio gain node per track, all ridden by the same duck amount.
+        if (exportBgMusicGains.length && audioCtx) {
+            exportBgMusicGains.forEach(({ gain, track }) => {
+                const fullLevel = Math.min(1.0, track.volume);
+                const duckedLevel = fullLevel * DUCK_DEPTH;
+                const targetVolume = fullLevel - (fullLevel - duckedLevel) * duckAmount;
+                gain.gain.setValueAtTime(targetVolume, audioCtx.currentTime);
+            });
         }
 
         requestAnimationFrame(duckingTick);
@@ -767,13 +977,13 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    // --- 4B. Background Music (Phase 3A) ---
+    // --- 4B. Background Music: multi-track timeline (v2.3) ---
     bgMusicDropzone.addEventListener('click', () => bgMusicInput.click());
 
     bgMusicInput.addEventListener('change', (e) => {
         const file = e.target.files[0];
-        if (!file) return;
-        loadBgMusicFile(file);
+        if (file) addBgMusicTrack(file);
+        bgMusicInput.value = '';
     });
 
     // Allow drag & drop onto the dropzone too, consistent with video/logo dropzones
@@ -789,52 +999,65 @@ document.addEventListener('DOMContentLoaded', () => {
         bgMusicDropzone.classList.remove('drag-over');
         const file = e.dataTransfer.files[0];
         if (file && file.type.startsWith('audio/')) {
-            loadBgMusicFile(file);
+            addBgMusicTrack(file);
         }
     });
 
-    function loadBgMusicFile(file) {
-        state.bgMusicBlob = file;
-        state.bgMusicUrl = URL.createObjectURL(file);
-        state.bgMusicAdded = true;
-
-        bgMusicFilename.innerText = file.name;
-        bgMusicAudioPreview.src = state.bgMusicUrl;
-        bgMusicAudioPreview.loop = true;
-        bgMusicAudioPreview.volume = state.bgMusicVolume;
-        bgMusicControlsContainer.style.display = 'block';
-        if (window.syncBgMusicVolumeStep2) window.syncBgMusicVolumeStep2();
+    if (bgMusicTrackStartInput) {
+        bgMusicTrackStartInput.addEventListener('input', (e) => {
+            const t = state.bgMusicTracks.find(x => x.id === state.selectedBgMusicTrackId);
+            if (t) {
+                t.startSec = Math.max(0, parseFloat(e.target.value) || 0);
+                renderBgMusicTrackList();
+            }
+        });
     }
 
-    removeBgMusicBtn.addEventListener('click', () => {
-        bgMusicAudioPreview.pause();
-        if (state.bgMusicUrl) URL.revokeObjectURL(state.bgMusicUrl);
-        state.bgMusicBlob = null;
-        state.bgMusicUrl = null;
-        state.bgMusicAdded = false;
+    if (bgMusicTrackEndInput) {
+        bgMusicTrackEndInput.addEventListener('input', (e) => {
+            const t = state.bgMusicTracks.find(x => x.id === state.selectedBgMusicTrackId);
+            if (t) {
+                const v = e.target.value.trim();
+                t.endSec = (v === '') ? null : Math.max(t.startSec + 0.1, parseFloat(v) || (t.startSec + 1));
+                renderBgMusicTrackList();
+            }
+        });
+    }
 
-        bgMusicFilename.innerText = 'No music added';
-        bgMusicAudioPreview.src = '';
-        bgMusicInput.value = '';
-        bgMusicControlsContainer.style.display = 'none';
-        if (window.syncBgMusicVolumeStep2) window.syncBgMusicVolumeStep2();
-    });
+    if (bgMusicTrackLoopModeSelect) {
+        bgMusicTrackLoopModeSelect.addEventListener('change', (e) => {
+            const t = state.bgMusicTracks.find(x => x.id === state.selectedBgMusicTrackId);
+            if (t) {
+                t.loopMode = e.target.value;
+                renderBgMusicTrackList();
+            }
+        });
+    }
 
-    bgMusicVolumeSlider.addEventListener('input', (e) => {
-        state.bgMusicVolume = parseInt(e.target.value) / 100;
-        bgMusicVolumeVal.innerText = e.target.value + '%';
-        // Only reflect base volume on preview element when NOT actively ducking during preview playback
-        if (!isDuckingActive()) {
-            bgMusicAudioPreview.volume = Math.min(1.0, state.bgMusicVolume);
-        }
-        if (window.syncBgMusicVolumeStep2) window.syncBgMusicVolumeStep2();
-    });
+    if (bgMusicTrackVolumeSlider) {
+        bgMusicTrackVolumeSlider.addEventListener('input', (e) => {
+            const t = state.bgMusicTracks.find(x => x.id === state.selectedBgMusicTrackId);
+            if (t) {
+                t.volume = parseInt(e.target.value) / 100;
+                bgMusicTrackVolumeVal.innerText = e.target.value + '%';
+            }
+        });
+    }
+
+    if (removeBgMusicTrackBtn) {
+        removeBgMusicTrackBtn.addEventListener('click', () => {
+            if (state.selectedBgMusicTrackId) removeBgMusicTrack(state.selectedBgMusicTrackId);
+        });
+    }
 
     bgMusicDuckingToggle.addEventListener('change', (e) => {
         state.bgMusicDuckingEnabled = e.target.checked;
     });
-    
-    // --- 5. Sync Voiceover & Background Music playing during preview playback ---
+
+    // --- 5. Sync Voiceover during preview playback ---
+    // (Background music playback/looping/switching-between-tracks is handled entirely
+    // by the always-on bgMusicSyncTick() loop above — it doesn't need onPlaybackStart/
+    // onPlaybackStop hooks because it already checks state.video.paused every frame.)
     window.onPlaybackStart = function() {
         if (state.voiceoverRecorded && state.voiceoverUrl) {
             // Seek and play voiceover preview synced to current playback time relative to trim start
@@ -850,25 +1073,11 @@ document.addEventListener('DOMContentLoaded', () => {
                 });
             }
         }
-
-        if (state.bgMusicAdded && state.bgMusicUrl) {
-            const musicOffset = (state.video.currentTime - state.startTime) % (bgMusicAudioPreview.duration || Infinity);
-            if (musicOffset >= 0 && isFinite(musicOffset)) {
-                bgMusicAudioPreview.currentTime = musicOffset;
-            }
-            bgMusicAudioPreview.volume = Math.min(1.0, state.bgMusicVolume);
-            bgMusicAudioPreview.play().catch(err => {
-                console.log("Auto-play blocked for background music", err);
-            });
-        }
     };
     
     window.onPlaybackStop = function() {
         if (state.voiceoverRecorded) {
             voiceoverAudioPreview.pause();
-        }
-        if (state.bgMusicAdded) {
-            bgMusicAudioPreview.pause();
         }
     };
     
@@ -882,12 +1091,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 voiceoverAudioPreview.currentTime = 0;
             }
         }
-        if (state.bgMusicAdded && bgMusicAudioPreview.duration) {
-            const musicOffset = (state.video.currentTime - state.startTime) % bgMusicAudioPreview.duration;
-            if (musicOffset >= 0 && isFinite(musicOffset)) {
-                bgMusicAudioPreview.currentTime = musicOffset;
-            }
-        }
+        // Background music re-syncs itself on the very next bgMusicSyncTick frame
+        // (it re-checks elapsed time continuously), so no seek handling needed here.
     });
     
     // --- 6. Export Mixing Node function ---
@@ -926,18 +1131,19 @@ document.addEventListener('DOMContentLoaded', () => {
             voiceoverGain.connect(exportVoiceoverAnalyser);
         }
 
-        // Pre-create gain node for background music mixing (Phase 3A)
-        let bgMusicSource = null;
-        let bgMusicGain = null;
+        // Pre-create one gain node per background music track (v2.3 multi-track timeline)
+        const bgMusicSources = []; // AudioBufferSourceNode[]
+        const bgMusicGainNodes = []; // {gain, track}[]
 
-        if (state.bgMusicAdded && state.bgMusicBlob) {
-            bgMusicGain = audioCtx.createGain();
-            bgMusicGain.gain.setValueAtTime(Math.min(1.0, state.bgMusicVolume), audioCtx.currentTime);
-            bgMusicGain.connect(dest);
-            // Hand this off to the duckingTick loop so it dynamically rides the
-            // gain up/down in real time as the export renders, instead of a flat duck.
-            exportBgMusicGain = bgMusicGain;
-        }
+        state.bgMusicTracks.forEach(track => {
+            const gain = audioCtx.createGain();
+            gain.gain.setValueAtTime(Math.min(1.0, track.volume), audioCtx.currentTime);
+            gain.connect(dest);
+            bgMusicGainNodes.push({ gain, track });
+        });
+        // Hand these off to the duckingTick loop so it dynamically rides each track's
+        // gain up/down in real time as the export renders, instead of a flat duck.
+        exportBgMusicGains = bgMusicGainNodes;
         
         return {
             stream: dest.stream,
@@ -952,15 +1158,15 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (voiceoverGain) {
                     try { voiceoverGain.disconnect(); } catch(e) {}
                 }
-                if (bgMusicSource) {
-                    try { bgMusicSource.stop(); } catch(e) {}
-                    try { bgMusicSource.disconnect(); } catch(e) {}
-                }
-                if (bgMusicGain) {
-                    try { bgMusicGain.disconnect(); } catch(e) {}
-                }
+                bgMusicSources.forEach(src => {
+                    try { src.stop(); } catch(e) {}
+                    try { src.disconnect(); } catch(e) {}
+                });
+                bgMusicGainNodes.forEach(({ gain }) => {
+                    try { gain.disconnect(); } catch(e) {}
+                });
                 exportVoiceoverAnalyser = null;
-                exportBgMusicGain = null;
+                exportBgMusicGains = [];
             },
             // Called immediately AFTER video.play() resolves to keep audio in sync
             startVoiceover: async function() {
@@ -988,21 +1194,39 @@ document.addEventListener('DOMContentLoaded', () => {
                     }
                 }
             },
-            // Called immediately AFTER video.play() resolves to keep music in sync; loops for full trim duration
+            // Called immediately AFTER video.play() resolves to keep music in sync.
+            // Schedules every track to start/stop at its own startSec/endSec on the
+            // timeline (relative to right now = the moment the export starts playing),
+            // looping within its window if loopMode is 'loop', or playing through once
+            // and then staying silent for the rest of the window if 'once'.
             startBgMusic: async function() {
-                if (state.bgMusicAdded && state.bgMusicBlob && bgMusicGain) {
+                const totalDuration = getTotalTimelineDuration();
+                for (const { gain, track } of bgMusicGainNodes) {
+                    if (!track.blob) continue;
                     try {
-                        const arrayBuffer = await state.bgMusicBlob.arrayBuffer();
+                        const arrayBuffer = await track.blob.arrayBuffer();
                         const audioBuffer = await audioCtx.decodeAudioData(arrayBuffer);
-                        
-                        bgMusicSource = audioCtx.createBufferSource();
-                        bgMusicSource.buffer = audioBuffer;
-                        bgMusicSource.loop = true; // Loop music across the whole exported clip
-                        bgMusicSource.connect(bgMusicGain);
-                        
-                        bgMusicSource.start(audioCtx.currentTime);
+
+                        const source = audioCtx.createBufferSource();
+                        source.buffer = audioBuffer;
+                        source.loop = (track.loopMode === 'loop');
+                        source.connect(gain);
+
+                        const windowStart = track.startSec;
+                        const windowEnd = (track.endSec == null || !isFinite(track.endSec))
+                            ? (isFinite(totalDuration) ? totalDuration : windowStart + audioBuffer.duration)
+                            : track.endSec;
+
+                        const now = audioCtx.currentTime;
+                        source.start(now + Math.max(0, windowStart));
+                        // Cuts the track off exactly at the end of its window, whether it's
+                        // looping (would otherwise run forever) or playing once (harmless
+                        // no-op if it already finished naturally before this point).
+                        try { source.stop(now + Math.max(windowStart + 0.05, windowEnd)); } catch(e) {}
+
+                        bgMusicSources.push(source);
                     } catch(e) {
-                        console.error('Background music export mix error:', e);
+                        console.error('Background music export mix error for track "' + track.name + '":', e);
                     }
                 }
             }
