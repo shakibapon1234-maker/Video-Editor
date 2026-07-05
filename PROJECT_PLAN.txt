@@ -266,6 +266,33 @@ Feature - একাধিক Background Music Track + Loop/Once অপশন (au
            যেই ট্র্যাক বাজছে তার volume ducking অনুযায়ী কমায়/বাড়ায়,
            export-এ প্রতি ট্র্যাকের gain node আলাদাভাবে ride করে।
 
+
+v2.4 - Free Drag Positioning + Continuous Speed Slider (সম্পন্ন)
+--------------------------------------------------------------------
+
+Bug 8 - B-roll/Text PiP "Drag করা যাচ্ছে না মনে হওয়া" (editor.js)
+  সমস্যা : B-roll (PiP mode) ও Text Overlay আগে থেকেই canvas-এ সরাসরি
+           ড্র্যাগ করে সরানো যেত (item.x/item.y ফ্রি কো-অর্ডিনেট,
+           findBrollPipAt/findTextOverlayAt hit-test আগে থেকেই ছিল) -
+           কিন্তু hover করলে কোনো cursor feedback (হাত/মুভ আইকন)
+           ছিল না, তাই ব্যবহারকারী বুঝতেই পারছিলেন না যে ড্র্যাগ করা
+           যায় - শুধু ৯-বাটনের Position grid-ই একমাত্র উপায় মনে হচ্ছিল।
+  সমাধান: handlePointerMove()-এ hover cursor feedback যোগ করা
+           হয়েছে - এখন B-roll PiP বক্স বা Text Overlay-এর উপর মাউস
+           নিলেই cursor 'move' (✥) হয়ে যায়, ঠিক Logo-এর মতোই। এখন
+           ক্লিক-ও-ড্র্যাগ করে সরাসরি ভিডিওর যেকোনো জায়গায় বসানো
+           যাবে; Position grid বাটনগুলো quick-preset হিসেবে থেকে গেছে।
+
+Improvement - Animation Speed: Dropdown থেকে Continuous Drag Slider (index.html + editor.js)
+  আগে   : Fast/Normal/Slow - এই ৩টা ফিক্সড অপশনের dropdown ছিল।
+  এখন   : YouTube volume bar-এর মতো একটা drag slider (বামে ধীর,
+           ডানে দ্রুত) - item.animationSpeedSec এ সরাসরি duration
+           (সেকেন্ড, ০.১৫s দ্রুততম থেকে ১.২s ধীরতম) সেভ হয়, তাই
+           ইচ্ছামতো precise speed সেট করা যায়, শুধু ৩টা ধাপ না।
+  পুরনো state.animationSpeed (string) ফিল্ড সরিয়ে animationSpeedSec
+           (number) দিয়ে replace করা হয়েছে (brollSpeedValueToSec/
+           brollSpeedSecToValue helper দিয়ে slider ⇄ সেকেন্ড কনভার্ট হয়)।
+
 PHASE 2 - VIDEO EDITING CORE (পরবর্তী প্রায়োরিটি)
 ====================================================
 

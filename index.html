@@ -689,12 +689,11 @@
                                         </select>
                                     </div>
                                     <div class="control-group mt-3">
-                                        <label>Animation Speed (গতি)</label>
-                                        <select id="broll-anim-speed" class="form-select">
-                                            <option value="fast">দ্রুত (Fast)</option>
-                                            <option value="normal" selected>স্বাভাবিক (Normal)</option>
-                                            <option value="slow">ধীর (Slow)</option>
-                                        </select>
+                                        <label>Animation Speed (গতি) — বামে ধীর, ডানে দ্রুত</label>
+                                        <div class="slider-val-container">
+                                            <input type="range" id="broll-anim-speed" min="1" max="100" value="65">
+                                            <span id="broll-anim-speed-val">Normal</span>
+                                        </div>
                                     </div>
                                     <div class="control-group mt-3">
                                         <label>Sound Effect (আসা/যাওয়ার শব্দ)</label>

@@ -1517,7 +1517,6 @@ document.addEventListener('DOMContentLoaded', () => {
         // --- Step E: Draw B-roll / Topic Image Overlays (Phase 5D) ---
         if (state.brollOverlays && state.brollOverlays.length > 0) {
             const currentTime = state.video.currentTime;
-            const brollSpeedToSec = { fast: 0.22, normal: 0.4, slow: 0.75 };
             const brollDirVec = (dir) => {
                 if (dir === 'left') return { x: -1, y: 0 };
                 if (dir === 'right') return { x: 1, y: 0 };
@@ -1546,7 +1545,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
                 const tIn = currentTime - item.startSec;
                 const tOut = item.endSec - currentTime;
-                const animDur = brollSpeedToSec[item.animationSpeed] || 0.4;
+                const animDur = item.animationSpeedSec || 0.4;
                 const resolvedExitDir = (!item.exitDirection || item.exitDirection === 'same')
                     ? (item.entryDirection || 'bottom')
                     : item.exitDirection;
@@ -2522,18 +2521,29 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
 
-        // Idle cursor feedback over logo
+        // Idle cursor feedback over logo / B-roll PiP box / text overlay — shows a
+        // "move" hand the instant the pointer is over something draggable, so the
+        // drag-anywhere behavior is obvious without needing to read any help text.
+        const idleCoords = getCanvasCoords(e);
         if (state.logoImg) {
-            const coords = getCanvasCoords(e);
-            const check = isPointerOnLogo(coords);
+            const check = isPointerOnLogo(idleCoords);
             if (check.isResize) {
                 state.canvas.style.cursor = 'nwse-resize';
+                return;
             } else if (check.isOver) {
                 state.canvas.style.cursor = 'move';
-            } else {
-                state.canvas.style.cursor = 'default';
+                return;
             }
         }
+        if (state.brollOverlays && state.brollOverlays.length > 0 && findBrollPipAt(idleCoords)) {
+            state.canvas.style.cursor = 'move';
+            return;
+        }
+        if (state.textOverlays && state.textOverlays.length > 0 && findTextOverlayAt(idleCoords)) {
+            state.canvas.style.cursor = 'move';
+            return;
+        }
+        state.canvas.style.cursor = 'default';
     }
     
     function handlePointerUp() {
@@ -2922,8 +2932,26 @@ document.addEventListener('DOMContentLoaded', () => {
     const brollExitDirectionRow = document.getElementById('broll-exit-direction-row');
     const brollEntryDirSelect = document.getElementById('broll-entry-dir');
     const brollExitDirSelect = document.getElementById('broll-exit-dir');
-    const brollAnimSpeedSelect = document.getElementById('broll-anim-speed');
+    const brollAnimSpeedSlider = document.getElementById('broll-anim-speed');
+    const brollAnimSpeedVal = document.getElementById('broll-anim-speed-val');
     const brollSoundEffectSelect = document.getElementById('broll-sound-effect');
+
+    // Continuous speed slider (1 = slowest, 100 = fastest) <-> animation duration in
+    // seconds. Replaces the old 3-option Fast/Normal/Slow dropdown with a YouTube-volume
+    // style drag bar so the person can dial in exactly how snappy the entry/exit feels.
+    function brollSpeedValueToSec(value) {
+        const v = Math.max(1, Math.min(100, value));
+        return 1.2 - ((v - 1) / 99) * (1.2 - 0.15);
+    }
+    function brollSpeedSecToValue(sec) {
+        const s = Math.max(0.15, Math.min(1.2, sec || 0.4));
+        return Math.round(1 + ((1.2 - s) / (1.2 - 0.15)) * 99);
+    }
+    function brollSpeedLabel(sec) {
+        if (sec <= 0.28) return 'দ্রুত (Fast)';
+        if (sec >= 0.68) return 'ধীর (Slow)';
+        return 'স্বাভাবিক (Normal)';
+    }
 
     // Animation style options differ by display mode. Fullscreen items get the
     // full "Ken Burns" style toolkit (Zoom in/out, Pan, Fade, Slide, Wipe reveal,
@@ -3017,7 +3045,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 entryDirection: ['left', 'right', 'top', 'bottom'][Math.floor(Math.random() * 4)],
                 exitDirection: 'same',
                 animationStyle: brollModeSelect && brollModeSelect.value === 'pip' ? 'slide-pop' : 'zoom',
-                animationSpeed: 'normal',
+                animationSpeedSec: 0.4, // continuous drag-slider speed (seconds); 0.4 ~= old 'Normal' preset
                 soundEffect: 'none'
             };
             state.brollOverlays.push(newItem);
@@ -3050,7 +3078,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 entryDirection: ['left', 'right', 'top', 'bottom'][Math.floor(Math.random() * 4)],
                 exitDirection: 'same',
                 animationStyle: brollModeSelect && brollModeSelect.value === 'pip' ? 'slide-pop' : 'zoom',
-                animationSpeed: 'normal',
+                animationSpeedSec: 0.4, // continuous drag-slider speed (seconds); 0.4 ~= old 'Normal' preset
                 soundEffect: 'none'
             };
             state.brollOverlays.push(newItem);
@@ -3161,7 +3189,11 @@ document.addEventListener('DOMContentLoaded', () => {
         if (brollAnimStyleSelect) brollAnimStyleSelect.value = item.animationStyle || defaultStyle;
         if (brollEntryDirSelect) brollEntryDirSelect.value = item.entryDirection || 'bottom';
         if (brollExitDirSelect) brollExitDirSelect.value = item.exitDirection || 'same';
-        if (brollAnimSpeedSelect) brollAnimSpeedSelect.value = item.animationSpeed || 'normal';
+        if (brollAnimSpeedSlider) {
+            const sec = item.animationSpeedSec || 0.4;
+            brollAnimSpeedSlider.value = brollSpeedSecToValue(sec);
+            if (brollAnimSpeedVal) brollAnimSpeedVal.innerText = brollSpeedLabel(sec);
+        }
         if (brollSoundEffectSelect) brollSoundEffectSelect.value = item.soundEffect || 'none';
         updateBrollDirectionRowsVisibility(item.animationStyle || defaultStyle);
     }
@@ -3197,11 +3229,13 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    if (brollAnimSpeedSelect) {
-        brollAnimSpeedSelect.addEventListener('change', (e) => {
+    if (brollAnimSpeedSlider) {
+        brollAnimSpeedSlider.addEventListener('input', (e) => {
             const item = state.brollOverlays.find(b => b.id === state.selectedBrollId);
             if (item) {
-                item.animationSpeed = e.target.value;
+                const sec = brollSpeedValueToSec(parseInt(e.target.value));
+                item.animationSpeedSec = sec;
+                if (brollAnimSpeedVal) brollAnimSpeedVal.innerText = brollSpeedLabel(sec);
                 drawFrame();
             }
         });
