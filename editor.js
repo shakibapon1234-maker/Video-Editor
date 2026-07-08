@@ -1887,7 +1887,55 @@ document.addEventListener('DOMContentLoaded', () => {
                         state.ctx.fillStyle = 'rgba(0,0,0,0.25)';
                         state.ctx.fillRect(drawBoxX - 4, drawBoxY - 4, boxW + 8, boxH + 8);
                     }
-                    state.ctx.drawImage(item.imageImg, sx, sy, sw, sh, drawBoxX, drawBoxY, boxW, boxH);
+                    if (style === 'comparison-slide' && item.imageImgAfter) {
+                        // Comparison Slide - Split rendering of Before & After images
+                        const divFrac = wipeFrac; // progress from 0.0 to 1.0
+                        
+                        // 1. Draw Before Image (Left portion)
+                        state.ctx.save();
+                        state.ctx.beginPath();
+                        state.ctx.rect(drawBoxX, drawBoxY, boxW * divFrac, boxH);
+                        state.ctx.clip();
+                        state.ctx.drawImage(item.imageImg, sx, sy, sw, sh, drawBoxX, drawBoxY, boxW, boxH);
+                        state.ctx.restore();
+                        
+                        // 2. Draw After Image (Right portion)
+                        state.ctx.save();
+                        state.ctx.beginPath();
+                        state.ctx.rect(drawBoxX + boxW * divFrac, drawBoxY, boxW * (1 - divFrac), boxH);
+                        state.ctx.clip();
+                        
+                        const imgAspectAfter = item.imageImgAfter.naturalWidth / item.imageImgAfter.naturalHeight;
+                        let sxA, syA, swA, shA;
+                        if (imgAspectAfter > boxAspect) {
+                            shA = item.imageImgAfter.naturalHeight;
+                            swA = shA * boxAspect;
+                            sxA = (item.imageImgAfter.naturalWidth - swA) / 2;
+                            syA = 0;
+                        } else {
+                            swA = item.imageImgAfter.naturalWidth;
+                            shA = swA / boxAspect;
+                            sxA = 0;
+                            syA = (item.imageImgAfter.naturalHeight - shA) / 2;
+                        }
+                        
+                        // Apply zoom/pan if active to keep them synced
+                        if (brollAnimActive && (style === 'zoom' || style === 'zoom-out')) {
+                            const totalDur = Math.max(0.01, item.endSec - item.startSec);
+                            const zoomProgress = Math.max(0, Math.min(1, tIn / totalDur));
+                            const zoom = style === 'zoom-out' ? (1.18 - 0.18 * zoomProgress) : (1 + 0.18 * zoomProgress);
+                            const newSwA = swA / zoom, newShA = shA / zoom;
+                            sxA += (swA - newSwA) / 2;
+                            syA += (shA - newShA) / 2;
+                            swA = newSwA; shA = newShA;
+                        }
+                        
+                        state.ctx.drawImage(item.imageImgAfter, sxA, syA, swA, shA, drawBoxX, drawBoxY, boxW, boxH);
+                        state.ctx.restore();
+                    } else {
+                        // Normal drawing of one image
+                        state.ctx.drawImage(item.imageImg, sx, sy, sw, sh, drawBoxX, drawBoxY, boxW, boxH);
+                    }
                 }
 
                 // Hand-drawn-style annotation markers (v2.5) — layered on top of the
@@ -3322,9 +3370,17 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function loadBrollImage(file) {
+        console.log("Loading B-roll image file:", file.name, "type:", file.type, "size:", file.size);
         const img = new Image();
         const url = URL.createObjectURL(file);
+        
         img.onload = () => {
+            console.log("B-roll image loaded successfully. Dimensions:", img.naturalWidth, "x", img.naturalHeight);
+            if (img.naturalWidth === 0 || img.naturalHeight === 0) {
+                console.error("Loaded image has zero dimensions.");
+                alert("ত্রুটি: ছবিটির ডাইমেনশন শূন্য (0)। অনুগ্রহ করে অন্য ছবি ব্যবহার করুন।");
+                return;
+            }
             const newItem = {
                 id: brollIdCounter++,
                 type: 'image',
@@ -3334,8 +3390,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 size: brollSizeSlider ? parseInt(brollSizeSlider.value) : 35,
                 x: 0.05,
                 y: 0.6,
-                startSec: state.video.currentTime || 0,
-                endSec: Math.min(state.duration || 5, (state.video.currentTime || 0) + 3),
+                startSec: Math.min(state.endTime || state.duration || 5, state.video.currentTime || 0),
+                endSec: Math.min(state.endTime || state.duration || 5, (state.video.currentTime || 0) + 3),
                 // Each B-roll clip enters from a different side so a sequence
                 // of images doesn't always pop in from the same corner. This is
                 // just the starting default — fully editable from the panel.
@@ -3350,7 +3406,15 @@ document.addEventListener('DOMContentLoaded', () => {
             renderBrollList();
             showBrollTimingFor(newItem.id);
             drawFrame();
+            console.log("Added B-roll overlay:", newItem);
         };
+        
+        img.onerror = (err) => {
+            console.error("Failed to load B-roll image:", err);
+            alert("ত্রুটি: ছবিটি লোড করা যায়নি। অনুগ্রহ করে নিশ্চিত করুন যে এটি একটি সঠিক ইমেজ ফাইল (যেমন PNG, JPG, বা WEBP)।");
+            if (brollInput) brollInput.value = '';
+        };
+        
         img.src = url;
         if (brollInput) brollInput.value = '';
     }
@@ -3370,8 +3434,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 size: brollSizeSlider ? parseInt(brollSizeSlider.value) : 35,
                 x: 0.5,
                 y: 0.5,
-                startSec: state.video.currentTime || 0,
-                endSec: Math.min(state.duration || 5, (state.video.currentTime || 0) + 3),
+                startSec: Math.min(state.endTime || state.duration || 5, state.video.currentTime || 0),
+                endSec: Math.min(state.endTime || state.duration || 5, (state.video.currentTime || 0) + 3),
                 entryDirection: ['left', 'right', 'top', 'bottom'][Math.floor(Math.random() * 4)],
                 exitDirection: 'same',
                 animationStyle: brollModeSelect && brollModeSelect.value === 'pip' ? 'slide-pop' : 'zoom',
@@ -3381,6 +3445,364 @@ document.addEventListener('DOMContentLoaded', () => {
             state.brollOverlays.push(newItem);
             state.selectedBrollId = newItem.id;
             brollTextInput.value = '';
+            renderBrollList();
+            showBrollTimingFor(newItem.id);
+            drawFrame();
+        });
+    }
+
+    // --- Wings Fly B-roll Presets Logic ---
+    const importAllPresetsBtn = document.getElementById('import-all-presets-btn');
+    const individualPresetSelect = document.getElementById('individual-preset-select');
+    const addSelectedPresetBtn = document.getElementById('add-selected-preset-btn');
+
+    const WINGSFLY_BROLL_PRESETS = [
+        {
+            text: "FERDOUS AHMED\nManaging Director",
+            fontSize: 40,
+            color: "#ffffff",
+            mode: "fullscreen",
+            size: 35,
+            x: 0.5,
+            y: 0.75,
+            startSec: 0.0,
+            endSec: 4.0,
+            entryDirection: "left",
+            exitDirection: "same",
+            animationStyle: "slide-pop",
+            animationSpeedSec: 0.4,
+            soundEffect: "whoosh"
+        },
+        {
+            text: "ক্যারিয়ার নিয়ে ভাবছেন??",
+            fontSize: 44,
+            color: "#ffffff",
+            mode: "fullscreen",
+            size: 35,
+            x: 0.5,
+            y: 0.5,
+            startSec: 4.5,
+            endSec: 7.5,
+            entryDirection: "bottom",
+            exitDirection: "same",
+            animationStyle: "question-bounce",
+            animationSpeedSec: 0.5,
+            soundEffect: "pop"
+        },
+        {
+            text: "GROWTH & SUCCESS",
+            fontSize: 48,
+            color: "#10b981",
+            mode: "fullscreen",
+            size: 35,
+            x: 0.5,
+            y: 0.5,
+            startSec: 8.0,
+            endSec: 11.0,
+            entryDirection: "top",
+            exitDirection: "same",
+            animationStyle: "checkmark-pop",
+            animationSpeedSec: 0.4,
+            soundEffect: "chime"
+        },
+        {
+            text: "KNOWLEDGE & GUIDELINE",
+            fontSize: 38,
+            color: "#f59e0b",
+            mode: "fullscreen",
+            size: 35,
+            x: 0.5,
+            y: 0.5,
+            startSec: 14.5,
+            endSec: 20.0,
+            entryDirection: "right",
+            exitDirection: "same",
+            animationStyle: "typewriter",
+            animationSpeedSec: 0.3,
+            soundEffect: "click"
+        },
+        {
+            text: "নিরাপদ ক্যারিয়ার",
+            fontSize: 46,
+            color: "#ffffff",
+            mode: "fullscreen",
+            size: 35,
+            x: 0.5,
+            y: 0.5,
+            startSec: 20.0,
+            endSec: 23.5,
+            entryDirection: "bottom",
+            exitDirection: "same",
+            animationStyle: "zoom-pop",
+            animationSpeedSec: 0.4,
+            soundEffect: "chime"
+        },
+        {
+            text: "বলুন তো কোন সেক্টর?",
+            fontSize: 44,
+            color: "#ffffff",
+            mode: "fullscreen",
+            size: 35,
+            x: 0.5,
+            y: 0.5,
+            startSec: 24.0,
+            endSec: 25.5,
+            entryDirection: "bottom",
+            exitDirection: "same",
+            animationStyle: "question-bounce",
+            animationSpeedSec: 0.4,
+            soundEffect: "pop"
+        },
+        {
+            text: "TRAVEL & TOURISM",
+            fontSize: 50,
+            color: "#3b82f6",
+            mode: "fullscreen",
+            size: 35,
+            x: 0.5,
+            y: 0.5,
+            startSec: 26.0,
+            endSec: 29.5,
+            entryDirection: "top",
+            exitDirection: "same",
+            animationStyle: "rotate-in",
+            animationSpeedSec: 0.5,
+            soundEffect: "whoosh"
+        },
+        {
+            text: "VISA PROCESSING\n& AIR TICKETING",
+            fontSize: 40,
+            color: "#ffffff",
+            mode: "fullscreen",
+            size: 35,
+            x: 0.5,
+            y: 0.5,
+            startSec: 30.5,
+            endSec: 34.0,
+            entryDirection: "bottom",
+            exitDirection: "same",
+            animationStyle: "highlight-sweep",
+            animationSpeedSec: 0.4,
+            soundEffect: "chime"
+        },
+        {
+            text: "এয়ার টিকেটিং ও ভিসা প্রসেস",
+            fontSize: 42,
+            color: "#ffffff",
+            mode: "fullscreen",
+            size: 35,
+            x: 0.5,
+            y: 0.5,
+            startSec: 34.0,
+            endSec: 38.0,
+            entryDirection: "left",
+            exitDirection: "same",
+            animationStyle: "typewriter",
+            animationSpeedSec: 0.3,
+            soundEffect: "click"
+        },
+        {
+            text: "Business & Job",
+            fontSize: 42,
+            color: "#ffffff",
+            mode: "fullscreen",
+            size: 35,
+            x: 0.5,
+            y: 0.5,
+            startSec: 39.0,
+            endSec: 45.0,
+            entryDirection: "left",
+            exitDirection: "same",
+            animationStyle: "arrow-point",
+            animationSpeedSec: 0.4,
+            soundEffect: "whoosh"
+        },
+        {
+            text: "দক্ষ জনবলের চাহিদা",
+            fontSize: 44,
+            color: "#ef4444",
+            mode: "fullscreen",
+            size: 35,
+            x: 0.5,
+            y: 0.5,
+            startSec: 54.0,
+            endSec: 57.0,
+            entryDirection: "bottom",
+            exitDirection: "same",
+            animationStyle: "highlight-sweep",
+            animationSpeedSec: 0.4,
+            soundEffect: "chime"
+        },
+        {
+            text: "৩টি GDS হাতে কলমে শিখুন",
+            fontSize: 40,
+            color: "#ffffff",
+            mode: "fullscreen",
+            size: 35,
+            x: 0.5,
+            y: 0.5,
+            startSec: 124.0,
+            endSec: 130.0,
+            entryDirection: "right",
+            exitDirection: "same",
+            animationStyle: "typewriter",
+            animationSpeedSec: 0.3,
+            soundEffect: "click"
+        },
+        {
+            text: "বেসিক থেকে এডভান্স লেভেল",
+            fontSize: 40,
+            color: "#ffffff",
+            mode: "fullscreen",
+            size: 35,
+            x: 0.5,
+            y: 0.5,
+            startSec: 131.0,
+            endSec: 142.0,
+            entryDirection: "bottom",
+            exitDirection: "same",
+            animationStyle: "slide-pop",
+            animationSpeedSec: 0.4,
+            soundEffect: "pop"
+        },
+        {
+            text: "৫ দিন প্র্যাকটিস করার সুযোগ",
+            fontSize: 42,
+            color: "#10b981",
+            mode: "fullscreen",
+            size: 35,
+            x: 0.5,
+            y: 0.5,
+            startSec: 143.0,
+            endSec: 149.0,
+            entryDirection: "top",
+            exitDirection: "same",
+            animationStyle: "checkmark-pop",
+            animationSpeedSec: 0.4,
+            soundEffect: "chime"
+        },
+        {
+            text: "ভিসার ধরন ও প্রয়োজনীয় কাগজপত্র তালিকা\n১. ব্যক্তিগত ও পরিচয়পত্র\n২. আর্থিক সচ্ছলতার প্রমাণ\n৩. কাভার লেটার (SOP)",
+            fontSize: 32,
+            color: "#ffffff",
+            mode: "fullscreen",
+            size: 35,
+            x: 0.5,
+            y: 0.5,
+            startSec: 198.0,
+            endSec: 207.0,
+            entryDirection: "left",
+            exitDirection: "same",
+            animationStyle: "typewriter",
+            animationSpeedSec: 0.3,
+            soundEffect: "click"
+        },
+        {
+            text: "visa success secret",
+            fontSize: 44,
+            color: "#ffffff",
+            mode: "fullscreen",
+            size: 35,
+            x: 0.5,
+            y: 0.5,
+            startSec: 208.0,
+            endSec: 211.0,
+            entryDirection: "bottom",
+            exitDirection: "same",
+            animationStyle: "zoom-pop",
+            animationSpeedSec: 0.4,
+            soundEffect: "chime"
+        },
+        {
+            text: "ক্যারিয়ার গড়তে এখনই সময়",
+            fontSize: 44,
+            color: "#ffffff",
+            mode: "fullscreen",
+            size: 35,
+            x: 0.5,
+            y: 0.5,
+            startSec: 212.0,
+            endSec: 229.0,
+            entryDirection: "top",
+            exitDirection: "same",
+            animationStyle: "slide-pop",
+            animationSpeedSec: 0.4,
+            soundEffect: "whoosh"
+        }
+    ];
+
+    if (importAllPresetsBtn) {
+        importAllPresetsBtn.addEventListener('click', () => {
+            let addedCount = 0;
+            WINGSFLY_BROLL_PRESETS.forEach(p => {
+                const maxSec = state.duration || 1000;
+                const start = Math.min(p.startSec, maxSec);
+                const end = Math.min(p.endSec, maxSec);
+                
+                const newItem = {
+                    id: brollIdCounter++,
+                    type: 'text',
+                    text: p.text,
+                    fontSize: p.fontSize,
+                    color: p.color,
+                    mode: p.mode,
+                    size: p.size,
+                    x: p.x,
+                    y: p.y,
+                    startSec: start,
+                    endSec: end,
+                    entryDirection: p.entryDirection,
+                    exitDirection: p.exitDirection,
+                    animationStyle: p.animationStyle,
+                    animationSpeedSec: p.animationSpeedSec,
+                    soundEffect: p.soundEffect
+                };
+                state.brollOverlays.push(newItem);
+                addedCount++;
+            });
+            if (addedCount > 0) {
+                state.selectedBrollId = state.brollOverlays[state.brollOverlays.length - 1].id;
+                renderBrollList();
+                showBrollTimingFor(state.selectedBrollId);
+                drawFrame();
+                alert(`সাফল্যের সাথে ১৭টি Wings Fly B-roll অ্যানিমেশন টেমপ্লেট ইম্পোর্ট করা হয়েছে!`);
+            }
+        });
+    }
+
+    if (addSelectedPresetBtn && individualPresetSelect) {
+        addSelectedPresetBtn.addEventListener('click', () => {
+            const indexVal = individualPresetSelect.value;
+            if (indexVal === "") {
+                alert("দয়া করে যেকোনো ১টি প্রিসেট সিলেক্ট করুন।");
+                return;
+            }
+            const p = WINGSFLY_BROLL_PRESETS[parseInt(indexVal)];
+            if (!p) return;
+
+            const currentVideoTime = state.video.currentTime || 0;
+            const duration = p.endSec - p.startSec;
+
+            const newItem = {
+                id: brollIdCounter++,
+                type: 'text',
+                text: p.text,
+                fontSize: p.fontSize,
+                color: p.color,
+                mode: p.mode,
+                size: p.size,
+                x: p.x,
+                y: p.y,
+                startSec: currentVideoTime,
+                endSec: currentVideoTime + duration,
+                entryDirection: p.entryDirection,
+                exitDirection: p.exitDirection,
+                animationStyle: p.animationStyle,
+                animationSpeedSec: p.animationSpeedSec,
+                soundEffect: p.soundEffect
+            };
+            state.brollOverlays.push(newItem);
+            state.selectedBrollId = newItem.id;
             renderBrollList();
             showBrollTimingFor(newItem.id);
             drawFrame();
@@ -3471,9 +3893,16 @@ document.addEventListener('DOMContentLoaded', () => {
             if (brollTimingContainer) brollTimingContainer.style.display = 'none';
             return;
         }
+        const maxVal = state.endTime || state.duration || 1000;
         if (brollTimingContainer) brollTimingContainer.style.display = 'block';
-        if (brollStartInput) brollStartInput.value = item.startSec;
-        if (brollEndInput) brollEndInput.value = item.endSec;
+        if (brollStartInput) {
+            brollStartInput.max = maxVal;
+            brollStartInput.value = item.startSec;
+        }
+        if (brollEndInput) {
+            brollEndInput.max = maxVal;
+            brollEndInput.value = item.endSec;
+        }
         if (brollModeSelect) brollModeSelect.value = item.mode;
         if (brollSizeSlider) brollSizeSlider.value = item.size;
         if (brollSizeVal) brollSizeVal.innerText = item.size + '%';
@@ -3493,6 +3922,24 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         if (brollSoundEffectSelect) brollSoundEffectSelect.value = item.soundEffect || 'none';
         updateBrollDirectionRowsVisibility(item.animationStyle || defaultStyle);
+
+        // Sync After Image Uploader visibility
+        const brollAfterImageContainer = document.getElementById('broll-after-image-container');
+        const brollAfterFilename = document.getElementById('broll-after-filename');
+        if (brollAfterImageContainer) {
+            if (item.type === 'image' && (item.animationStyle === 'comparison-slide')) {
+                brollAfterImageContainer.style.display = 'block';
+                if (item.imageUrlAfter) {
+                    brollAfterFilename.innerText = "তুলনার পরের ছবি লোড করা আছে";
+                    brollAfterFilename.style.color = "#10b981";
+                } else {
+                    brollAfterFilename.innerText = "Upload After Image (তুলনার পরের ছবি)...";
+                    brollAfterFilename.style.color = "#cbd5e1";
+                }
+            } else {
+                brollAfterImageContainer.style.display = 'none';
+            }
+        }
     }
 
     if (brollAnimStyleSelect) {
@@ -3501,9 +3948,78 @@ document.addEventListener('DOMContentLoaded', () => {
             if (item) {
                 item.animationStyle = e.target.value;
                 updateBrollDirectionRowsVisibility(item.animationStyle);
+                
+                const brollAfterImageContainer = document.getElementById('broll-after-image-container');
+                const brollAfterFilename = document.getElementById('broll-after-filename');
+                if (brollAfterImageContainer) {
+                    if (item.type === 'image' && item.animationStyle === 'comparison-slide') {
+                        brollAfterImageContainer.style.display = 'block';
+                        if (item.imageUrlAfter) {
+                            brollAfterFilename.innerText = "তুলনার পরের ছবি লোড করা আছে";
+                            brollAfterFilename.style.color = "#10b981";
+                        } else {
+                            brollAfterFilename.innerText = "Upload After Image (তুলনার পরের ছবি)...";
+                            brollAfterFilename.style.color = "#cbd5e1";
+                        }
+                    } else {
+                        brollAfterImageContainer.style.display = 'none';
+                    }
+                }
+                
                 drawFrame();
             }
         });
+    }
+
+    // --- Wings Fly B-roll After-Image Uploader for Comparison Slide ---
+    const brollAfterDropzone = document.getElementById('broll-after-dropzone');
+    const brollAfterInput = document.getElementById('broll-after-input');
+    const brollAfterFilename = document.getElementById('broll-after-filename');
+
+    if (brollAfterDropzone && brollAfterInput) {
+        brollAfterDropzone.addEventListener('click', () => brollAfterInput.click());
+
+        brollAfterInput.addEventListener('change', (e) => {
+            const file = e.target.files[0];
+            if (file) loadBrollAfterImage(file);
+        });
+
+        brollAfterDropzone.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            brollAfterDropzone.classList.add('drag-over');
+        });
+        brollAfterDropzone.addEventListener('dragleave', () => {
+            brollAfterDropzone.classList.remove('drag-over');
+        });
+        brollAfterDropzone.addEventListener('drop', (e) => {
+            e.preventDefault();
+            brollAfterDropzone.classList.remove('drag-over');
+            const file = e.dataTransfer.files[0];
+            if (file && file.type.startsWith('image/')) loadBrollAfterImage(file);
+        });
+    }
+
+    function loadBrollAfterImage(file) {
+        const item = state.brollOverlays.find(b => b.id === state.selectedBrollId);
+        if (!item || item.type !== 'image') return;
+
+        console.log("Loading B-roll AFTER image file:", file.name);
+        const img = new Image();
+        const url = URL.createObjectURL(file);
+        
+        img.onload = () => {
+            item.imageImgAfter = img;
+            item.imageUrlAfter = url;
+            if (brollAfterFilename) {
+                brollAfterFilename.innerText = "তুলনার পরের ছবি লোড করা আছে";
+                brollAfterFilename.style.color = "#10b981";
+            }
+            drawFrame();
+        };
+        img.onerror = () => {
+            alert("ত্রুটি: ছবিটি লোড করা যায়নি।");
+        };
+        img.src = url;
     }
 
     if (brollEntryDirSelect) {
@@ -3553,7 +4069,13 @@ document.addEventListener('DOMContentLoaded', () => {
         brollStartInput.addEventListener('input', (e) => {
             const item = state.brollOverlays.find(b => b.id === state.selectedBrollId);
             if (item) {
-                item.startSec = Math.max(0, parseFloat(e.target.value) || 0);
+                const maxVal = state.endTime || state.duration || 1000;
+                let val = parseFloat(e.target.value) || 0;
+                if (val > maxVal) {
+                    val = maxVal;
+                    brollStartInput.value = val;
+                }
+                item.startSec = Math.max(0, val);
                 renderBrollList();
             }
         });
@@ -3563,7 +4085,13 @@ document.addEventListener('DOMContentLoaded', () => {
         brollEndInput.addEventListener('input', (e) => {
             const item = state.brollOverlays.find(b => b.id === state.selectedBrollId);
             if (item) {
-                item.endSec = Math.max(item.startSec + 0.1, parseFloat(e.target.value) || (item.startSec + 1));
+                const maxVal = state.endTime || state.duration || 1000;
+                let val = parseFloat(e.target.value) || 0;
+                if (val > maxVal) {
+                    val = maxVal;
+                    brollEndInput.value = val;
+                }
+                item.endSec = Math.max(item.startSec + 0.1, val);
                 renderBrollList();
             }
         });
