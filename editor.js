@@ -1514,16 +1514,27 @@ document.addEventListener('DOMContentLoaded', () => {
             state.ctx.restore();
         }
 
-        // --- Step E: Draw B-roll / Topic Image Overlays (Phase 5D) ---
+        // --- Step E: Draw B-roll / Topic Image Overlays (Phase 5D, unified in v2.5) ---
+        // Fullscreen and PiP used to run two separate animation engines with two
+        // separate dropdown option lists (e.g. "Wipe Reveal" only existed for
+        // Fullscreen, "Spin Pop" only for PiP). They're unified here: every style
+        // in the Animation Style dropdown now works the same way regardless of
+        // Display Mode — the only thing that changes between modes is the size/
+        // position of the box being animated (full video frame vs. a small
+        // floating corner box), not which effects are available.
         if (state.brollOverlays && state.brollOverlays.length > 0) {
             const currentTime = state.video.currentTime;
-            const brollDirVec = (dir) => {
-                if (dir === 'left') return { x: -1, y: 0 };
-                if (dir === 'right') return { x: 1, y: 0 };
-                if (dir === 'top') return { x: 0, y: -1 };
-                return { x: 0, y: 1 }; // 'bottom' (also the fallback default)
-            };
             const brollEaseOut = (p) => 1 - Math.pow(1 - Math.max(0, Math.min(1, p)), 3);
+            // Distance (in px) to slide a box fully off-canvas in a given direction —
+            // used by both 'slide' and 'slide-pop'. Works for any box size/position:
+            // for a Fullscreen box (~ the whole frame) it slides the whole picture off
+            // the edge; for a small PiP box it slides just that corner box off.
+            const brollSlideOffset = (dir, bx, by, bw, bh) => {
+                if (dir === 'left') return { x: -(bx + bw), y: 0 };
+                if (dir === 'right') return { x: (canvasW - bx), y: 0 };
+                if (dir === 'top') return { x: 0, y: -(by + bh) };
+                return { x: 0, y: (canvasH - by) }; // 'bottom' (also the fallback default)
+            };
 
             state.brollOverlays.forEach((item) => {
                 if (item.type !== 'text' && !item.imageImg) return;
@@ -1572,258 +1583,321 @@ document.addEventListener('DOMContentLoaded', () => {
                     }
                 }
 
+                // ---- 1. Box rect: where/how big is the thing we're animating? ----
+                // Fullscreen = the video frame's own draw rect. PiP = a small box
+                // sized by its content and positioned by item.x/item.y (drag-anywhere).
+                let boxX, boxY, boxW, boxH;
                 if (item.mode === 'fullscreen') {
-                    const style = item.animationStyle || 'zoom';
-                    let alpha = 1;
-                    let slideOffXFrac = 0, slideOffYFrac = 0;
-                    let bounceOffYFrac = 0;
-                    let rotateAmt = 0, scaleAmt = 1;
-                    let blurPx = 0;
-                    let wipeFrac = 1;
-
-                    if (brollAnimActive && style !== 'none') {
-                        if (style === 'slide') {
-                            // Whole frame slides in from the entry edge, holds, then
-                            // slides out toward the exit edge — position animates,
-                            // opacity stays fully visible throughout.
-                            if (tIn < animDur) {
-                                const eased = brollEaseOut(tIn / animDur);
-                                const d = brollDirVec(item.entryDirection || 'bottom');
-                                slideOffXFrac = d.x * (1 - eased);
-                                slideOffYFrac = d.y * (1 - eased);
-                            } else if (tOut < animDur) {
-                                const eased = brollEaseOut(tOut / animDur);
-                                const d = brollDirVec(resolvedExitDir);
-                                slideOffXFrac = d.x * (1 - eased);
-                                slideOffYFrac = d.y * (1 - eased);
-                            }
-                        } else if (style === 'wipe') {
-                            // Directional reveal: a growing clip rectangle wipes the image
-                            // into view from the entry edge, then wipes it away on exit.
-                            if (tIn < animDur) {
-                                wipeFrac = brollEaseOut(tIn / animDur);
-                            } else if (tOut < animDur) {
-                                wipeFrac = brollEaseOut(tOut / animDur);
-                            }
-                        } else if (style === 'rotate-in') {
-                            // Gentle spin-and-scale settle on the way in, mirrored on the way out.
-                            if (tIn < animDur) {
-                                const eased = brollEaseOut(tIn / animDur);
-                                rotateAmt = (1 - eased) * (Math.PI / 10);
-                                scaleAmt = 0.82 + 0.18 * eased;
-                                alpha = Math.max(0, eased);
-                            } else if (tOut < animDur) {
-                                const eased = brollEaseOut(tOut / animDur);
-                                rotateAmt = -(1 - eased) * (Math.PI / 10);
-                                scaleAmt = 0.82 + 0.18 * eased;
-                                alpha = Math.max(0, eased);
-                            }
-                        } else if (style === 'bounce-in') {
-                            // Drops in from off the top edge with a bouncy overshoot landing,
-                            // then bounces back out the same way at the end.
-                            if (tIn < animDur) {
-                                const eased = easeOutBackOvershoot(Math.max(0, Math.min(1, tIn / animDur)));
-                                bounceOffYFrac = -(1 - eased);
-                            } else if (tOut < animDur) {
-                                const eased = easeOutBackOvershoot(Math.max(0, Math.min(1, tOut / animDur)));
-                                bounceOffYFrac = -(1 - eased);
-                            }
-                        } else {
-                            // 'fade', 'zoom', 'zoom-out', 'pan' and 'blur-focus' all fade
-                            // in/out at the edges of the range; 'blur-focus' layers a
-                            // sharpen-in/blur-out on top of that same fade envelope.
-                            if (tIn < animDur) alpha = Math.max(0, tIn / animDur);
-                            if (tOut < animDur) alpha = Math.min(alpha, Math.max(0, tOut / animDur));
-                            if (style === 'blur-focus') {
-                                let blurP = 0;
-                                if (tIn < animDur) blurP = Math.max(blurP, 1 - tIn / animDur);
-                                if (tOut < animDur) blurP = Math.max(blurP, 1 - tOut / animDur);
-                                blurPx = Math.max(0, Math.min(1, blurP)) * 14;
-                            }
-                        }
-                    }
-
-                    const fsDrawX = drawX + slideOffXFrac * canvasW;
-                    const fsDrawY = drawY + (slideOffYFrac + bounceOffYFrac) * canvasH;
-
-                    state.ctx.save();
-                    state.ctx.globalAlpha = alpha;
-                    if (blurPx > 0.1) state.ctx.filter = `blur(${blurPx.toFixed(1)}px)`;
-                    if (rotateAmt !== 0 || scaleAmt !== 1) {
-                        const rcx = fsDrawX + drawW / 2;
-                        const rcy = fsDrawY + drawH / 2;
-                        state.ctx.translate(rcx, rcy);
-                        state.ctx.rotate(rotateAmt);
-                        state.ctx.scale(scaleAmt, scaleAmt);
-                        state.ctx.translate(-rcx, -rcy);
-                    }
-                    if (wipeFrac < 0.999) {
-                        state.ctx.beginPath();
-                        state.ctx.rect(fsDrawX, fsDrawY, drawW * Math.max(0, wipeFrac), drawH);
-                        state.ctx.clip();
-                    }
-
-                    if (item.type === 'text') {
-                        // Dark scrim behind the text so it reads over any video content
-                        state.ctx.fillStyle = 'rgba(0,0,0,0.45)';
-                        state.ctx.fillRect(fsDrawX, fsDrawY, drawW, drawH);
-
-                        state.ctx.font = `bold ${item.fontSize}px "Hind Siliguri", "Plus Jakarta Sans", sans-serif`;
-                        state.ctx.fillStyle = item.color;
-                        state.ctx.textAlign = 'center';
-                        state.ctx.textBaseline = 'middle';
-                        state.ctx.lineWidth = Math.max(2, item.fontSize * 0.08);
-                        state.ctx.strokeStyle = 'rgba(0,0,0,0.55)';
-                        const cx = fsDrawX + drawW / 2;
-                        const cy = fsDrawY + drawH / 2;
-                        state.ctx.strokeText(item.text, cx, cy);
-                        state.ctx.fillText(item.text, cx, cy);
-                    } else {
-                        // Cover the entire video frame area, preserving aspect ratio (fill/crop).
-                        // The 'zoom' style additionally applies a slow continuous "Ken Burns"
-                        // zoom-in so a still photo feels alive instead of sitting frozen on screen.
-                        const imgAspect = item.imageImg.naturalWidth / item.imageImg.naturalHeight;
-                        const boxAspect = drawW / drawH;
-                        let sx, sy, sw, sh;
-                        if (imgAspect > boxAspect) {
-                            sh = item.imageImg.naturalHeight;
-                            sw = sh * boxAspect;
-                            sx = (item.imageImg.naturalWidth - sw) / 2;
-                            sy = 0;
-                        } else {
-                            sw = item.imageImg.naturalWidth;
-                            sh = sw / boxAspect;
-                            sx = 0;
-                            sy = (item.imageImg.naturalHeight - sh) / 2;
-                        }
-                        if (brollAnimActive && (style === 'zoom' || style === 'zoom-out')) {
-                            const totalDur = Math.max(0.01, item.endSec - item.startSec);
-                            const zoomProgress = Math.max(0, Math.min(1, tIn / totalDur));
-                            // 'zoom' grows to 18% zoomed-in by the end; 'zoom-out' starts
-                            // 18% zoomed-in and eases back down to normal. (Bumped up from
-                            // an earlier 8% which read as too subtle/static next to
-                            // PowerPoint-style zoom transitions.)
-                            const zoom = style === 'zoom-out'
-                                ? (1.18 - 0.18 * zoomProgress)
-                                : (1 + 0.18 * zoomProgress);
-                            const newSw = sw / zoom, newSh = sh / zoom;
-                            sx += (sw - newSw) / 2;
-                            sy += (sh - newSh) / 2;
-                            sw = newSw; sh = newSh;
-                        } else if (brollAnimActive && style === 'pan') {
-                            // Ken Burns pan: slides the crop window across whatever slack
-                            // space is left after the aspect-fit crop above, using the
-                            // entry direction to pick which way it pans.
-                            const totalDur = Math.max(0.01, item.endSec - item.startSec);
-                            const panProgress = Math.max(0, Math.min(1, tIn / totalDur));
-                            const dirSign = (item.entryDirection === 'right' || item.entryDirection === 'bottom') ? -1 : 1;
-                            const slackW = item.imageImg.naturalWidth - sw;
-                            const slackH = item.imageImg.naturalHeight - sh;
-                            if (slackW > 1) {
-                                sx = Math.max(0, Math.min(slackW, (slackW / 2) + dirSign * (slackW / 2) * (panProgress * 2 - 1)));
-                            } else if (slackH > 1) {
-                                sy = Math.max(0, Math.min(slackH, (slackH / 2) + dirSign * (slackH / 2) * (panProgress * 2 - 1)));
-                            }
-                        }
-                        state.ctx.drawImage(item.imageImg, sx, sy, sw, sh, fsDrawX, fsDrawY, drawW, drawH);
-                    }
-                    state.ctx.restore();
+                    boxX = drawX; boxY = drawY; boxW = drawW; boxH = drawH;
                 } else {
-                    // Picture-in-picture with a cartoon-style slide-in/pop entrance and
-                    // slide-out exit. Each clip gets its own entry direction (assigned when
-                    // the item was added) so a sequence of B-roll items doesn't always
-                    // enter from the same corner.
-                    let pipW, pipH;
                     if (item.type === 'text') {
                         state.ctx.font = `bold ${item.fontSize}px "Hind Siliguri", "Plus Jakarta Sans", sans-serif`;
                         const metrics = state.ctx.measureText(item.text);
-                        pipW = metrics.width + 32;
-                        pipH = item.fontSize + 24;
+                        boxW = metrics.width + 32;
+                        boxH = item.fontSize + 24;
                     } else {
-                        pipW = canvasW * (item.size / 100);
-                        pipH = pipW * (item.imageImg.naturalHeight / item.imageImg.naturalWidth);
+                        boxW = canvasW * (item.size / 100);
+                        boxH = boxW * (item.imageImg.naturalHeight / item.imageImg.naturalWidth);
                     }
-                    const targetX = item.x * canvasW;
-                    const targetY = item.y * canvasH;
-                    const pipStyle = item.animationStyle || 'slide-pop';
+                    boxX = item.x * canvasW;
+                    boxY = item.y * canvasH;
+                }
 
-                    let progress = 1;
-                    if (brollAnimActive && pipStyle !== 'none') {
-                        const enter = tIn < animDur ? Math.max(0, tIn / animDur) : 1;
-                        const exit = tOut < animDur ? Math.max(0, tOut / animDur) : 1;
-                        progress = Math.max(0, Math.min(1, Math.min(enter, exit)));
+                // ---- 2. Resolve the animation transform (same style set, any box) ----
+                const style = item.animationStyle || (item.mode === 'pip' ? 'slide-pop' : 'zoom');
+                let alpha = 1, scaleAmt = 1, rotateAmt = 0, blurPx = 0, wipeFrac = 1;
+                let offX = 0, offY = 0; // absolute px offset applied to the box during entry/exit
+
+                if (brollAnimActive && style !== 'none') {
+                    if (style === 'slide' || style === 'slide-pop') {
+                        // Whole box slides in from the entry edge, holds, then slides out
+                        // toward the exit edge. 'slide-pop' additionally scales up from
+                        // 70% with a bouncy overshoot settle; 'slide' just glides in flat.
+                        let eased = 1;
+                        let dir = null;
+                        if (tIn < animDur) {
+                            eased = (style === 'slide-pop') ? easeOutBackOvershoot(Math.max(0, tIn / animDur)) : brollEaseOut(tIn / animDur);
+                            dir = item.entryDirection || 'bottom';
+                        } else if (tOut < animDur) {
+                            eased = (style === 'slide-pop') ? easeOutBackOvershoot(Math.max(0, tOut / animDur)) : brollEaseOut(tOut / animDur);
+                            dir = resolvedExitDir;
+                        }
+                        if (dir) {
+                            const d = brollSlideOffset(dir, boxX, boxY, boxW, boxH);
+                            offX = d.x * (1 - eased);
+                            offY = d.y * (1 - eased);
+                        }
+                        if (style === 'slide-pop') {
+                            scaleAmt = (tIn < animDur || tOut < animDur) ? (0.7 + 0.3 * eased) : 1;
+                            alpha = Math.max(0.15, tIn < animDur ? eased : (tOut < animDur ? eased : 1));
+                        }
+                    } else if (style === 'wipe') {
+                        // Directional reveal: a growing clip rectangle wipes the box's
+                        // content into view from the entry edge, then wipes it away on exit.
+                        if (tIn < animDur) {
+                            wipeFrac = brollEaseOut(tIn / animDur);
+                        } else if (tOut < animDur) {
+                            wipeFrac = brollEaseOut(tOut / animDur);
+                        }
+                    } else if (style === 'rotate-in') {
+                        // Gentle spin-and-scale settle on the way in, mirrored on the way out.
+                        if (tIn < animDur) {
+                            const eased = brollEaseOut(tIn / animDur);
+                            rotateAmt = (1 - eased) * (Math.PI / 10);
+                            scaleAmt = 0.82 + 0.18 * eased;
+                            alpha = Math.max(0, eased);
+                        } else if (tOut < animDur) {
+                            const eased = brollEaseOut(tOut / animDur);
+                            rotateAmt = -(1 - eased) * (Math.PI / 10);
+                            scaleAmt = 0.82 + 0.18 * eased;
+                            alpha = Math.max(0, eased);
+                        }
+                    } else if (style === 'bounce-in' || style === 'bounce-drop') {
+                        // Drops in from off the top edge with a bouncy overshoot landing,
+                        // then bounces back out the same way at the end. ('bounce-drop' is
+                        // kept as an alias of 'bounce-in' — same effect, old PiP name.)
+                        if (tIn < animDur) {
+                            const eased = easeOutBackOvershoot(Math.max(0, Math.min(1, tIn / animDur)));
+                            offY = -(boxY + boxH) * (1 - eased);
+                            alpha = Math.max(0.15, eased);
+                        } else if (tOut < animDur) {
+                            const eased = easeOutBackOvershoot(Math.max(0, Math.min(1, tOut / animDur)));
+                            offY = -(boxY + boxH) * (1 - eased);
+                            alpha = Math.max(0.15, eased);
+                        }
+                    } else if (style === 'spin-pop') {
+                        // Spins in from a 60° offset while scaling up from 75%, settles flat.
+                        if (tIn < animDur) {
+                            const eased = easeOutBackOvershoot(Math.max(0, tIn / animDur));
+                            rotateAmt = (1 - eased) * (Math.PI / 3);
+                            scaleAmt = 0.75 + 0.25 * eased;
+                            alpha = Math.max(0.15, eased);
+                        } else if (tOut < animDur) {
+                            const eased = easeOutBackOvershoot(Math.max(0, tOut / animDur));
+                            rotateAmt = -(1 - eased) * (Math.PI / 3);
+                            scaleAmt = 0.75 + 0.25 * eased;
+                            alpha = Math.max(0.15, eased);
+                        }
+                    } else if (style === 'zoom-pop') {
+                        // Quick pop-in scale from 70% with a bouncy overshoot — distinct
+                        // from the slow continuous Ken Burns 'zoom' below.
+                        if (tIn < animDur) {
+                            const eased = easeOutBackOvershoot(Math.max(0, tIn / animDur));
+                            scaleAmt = 0.7 + 0.3 * eased;
+                            alpha = Math.max(0.15, eased);
+                        } else if (tOut < animDur) {
+                            const eased = easeOutBackOvershoot(Math.max(0, tOut / animDur));
+                            scaleAmt = 0.7 + 0.3 * eased;
+                            alpha = Math.max(0.15, eased);
+                        }
+                    } else if (style === 'blur-pop') {
+                        // Starts heavily blurred and small, sharpens and scales up to settle.
+                        if (tIn < animDur) {
+                            const eased = brollEaseOut(tIn / animDur);
+                            blurPx = Math.max(0, 1 - eased) * 10;
+                            scaleAmt = 0.85 + 0.15 * eased;
+                            alpha = Math.max(0, eased);
+                        } else if (tOut < animDur) {
+                            const eased = brollEaseOut(tOut / animDur);
+                            blurPx = Math.max(0, 1 - eased) * 10;
+                            scaleAmt = 0.85 + 0.15 * eased;
+                            alpha = Math.max(0, eased);
+                        }
+                    } else {
+                        // 'fade', 'zoom', 'zoom-out', 'pan' and 'blur-focus' all fade
+                        // in/out at the edges of the range; 'blur-focus' layers a
+                        // sharpen-in/blur-out on top of that same fade envelope. The
+                        // actual zoom/pan *motion* for images is applied separately
+                        // below (it animates the source crop window, not the box).
+                        if (tIn < animDur) alpha = Math.max(0, tIn / animDur);
+                        if (tOut < animDur) alpha = Math.min(alpha, Math.max(0, tOut / animDur));
+                        if (style === 'blur-focus') {
+                            let blurP = 0;
+                            if (tIn < animDur) blurP = Math.max(blurP, 1 - tIn / animDur);
+                            if (tOut < animDur) blurP = Math.max(blurP, 1 - tOut / animDur);
+                            blurPx = Math.max(0, Math.min(1, blurP)) * 14;
+                        }
+                        if ((style === 'zoom' || style === 'zoom-out') && item.type === 'text') {
+                            // Images get a true Ken Burns source-crop zoom (below). For text
+                            // there's no source image to crop, so 'zoom'/'zoom-out' instead
+                            // continuously scale the text box itself over the item's full
+                            // duration, growing (zoom) or shrinking-from-large (zoom-out).
+                            const totalDur = Math.max(0.01, item.endSec - item.startSec);
+                            const p = Math.max(0, Math.min(1, tIn / totalDur));
+                            scaleAmt = (style === 'zoom-out') ? (1.18 - 0.18 * p) : (1 + 0.18 * p);
+                        }
                     }
-                    const eased = easeOutBackOvershoot(progress);
+                }
 
-                    // Pick which direction governs the current phase: the entry
-                    // direction while entering, the (independently selectable) exit
-                    // direction while exiting. Once settled (progress===1) this value
-                    // is irrelevant since the offset term below is already zero.
-                    const dir = (tIn < tOut) ? (item.entryDirection || 'bottom') : resolvedExitDir;
-                    let offX = 0, offY = 0;
-                    if (pipStyle === 'slide-pop') {
-                        if (dir === 'left') offX = -(targetX + pipW);
-                        else if (dir === 'right') offX = (canvasW - targetX);
-                        else if (dir === 'top') offY = -(targetY + pipH);
-                        else offY = (canvasH - targetY);
-                    } else if (pipStyle === 'bounce-drop') {
-                        // Always drops in straight from above the frame, regardless of the
-                        // configured entry direction, then bounces back up on exit.
-                        offY = -(targetY + pipH);
-                    }
+                // ---- 3. Draw: box transform (position/scale/rotate/blur/alpha) is the
+                // same regardless of mode; only the content differs (text vs image, and
+                // for images, whether we additionally animate the source crop window). ----
+                const drawBoxX = boxX + offX;
+                const drawBoxY = boxY + offY;
 
-                    const drawXpip = targetX + offX * (1 - eased);
-                    const drawYpip = targetY + offY * (1 - eased);
-                    // Pop-style entrances scale up from smaller; 'fade' and 'none' stay full-size in place.
-                    const scale = (pipStyle === 'slide-pop' || pipStyle === 'zoom' || pipStyle === 'bounce-drop' || pipStyle === 'blur-pop')
-                        ? (0.7 + 0.3 * eased)
-                        : (pipStyle === 'spin-pop' ? (0.75 + 0.25 * eased) : 1);
-                    const wobble = (pipStyle === 'slide-pop' || pipStyle === 'bounce-drop')
-                        ? (1 - eased) * (dir === 'left' || dir === 'top' ? -0.10 : 0.10)
-                        : (pipStyle === 'spin-pop' ? (1 - eased) * (Math.PI / 3) : 0);
-                    const pipBlur = (pipStyle === 'blur-pop') ? Math.max(0, 1 - eased) * 10 : 0;
+                state.ctx.save();
+                state.ctx.globalAlpha = alpha;
+                if (blurPx > 0.1) state.ctx.filter = `blur(${blurPx.toFixed(1)}px)`;
 
-                    state.ctx.save();
-                    state.ctx.globalAlpha = (pipStyle === 'none') ? 1 : Math.max(0.15, Math.min(1, eased));
-                    if (pipBlur > 0.1) state.ctx.filter = `blur(${pipBlur.toFixed(1)}px)`;
-
-                    const cx = drawXpip + pipW / 2;
-                    const cy = drawYpip + pipH / 2;
+                const cx = drawBoxX + boxW / 2;
+                const cy = drawBoxY + boxH / 2;
+                if (rotateAmt !== 0 || scaleAmt !== 1) {
                     state.ctx.translate(cx, cy);
-                    state.ctx.rotate(wobble);
-                    state.ctx.scale(scale, scale);
-                    state.ctx.translate(-pipW / 2, -pipH / 2);
+                    if (rotateAmt !== 0) state.ctx.rotate(rotateAmt);
+                    state.ctx.scale(scaleAmt, scaleAmt);
+                    state.ctx.translate(-cx, -cy);
+                }
+                if (wipeFrac < 0.999) {
+                    state.ctx.beginPath();
+                    state.ctx.rect(drawBoxX, drawBoxY, boxW * Math.max(0, wipeFrac), boxH);
+                    state.ctx.clip();
+                }
 
-                    if (item.type === 'text') {
+                if (item.type === 'text') {
+                    if (item.mode === 'fullscreen') {
+                        // Dark scrim behind the text so it reads over any video content
+                        state.ctx.fillStyle = 'rgba(0,0,0,0.45)';
+                        state.ctx.fillRect(drawBoxX, drawBoxY, boxW, boxH);
+                    } else {
                         state.ctx.fillStyle = 'rgba(0,0,0,0.55)';
                         if (state.ctx.roundRect) {
                             state.ctx.beginPath();
-                            state.ctx.roundRect(0, 0, pipW, pipH, 10);
+                            state.ctx.roundRect(drawBoxX, drawBoxY, boxW, boxH, 10);
                             state.ctx.fill();
                         } else {
-                            state.ctx.fillRect(0, 0, pipW, pipH);
+                            state.ctx.fillRect(drawBoxX, drawBoxY, boxW, boxH);
                         }
-                        state.ctx.font = `bold ${item.fontSize}px "Hind Siliguri", "Plus Jakarta Sans", sans-serif`;
-                        state.ctx.fillStyle = item.color;
-                        state.ctx.textAlign = 'center';
-                        state.ctx.textBaseline = 'middle';
-                        state.ctx.fillText(item.text, pipW / 2, pipH / 2);
+                    }
+                    state.ctx.font = `bold ${item.fontSize}px "Hind Siliguri", "Plus Jakarta Sans", sans-serif`;
+                    state.ctx.fillStyle = item.color;
+                    state.ctx.textAlign = 'center';
+                    state.ctx.textBaseline = 'middle';
+                    if (item.mode === 'fullscreen') {
+                        state.ctx.lineWidth = Math.max(2, item.fontSize * 0.08);
+                        state.ctx.strokeStyle = 'rgba(0,0,0,0.55)';
+                        state.ctx.strokeText(item.text, cx, cy);
+                    }
+                    state.ctx.fillText(item.text, cx, cy);
+                } else {
+                    // Cover the box, preserving aspect ratio (fill/crop).
+                    const imgAspect = item.imageImg.naturalWidth / item.imageImg.naturalHeight;
+                    const boxAspect = boxW / boxH;
+                    let sx, sy, sw, sh;
+                    if (imgAspect > boxAspect) {
+                        sh = item.imageImg.naturalHeight;
+                        sw = sh * boxAspect;
+                        sx = (item.imageImg.naturalWidth - sw) / 2;
+                        sy = 0;
                     } else {
+                        sw = item.imageImg.naturalWidth;
+                        sh = sw / boxAspect;
+                        sx = 0;
+                        sy = (item.imageImg.naturalHeight - sh) / 2;
+                    }
+                    if (brollAnimActive && (style === 'zoom' || style === 'zoom-out')) {
+                        // 'zoom' grows to 18% zoomed-in by the end; 'zoom-out' starts
+                        // 18% zoomed-in and eases back down to normal. Works identically
+                        // for a Fullscreen frame or a small PiP box — it just crops a
+                        // little tighter into whichever source region is being shown.
+                        const totalDur = Math.max(0.01, item.endSec - item.startSec);
+                        const zoomProgress = Math.max(0, Math.min(1, tIn / totalDur));
+                        const zoom = style === 'zoom-out'
+                            ? (1.18 - 0.18 * zoomProgress)
+                            : (1 + 0.18 * zoomProgress);
+                        const newSw = sw / zoom, newSh = sh / zoom;
+                        sx += (sw - newSw) / 2;
+                        sy += (sh - newSh) / 2;
+                        sw = newSw; sh = newSh;
+                    } else if (brollAnimActive && style === 'pan') {
+                        // Ken Burns pan: slides the crop window across whatever slack
+                        // space is left after the aspect-fit crop above, using the
+                        // entry direction to pick which way it pans.
+                        const totalDur = Math.max(0.01, item.endSec - item.startSec);
+                        const panProgress = Math.max(0, Math.min(1, tIn / totalDur));
+                        const dirSign = (item.entryDirection === 'right' || item.entryDirection === 'bottom') ? -1 : 1;
+                        const slackW = item.imageImg.naturalWidth - sw;
+                        const slackH = item.imageImg.naturalHeight - sh;
+                        if (slackW > 1) {
+                            sx = Math.max(0, Math.min(slackW, (slackW / 2) + dirSign * (slackW / 2) * (panProgress * 2 - 1)));
+                        } else if (slackH > 1) {
+                            sy = Math.max(0, Math.min(slackH, (slackH / 2) + dirSign * (slackH / 2) * (panProgress * 2 - 1)));
+                        }
+                    }
+                    if (item.mode === 'pip') {
                         state.ctx.fillStyle = 'rgba(0,0,0,0.25)';
-                        state.ctx.fillRect(-4, -4, pipW + 8, pipH + 8);
-                        state.ctx.drawImage(item.imageImg, 0, 0, pipW, pipH);
+                        state.ctx.fillRect(drawBoxX - 4, drawBoxY - 4, boxW + 8, boxH + 8);
                     }
-
-                    if (state.currentStep === 2 && item.id === state.selectedBrollId) {
-                        state.ctx.strokeStyle = 'rgba(79, 70, 229, 0.9)';
-                        state.ctx.lineWidth = 2;
-                        state.ctx.setLineDash([6, 4]);
-                        state.ctx.strokeRect(0, 0, pipW, pipH);
-                        state.ctx.setLineDash([]);
-                    }
-
-                    state.ctx.restore();
+                    state.ctx.drawImage(item.imageImg, sx, sy, sw, sh, drawBoxX, drawBoxY, boxW, boxH);
                 }
+
+                // Hand-drawn-style annotation markers (v2.5) — layered on top of the
+                // content after it's painted, growing in sync with the entry (and
+                // shrinking back out on exit) so they feel "drawn on" rather than
+                // just appearing instantly.
+                if (brollAnimActive && (style === 'circle-highlight' || style === 'underline-draw' || style === 'checkmark-pop')) {
+                    let annoP = 1;
+                    if (tIn < animDur) annoP = brollEaseOut(tIn / animDur);
+                    else if (tOut < animDur) annoP = brollEaseOut(tOut / animDur);
+
+                    if (annoP > 0.01) {
+                        const markColor = (item.type === 'text') ? item.color : '#fbbf24';
+                        if (style === 'circle-highlight') {
+                            // A slightly-imperfect ellipse "circled" around the box, drawn as a
+                            // growing arc so it looks hand-drawn rather than a static ring.
+                            const rx = boxW / 2 * 1.18, ry = boxH / 2 * 1.45;
+                            const ecx = drawBoxX + boxW / 2, ecy = drawBoxY + boxH / 2;
+                            state.ctx.strokeStyle = markColor;
+                            state.ctx.lineWidth = Math.max(3, Math.min(boxW, boxH) * 0.05);
+                            state.ctx.lineCap = 'round';
+                            state.ctx.beginPath();
+                            const startAngle = -Math.PI / 2 - 0.25;
+                            // Goes slightly past a full loop (2π + a bit) at full progress so the
+                            // stroke visibly overlaps its own start, like a real marker circle.
+                            state.ctx.ellipse(ecx, ecy, Math.max(1, rx), Math.max(1, ry), 0, startAngle, startAngle + annoP * (Math.PI * 2 + 0.5));
+                            state.ctx.stroke();
+                        } else if (style === 'underline-draw') {
+                            const uy = drawBoxY + boxH + Math.max(4, boxH * 0.12);
+                            const ux1 = drawBoxX + boxW * 0.04;
+                            const ux2 = ux1 + (boxW * 0.92) * annoP;
+                            state.ctx.strokeStyle = markColor;
+                            state.ctx.lineWidth = Math.max(3, boxH * 0.07);
+                            state.ctx.lineCap = 'round';
+                            state.ctx.beginPath();
+                            state.ctx.moveTo(ux1, uy);
+                            state.ctx.lineTo(ux2, uy);
+                            state.ctx.stroke();
+                        } else if (style === 'checkmark-pop') {
+                            const csize = Math.max(10, Math.min(boxW, boxH) * 0.55) * easeOutBackOvershoot(annoP);
+                            const ccx = drawBoxX + boxW - csize * 0.25;
+                            const ccy = drawBoxY - csize * 0.05;
+                            state.ctx.fillStyle = '#22c55e';
+                            state.ctx.beginPath();
+                            state.ctx.arc(ccx, ccy, csize / 2, 0, Math.PI * 2);
+                            state.ctx.fill();
+                            state.ctx.strokeStyle = '#ffffff';
+                            state.ctx.lineWidth = Math.max(2, csize * 0.13);
+                            state.ctx.lineCap = 'round';
+                            state.ctx.lineJoin = 'round';
+                            state.ctx.beginPath();
+                            state.ctx.moveTo(ccx - csize * 0.22, ccy);
+                            state.ctx.lineTo(ccx - csize * 0.04, ccy + csize * 0.20);
+                            state.ctx.lineTo(ccx + csize * 0.26, ccy - csize * 0.22);
+                            state.ctx.stroke();
+                        }
+                    }
+                }
+
+                // Selection box in Step 2 for the active B-roll item being edited (PiP only —
+                // Fullscreen items cover the whole frame so an outline wouldn't be useful).
+                if (state.currentStep === 2 && item.mode === 'pip' && item.id === state.selectedBrollId) {
+                    state.ctx.strokeStyle = 'rgba(79, 70, 229, 0.9)';
+                    state.ctx.lineWidth = 2;
+                    state.ctx.setLineDash([6, 4]);
+                    state.ctx.strokeRect(drawBoxX, drawBoxY, boxW, boxH);
+                    state.ctx.setLineDash([]);
+                }
+
+                state.ctx.restore();
             });
         }
 
@@ -2953,39 +3027,34 @@ document.addEventListener('DOMContentLoaded', () => {
         return 'স্বাভাবিক (Normal)';
     }
 
-    // Animation style options differ by display mode. Fullscreen items get the
-    // full "Ken Burns" style toolkit (Zoom in/out, Pan, Fade, Slide, Wipe reveal,
-    // Rotate-in, Bounce-in, Blur-focus) or No animation. PiP items keep their
-    // bouncy corner-box repertoire (Slide+Pop, Bounce-drop, Spin-pop, Zoom pop,
-    // Blur-pop, Fade) or No animation.
-    const BROLL_ANIM_STYLES = {
-        fullscreen: [
-            { value: 'zoom', label: 'Zoom In (ধীরে ধীরে জুম হবে)' },
-            { value: 'zoom-out', label: 'Zoom Out (জুম আউট হবে)' },
-            { value: 'pan', label: 'Pan (Ken Burns - আস্তে আস্তে সরে যাবে)' },
-            { value: 'fade', label: 'Fade (আস্তে আস্তে ভেসে উঠবে)' },
-            { value: 'slide', label: 'Slide (এক পাশ থেকে স্লাইড করে আসবে)' },
-            { value: 'wipe', label: 'Wipe Reveal (মুছে মুছে দেখা যাবে)' },
-            { value: 'rotate-in', label: 'Rotate In (ঘুরে ঘুরে আসবে)' },
-            { value: 'bounce-in', label: 'Bounce In (লাফিয়ে লাফিয়ে আসবে)' },
-            { value: 'blur-focus', label: 'Blur Focus (ঝাপসা থেকে স্পষ্ট হবে)' },
-            { value: 'none', label: 'কোনো অ্যানিমেশন নেই (সরাসরি দেখাবে)' }
-        ],
-        pip: [
-            { value: 'slide-pop', label: 'Slide + Pop (কোণা থেকে বাউন্স করে আসবে)' },
-            { value: 'bounce-drop', label: 'Bounce Drop (উপর থেকে লাফিয়ে পড়বে)' },
-            { value: 'spin-pop', label: 'Spin Pop (ঘুরতে ঘুরতে আসবে)' },
-            { value: 'zoom', label: 'Zoom Pop (জায়গায় থেকে বড় হবে)' },
-            { value: 'blur-pop', label: 'Blur Pop (ঝাপসা থেকে স্পষ্ট হয়ে আসবে)' },
-            { value: 'fade', label: 'Fade (আস্তে আস্তে ভেসে উঠবে)' },
-            { value: 'none', label: 'কোনো অ্যানিমেশন নেই (সরাসরি দেখাবে)' }
-        ]
-    };
+    // Unified animation style list (v2.5) — every style works the same way in
+    // both Fullscreen and PiP mode now, so there's just one shared list instead
+    // of two different ones. A couple of PiP-only Bengali labels ("Zoom Pop",
+    // "Bounce Drop") are worded to make it obvious what they'll look like on a
+    // small corner box, even though the same style value also works full-screen.
+    const BROLL_ANIM_STYLES = [
+        { value: 'none', label: 'কোনো অ্যানিমেশন নেই (সরাসরি দেখাবে)' },
+        { value: 'fade', label: 'Fade (আস্তে আস্তে ভেসে উঠবে)' },
+        { value: 'zoom', label: 'Zoom In (ধীরে ধীরে জুম হবে)' },
+        { value: 'zoom-out', label: 'Zoom Out (জুম আউট হবে)' },
+        { value: 'zoom-pop', label: 'Zoom Pop (হঠাৎ বড় হয়ে পপ করে আসবে)' },
+        { value: 'pan', label: 'Pan (Ken Burns - আস্তে আস্তে সরে যাবে)' },
+        { value: 'slide', label: 'Slide (এক পাশ থেকে সোজা স্লাইড করে আসবে)' },
+        { value: 'slide-pop', label: 'Slide + Pop (কোণা থেকে বাউন্স করে আসবে)' },
+        { value: 'wipe', label: 'Wipe Reveal (মুছে মুছে দেখা যাবে)' },
+        { value: 'rotate-in', label: 'Rotate In (ঘুরে ঘুরে আসবে)' },
+        { value: 'spin-pop', label: 'Spin Pop (ঘুরতে ঘুরতে আসবে)' },
+        { value: 'bounce-in', label: 'Bounce Drop (উপর থেকে লাফিয়ে পড়বে)' },
+        { value: 'blur-pop', label: 'Blur Pop (ঝাপসা থেকে স্পষ্ট হয়ে আসবে)' },
+        { value: 'blur-focus', label: 'Blur Focus (ঝাপসা থেকে স্পষ্ট হবে)' },
+        { value: 'circle-highlight', label: 'Circle Highlight (চারপাশে হাতে-আঁকা গোল দাগ)' },
+        { value: 'underline-draw', label: 'Underline Draw-on (নিচে দাগ আঁকা হবে)' },
+        { value: 'checkmark-pop', label: 'Checkmark Pop (✓ চিহ্ন পপ করে আসবে)' }
+    ];
 
-    function populateBrollAnimStyleOptions(mode) {
+    function populateBrollAnimStyleOptions() {
         if (!brollAnimStyleSelect) return;
-        const list = BROLL_ANIM_STYLES[mode === 'pip' ? 'pip' : 'fullscreen'];
-        brollAnimStyleSelect.innerHTML = list.map(o => `<option value="${o.value}">${o.label}</option>`).join('');
+        brollAnimStyleSelect.innerHTML = BROLL_ANIM_STYLES.map(o => `<option value="${o.value}">${o.label}</option>`).join('');
     }
 
     // Shows/hides the entry/exit direction pickers depending on whether the
@@ -3279,10 +3348,11 @@ document.addEventListener('DOMContentLoaded', () => {
                 item.mode = e.target.value;
                 if (brollSizeContainer) brollSizeContainer.style.display = item.mode === 'pip' ? 'block' : 'none';
                 if (brollPositionContainer) brollPositionContainer.style.display = item.mode === 'pip' ? 'block' : 'none';
-                // Switching mode changes which animation styles are valid, so reset
-                // to that mode's default and refresh the dropdown's option list.
+                // All animation styles now work in either mode, but we still switch to
+                // that mode's more natural-feeling default when toggling, so it doesn't
+                // suddenly look like nothing changed.
                 item.animationStyle = item.mode === 'pip' ? 'slide-pop' : 'zoom';
-                populateBrollAnimStyleOptions(item.mode);
+                populateBrollAnimStyleOptions();
                 if (brollAnimStyleSelect) brollAnimStyleSelect.value = item.animationStyle;
                 updateBrollDirectionRowsVisibility(item.animationStyle);
                 drawFrame();

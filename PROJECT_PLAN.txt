@@ -293,6 +293,38 @@ Improvement - Animation Speed: Dropdown থেকে Continuous Drag Slider (ind
            (number) দিয়ে replace করা হয়েছে (brollSpeedValueToSec/
            brollSpeedSecToValue helper দিয়ে slider ⇄ সেকেন্ড কনভার্ট হয়)।
 
+
+v2.5 - Unified B-roll Animation Engine + New Marker Animations (সম্পন্ন)
+----------------------------------------------------------------------------
+
+Bug 9 - Fullscreen ও PiP-এ আলাদা আলাদা Animation Style লিস্ট (editor.js)
+  সমস্যা : Fullscreen mode-এ Zoom/Pan/Wipe/Rotate/Bounce ইত্যাদি ছিল,
+           কিন্তু PiP mode-এ Slide+Pop/Spin Pop/Zoom Pop/Blur Pop -
+           সম্পূর্ণ আলাদা লিস্ট। মানে PiP-তে "Wipe Reveal" পাওয়া
+           যেত না, Fullscreen-এ "Spin Pop" পাওয়া যেত না - ইচ্ছাকৃত
+           সীমাবদ্ধতা ছিল, বাগ না, কিন্তু ব্যবহারকারীর জন্য confusing।
+  সমাধান: পুরো B-roll animation রেন্ডারিং ইঞ্জিন rewrite করে একটা
+           unified box-based মডেলে আনা হয়েছে - Fullscreen (পুরো
+           ভিডিও ফ্রেম) আর PiP (ছোট কোণার বক্স) এখন শুধু "বক্সের
+           সাইজ/পজিশন" আলাদা, animation style গুলো একদম same থাকে।
+           এখন ১৪টা style-ই (Zoom In/Out, Zoom Pop, Pan, Fade, Slide,
+           Slide+Pop, Wipe Reveal, Rotate In, Spin Pop, Bounce Drop,
+           Blur Pop, Blur Focus, + নতুন ৩টা নিচে) Fullscreen ও PiP
+           দুই মোডেই ব্যবহার করা যাবে।
+
+Feature - নতুন Marker-স্টাইল অ্যানিমেশন (editor.js)
+  আগের চ্যাটে যেই cartoon/marker-স্টাইল অ্যানিমেশনগুলোর প্ল্যান
+  দেওয়া হয়েছিল, তার মধ্যে এই তিনটা এখন implement করা হলো:
+    - Circle Highlight: টেক্সট/ছবির চারপাশে হাতে-আঁকা গোল দাগ
+      animate হয়ে আঁকা হয় (একটু বেশি ঘোরে যাতে হাতে আঁকার মতো
+      লাগে - marker circle-এর মতো)
+    - Underline Draw-on: নিচে বাম থেকে ডানে দাগ animate হয়ে আঁকা হয়
+    - Checkmark Pop: ✓ (সবুজ) চিহ্ন বাউন্স করে পপ-ইন করে
+  বাকি যেগুলো এখনো বাকি আছে (পরের ধাপে করা হবে): Thinking
+  Character (মুখে হাত দিয়ে ভাবছে এমন আইকন), Arrow Point-in,
+  Highlight Marker Sweep, Typewriter Reveal - এগুলোর জন্য নতুন করে
+  বলবেন কোনটা আগে দরকার, priority অনুযায়ী পরের বার করে দেব।
+
 PHASE 2 - VIDEO EDITING CORE (পরবর্তী প্রায়োরিটি)
 ====================================================
 
