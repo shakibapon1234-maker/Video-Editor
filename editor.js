@@ -3316,7 +3316,7 @@ document.addEventListener('DOMContentLoaded', () => {
         { value: 'blur-pop', label: 'Blur Pop (ঝাপসা থেকে স্পষ্ট হয়ে আসবে)' },
         { value: 'blur-focus', label: 'Blur Focus (ঝাপসা থেকে স্পষ্ট হবে)' },
         { value: 'circle-highlight', label: 'Circle Highlight (চারপাশে হাতে-আঁকা গোল দাগ)' },
-        { value: 'underline-draw', label: 'Underline Draw-on (নিচে দাগ আঁকা হবে)' },
+        { value: 'underline-draw', label: 'Underline Draw-on (নিচে দাগ আঁка হবে)' },
         { value: 'checkmark-pop', label: 'Checkmark Pop (✓ চিহ্ন পপ করে আসবে)' },
         { value: 'thinking-character', label: 'Thinking Character (🤔 চিন্তা করার বাবল)' },
         { value: 'arrow-point', label: 'Arrow Point-in (তীর চিহ্ন দেখাবে)' },
@@ -3325,7 +3325,17 @@ document.addEventListener('DOMContentLoaded', () => {
         { value: 'magnifier-zoom', label: 'Magnifying Glass Zoom (🔍 ম্যাগনিফায়ার আইকন)' },
         { value: 'comparison-slide', label: 'Comparison Slide (Before/After স্লাইডার)' },
         { value: 'question-bounce', label: 'Question Mark Bounce (❓ লাফিয়ে আসবে)' },
-        { value: 'confetti-pop', label: 'Confetti Pop (রঙিন কনফেত্তি ছড়িয়ে পড়বে)' }
+        { value: 'confetti-pop', label: 'Confetti Pop (রঙিন কনফেত্তি ছড়িয়ে পড়বে)' },
+        
+        // Wings Fly Custom Presets (Style + Direction + Sound Combinations)
+        { value: 'preset-wings-intro', label: 'Wings Intro Banner (বাম দিক থেকে স্লাইড ও সুইশ শব্দ)' },
+        { value: 'preset-question-pop', label: 'Question Bounce + Pop (❓ নিচ দিক থেকে লাফিয়ে আসা ও পপ শব্দ)' },
+        { value: 'preset-checkmark-chime', label: 'Checkmark Pop + Chime (✓ চিহ্ন পপ ও চমক শব্দ)' },
+        { value: 'preset-typewriter-click', label: 'Typewriter + Click (টাইপরাইটার ও ক্লিক শব্দ)' },
+        { value: 'preset-zoom-chime', label: 'Zoom Pop + Chime (জুম পপ ও চমক শব্দ)' },
+        { value: 'preset-rotate-whoosh', label: 'Rotate In + Whoosh (ঘুরে আসা ও সুইশ শব্দ)' },
+        { value: 'preset-highlight-chime', label: 'Highlight Sweep + Chime (মার্কার হাইলাইট ও চমক শব্দ)' },
+        { value: 'preset-arrow-whoosh', label: 'Arrow Point + Whoosh (তীর চিহ্ন ও সুইশ শব্দ)' }
     ];
 
     function populateBrollAnimStyleOptions() {
@@ -3451,362 +3461,67 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    // --- Wings Fly B-roll Presets Logic ---
-    const importAllPresetsBtn = document.getElementById('import-all-presets-btn');
-    const individualPresetSelect = document.getElementById('individual-preset-select');
-    const addSelectedPresetBtn = document.getElementById('add-selected-preset-btn');
-
-    const WINGSFLY_BROLL_PRESETS = [
-        {
-            text: "FERDOUS AHMED\nManaging Director",
-            fontSize: 40,
-            color: "#ffffff",
-            mode: "fullscreen",
-            size: 35,
-            x: 0.5,
-            y: 0.75,
-            startSec: 0.0,
-            endSec: 4.0,
-            entryDirection: "left",
-            exitDirection: "same",
-            animationStyle: "slide-pop",
-            animationSpeedSec: 0.4,
-            soundEffect: "whoosh"
-        },
-        {
-            text: "ক্যারিয়ার নিয়ে ভাবছেন??",
-            fontSize: 44,
-            color: "#ffffff",
-            mode: "fullscreen",
-            size: 35,
-            x: 0.5,
-            y: 0.5,
-            startSec: 4.5,
-            endSec: 7.5,
-            entryDirection: "bottom",
-            exitDirection: "same",
-            animationStyle: "question-bounce",
-            animationSpeedSec: 0.5,
-            soundEffect: "pop"
-        },
-        {
-            text: "GROWTH & SUCCESS",
-            fontSize: 48,
-            color: "#10b981",
-            mode: "fullscreen",
-            size: 35,
-            x: 0.5,
-            y: 0.5,
-            startSec: 8.0,
-            endSec: 11.0,
-            entryDirection: "top",
-            exitDirection: "same",
-            animationStyle: "checkmark-pop",
-            animationSpeedSec: 0.4,
-            soundEffect: "chime"
-        },
-        {
-            text: "KNOWLEDGE & GUIDELINE",
-            fontSize: 38,
-            color: "#f59e0b",
-            mode: "fullscreen",
-            size: 35,
-            x: 0.5,
-            y: 0.5,
-            startSec: 14.5,
-            endSec: 20.0,
-            entryDirection: "right",
-            exitDirection: "same",
-            animationStyle: "typewriter",
-            animationSpeedSec: 0.3,
-            soundEffect: "click"
-        },
-        {
-            text: "নিরাপদ ক্যারিয়ার",
-            fontSize: 46,
-            color: "#ffffff",
-            mode: "fullscreen",
-            size: 35,
-            x: 0.5,
-            y: 0.5,
-            startSec: 20.0,
-            endSec: 23.5,
-            entryDirection: "bottom",
-            exitDirection: "same",
-            animationStyle: "zoom-pop",
-            animationSpeedSec: 0.4,
-            soundEffect: "chime"
-        },
-        {
-            text: "বলুন তো কোন সেক্টর?",
-            fontSize: 44,
-            color: "#ffffff",
-            mode: "fullscreen",
-            size: 35,
-            x: 0.5,
-            y: 0.5,
-            startSec: 24.0,
-            endSec: 25.5,
-            entryDirection: "bottom",
-            exitDirection: "same",
-            animationStyle: "question-bounce",
-            animationSpeedSec: 0.4,
-            soundEffect: "pop"
-        },
-        {
-            text: "TRAVEL & TOURISM",
-            fontSize: 50,
-            color: "#3b82f6",
-            mode: "fullscreen",
-            size: 35,
-            x: 0.5,
-            y: 0.5,
-            startSec: 26.0,
-            endSec: 29.5,
-            entryDirection: "top",
-            exitDirection: "same",
-            animationStyle: "rotate-in",
-            animationSpeedSec: 0.5,
-            soundEffect: "whoosh"
-        },
-        {
-            text: "VISA PROCESSING\n& AIR TICKETING",
-            fontSize: 40,
-            color: "#ffffff",
-            mode: "fullscreen",
-            size: 35,
-            x: 0.5,
-            y: 0.5,
-            startSec: 30.5,
-            endSec: 34.0,
-            entryDirection: "bottom",
-            exitDirection: "same",
-            animationStyle: "highlight-sweep",
-            animationSpeedSec: 0.4,
-            soundEffect: "chime"
-        },
-        {
-            text: "এয়ার টিকেটিং ও ভিসা প্রসেস",
-            fontSize: 42,
-            color: "#ffffff",
-            mode: "fullscreen",
-            size: 35,
-            x: 0.5,
-            y: 0.5,
-            startSec: 34.0,
-            endSec: 38.0,
-            entryDirection: "left",
-            exitDirection: "same",
-            animationStyle: "typewriter",
-            animationSpeedSec: 0.3,
-            soundEffect: "click"
-        },
-        {
-            text: "Business & Job",
-            fontSize: 42,
-            color: "#ffffff",
-            mode: "fullscreen",
-            size: 35,
-            x: 0.5,
-            y: 0.5,
-            startSec: 39.0,
-            endSec: 45.0,
-            entryDirection: "left",
-            exitDirection: "same",
-            animationStyle: "arrow-point",
-            animationSpeedSec: 0.4,
-            soundEffect: "whoosh"
-        },
-        {
-            text: "দক্ষ জনবলের চাহিদা",
-            fontSize: 44,
-            color: "#ef4444",
-            mode: "fullscreen",
-            size: 35,
-            x: 0.5,
-            y: 0.5,
-            startSec: 54.0,
-            endSec: 57.0,
-            entryDirection: "bottom",
-            exitDirection: "same",
-            animationStyle: "highlight-sweep",
-            animationSpeedSec: 0.4,
-            soundEffect: "chime"
-        },
-        {
-            text: "৩টি GDS হাতে কলমে শিখুন",
-            fontSize: 40,
-            color: "#ffffff",
-            mode: "fullscreen",
-            size: 35,
-            x: 0.5,
-            y: 0.5,
-            startSec: 124.0,
-            endSec: 130.0,
-            entryDirection: "right",
-            exitDirection: "same",
-            animationStyle: "typewriter",
-            animationSpeedSec: 0.3,
-            soundEffect: "click"
-        },
-        {
-            text: "বেসিক থেকে এডভান্স লেভেল",
-            fontSize: 40,
-            color: "#ffffff",
-            mode: "fullscreen",
-            size: 35,
-            x: 0.5,
-            y: 0.5,
-            startSec: 131.0,
-            endSec: 142.0,
-            entryDirection: "bottom",
-            exitDirection: "same",
-            animationStyle: "slide-pop",
-            animationSpeedSec: 0.4,
-            soundEffect: "pop"
-        },
-        {
-            text: "৫ দিন প্র্যাকটিস করার সুযোগ",
-            fontSize: 42,
-            color: "#10b981",
-            mode: "fullscreen",
-            size: 35,
-            x: 0.5,
-            y: 0.5,
-            startSec: 143.0,
-            endSec: 149.0,
-            entryDirection: "top",
-            exitDirection: "same",
-            animationStyle: "checkmark-pop",
-            animationSpeedSec: 0.4,
-            soundEffect: "chime"
-        },
-        {
-            text: "ভিসার ধরন ও প্রয়োজনীয় কাগজপত্র তালিকা\n১. ব্যক্তিগত ও পরিচয়পত্র\n২. আর্থিক সচ্ছলতার প্রমাণ\n৩. কাভার লেটার (SOP)",
-            fontSize: 32,
-            color: "#ffffff",
-            mode: "fullscreen",
-            size: 35,
-            x: 0.5,
-            y: 0.5,
-            startSec: 198.0,
-            endSec: 207.0,
-            entryDirection: "left",
-            exitDirection: "same",
-            animationStyle: "typewriter",
-            animationSpeedSec: 0.3,
-            soundEffect: "click"
-        },
-        {
-            text: "visa success secret",
-            fontSize: 44,
-            color: "#ffffff",
-            mode: "fullscreen",
-            size: 35,
-            x: 0.5,
-            y: 0.5,
-            startSec: 208.0,
-            endSec: 211.0,
-            entryDirection: "bottom",
-            exitDirection: "same",
-            animationStyle: "zoom-pop",
-            animationSpeedSec: 0.4,
-            soundEffect: "chime"
-        },
-        {
-            text: "ক্যারিয়ার গড়তে এখনই সময়",
-            fontSize: 44,
-            color: "#ffffff",
-            mode: "fullscreen",
-            size: 35,
-            x: 0.5,
-            y: 0.5,
-            startSec: 212.0,
-            endSec: 229.0,
-            entryDirection: "top",
-            exitDirection: "same",
-            animationStyle: "slide-pop",
-            animationSpeedSec: 0.4,
-            soundEffect: "whoosh"
-        }
-    ];
-
-    if (importAllPresetsBtn) {
-        importAllPresetsBtn.addEventListener('click', () => {
-            let addedCount = 0;
-            WINGSFLY_BROLL_PRESETS.forEach(p => {
-                const maxSec = state.duration || 1000;
-                const start = Math.min(p.startSec, maxSec);
-                const end = Math.min(p.endSec, maxSec);
-                
-                const newItem = {
-                    id: brollIdCounter++,
-                    type: 'text',
-                    text: p.text,
-                    fontSize: p.fontSize,
-                    color: p.color,
-                    mode: p.mode,
-                    size: p.size,
-                    x: p.x,
-                    y: p.y,
-                    startSec: start,
-                    endSec: end,
-                    entryDirection: p.entryDirection,
-                    exitDirection: p.exitDirection,
-                    animationStyle: p.animationStyle,
-                    animationSpeedSec: p.animationSpeedSec,
-                    soundEffect: p.soundEffect
-                };
-                state.brollOverlays.push(newItem);
-                addedCount++;
-            });
-            if (addedCount > 0) {
-                state.selectedBrollId = state.brollOverlays[state.brollOverlays.length - 1].id;
-                renderBrollList();
-                showBrollTimingFor(state.selectedBrollId);
-                drawFrame();
-                alert(`সাফল্যের সাথে ১৭টি Wings Fly B-roll অ্যানিমেশন টেমপ্লেট ইম্পোর্ট করা হয়েছে!`);
-            }
-        });
+    // --- Wings Fly B-roll Presets Helpers ---
+    function getBrollPresetValue(item) {
+        if (item.animationStyle === 'slide-pop' && item.entryDirection === 'left' && item.soundEffect === 'whoosh') return 'preset-wings-intro';
+        if (item.animationStyle === 'question-bounce' && item.entryDirection === 'bottom' && item.soundEffect === 'pop') return 'preset-question-pop';
+        if (item.animationStyle === 'checkmark-pop' && item.entryDirection === 'top' && item.soundEffect === 'chime') return 'preset-checkmark-chime';
+        if (item.animationStyle === 'typewriter' && item.entryDirection === 'left' && item.soundEffect === 'click') return 'preset-typewriter-click';
+        if (item.animationStyle === 'zoom-pop' && item.entryDirection === 'bottom' && item.soundEffect === 'chime') return 'preset-zoom-chime';
+        if (item.animationStyle === 'rotate-in' && item.entryDirection === 'top' && item.soundEffect === 'whoosh') return 'preset-rotate-whoosh';
+        if (item.animationStyle === 'highlight-sweep' && item.entryDirection === 'bottom' && item.soundEffect === 'chime') return 'preset-highlight-chime';
+        if (item.animationStyle === 'arrow-point' && item.entryDirection === 'left' && item.soundEffect === 'whoosh') return 'preset-arrow-whoosh';
+        return item.animationStyle;
     }
 
-    if (addSelectedPresetBtn && individualPresetSelect) {
-        addSelectedPresetBtn.addEventListener('click', () => {
-            const indexVal = individualPresetSelect.value;
-            if (indexVal === "") {
-                alert("দয়া করে যেকোনো ১টি প্রিসেট সিলেক্ট করুন।");
-                return;
-            }
-            const p = WINGSFLY_BROLL_PRESETS[parseInt(indexVal)];
-            if (!p) return;
-
-            const currentVideoTime = state.video.currentTime || 0;
-            const duration = p.endSec - p.startSec;
-
-            const newItem = {
-                id: brollIdCounter++,
-                type: 'text',
-                text: p.text,
-                fontSize: p.fontSize,
-                color: p.color,
-                mode: p.mode,
-                size: p.size,
-                x: p.x,
-                y: p.y,
-                startSec: currentVideoTime,
-                endSec: currentVideoTime + duration,
-                entryDirection: p.entryDirection,
-                exitDirection: p.exitDirection,
-                animationStyle: p.animationStyle,
-                animationSpeedSec: p.animationSpeedSec,
-                soundEffect: p.soundEffect
-            };
-            state.brollOverlays.push(newItem);
-            state.selectedBrollId = newItem.id;
-            renderBrollList();
-            showBrollTimingFor(newItem.id);
-            drawFrame();
-        });
+    function applyBrollPresetStyle(item, val) {
+        switch(val) {
+            case 'preset-wings-intro':
+                item.animationStyle = 'slide-pop';
+                item.entryDirection = 'left';
+                item.soundEffect = 'whoosh';
+                break;
+            case 'preset-question-pop':
+                item.animationStyle = 'question-bounce';
+                item.entryDirection = 'bottom';
+                item.soundEffect = 'pop';
+                break;
+            case 'preset-checkmark-chime':
+                item.animationStyle = 'checkmark-pop';
+                item.entryDirection = 'top';
+                item.soundEffect = 'chime';
+                break;
+            case 'preset-typewriter-click':
+                item.animationStyle = 'typewriter';
+                item.entryDirection = 'left';
+                item.soundEffect = 'click';
+                break;
+            case 'preset-zoom-chime':
+                item.animationStyle = 'zoom-pop';
+                item.entryDirection = 'bottom';
+                item.soundEffect = 'chime';
+                break;
+            case 'preset-rotate-whoosh':
+                item.animationStyle = 'rotate-in';
+                item.entryDirection = 'top';
+                item.soundEffect = 'whoosh';
+                break;
+            case 'preset-highlight-chime':
+                item.animationStyle = 'highlight-sweep';
+                item.entryDirection = 'bottom';
+                item.soundEffect = 'chime';
+                break;
+            case 'preset-arrow-whoosh':
+                item.animationStyle = 'arrow-point';
+                item.entryDirection = 'left';
+                item.soundEffect = 'whoosh';
+                break;
+        }
+        
+        // Sync the form controls to these loaded values
+        if (brollEntryDirSelect) brollEntryDirSelect.value = item.entryDirection;
+        if (brollExitDirSelect) brollExitDirSelect.value = item.exitDirection || 'same';
+        if (brollSoundEffectSelect) brollSoundEffectSelect.value = item.soundEffect;
     }
 
     // Computes this item's on-screen box size as a fraction of the canvas, used both for
@@ -3912,7 +3627,7 @@ document.addEventListener('DOMContentLoaded', () => {
         // Sync the animation/direction/speed/sound controls to this item
         populateBrollAnimStyleOptions(item.mode);
         const defaultStyle = item.mode === 'pip' ? 'slide-pop' : 'zoom';
-        if (brollAnimStyleSelect) brollAnimStyleSelect.value = item.animationStyle || defaultStyle;
+        if (brollAnimStyleSelect) brollAnimStyleSelect.value = getBrollPresetValue(item) || defaultStyle;
         if (brollEntryDirSelect) brollEntryDirSelect.value = item.entryDirection || 'bottom';
         if (brollExitDirSelect) brollExitDirSelect.value = item.exitDirection || 'same';
         if (brollAnimSpeedSlider) {
@@ -3946,7 +3661,12 @@ document.addEventListener('DOMContentLoaded', () => {
         brollAnimStyleSelect.addEventListener('change', (e) => {
             const item = state.brollOverlays.find(b => b.id === state.selectedBrollId);
             if (item) {
-                item.animationStyle = e.target.value;
+                const val = e.target.value;
+                if (val.startsWith('preset-')) {
+                    applyBrollPresetStyle(item, val);
+                } else {
+                    item.animationStyle = val;
+                }
                 updateBrollDirectionRowsVisibility(item.animationStyle);
                 
                 const brollAfterImageContainer = document.getElementById('broll-after-image-container');
