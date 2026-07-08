@@ -1631,9 +1631,12 @@ document.addEventListener('DOMContentLoaded', () => {
                             scaleAmt = (tIn < animDur || tOut < animDur) ? (0.7 + 0.3 * eased) : 1;
                             alpha = Math.max(0.15, tIn < animDur ? eased : (tOut < animDur ? eased : 1));
                         }
-                    } else if (style === 'wipe') {
+                    } else if (style === 'wipe' || style === 'highlight-sweep' || style === 'comparison-slide') {
                         // Directional reveal: a growing clip rectangle wipes the box's
                         // content into view from the entry edge, then wipes it away on exit.
+                        // 'highlight-sweep' reuses this exact reveal mechanic and additionally
+                        // paints a translucent marker-color bar in step with it (see the
+                        // drawing section below), so the content looks "highlighted on".
                         if (tIn < animDur) {
                             wipeFrac = brollEaseOut(tIn / animDur);
                         } else if (tOut < animDur) {
@@ -1678,9 +1681,11 @@ document.addEventListener('DOMContentLoaded', () => {
                             scaleAmt = 0.75 + 0.25 * eased;
                             alpha = Math.max(0.15, eased);
                         }
-                    } else if (style === 'zoom-pop') {
+                    } else if (style === 'zoom-pop' || style === 'confetti-pop') {
                         // Quick pop-in scale from 70% with a bouncy overshoot — distinct
-                        // from the slow continuous Ken Burns 'zoom' below.
+                        // from the slow continuous Ken Burns 'zoom' below. 'confetti-pop'
+                        // reuses this exact box pop and additionally bursts colorful
+                        // particles outward (drawn in the annotation section below).
                         if (tIn < animDur) {
                             const eased = easeOutBackOvershoot(Math.max(0, tIn / animDur));
                             scaleAmt = 0.7 + 0.3 * eased;
@@ -1703,6 +1708,11 @@ document.addEventListener('DOMContentLoaded', () => {
                             scaleAmt = 0.85 + 0.15 * eased;
                             alpha = Math.max(0, eased);
                         }
+                    } else if (style === 'typewriter') {
+                        // No box-level fade-in — the character-by-character reveal drawn
+                        // in the text block below sells the "typing in" effect on its own.
+                        // Exit still fades out normally like everything else.
+                        if (tOut < animDur) alpha = Math.max(0, tOut / animDur);
                     } else {
                         // 'fade', 'zoom', 'zoom-out', 'pan' and 'blur-focus' all fade
                         // in/out at the edges of the range; 'blur-focus' layers a
@@ -1753,6 +1763,15 @@ document.addEventListener('DOMContentLoaded', () => {
                     state.ctx.clip();
                 }
 
+                if (style === 'highlight-sweep') {
+                    // Translucent marker-color bar painted behind the content. It's
+                    // drawn at full box size but the clip rect above (driven by the
+                    // same wipeFrac as 'wipe') restricts it to exactly the revealed
+                    // sliver, so it grows in lockstep with the content reveal.
+                    state.ctx.fillStyle = (item.type === 'text') ? 'rgba(250, 204, 21, 0.55)' : 'rgba(250, 204, 21, 0.35)';
+                    state.ctx.fillRect(drawBoxX - 6, drawBoxY - 6, boxW + 12, boxH + 12);
+                }
+
                 if (item.type === 'text') {
                     if (item.mode === 'fullscreen') {
                         // Dark scrim behind the text so it reads over any video content
@@ -1770,14 +1789,55 @@ document.addEventListener('DOMContentLoaded', () => {
                     }
                     state.ctx.font = `bold ${item.fontSize}px "Hind Siliguri", "Plus Jakarta Sans", sans-serif`;
                     state.ctx.fillStyle = item.color;
-                    state.ctx.textAlign = 'center';
                     state.ctx.textBaseline = 'middle';
-                    if (item.mode === 'fullscreen') {
-                        state.ctx.lineWidth = Math.max(2, item.fontSize * 0.08);
-                        state.ctx.strokeStyle = 'rgba(0,0,0,0.55)';
-                        state.ctx.strokeText(item.text, cx, cy);
+
+                    // Typewriter Reveal (v2.6): only ever reveals characters left-to-right
+                    // during entry, so it needs a fixed left anchor rather than the usual
+                    // center alignment (centering a growing substring would jitter/re-center
+                    // every frame instead of visually "typing" in place).
+                    let renderText = item.text;
+                    let typewriterActive = false;
+                    let cursorX = cx, cursorTop = cy, cursorBottom = cy;
+                    if (style === 'typewriter' && brollAnimActive && tIn < animDur) {
+                        typewriterActive = true;
+                        const fullWidth = state.ctx.measureText(item.text).width;
+                        const leftX = cx - fullWidth / 2;
+                        const revealCount = Math.max(0, Math.min(item.text.length, Math.round(item.text.length * Math.max(0, Math.min(1, tIn / animDur)))));
+                        renderText = item.text.slice(0, revealCount);
+                        state.ctx.textAlign = 'left';
+                        if (item.mode === 'fullscreen') {
+                            state.ctx.lineWidth = Math.max(2, item.fontSize * 0.08);
+                            state.ctx.strokeStyle = 'rgba(0,0,0,0.55)';
+                            state.ctx.strokeText(renderText, leftX, cy);
+                        }
+                        state.ctx.fillText(renderText, leftX, cy);
+                        cursorX = leftX + state.ctx.measureText(renderText).width + Math.max(2, item.fontSize * 0.04);
+                        cursorTop = cy - item.fontSize * 0.42;
+                        cursorBottom = cy + item.fontSize * 0.42;
+                    } else {
+                        state.ctx.textAlign = 'center';
+                        if (item.mode === 'fullscreen') {
+                            state.ctx.lineWidth = Math.max(2, item.fontSize * 0.08);
+                            state.ctx.strokeStyle = 'rgba(0,0,0,0.55)';
+                            state.ctx.strokeText(renderText, cx, cy);
+                        }
+                        state.ctx.fillText(renderText, cx, cy);
                     }
-                    state.ctx.fillText(item.text, cx, cy);
+
+                    // Blinking cursor while the text is still being "typed". Blink phase
+                    // is driven by the deterministic timeline clock (currentTime), not
+                    // wall-clock time, so exported video frames stay consistent.
+                    if (typewriterActive && renderText.length < item.text.length && Math.floor(currentTime * 2.5) % 2 === 0) {
+                        state.ctx.save();
+                        state.ctx.strokeStyle = item.color;
+                        state.ctx.lineWidth = Math.max(2, item.fontSize * 0.07);
+                        state.ctx.lineCap = 'round';
+                        state.ctx.beginPath();
+                        state.ctx.moveTo(cursorX, cursorTop);
+                        state.ctx.lineTo(cursorX, cursorBottom);
+                        state.ctx.stroke();
+                        state.ctx.restore();
+                    }
                 } else {
                     // Cover the box, preserving aspect ratio (fill/crop).
                     const imgAspect = item.imageImg.naturalWidth / item.imageImg.naturalHeight;
@@ -1834,7 +1894,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 // content after it's painted, growing in sync with the entry (and
                 // shrinking back out on exit) so they feel "drawn on" rather than
                 // just appearing instantly.
-                if (brollAnimActive && (style === 'circle-highlight' || style === 'underline-draw' || style === 'checkmark-pop')) {
+                if (brollAnimActive && (style === 'circle-highlight' || style === 'underline-draw' || style === 'checkmark-pop' || style === 'thinking-character' || style === 'arrow-point' || style === 'magnifier-zoom' || style === 'question-bounce' || style === 'confetti-pop')) {
                     let annoP = 1;
                     if (tIn < animDur) annoP = brollEaseOut(tIn / animDur);
                     else if (tOut < animDur) annoP = brollEaseOut(tOut / animDur);
@@ -1883,6 +1943,124 @@ document.addEventListener('DOMContentLoaded', () => {
                             state.ctx.lineTo(ccx - csize * 0.04, ccy + csize * 0.20);
                             state.ctx.lineTo(ccx + csize * 0.26, ccy - csize * 0.22);
                             state.ctx.stroke();
+                        } else if (style === 'thinking-character') {
+                            // A small "thinking" bubble that pops into the top-right corner
+                            // with a 🤔 face and two trailing dots, like a thought bubble,
+                            // then pops back out — a lightweight "hmm, let's see..." beat.
+                            const bubbleR = Math.max(16, Math.min(boxW, boxH) * 0.16) * easeOutBackOvershoot(annoP);
+                            const bcx = drawBoxX + boxW - bubbleR * 0.4;
+                            const bcy = drawBoxY - bubbleR * 0.4;
+                            state.ctx.fillStyle = 'rgba(255,255,255,0.95)';
+                            state.ctx.strokeStyle = 'rgba(0,0,0,0.18)';
+                            state.ctx.lineWidth = 1.5;
+                            [0.85, 1.55].forEach((offMul, i) => {
+                                const tr = bubbleR * (0.22 - i * 0.08);
+                                if (tr <= 0) return;
+                                state.ctx.beginPath();
+                                state.ctx.arc(bcx - bubbleR * offMul, bcy + bubbleR * offMul, tr, 0, Math.PI * 2);
+                                state.ctx.fill();
+                                state.ctx.stroke();
+                            });
+                            state.ctx.beginPath();
+                            state.ctx.arc(bcx, bcy, bubbleR, 0, Math.PI * 2);
+                            state.ctx.fill();
+                            state.ctx.stroke();
+                            state.ctx.font = `${Math.max(10, Math.round(bubbleR * 1.15))}px sans-serif`;
+                            state.ctx.textAlign = 'center';
+                            state.ctx.textBaseline = 'middle';
+                            state.ctx.fillText('🤔', bcx, bcy - bubbleR * 0.04);
+                        } else if (style === 'arrow-point') {
+                            // A hand-drawn-style arrow that flies in from the chosen entry
+                            // direction and points at the box, then retracts the same way
+                            // on exit — good for calling attention to a specific B-roll.
+                            const dir = item.entryDirection || 'bottom';
+                            const ecx2 = drawBoxX + boxW / 2, ecy2 = drawBoxY + boxH / 2;
+                            const reach = Math.max(boxW, boxH) * 0.55;
+                            const gap = Math.max(10, Math.min(boxW, boxH) * 0.06);
+                            let tipX, tipY, tailX, tailY;
+                            if (dir === 'left') {
+                                tipX = drawBoxX - gap; tipY = ecy2;
+                                tailX = tipX - reach * annoP; tailY = tipY;
+                            } else if (dir === 'right') {
+                                tipX = drawBoxX + boxW + gap; tipY = ecy2;
+                                tailX = tipX + reach * annoP; tailY = tipY;
+                            } else if (dir === 'top') {
+                                tipX = ecx2; tipY = drawBoxY - gap;
+                                tailX = tipX; tailY = tipY - reach * annoP;
+                            } else {
+                                tipX = ecx2; tipY = drawBoxY + boxH + gap;
+                                tailX = tipX; tailY = tipY + reach * annoP;
+                            }
+                            state.ctx.strokeStyle = markColor;
+                            state.ctx.fillStyle = markColor;
+                            state.ctx.lineWidth = Math.max(3, Math.min(boxW, boxH) * 0.045);
+                            state.ctx.lineCap = 'round';
+                            state.ctx.beginPath();
+                            state.ctx.moveTo(tailX, tailY);
+                            state.ctx.lineTo(tipX, tipY);
+                            state.ctx.stroke();
+                            const ang = Math.atan2(tipY - tailY, tipX - tailX);
+                            const headLen = Math.max(8, Math.min(boxW, boxH) * 0.14);
+                            state.ctx.beginPath();
+                            state.ctx.moveTo(tipX, tipY);
+                            state.ctx.lineTo(tipX - headLen * Math.cos(ang - Math.PI / 7), tipY - headLen * Math.sin(ang - Math.PI / 7));
+                            state.ctx.lineTo(tipX - headLen * Math.cos(ang + Math.PI / 7), tipY - headLen * Math.sin(ang + Math.PI / 7));
+                            state.ctx.closePath();
+                            state.ctx.fill();
+                        } else if (style === 'magnifier-zoom') {
+                            // A 🔍 badge pops into the bottom-right corner with a bouncy
+                            // overshoot, like someone circled the B-roll and said "look here".
+                            const msize = Math.max(16, Math.min(boxW, boxH) * 0.45) * easeOutBackOvershoot(annoP);
+                            const mcx = drawBoxX + boxW - msize * 0.4;
+                            const mcy = drawBoxY + boxH - msize * 0.4;
+                            state.ctx.font = `${Math.max(10, Math.round(msize))}px sans-serif`;
+                            state.ctx.textAlign = 'center';
+                            state.ctx.textBaseline = 'middle';
+                            state.ctx.fillText('🔍', mcx, mcy);
+                        } else if (style === 'question-bounce') {
+                            // A ❓ badge bounces into the top-left corner — pairs well with
+                            // "wait, what?" or confusion beats in a script.
+                            const qsize = Math.max(16, Math.min(boxW, boxH) * 0.45) * easeOutBackOvershoot(annoP);
+                            const qcx = drawBoxX + qsize * 0.4;
+                            const qcy = drawBoxY - qsize * 0.15;
+                            state.ctx.font = `${Math.max(10, Math.round(qsize))}px sans-serif`;
+                            state.ctx.textAlign = 'center';
+                            state.ctx.textBaseline = 'middle';
+                            state.ctx.fillText('❓', qcx, qcy);
+                        } else if (style === 'confetti-pop') {
+                            // One-shot celebratory particle burst timed to the entry pop
+                            // handled in the transform section above. Entry-only by design —
+                            // exit just uses the normal pop-out, no second burst.
+                            if (tIn < animDur) {
+                                const burstP = Math.max(0, Math.min(1, tIn / animDur));
+                                const particleAlpha = 1 - Math.pow(burstP, 2.2);
+                                if (particleAlpha > 0.02) {
+                                    const pcx = drawBoxX + boxW / 2, pcy = drawBoxY + boxH / 2;
+                                    const maxDist = Math.max(boxW, boxH) * 0.75;
+                                    const palette = ['#f87171', '#fbbf24', '#34d399', '#60a5fa', '#c084fc', '#f472b6'];
+                                    const N = 14;
+                                    state.ctx.save();
+                                    state.ctx.globalAlpha = particleAlpha;
+                                    for (let i = 0; i < N; i++) {
+                                        // Deterministic pseudo-random spread per particle index
+                                        // (not Math.random) so exported video frames stay
+                                        // identical across repeated renders of the same timeline.
+                                        const seedAngle = (i / N) * Math.PI * 2 + (i % 3) * 0.35;
+                                        const seedDist = (0.5 + ((i * 37) % 50) / 100) * maxDist * burstP;
+                                        const px = pcx + Math.cos(seedAngle) * seedDist;
+                                        const py = pcy + Math.sin(seedAngle) * seedDist - (burstP * burstP) * 14;
+                                        const psize = Math.max(2, Math.min(boxW, boxH) * 0.035);
+                                        const rot = seedAngle * 3 + burstP * 6;
+                                        state.ctx.save();
+                                        state.ctx.translate(px, py);
+                                        state.ctx.rotate(rot);
+                                        state.ctx.fillStyle = palette[i % palette.length];
+                                        state.ctx.fillRect(-psize / 2, -psize / 3, psize, psize * 0.66);
+                                        state.ctx.restore();
+                                    }
+                                    state.ctx.restore();
+                                }
+                            }
                         }
                     }
                 }
@@ -1898,6 +2076,46 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
 
                 state.ctx.restore();
+
+                // Comparison Slide (Before/After) divider handle — drawn unclipped
+                // (after the box's own restore above) so the handle circle isn't cut
+                // off by the wipe-reveal clip. Reuses the same wipeFrac reveal as
+                // 'wipe'/'highlight-sweep': since a B-roll item is a single image,
+                // this reads as a before/after slider revealing that one image
+                // left-to-right rather than a true two-image comparison.
+                if (style === 'comparison-slide' && wipeFrac > 0.01 && wipeFrac < 0.999) {
+                    const divX = boxX + offX + boxW * wipeFrac;
+                    const dTop = boxY + offY, dBottom = dTop + boxH;
+                    state.ctx.save();
+                    state.ctx.strokeStyle = 'rgba(255,255,255,0.95)';
+                    state.ctx.lineWidth = Math.max(2, boxW * 0.006);
+                    state.ctx.beginPath();
+                    state.ctx.moveTo(divX, dTop);
+                    state.ctx.lineTo(divX, dBottom);
+                    state.ctx.stroke();
+                    const hr = Math.max(9, Math.min(boxW, boxH) * 0.06);
+                    const hcy = (dTop + dBottom) / 2;
+                    state.ctx.fillStyle = 'rgba(255,255,255,0.95)';
+                    state.ctx.beginPath();
+                    state.ctx.arc(divX, hcy, hr, 0, Math.PI * 2);
+                    state.ctx.fill();
+                    state.ctx.strokeStyle = 'rgba(0,0,0,0.25)';
+                    state.ctx.lineWidth = 1.5;
+                    state.ctx.stroke();
+                    // Little left/right chevrons on the handle, like a real slider control
+                    state.ctx.strokeStyle = 'rgba(60,60,60,0.85)';
+                    state.ctx.lineWidth = Math.max(1.5, hr * 0.16);
+                    state.ctx.lineCap = 'round';
+                    state.ctx.beginPath();
+                    state.ctx.moveTo(divX - hr * 0.35, hcy - hr * 0.35);
+                    state.ctx.lineTo(divX - hr * 0.75, hcy);
+                    state.ctx.lineTo(divX - hr * 0.35, hcy + hr * 0.35);
+                    state.ctx.moveTo(divX + hr * 0.35, hcy - hr * 0.35);
+                    state.ctx.lineTo(divX + hr * 0.75, hcy);
+                    state.ctx.lineTo(divX + hr * 0.35, hcy + hr * 0.35);
+                    state.ctx.stroke();
+                    state.ctx.restore();
+                }
             });
         }
 
@@ -3013,17 +3231,19 @@ document.addEventListener('DOMContentLoaded', () => {
     // Continuous speed slider (1 = slowest, 100 = fastest) <-> animation duration in
     // seconds. Replaces the old 3-option Fast/Normal/Slow dropdown with a YouTube-volume
     // style drag bar so the person can dial in exactly how snappy the entry/exit feels.
+    // Slow end raised from 1.2s to 2.6s (v2.6) — at the old cap, even the slowest setting
+    // still read as "fast" for entry/exit animations; 2.6s gives a real slow-motion feel.
     function brollSpeedValueToSec(value) {
         const v = Math.max(1, Math.min(100, value));
-        return 1.2 - ((v - 1) / 99) * (1.2 - 0.15);
+        return 2.6 - ((v - 1) / 99) * (2.6 - 0.15);
     }
     function brollSpeedSecToValue(sec) {
-        const s = Math.max(0.15, Math.min(1.2, sec || 0.4));
-        return Math.round(1 + ((1.2 - s) / (1.2 - 0.15)) * 99);
+        const s = Math.max(0.15, Math.min(2.6, sec || 0.4));
+        return Math.round(1 + ((2.6 - s) / (2.6 - 0.15)) * 99);
     }
     function brollSpeedLabel(sec) {
-        if (sec <= 0.28) return 'দ্রুত (Fast)';
-        if (sec >= 0.68) return 'ধীর (Slow)';
+        if (sec <= 0.3) return 'দ্রুত (Fast)';
+        if (sec >= 1.5) return 'ধীর (Slow)';
         return 'স্বাভাবিক (Normal)';
     }
 
@@ -3049,7 +3269,15 @@ document.addEventListener('DOMContentLoaded', () => {
         { value: 'blur-focus', label: 'Blur Focus (ঝাপসা থেকে স্পষ্ট হবে)' },
         { value: 'circle-highlight', label: 'Circle Highlight (চারপাশে হাতে-আঁকা গোল দাগ)' },
         { value: 'underline-draw', label: 'Underline Draw-on (নিচে দাগ আঁকা হবে)' },
-        { value: 'checkmark-pop', label: 'Checkmark Pop (✓ চিহ্ন পপ করে আসবে)' }
+        { value: 'checkmark-pop', label: 'Checkmark Pop (✓ চিহ্ন পপ করে আসবে)' },
+        { value: 'thinking-character', label: 'Thinking Character (🤔 চিন্তা করার বাবল)' },
+        { value: 'arrow-point', label: 'Arrow Point-in (তীর চিহ্ন দেখাবে)' },
+        { value: 'highlight-sweep', label: 'Highlight Marker Sweep (মার্কার দিয়ে হাইলাইট)' },
+        { value: 'typewriter', label: 'Typewriter Reveal (টাইপরাইটারের মতো লেখা হবে)' },
+        { value: 'magnifier-zoom', label: 'Magnifying Glass Zoom (🔍 ম্যাগনিফায়ার আইকন)' },
+        { value: 'comparison-slide', label: 'Comparison Slide (Before/After স্লাইডার)' },
+        { value: 'question-bounce', label: 'Question Mark Bounce (❓ লাফিয়ে আসবে)' },
+        { value: 'confetti-pop', label: 'Confetti Pop (রঙিন কনফেত্তি ছড়িয়ে পড়বে)' }
     ];
 
     function populateBrollAnimStyleOptions() {
@@ -3062,7 +3290,7 @@ document.addEventListener('DOMContentLoaded', () => {
     function updateBrollDirectionRowsVisibility(style) {
         // 'pan' only cares about a single pan direction (reuses the entry-direction
         // picker) and has no separate exit phase, so its exit-direction row stays hidden.
-        const usesEntryDirection = (style === 'slide' || style === 'slide-pop' || style === 'pan');
+        const usesEntryDirection = (style === 'slide' || style === 'slide-pop' || style === 'pan' || style === 'arrow-point');
         const usesExitDirection = (style === 'slide' || style === 'slide-pop');
         if (brollDirectionRow) brollDirectionRow.style.display = usesEntryDirection ? 'block' : 'none';
         if (brollExitDirectionRow) brollExitDirectionRow.style.display = usesExitDirection ? 'block' : 'none';
