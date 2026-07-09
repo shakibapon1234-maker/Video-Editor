@@ -802,10 +802,10 @@ document.addEventListener('DOMContentLoaded', () => {
                 voiceoverVolumeGain.gain.setValueAtTime(state.voiceoverVolume, 0);
                 voiceoverVoiceChanger.setProfile(state.voiceoverProfile || 'none');
                 
-                // Connect preview stream: voiceoverAudioPreviewEl -> voiceoverMediaSource -> VoiceChanger -> VolumeGain -> Destination
+                // Connect preview stream: voiceoverAudioPreviewEl -> voiceoverMediaSource -> VoiceChanger -> VolumeGain -> DSP Chain (for Noise Cancellation)
                 voiceoverMediaSource.connect(voiceoverVoiceChanger.input);
                 voiceoverVoiceChanger.output.connect(voiceoverVolumeGain);
-                voiceoverVolumeGain.connect(audioCtx.destination);
+                voiceoverVolumeGain.connect(highpassNode);
 
                 // Analyser tap for the auto-ducking engine (recorded voiceover during preview)
                 voiceoverPreviewAnalyser = audioCtx.createAnalyser();
@@ -1158,7 +1158,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (state.voiceoverRecorded && state.voiceoverBlob) {
             voiceoverGain = audioCtx.createGain();
             voiceoverGain.gain.setValueAtTime(Math.min(1.0, state.voiceoverVolume), audioCtx.currentTime);
-            voiceoverGain.connect(dest); // Connect voiceover gain directly to export destination
+            voiceoverGain.connect(highpassNode); // Connect voiceover gain to DSP Chain so it receives noise cancellation
 
             // Analyser tap for the auto-ducking engine — lets export dynamically
             // duck the bg music exactly when the voiceover is actually speaking.
