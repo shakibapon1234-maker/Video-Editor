@@ -151,6 +151,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const logoDropzone = document.getElementById('logo-dropzone');
     const playPauseBtn = document.getElementById('play-pause-btn');
     const splitClipBtn = document.getElementById('split-clip-btn');
+    const cutOutTrimBtn = document.getElementById('cut-out-trim-btn');
     const trimStart = document.getElementById('trim-start');
     const trimEnd = document.getElementById('trim-end');
     const startVal = document.getElementById('start-time-val');
@@ -771,6 +772,81 @@ document.addEventListener('DOMContentLoaded', () => {
             switchActiveClip(activeClip.id);
             
             console.log("Split clip at:", currentTime);
+        });
+    }
+
+    if (cutOutTrimBtn) {
+        cutOutTrimBtn.addEventListener('click', () => {
+            const activeClip = state.clips.find(c => c.id === state.activeClipId);
+            if (!activeClip) return;
+
+            const startCut = parseFloat(trimStart.value) || 0;
+            const endCut = parseFloat(trimEnd.value) || 0;
+
+            if (endCut <= startCut + 0.1) {
+                alert("বাদ দেওয়ার জন্য সঠিক সময়সীমা সিলেক্ট করুন।");
+                return;
+            }
+
+            const confirmMsg = `আপনি কি নিশ্চিত যে ক্লিপটির ${startCut.toFixed(1)}s থেকে ${endCut.toFixed(1)}s অংশটি কেটে বাদ দিতে চান?`;
+            if (!confirm(confirmMsg)) return;
+
+            const clipIndex = state.clips.indexOf(activeClip);
+            const keepFirst = startCut > activeClip.start + 0.15;
+            const keepSecond = endCut < activeClip.end - 0.15;
+
+            if (!keepFirst && !keepSecond) {
+                alert("পুরো ক্লিপটি একসাথে বাদ দেওয়া যাবে না। ক্লিপ ডিলিট করতে ক্লিপ তালিকার X বাটনে ক্লিক করুন।");
+                return;
+            }
+
+            // Pause playback
+            if (state.isPlaying) {
+                pauseVideo();
+            }
+
+            const newClips = [];
+
+            if (keepFirst) {
+                newClips.push({
+                    id: Date.now(),
+                    file: activeClip.file,
+                    url: activeClip.url,
+                    name: activeClip.name,
+                    duration: activeClip.duration,
+                    start: activeClip.start,
+                    end: startCut,
+                    cropX: activeClip.cropX,
+                    cropY: activeClip.cropY,
+                    cropW: activeClip.cropW,
+                    cropH: activeClip.cropH
+                });
+            }
+
+            if (keepSecond) {
+                newClips.push({
+                    id: Date.now() + 1,
+                    file: activeClip.file,
+                    url: activeClip.url,
+                    name: activeClip.name,
+                    duration: activeClip.duration,
+                    start: endCut,
+                    end: activeClip.end,
+                    cropX: activeClip.cropX,
+                    cropY: activeClip.cropY,
+                    cropW: activeClip.cropW,
+                    cropH: activeClip.cropH
+                });
+            }
+
+            // Replace activeClip with newClips
+            state.clips.splice(clipIndex, 1, ...newClips);
+
+            // Re-render
+            renderClipTimeline();
+
+            // Switch to the first of the new clips
+            switchActiveClip(newClips[0].id);
         });
     }
     

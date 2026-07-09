@@ -128,7 +128,7 @@
                                 <input type="range" id="trim-end" class="trim-slider" min="0" max="100" value="100" step="0.01">
                                 <div class="playhead" id="playhead-indicator"></div>
                             </div>
-                            <div class="time-inputs">
+                            <div class="time-inputs" style="display: flex; align-items: flex-end; gap: 8px;">
                                 <div class="time-field">
                                     <label>Start</label>
                                     <input type="text" id="start-time-val" value="00:00.0">
@@ -137,6 +137,9 @@
                                     <label>End</label>
                                     <input type="text" id="end-time-val" value="00:00.0">
                                 </div>
+                                <button id="cut-out-trim-btn" class="btn" title="Cut out this selected range from the video (সিলেক্ট করা অংশটি কেটে বাদ দিন)" style="background: rgba(248, 113, 113, 0.15); border: 1.5px solid #f87171; color: #f87171; height: 36px; font-size: 11px; padding: 0 10px; display: flex; align-items: center; gap: 4px; border-radius: 4px; cursor: pointer; font-weight: 600;" type="button">
+                                    <i class="fa-solid fa-scissors"></i> বাদ দিন (Cut Out)
+                                </button>
                             </div>
                         </div>
 
