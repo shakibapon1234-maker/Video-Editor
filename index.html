@@ -76,6 +76,14 @@
                     <p id="current-step-subtitle">Start by uploading your video clip and branding logo</p>
                 </div>
                 <div class="header-actions">
+                    <button id="save-project-btn" class="btn btn-outline" data-tooltip="প্রজেক্ট ফাইল সংরক্ষণ করুন (Save Project)">
+                        <i class="fa-solid fa-floppy-disk"></i> Save Project
+                    </button>
+                    <button id="load-project-btn" class="btn btn-outline" data-tooltip="সংরক্ষিত প্রজেক্ট ফাইল লোড করুন (Load Project)">
+                        <i class="fa-solid fa-folder-open"></i> Load Project
+                    </button>
+                    <input type="file" id="project-file-input" accept=".json" style="display: none;">
+                    
                     <button id="prev-btn" class="btn btn-secondary" disabled data-tooltip="পূর্ববর্তী ধাপে ফিরে যান (Go back to previous step)">
                         <i class="fa-solid fa-arrow-left"></i> Back
                     </button>
@@ -1364,6 +1372,68 @@
                 </div>
             </div>
         </main>
+    </div>
+
+    <!-- Save Project Modal Dialog -->
+    <div class="modal-overlay" id="save-project-modal" style="display: none;">
+        <div class="modal-card">
+            <div class="modal-header">
+                <h3><i class="fa-solid fa-floppy-disk"></i> Save Project (প্রজেক্ট সংরক্ষণ করুন)</h3>
+                <button class="modal-close" id="save-modal-close"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+            <div class="modal-body">
+                <p class="modal-desc">আপনার প্রজেক্টের বর্তমান অবস্থাটি ফাইল হিসেবে সংরক্ষণ করে রাখতে পারেন। পরবর্তীতে এই ফাইলটি লোড করে আবার কাজ শুরু করা যাবে।</p>
+                
+                <div class="save-option-card active" id="save-opt-settings">
+                    <div class="save-option-radio">
+                        <i class="fa-solid fa-circle-dot"></i>
+                    </div>
+                    <div class="save-option-info">
+                        <h4>Settings Only (সেটিংস ও কনফিগারেশন) <span class="badge badge-success">রুপান্তরিত (Recommended)</span></h4>
+                        <p>এটি মাত্র কয়েক KB সাইজের ফাইল। ডাউনলোড হবে সাথে সাথে। অন্য কোনো ব্রাউজার বা ডিভাইসে এই ফাইল দিয়ে প্রজেক্ট রিলোড করলে ভিডিও এবং অডিও ফাইলটি আবার সিলেক্ট (রি-লিংক) করতে হবে।</p>
+                    </div>
+                </div>
+
+                <div class="save-option-card" id="save-opt-full">
+                    <div class="save-option-radio">
+                        <i class="fa-regular fa-circle"></i>
+                    </div>
+                    <div class="save-option-info">
+                        <h4>Full Project Bundle (মিডিয়া ফাইল সহ)</h4>
+                        <p>ভিডিও, লোগো, ব্যাকগ্রাউন্ড মিউজিক এবং ভয়েসওভার সহ সম্পূর্ণ প্রজেক্টটি একটি সিঙ্গেল ফাইলে বেক হয়ে ডাউনলোড হবে। এটি যেকোনো ডিভাইসে কোনো রি-লিংক ছাড়াই সরাসরি ওপেন হবে। (ফাইল সাইজ বড় হলে ডাউনলোডে সময় নিতে পারে)</p>
+                    </div>
+                </div>
+                
+                <div id="full-save-warning" class="save-warning-box" style="display: none;">
+                    <i class="fa-solid fa-triangle-exclamation"></i>
+                    <span>আপনার বর্তমান প্রজেক্টে বড় ভিডিও ফাইল থাকায় এই মোডে ফাইল সাইজ বড় হবে এবং এক্সপোর্ট করতে কিছুটা লোডিং টাইম লাগবে।</span>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" id="save-modal-cancel">Cancel</button>
+                <button class="btn btn-primary" id="save-modal-confirm"><i class="fa-solid fa-download"></i> Download Project File</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Media Re-linker Modal Dialog -->
+    <div class="modal-overlay" id="media-relinker-modal" style="display: none;">
+        <div class="modal-card">
+            <div class="modal-header">
+                <h3><i class="fa-solid fa-link-slash text-danger"></i> Offline Media Re-linker (মিডিয়া ফাইল রি-লিংক)</h3>
+            </div>
+            <div class="modal-body">
+                <p class="modal-desc">প্রজেক্ট ফাইলটি লোড করা হয়েছে! কিন্তু আপনার লোকাল ব্রাউজারে নিচের মিডিয়া ফাইলগুলো পাওয়া যায়নি। প্রজেক্টটি সচল করতে দয়া করে ফাইলগুলো রি-সিলেক্ট (রি-লিংক) করুন:</p>
+                
+                <div class="missing-files-list" id="missing-files-container">
+                    <!-- Dynamically populated missing file rows -->
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" id="relink-modal-cancel">Cancel Load</button>
+                <button class="btn btn-success" id="relink-modal-confirm" disabled><i class="fa-solid fa-circle-check"></i> Restore Project</button>
+            </div>
+        </div>
     </div>
 
     <!-- Hidden Video element for decoding/playing the original video source -->

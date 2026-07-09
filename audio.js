@@ -439,6 +439,7 @@ document.addEventListener('DOMContentLoaded', () => {
             bgMusicTrackListEl.appendChild(row);
         });
     }
+    window.renderBgMusicTrackListGlobal = renderBgMusicTrackList;
 
     function showBgMusicTrackDetail(id) {
         const t = state.bgMusicTracks.find(x => x.id === id);
@@ -1523,6 +1524,48 @@ document.addEventListener('DOMContentLoaded', () => {
             subtitleListEl.appendChild(row);
         });
     }
+
+    window.syncAudioUIFromStateGlobal = function() {
+        if (noiseCancelToggle) {
+            noiseCancelToggle.checked = state.isNoiseCancelActive;
+        }
+        if (noiseLevelContainer) {
+            noiseLevelContainer.style.display = state.isNoiseCancelActive ? 'block' : 'none';
+        }
+        if (noiseGateSlider) {
+            noiseGateSlider.value = state.noiseGateThreshold;
+        }
+        if (noiseGateVal) {
+            noiseGateVal.innerText = state.noiseGateThreshold + ' dB';
+        }
+        if (voiceoverVolumeSlider) {
+            voiceoverVolumeSlider.value = state.voiceoverVolume * 100;
+        }
+        if (voiceoverVolumeVal) {
+            voiceoverVolumeVal.innerText = Math.round(state.voiceoverVolume * 100) + '%';
+        }
+        if (voiceChangerSelect) {
+            voiceChangerSelect.value = state.voiceoverProfile || 'none';
+        }
+        if (bgMusicDuckingToggle) {
+            bgMusicDuckingToggle.checked = state.bgMusicDuckingEnabled;
+        }
+        if (state.voiceoverRecorded) {
+            if (voiceoverPreviewBox) voiceoverPreviewBox.style.display = 'block';
+            if (voiceoverVolumeContainer) voiceoverVolumeContainer.style.display = 'block';
+            if (voiceoverAudioPreview && state.voiceoverUrl) {
+                voiceoverAudioPreview.src = state.voiceoverUrl;
+            }
+        } else {
+            if (voiceoverPreviewBox) voiceoverPreviewBox.style.display = 'none';
+            if (voiceoverVolumeContainer) voiceoverVolumeContainer.style.display = 'none';
+            if (voiceoverAudioPreview) voiceoverAudioPreview.src = '';
+        }
+        if (window.renderBgMusicTrackListGlobal) {
+            window.renderBgMusicTrackListGlobal();
+        }
+        renderSubtitleList();
+    };
 
     // Stop listening automatically once the trimmed playback range ends or video is paused
     state.video.addEventListener('pause', () => {

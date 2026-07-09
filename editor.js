@@ -479,6 +479,7 @@ document.addEventListener('DOMContentLoaded', () => {
     function handleLogoFile(file) {
         if (!file) return;
         
+        state.logoFile = file;
         const fileURL = URL.createObjectURL(file);
         const img = new Image();
         img.src = fileURL;
@@ -506,6 +507,7 @@ document.addEventListener('DOMContentLoaded', () => {
     
     removeLogoBtn.addEventListener('click', () => {
         state.logoImg = null;
+        state.logoFile = null;
         logoPreviewBox.style.display = 'none';
         logoDropzone.style.display = 'flex';
         logoControlCard.style.display = 'none';
@@ -4576,6 +4578,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 type: 'image',
                 imageImg: img,
                 imageUrl: url,
+                file: file,
+                name: file.name,
+                size: file.size,
                 mode: brollModeSelect ? brollModeSelect.value : 'fullscreen',
                 size: brollModeSelect && brollModeSelect.value === 'pip'
                     ? (brollSizeSlider ? parseInt(brollSizeSlider.value) : 35)
@@ -5329,7 +5334,1095 @@ document.addEventListener('DOMContentLoaded', () => {
     document.addEventListener('click', () => {
         tooltipEl.classList.remove('show');
     });
+
+    // --- IndexedDB Database Engine ---
+    const DB_NAME = 'StudioFlowEditorDB';
+    const DB_VERSION = 1;
+    const STORE_NAME = 'mediaFiles';
+
+    function getDB() {
+        return new Promise((resolve, reject) => {
+            const request = indexedDB.open(DB_NAME, DB_VERSION);
+            request.onupgradeneeded = (e) => {
+                const db = e.target.result;
+                if (!db.objectStoreNames.contains(STORE_NAME)) {
+                    db.createObjectStore(STORE_NAME);
+                }
+            };
+            request.onsuccess = (e) => resolve(e.target.result);
+            request.onerror = (e) => reject(e.target.error);
+        });
+    }
+
+    async function storeFileInDB(key, blob) {
+        try {
+            const db = await getDB();
+            const tx = db.transaction(STORE_NAME, 'readwrite');
+            const store = tx.objectStore(STORE_NAME);
+            store.put(blob, key);
+            return new Promise((res, rej) => {
+                tx.oncomplete = () => res();
+                tx.onerror = () => rej(tx.error);
+            });
+        } catch (e) {
+            console.error("IndexedDB store failed:", e);
+        }
+    }
+
+    async function getFileFromDB(key) {
+        try {
+            const db = await getDB();
+            const tx = db.transaction(STORE_NAME, 'readonly');
+            const store = tx.objectStore(STORE_NAME);
+            const request = store.get(key);
+            return new Promise((res, rej) => {
+                request.onsuccess = () => res(request.result);
+                request.onerror = () => rej(request.error);
+            });
+        } catch (e) {
+            console.error("IndexedDB get failed:", e);
+            return null;
+        }
+    }
+
+    async function clearFilesFromDB() {
+        try {
+            const db = await getDB();
+            const tx = db.transaction(STORE_NAME, 'readwrite');
+            const store = tx.objectStore(STORE_NAME);
+            store.clear();
+            return new Promise((res, rej) => {
+                tx.oncomplete = () => res();
+                tx.onerror = () => rej(tx.error);
+            });
+        } catch (e) {
+            console.error("IndexedDB clear failed:", e);
+        }
+    }
+
+    // Helper functions for Base64 conversion
+    function blobToBase64(blob) {
+        return new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onloadend = () => resolve(reader.result);
+            reader.onerror = reject;
+            reader.readAsDataURL(blob);
+        });
+    }
+
+    function dataURLtoBlob(dataurl) {
+        if (!dataurl) return null;
+        var arr = dataurl.split(','), mime = arr[0].match(/:(.*?);/)[1],
+            bstr = atob(arr[1]), n = bstr.length, u8arr = new Uint8Array(n);
+        while(n--){
+            u8arr[n] = bstr.charCodeAt(n);
+        }
+        return new Blob([u8arr], {type:mime});
+    }
+
+    // --- Sync UI Controls from state Object ---
+    function syncUIFromState() {
+        if (!state) return;
+        
+        // Navigation & Layout format buttons
+        updateNavigation();
+
+        const aspectButtons = document.querySelectorAll('.aspect-btn');
+        aspectButtons.forEach(btn => {
+            if (btn.dataset.ratio === state.aspectRatio) {
+                btn.classList.add('active');
+            } else {
+                btn.classList.remove('active');
+            }
+        });
+
+        const layoutModeBtns = document.querySelectorAll('.layout-mode-btn');
+        layoutModeBtns.forEach(btn => {
+            if (btn.dataset.mode === state.layoutMode) {
+                btn.classList.add('active');
+            } else {
+                btn.classList.remove('active');
+            }
+        });
+
+        // Sliders & values
+        if (videoVolumeSlider) {
+            videoVolumeSlider.value = state.videoVolume * 100;
+            if (videoVolumeVal) videoVolumeVal.innerText = Math.round(state.videoVolume * 100) + '%';
+        }
+        if (videoVolumeSliderStep2) {
+            videoVolumeSliderStep2.value = state.videoVolume * 100;
+            if (videoVolumeValStep2) videoVolumeValStep2.innerText = Math.round(state.videoVolume * 100) + '%';
+        }
+
+        // Logo configuration
+        if (state.logoImg) {
+            if (logoPreviewBox) logoPreviewBox.style.display = 'flex';
+            if (logoDropzone) logoDropzone.style.display = 'none';
+            if (logoControlCard) logoControlCard.style.display = 'block';
+            if (logoImgPreview) logoImgPreview.src = state.logoImg.src;
+            if (logoFilename) logoFilename.innerText = state.logoFile ? state.logoFile.name : 'watermark.png';
+        } else {
+            if (logoPreviewBox) logoPreviewBox.style.display = 'none';
+            if (logoDropzone) logoDropzone.style.display = 'flex';
+            if (logoControlCard) logoControlCard.style.display = 'none';
+            if (logoInput) logoInput.value = '';
+        }
+        if (logoSizeSlider) {
+            logoSizeSlider.value = state.logoSize;
+            if (logoSizeVal) logoSizeVal.innerText = state.logoSize + '%';
+        }
+        if (logoOpacitySlider) {
+            logoOpacitySlider.value = state.logoOpacity * 100;
+            if (logoOpacityVal) logoOpacityVal.innerText = Math.round(state.logoOpacity * 100) + '%';
+        }
+
+        // Banners
+        if (bannerStyleSelect) bannerStyleSelect.value = state.bannerStyle;
+        if (headerTextInput) headerTextInput.value = state.headerText;
+        if (footerTextInput) footerTextInput.value = state.footerText;
+        if (bannerFontSelect) bannerFontSelect.value = state.bannerFontFamily;
+        if (bannerFontSizeSlider) {
+            bannerFontSizeSlider.value = state.bannerFontSize;
+            if (bannerFontSizeVal) bannerFontSizeVal.innerText = state.bannerFontSize + 'px';
+        }
+        if (bannerTextColor) bannerTextColor.value = state.bannerTextColor;
+        if (bannerBgColor) bannerBgColor.value = state.bannerBgColor;
+        if (bannerHeightSlider) {
+            bannerHeightSlider.value = state.bannerHeightPercent;
+            if (bannerHeightVal) bannerHeightVal.innerText = state.bannerHeightPercent + '%';
+        }
+
+        // News Ticker
+        if (tickerEnableToggle) {
+            tickerEnableToggle.checked = state.tickerEnabled;
+            if (tickerControlsBox) tickerControlsBox.style.display = state.tickerEnabled ? 'block' : 'none';
+        }
+        if (tickerTextInput) tickerTextInput.value = state.tickerText;
+        if (tickerLabelInput) tickerLabelInput.value = state.tickerLabel;
+        if (tickerPositionSelect) tickerPositionSelect.value = state.tickerPosition;
+        if (tickerSpeedSlider) {
+            tickerSpeedSlider.value = state.tickerSpeed;
+            if (tickerSpeedVal) tickerSpeedVal.innerText = state.tickerSpeed + ' px/s';
+        }
+        if (tickerFontSizeSlider) {
+            tickerFontSizeSlider.value = state.tickerFontSize;
+            if (tickerFontSizeVal) tickerFontSizeVal.innerText = state.tickerFontSize + 'px';
+        }
+        if (tickerTextColor) tickerTextColor.value = state.tickerTextColor;
+        if (tickerBgColor) tickerBgColor.value = state.tickerBgColor;
+        if (tickerHeightSlider) {
+            tickerHeightSlider.value = state.tickerHeightPercent;
+            if (tickerHeightVal) tickerHeightVal.innerText = state.tickerHeightPercent + '%';
+        }
+
+        // Progress Bar
+        if (progressBarToggle) {
+            progressBarToggle.checked = state.enableProgressBar;
+            if (progressBarOptionsContainer) progressBarOptionsContainer.style.display = state.enableProgressBar ? 'block' : 'none';
+        }
+        if (progressBarPos) progressBarPos.value = state.progressBarPosition;
+        if (progressBarColor) {
+            progressBarColor.value = state.progressBarColor;
+            if (progressBarColorVal) progressBarColorVal.innerText = state.progressBarColor.toUpperCase();
+        }
+        if (progressBarHeight) {
+            progressBarHeight.value = state.progressBarHeight;
+            if (progressBarHeightVal) progressBarHeightVal.innerText = state.progressBarHeight + 'px';
+        }
+
+        // Filters presets & sliders
+        const filterBtns = document.querySelectorAll('.filter-preset-btn');
+        filterBtns.forEach(btn => {
+            if (btn.dataset.filter === state.filterPreset) {
+                btn.classList.add('active');
+            } else {
+                btn.classList.remove('active');
+            }
+        });
+        if (brightnessSlider) {
+            brightnessSlider.value = state.brightness;
+            if (brightnessVal) brightnessVal.innerText = state.brightness + '%';
+        }
+        if (contrastSlider) {
+            contrastSlider.value = state.contrast;
+            if (contrastVal) contrastVal.innerText = state.contrast + '%';
+        }
+        if (saturationSlider) {
+            saturationSlider.value = state.saturation;
+            if (saturationVal) saturationVal.innerText = state.saturation + '%';
+        }
+
+        // Color grading curves
+        if (colorGradeToggle) {
+            colorGradeToggle.checked = state.colorGradeEnabled;
+            if (colorGradeContainer) colorGradeContainer.style.display = state.colorGradeEnabled ? 'block' : 'none';
+        }
+        colorGradeSliderMap.forEach(([elId, stateKey]) => {
+            const sliderEl = document.getElementById(elId);
+            const valEl = document.getElementById(elId + '-val');
+            if (sliderEl) sliderEl.value = state[stateKey];
+            if (valEl) valEl.innerText = state[stateKey];
+        });
+
+        // Trim slider values for active clip
+        const activeClip = state.clips.find(c => c.id === state.activeClipId);
+        if (activeClip) {
+            if (trimStart) {
+                trimStart.max = activeClip.duration;
+                trimStart.value = activeClip.start;
+            }
+            if (trimEnd) {
+                trimEnd.max = activeClip.duration;
+                trimEnd.value = activeClip.end;
+            }
+            if (startVal) startVal.value = formatTime(activeClip.start);
+            if (endVal) endVal.value = formatTime(activeClip.end);
+            
+            // Show seek controls
+            const timelineControls = document.getElementById('timeline-controls');
+            if (timelineControls) timelineControls.style.display = 'flex';
+            const overlayControls = document.querySelector('.canvas-overlay-controls');
+            if (overlayControls) overlayControls.style.display = 'block';
+            if (videoDropzone) videoDropzone.style.display = 'none';
+            if (document.getElementById('selected-video-name')) {
+                document.getElementById('selected-video-name').innerText = activeClip.name;
+            }
+            nextBtn.disabled = false;
+        }
+
+        // Intros and Outros
+        if (introEnabledToggle) {
+            introEnabledToggle.checked = state.introEnabled;
+            if (introControlsBox) introControlsBox.style.display = state.introEnabled ? 'block' : 'none';
+        }
+        if (introTemplateSelect) introTemplateSelect.value = state.introTemplate;
+        if (introTitleInput) introTitleInput.value = state.introTitle;
+        if (introSubtitleInput) introSubtitleInput.value = state.introSubtitle;
+        if (introDurationSlider) {
+            introDurationSlider.value = state.introDuration;
+            if (introDurationVal) introDurationVal.innerText = state.introDuration.toFixed(1) + 's';
+        }
+
+        if (outroEnabledToggle) {
+            outroEnabledToggle.checked = state.outroEnabled;
+            if (outroControlsBox) outroControlsBox.style.display = state.outroEnabled ? 'block' : 'none';
+        }
+        if (outroTemplateSelect) outroTemplateSelect.value = state.outroTemplate;
+        if (outroTitleInput) outroTitleInput.value = state.outroTitle;
+        if (outroSubtitleInput) outroSubtitleInput.value = state.outroSubtitle;
+        if (outroDurationSlider) {
+            outroDurationSlider.value = state.outroDuration;
+            if (outroDurationVal) outroDurationVal.innerText = state.outroDuration.toFixed(1) + 's';
+        }
+
+        // Subtitles enabled
+        const subtitlesEnabledToggle = document.getElementById('subtitles-enabled-toggle');
+        if (subtitlesEnabledToggle) subtitlesEnabledToggle.checked = state.subtitlesEnabled;
+
+        // Render dynamic timelines and overlays
+        if (typeof renderClipTimeline === 'function') renderClipTimeline();
+        if (typeof renderBlurRegionList === 'function') renderBlurRegionList();
+        if (typeof renderTextOverlayList === 'function') renderTextOverlayList();
+        if (typeof renderBrollList === 'function') renderBrollList();
+        if (typeof renderStickerList === 'function') renderStickerList();
+        
+        // Sync Audio engine UI
+        if (window.syncAudioUIFromStateGlobal) {
+            window.syncAudioUIFromStateGlobal();
+        }
+    }
+
+    // --- Save project to download file (Settings vs Full) ---
+    async function exportProject(mode) {
+        const prevConfirmText = saveModalConfirm.innerHTML;
+        try {
+            // Show custom loading feedback
+            saveModalConfirm.disabled = true;
+            saveModalConfirm.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Exporting...';
+
+            const data = {
+                version: "1.0",
+                appName: "Studio Flow",
+                timestamp: Date.now(),
+                settings: {
+                    startTime: state.startTime,
+                    endTime: state.endTime,
+                    aspectRatio: state.aspectRatio,
+                    cropX: state.cropX,
+                    cropY: state.cropY,
+                    cropW: state.cropW,
+                    cropH: state.cropH,
+                    logoX: state.logoX,
+                    logoY: state.logoY,
+                    logoSize: state.logoSize,
+                    logoOpacity: state.logoOpacity,
+                    videoVolume: state.videoVolume,
+                    voiceoverVolume: state.voiceoverVolume,
+                    voiceoverProfile: state.voiceoverProfile,
+                    isNoiseCancelActive: state.isNoiseCancelActive,
+                    noiseGateThreshold: state.noiseGateThreshold,
+                    bgMusicDuckingEnabled: state.bgMusicDuckingEnabled,
+                    bannerStyle: state.bannerStyle,
+                    headerText: state.headerText,
+                    footerText: state.footerText,
+                    bannerFontFamily: state.bannerFontFamily,
+                    bannerFontSize: state.bannerFontSize,
+                    bannerTextColor: state.bannerTextColor,
+                    bannerBgColor: state.bannerBgColor,
+                    bannerHeightPercent: state.bannerHeightPercent,
+                    tickerEnabled: state.tickerEnabled,
+                    tickerText: state.tickerText,
+                    tickerLabel: state.tickerLabel,
+                    tickerPosition: state.tickerPosition,
+                    tickerSpeed: state.tickerSpeed,
+                    tickerFontSize: state.tickerFontSize,
+                    tickerTextColor: state.tickerTextColor,
+                    tickerBgColor: state.tickerBgColor,
+                    tickerHeightPercent: state.tickerHeightPercent,
+                    enableProgressBar: state.enableProgressBar,
+                    progressBarColor: state.progressBarColor,
+                    progressBarHeight: state.progressBarHeight,
+                    progressBarPosition: state.progressBarPosition,
+                    filterPreset: state.filterPreset,
+                    brightness: state.brightness,
+                    contrast: state.contrast,
+                    saturation: state.saturation,
+                    colorGradeEnabled: state.colorGradeEnabled,
+                    gradeRShadow: state.gradeRShadow,
+                    gradeRMid: state.gradeRMid,
+                    gradeRHigh: state.gradeRHigh,
+                    gradeGShadow: state.gradeGShadow,
+                    gradeGMid: state.gradeGMid,
+                    gradeGHigh: state.gradeGHigh,
+                    gradeBShadow: state.gradeBShadow,
+                    gradeBMid: state.gradeBMid,
+                    gradeBHigh: state.gradeBHigh,
+                    layoutMode: state.layoutMode,
+                    introEnabled: state.introEnabled,
+                    introTemplate: state.introTemplate,
+                    introTitle: state.introTitle,
+                    introSubtitle: state.introSubtitle,
+                    introDuration: state.introDuration,
+                    outroEnabled: state.outroEnabled,
+                    outroTemplate: state.outroTemplate,
+                    outroTitle: state.outroTitle,
+                    outroSubtitle: state.outroSubtitle,
+                    outroDuration: state.outroDuration,
+                    subtitlesEnabled: state.subtitlesEnabled,
+                    activeClipId: state.activeClipId,
+                    voiceoverRecorded: state.voiceoverRecorded
+                },
+                textOverlays: state.textOverlays,
+                stickers: state.stickers,
+                blurRegions: state.blurRegions,
+                subtitles: state.subtitles
+            };
+
+            // Convert logo to Base64 (always, since it is small)
+            if (state.logoFile) {
+                data.logoBase64 = await blobToBase64(state.logoFile);
+                data.logoName = state.logoFile.name;
+            }
+
+            // Convert voiceover to Base64 (always, since it's small)
+            if (state.voiceoverBlob) {
+                data.voiceoverBase64 = await blobToBase64(state.voiceoverBlob);
+            }
+
+            // Convert B-roll images to Base64 (always, since they are static pictures)
+            data.brollOverlays = [];
+            for (let i = 0; i < state.brollOverlays.length; i++) {
+                const broll = state.brollOverlays[i];
+                const brollCopy = {...broll};
+                delete brollCopy.imageImg;
+                delete brollCopy.file;
+
+                if (broll.type === 'image' && broll.file) {
+                    brollCopy.imageBase64 = await blobToBase64(broll.file);
+                }
+                data.brollOverlays.push(brollCopy);
+            }
+
+            // Convert Clips to Base64 (conditional based on mode)
+            data.clips = [];
+            for (let i = 0; i < state.clips.length; i++) {
+                const clip = state.clips[i];
+                const clipCopy = {...clip};
+                delete clipCopy.imageImg;
+                delete clipCopy.file;
+
+                if (mode === 'full') {
+                    if (clip.file) {
+                        clipCopy.videoBase64 = await blobToBase64(clip.file);
+                        clipCopy.fileType = clip.file.type;
+                    }
+                }
+                data.clips.push(clipCopy);
+            }
+
+            // Convert BG Music tracks to Base64 (conditional based on mode)
+            data.bgMusicTracks = [];
+            for (let i = 0; i < state.bgMusicTracks.length; i++) {
+                const track = state.bgMusicTracks[i];
+                const trackCopy = {...track};
+                delete trackCopy.blob;
+
+                if (mode === 'full') {
+                    if (track.blob) {
+                        trackCopy.audioBase64 = await blobToBase64(track.blob);
+                        trackCopy.fileType = track.blob.type;
+                    }
+                }
+                data.bgMusicTracks.push(trackCopy);
+            }
+
+            // Trigger JSON file download
+            const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(data));
+            const downloadAnchor = document.createElement('a');
+            const filename = `studio-flow-project-${mode === 'full' ? 'full' : 'settings'}-${Date.now()}.json`;
+            downloadAnchor.setAttribute("href", dataStr);
+            downloadAnchor.setAttribute("download", filename);
+            document.body.appendChild(downloadAnchor);
+            downloadAnchor.click();
+            downloadAnchor.remove();
+            
+            // Reset confirm button
+            saveModalConfirm.disabled = false;
+            saveModalConfirm.innerHTML = prevConfirmText;
+            console.log("Project exported successfully.");
+        } catch (e) {
+            console.error("Export failed:", e);
+            alert("প্রজেক্ট এক্সপোর্ট করতে ব্যর্থ হয়েছে। অনুগ্রহ করে আবার চেষ্টা করুন।");
+            saveModalConfirm.disabled = false;
+            saveModalConfirm.innerHTML = prevConfirmText;
+        }
+    }
+
+    // --- Load project from imported JSON string ---
+    let pendingImportData = null;
+
+    async function importProject(jsonData) {
+        try {
+            const data = JSON.parse(jsonData);
+            if (data.appName !== 'Studio Flow' || !data.settings) {
+                alert("ত্রুটি: এটি কোনো বৈধ Studio Flow প্রজেক্ট ফাইল নয়।");
+                return;
+            }
+
+            pendingImportData = data;
+            const missingFiles = [];
+
+            // Check clips (only clips that don't have videoBase64 or imageBase64 embedded)
+            for (let i = 0; i < data.clips.length; i++) {
+                const clip = data.clips[i];
+                if (clip.type !== 'image' && !clip.videoBase64) {
+                    const cachedFile = await getFileFromDB(`clip_${clip.id}`);
+                    if (cachedFile) {
+                        clip.file = cachedFile;
+                        clip.url = URL.createObjectURL(cachedFile);
+                    } else {
+                        missingFiles.push({
+                            type: 'clip',
+                            id: clip.id,
+                            name: clip.name,
+                            meta: `ভিডিও ক্লিপ · Duration: ${clip.duration.toFixed(1)}s`
+                        });
+                    }
+                }
+            }
+
+            // Check BG music tracks
+            for (let i = 0; i < data.bgMusicTracks.length; i++) {
+                const track = data.bgMusicTracks[i];
+                if (!track.audioBase64) {
+                    const cachedFile = await getFileFromDB(`bgmusic_${track.id}`);
+                    if (cachedFile) {
+                        track.blob = cachedFile;
+                        track.url = URL.createObjectURL(cachedFile);
+                    } else {
+                        missingFiles.push({
+                            type: 'bgmusic',
+                            id: track.id,
+                            name: track.name,
+                            meta: `ব্যাকগ্রাউন্ড মিউজিক ট্র্যাক`
+                        });
+                    }
+                }
+            }
+
+            if (missingFiles.length > 0) {
+                showMediaReLinkerModal(missingFiles);
+            } else {
+                await applyImportedProject(data);
+            }
+        } catch (e) {
+            console.error("Import failed:", e);
+            alert("প্রজেক্ট ইম্পোর্ট করতে ব্যর্থ হয়েছে। ফাইলটি সঠিক কিনা যাচাই করুন।");
+        }
+    }
+
+    // --- Render missing files and selection UI in Re-linker ---
+    function showMediaReLinkerModal(missingFiles) {
+        const modal = document.getElementById('media-relinker-modal');
+        const container = document.getElementById('missing-files-container');
+        const confirmBtn = document.getElementById('relink-modal-confirm');
+        
+        if (!modal || !container) return;
+        
+        container.innerHTML = '';
+        confirmBtn.disabled = true;
+        modal.style.display = 'flex';
+
+        missingFiles.forEach((item) => {
+            const row = document.createElement('div');
+            row.className = 'missing-file-row';
+            row.id = `relink-row-${item.type}-${item.id}`;
+
+            const info = document.createElement('div');
+            info.className = 'file-info-container';
+            
+            const nameSpan = document.createElement('span');
+            nameSpan.className = 'file-info-name';
+            nameSpan.innerText = item.name;
+            
+            const metaSpan = document.createElement('span');
+            metaSpan.className = 'file-info-meta';
+            metaSpan.innerText = item.meta;
+
+            info.appendChild(nameSpan);
+            info.appendChild(metaSpan);
+
+            const uploadWrap = document.createElement('div');
+            uploadWrap.className = 'btn-file-select-wrap';
+            
+            const selectBtn = document.createElement('button');
+            selectBtn.className = 'btn btn-sm btn-outline';
+            selectBtn.innerHTML = '<i class="fa-solid fa-file-circle-plus"></i> Select File';
+
+            const fileInput = document.createElement('input');
+            fileInput.type = 'file';
+            fileInput.accept = item.type === 'bgmusic' ? 'audio/*' : 'video/*, image/*';
+
+            fileInput.addEventListener('change', (e) => {
+                const selectedFile = e.target.files[0];
+                if (selectedFile) {
+                    item.fileObj = selectedFile;
+                    row.classList.add('linked');
+                    selectBtn.className = 'btn btn-sm btn-success';
+                    selectBtn.innerHTML = '<i class="fa-solid fa-circle-check"></i> Linked';
+                    
+                    const allLinked = missingFiles.every(x => x.fileObj);
+                    confirmBtn.disabled = !allLinked;
+                }
+            });
+
+            uploadWrap.appendChild(selectBtn);
+            uploadWrap.appendChild(fileInput);
+
+            row.appendChild(info);
+            row.appendChild(uploadWrap);
+            container.appendChild(row);
+        });
+        
+        confirmBtn.onclick = async () => {
+            modal.style.display = 'none';
+
+            // Bind the selected files into the pending imported clips/tracks
+            missingFiles.forEach(item => {
+                if (item.type === 'clip') {
+                    const clip = pendingImportData.clips.find(c => c.id === item.id);
+                    if (clip) {
+                        clip.file = item.fileObj;
+                        clip.url = URL.createObjectURL(item.fileObj);
+                    }
+                } else if (item.type === 'bgmusic') {
+                    const track = pendingImportData.bgMusicTracks.find(t => t.id === item.id);
+                    if (track) {
+                        track.blob = item.fileObj;
+                        track.url = URL.createObjectURL(item.fileObj);
+                    }
+                }
+            });
+
+            await applyImportedProject(pendingImportData);
+        };
+    }
+
+    // --- Write files and settings to state, then refresh workspace ---
+    async function applyImportedProject(data) {
+        try {
+            // Clear DB cache
+            await clearFilesFromDB();
+
+            // Restore Logo
+            if (data.logoBase64) {
+                const logoBlob = dataURLtoBlob(data.logoBase64);
+                state.logoFile = new File([logoBlob], data.logoName || 'logo.png', { type: logoBlob.type });
+                state.logoImg = new Image();
+                state.logoImg.src = URL.createObjectURL(state.logoFile);
+                await new Promise(r => state.logoImg.onload = r);
+                await storeFileInDB('logo', state.logoFile);
+            } else {
+                state.logoFile = null;
+                state.logoImg = null;
+            }
+
+            // Restore Voiceover
+            if (data.voiceoverBase64) {
+                state.voiceoverBlob = dataURLtoBlob(data.voiceoverBase64);
+                state.voiceoverUrl = URL.createObjectURL(state.voiceoverBlob);
+                await storeFileInDB('voiceover', state.voiceoverBlob);
+            } else {
+                state.voiceoverBlob = null;
+                state.voiceoverUrl = null;
+            }
+
+            // Restore B-roll images
+            for (let i = 0; i < data.brollOverlays.length; i++) {
+                const broll = data.brollOverlays[i];
+                if (broll.type === 'image' && broll.imageBase64) {
+                    const bBlob = dataURLtoBlob(broll.imageBase64);
+                    broll.file = new File([bBlob], broll.name || 'broll_image.png', { type: bBlob.type });
+                    broll.imageUrl = URL.createObjectURL(broll.file);
+                    broll.imageImg = new Image();
+                    broll.imageImg.src = broll.imageUrl;
+                    await new Promise(r => broll.imageImg.onload = r);
+                    await storeFileInDB(`broll_${broll.id}`, broll.file);
+                }
+            }
+
+            // Restore Clips files
+            for (let i = 0; i < data.clips.length; i++) {
+                const clip = data.clips[i];
+                if (clip.type === 'image' && clip.imageBase64) {
+                    const cBlob = dataURLtoBlob(clip.imageBase64);
+                    clip.file = new File([cBlob], clip.name || 'image_clip.png', { type: cBlob.type });
+                    clip.url = URL.createObjectURL(clip.file);
+                    clip.imageImg = new Image();
+                    clip.imageImg.src = clip.url;
+                    await new Promise(r => clip.imageImg.onload = r);
+                    await storeFileInDB(`clip_${clip.id}`, clip.file);
+                } else if (clip.videoBase64) {
+                    const cBlob = dataURLtoBlob(clip.videoBase64);
+                    clip.file = new File([cBlob], clip.name || 'video_clip.mp4', { type: clip.fileType || cBlob.type });
+                    clip.url = URL.createObjectURL(clip.file);
+                    await storeFileInDB(`clip_${clip.id}`, clip.file);
+                } else if (clip.file) {
+                    await storeFileInDB(`clip_${clip.id}`, clip.file);
+                }
+            }
+
+            // Restore BG Music tracks
+            for (let i = 0; i < data.bgMusicTracks.length; i++) {
+                const track = data.bgMusicTracks[i];
+                if (track.audioBase64) {
+                    const tBlob = dataURLtoBlob(track.audioBase64);
+                    track.blob = new File([tBlob], track.name || 'audio_track.mp3', { type: track.fileType || tBlob.type });
+                    track.url = URL.createObjectURL(track.blob);
+                    await storeFileInDB(`bgmusic_${track.id}`, track.blob);
+                } else if (track.blob) {
+                    await storeFileInDB(`bgmusic_${track.id}`, track.blob);
+                }
+            }
+
+            // Assign settings to editor state object
+            Object.assign(state, data.settings);
+            state.textOverlays = data.textOverlays || [];
+            state.stickers = data.stickers || [];
+            state.brollOverlays = data.brollOverlays || [];
+            state.blurRegions = data.blurRegions || [];
+            state.subtitles = data.subtitles || [];
+            state.clips = data.clips || [];
+            state.bgMusicTracks = data.bgMusicTracks || [];
+
+            // Load video src
+            if (state.clips.length > 0) {
+                const activeClip = state.clips.find(c => c.id === state.activeClipId);
+                if (activeClip && activeClip.type !== 'image') {
+                    state.video.src = activeClip.url;
+                    state.video.load();
+                    await new Promise(r => state.video.onloadedmetadata = r);
+                }
+            }
+
+            // Trigger immediate local storage auto-save
+            saveProjectToBrowserStorage();
+
+            // Re-sync and render
+            syncUIFromState();
+            drawFrame();
+
+            // Set default step view
+            state.currentStep = 1;
+            updateNavigation();
+
+            alert("প্রজেক্ট সফলভাবে লোড হয়েছে!");
+        } catch (e) {
+            console.error("Apply import failed:", e);
+            alert("প্রজেক্ট ফাইল অ্যাপ্লাই করতে ত্রুটি ঘটেছে।");
+        }
+    }
+
+    // --- Save project state into IndexedDB and LocalStorage ---
+    async function saveProjectToBrowserStorage() {
+        try {
+            const db = await getDB();
+            
+            // Prepare clean JSON metadata
+            const settingsToSave = {
+                version: "1.0",
+                appName: "Studio Flow",
+                timestamp: Date.now(),
+                settings: {
+                    startTime: state.startTime,
+                    endTime: state.endTime,
+                    aspectRatio: state.aspectRatio,
+                    cropX: state.cropX,
+                    cropY: state.cropY,
+                    cropW: state.cropW,
+                    cropH: state.cropH,
+                    logoX: state.logoX,
+                    logoY: state.logoY,
+                    logoSize: state.logoSize,
+                    logoOpacity: state.logoOpacity,
+                    videoVolume: state.videoVolume,
+                    voiceoverVolume: state.voiceoverVolume,
+                    voiceoverProfile: state.voiceoverProfile,
+                    isNoiseCancelActive: state.isNoiseCancelActive,
+                    noiseGateThreshold: state.noiseGateThreshold,
+                    bgMusicDuckingEnabled: state.bgMusicDuckingEnabled,
+                    bannerStyle: state.bannerStyle,
+                    headerText: state.headerText,
+                    footerText: state.footerText,
+                    bannerFontFamily: state.bannerFontFamily,
+                    bannerFontSize: state.bannerFontSize,
+                    bannerTextColor: state.bannerTextColor,
+                    bannerBgColor: state.bannerBgColor,
+                    bannerHeightPercent: state.bannerHeightPercent,
+                    tickerEnabled: state.tickerEnabled,
+                    tickerText: state.tickerText,
+                    tickerLabel: state.tickerLabel,
+                    tickerPosition: state.tickerPosition,
+                    tickerSpeed: state.tickerSpeed,
+                    tickerFontSize: state.tickerFontSize,
+                    tickerTextColor: state.tickerTextColor,
+                    tickerBgColor: state.tickerBgColor,
+                    tickerHeightPercent: state.tickerHeightPercent,
+                    enableProgressBar: state.enableProgressBar,
+                    progressBarColor: state.progressBarColor,
+                    progressBarHeight: state.progressBarHeight,
+                    progressBarPosition: state.progressBarPosition,
+                    filterPreset: state.filterPreset,
+                    brightness: state.brightness,
+                    contrast: state.contrast,
+                    saturation: state.saturation,
+                    colorGradeEnabled: state.colorGradeEnabled,
+                    gradeRShadow: state.gradeRShadow,
+                    gradeRMid: state.gradeRMid,
+                    gradeRHigh: state.gradeRHigh,
+                    gradeGShadow: state.gradeGShadow,
+                    gradeGMid: state.gradeGMid,
+                    gradeGHigh: state.gradeGHigh,
+                    gradeBShadow: state.gradeBShadow,
+                    gradeBMid: state.gradeBMid,
+                    gradeBHigh: state.gradeBHigh,
+                    layoutMode: state.layoutMode,
+                    introEnabled: state.introEnabled,
+                    introTemplate: state.introTemplate,
+                    introTitle: state.introTitle,
+                    introSubtitle: state.introSubtitle,
+                    introDuration: state.introDuration,
+                    outroEnabled: state.outroEnabled,
+                    outroTemplate: state.outroTemplate,
+                    outroTitle: state.outroTitle,
+                    outroSubtitle: state.outroSubtitle,
+                    outroDuration: state.outroDuration,
+                    subtitlesEnabled: state.subtitlesEnabled,
+                    activeClipId: state.activeClipId,
+                    voiceoverRecorded: state.voiceoverRecorded
+                },
+                textOverlays: state.textOverlays,
+                stickers: state.stickers,
+                brollOverlays: state.brollOverlays.map(b => {
+                    const copy = {...b};
+                    delete copy.imageImg;
+                    delete copy.file;
+                    return copy;
+                }),
+                blurRegions: state.blurRegions,
+                subtitles: state.subtitles,
+                clips: state.clips.map(c => {
+                    const copy = {...c};
+                    delete copy.imageImg;
+                    delete copy.file;
+                    return copy;
+                }),
+                bgMusicTracks: state.bgMusicTracks.map(t => {
+                    const copy = {...t};
+                    delete copy.blob;
+                    return copy;
+                })
+            };
+
+            localStorage.setItem('studio_flow_project_settings', JSON.stringify(settingsToSave));
+
+            // Write files to IndexedDB
+            const tx = db.transaction(STORE_NAME, 'readwrite');
+            const store = tx.objectStore(STORE_NAME);
+
+            if (state.logoFile) {
+                store.put(state.logoFile, 'logo');
+            } else {
+                store.delete('logo');
+            }
+
+            if (state.voiceoverBlob) {
+                store.put(state.voiceoverBlob, 'voiceover');
+            } else {
+                store.delete('voiceover');
+            }
+
+            state.bgMusicTracks.forEach(t => {
+                if (t.blob) {
+                    store.put(t.blob, `bgmusic_${t.id}`);
+                }
+            });
+
+            state.clips.forEach(c => {
+                if (c.file) {
+                    store.put(c.file, `clip_${c.id}`);
+                }
+            });
+
+            state.brollOverlays.forEach(b => {
+                if (b.type === 'image' && b.file) {
+                    store.put(b.file, `broll_${b.id}`);
+                }
+            });
+            
+            console.log("IndexedDB Auto-save completed.");
+        } catch (e) {
+            console.error("Auto-save storage failed:", e);
+        }
+    }
+
+    // --- Restore state on application startup ---
+    async function restoreProjectFromBrowserStorage() {
+        try {
+            const savedSettingsRaw = localStorage.getItem('studio_flow_project_settings');
+            if (!savedSettingsRaw) return false;
+
+            const savedData = JSON.parse(savedSettingsRaw);
+            console.log("Auto-save project found. Re-establishing settings...", savedData);
+
+            // Restore files from database
+            const db = await getDB();
+
+            // Logo
+            const logoFile = await getFileFromDB('logo');
+            if (logoFile) {
+                state.logoFile = logoFile;
+                state.logoImg = new Image();
+                state.logoImg.src = URL.createObjectURL(logoFile);
+                await new Promise(r => state.logoImg.onload = r);
+            }
+
+            // Voiceover
+            const voiceoverBlob = await getFileFromDB('voiceover');
+            if (voiceoverBlob) {
+                state.voiceoverBlob = voiceoverBlob;
+                state.voiceoverUrl = URL.createObjectURL(voiceoverBlob);
+            }
+
+            // Clips
+            for (let i = 0; i < savedData.clips.length; i++) {
+                const clipMeta = savedData.clips[i];
+                const file = await getFileFromDB(`clip_${clipMeta.id}`);
+                if (file) {
+                    clipMeta.file = file;
+                    clipMeta.url = URL.createObjectURL(file);
+                    if (clipMeta.type === 'image') {
+                        clipMeta.imageImg = new Image();
+                        clipMeta.imageImg.src = clipMeta.url;
+                        await new Promise(r => clipMeta.imageImg.onload = r);
+                    }
+                }
+            }
+
+            // BG Music tracks
+            for (let i = 0; i < savedData.bgMusicTracks.length; i++) {
+                const trackMeta = savedData.bgMusicTracks[i];
+                const file = await getFileFromDB(`bgmusic_${trackMeta.id}`);
+                if (file) {
+                    trackMeta.blob = file;
+                    trackMeta.url = URL.createObjectURL(file);
+                }
+            }
+
+            // B-roll images
+            for (let i = 0; i < savedData.brollOverlays.length; i++) {
+                const broll = savedData.brollOverlays[i];
+                if (broll.type === 'image') {
+                    const file = await getFileFromDB(`broll_${broll.id}`);
+                    if (file) {
+                        broll.file = file;
+                        broll.imageUrl = URL.createObjectURL(file);
+                        broll.imageImg = new Image();
+                        broll.imageImg.src = broll.imageUrl;
+                        await new Promise(r => broll.imageImg.onload = r);
+                    }
+                }
+            }
+
+            // Load settings into current state object
+            Object.assign(state, savedData.settings);
+            state.textOverlays = savedData.textOverlays || [];
+            state.stickers = savedData.stickers || [];
+            state.brollOverlays = savedData.brollOverlays || [];
+            state.blurRegions = savedData.blurRegions || [];
+            state.subtitles = savedData.subtitles || [];
+            state.clips = savedData.clips || [];
+            state.bgMusicTracks = savedData.bgMusicTracks || [];
+
+            // Setup video element src
+            if (state.clips.length > 0) {
+                const activeClip = state.clips.find(c => c.id === state.activeClipId);
+                if (activeClip && activeClip.type !== 'image') {
+                    state.video.src = activeClip.url;
+                    state.video.load();
+                    await new Promise(r => state.video.onloadedmetadata = r);
+                }
+            }
+
+            // Refresh UI
+            syncUIFromState();
+            drawFrame();
+            
+            console.log("Project auto-restore completed successfully.");
+            return true;
+        } catch (e) {
+            console.error("Auto-restore process failed:", e);
+            return false;
+        }
+    }
+
+    // --- Debounced Auto-Save trigger ---
+    let autoSaveTimeout = null;
+    function triggerAutoSave() {
+        if (state.isPlaying) return; // skip auto-saving while playing to avoid stutters
+        if (autoSaveTimeout) clearTimeout(autoSaveTimeout);
+        autoSaveTimeout = setTimeout(() => {
+            saveProjectToBrowserStorage();
+        }, 1200);
+    }
+
+    // Bind triggerAutoSave on input changes
+    document.addEventListener('input', (e) => {
+        triggerAutoSave();
+    });
+    document.addEventListener('change', (e) => {
+        triggerAutoSave();
+    });
     
+    // Bind triggerAutoSave on dragging / resizing elements end
+    window.addEventListener('mouseup', () => {
+        triggerAutoSave();
+    });
+    window.addEventListener('touchend', () => {
+        triggerAutoSave();
+    });
+
+    // --- UI Button Event Bindings for Save/Load ---
+    let selectedSaveMode = 'settings'; // default mode
+
+    const saveProjectBtn = document.getElementById('save-project-btn');
+    const loadProjectBtn = document.getElementById('load-project-btn');
+    const projectFileInput = document.getElementById('project-file-input');
+
+    const saveProjectModal = document.getElementById('save-project-modal');
+    const saveModalClose = document.getElementById('save-modal-close');
+    const saveModalCancel = document.getElementById('save-modal-cancel');
+    const saveModalConfirm = document.getElementById('save-modal-confirm');
+    
+    const saveOptSettings = document.getElementById('save-opt-settings');
+    const saveOptFull = document.getElementById('save-opt-full');
+    const fullSaveWarning = document.getElementById('full-save-warning');
+    const relinkModalCancel = document.getElementById('relink-modal-cancel');
+    const relinkerModal = document.getElementById('media-relinker-modal');
+
+    if (saveOptSettings) {
+        saveOptSettings.addEventListener('click', () => {
+            selectedSaveMode = 'settings';
+            saveOptSettings.classList.add('active');
+            saveOptFull.classList.remove('active');
+            saveOptSettings.querySelector('.save-option-radio').innerHTML = '<i class="fa-solid fa-circle-dot"></i>';
+            saveOptFull.querySelector('.save-option-radio').innerHTML = '<i class="fa-regular fa-circle"></i>';
+            if (fullSaveWarning) fullSaveWarning.style.display = 'none';
+        });
+    }
+
+    if (saveOptFull) {
+        saveOptFull.addEventListener('click', () => {
+            selectedSaveMode = 'full';
+            saveOptFull.classList.add('active');
+            saveOptSettings.classList.remove('active');
+            saveOptFull.querySelector('.save-option-radio').innerHTML = '<i class="fa-solid fa-circle-dot"></i>';
+            saveOptSettings.querySelector('.save-option-radio').innerHTML = '<i class="fa-regular fa-circle"></i>';
+            if (fullSaveWarning) fullSaveWarning.style.display = 'flex';
+        });
+    }
+
+    if (saveProjectBtn) {
+        saveProjectBtn.addEventListener('click', () => {
+            if (saveProjectModal) saveProjectModal.style.display = 'flex';
+        });
+    }
+
+    const closeSaveModal = () => {
+        if (saveProjectModal) saveProjectModal.style.display = 'none';
+    };
+
+    if (saveModalClose) saveModalClose.addEventListener('click', closeSaveModal);
+    if (saveModalCancel) saveModalCancel.addEventListener('click', closeSaveModal);
+
+    if (saveModalConfirm) {
+        saveModalConfirm.addEventListener('click', async () => {
+            closeSaveModal();
+            await exportProject(selectedSaveMode);
+        });
+    }
+
+    if (loadProjectBtn && projectFileInput) {
+        loadProjectBtn.addEventListener('click', () => {
+            projectFileInput.click();
+        });
+
+        projectFileInput.addEventListener('change', (e) => {
+            const file = e.target.files[0];
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = async (evt) => {
+                    await importProject(evt.target.result);
+                };
+                reader.readAsText(file);
+                projectFileInput.value = ''; // Reset input to allow reloading same file
+            }
+        });
+    }
+
+    if (relinkModalCancel && relinkerModal) {
+        relinkModalCancel.addEventListener('click', () => {
+            relinkerModal.style.display = 'none';
+            pendingImportData = null;
+        });
+    }
+
+    // Try to restore from database cache on initial load
+    setTimeout(async () => {
+        await restoreProjectFromBrowserStorage();
+    }, 500);
+
     // Bind global trigger to allow re-render on demands
     window.triggerCanvasRedraw = drawFrame;
 });

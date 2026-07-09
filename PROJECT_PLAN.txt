@@ -53,6 +53,8 @@
   [DONE] Advanced Color Grading (custom R/G/B shadow/mid/highlight curves) - editor.js
   [DONE] Intro / Outro Template (canvas-drawn animated title cards) - editor.js + exporter.js
   [DONE] Export Progress UX (ETA + Cancel Render button)          - exporter.js
+  [DONE] Project Save/Load & Auto-Save/Restore (JSON Export & IndexedDB Cache) - editor.js
+
 
 
 -----------------------------------------------------
@@ -810,15 +812,12 @@ AI সাজেশন — পরবর্তী সম্ভাব্য ফি�
   - "বর্তমান ফিচার" তালিকায় নতুন লাইন যোগ করতে হবে
 
 
-=====================================================
- শেষ আপডেট: v2.10 - বাকি ৪টা Marker Animation সম্পন্ন
- (Thinking Character, Arrow Point-in, Highlight Marker Sweep,
- Typewriter Reveal — প্লাস বোনাস হিসেবে Magnifier Zoom, Question
- Bounce, Confetti Pop, এবং ৮টা Wings Fly Custom Preset কম্বো।
- কোড ইন্সপেকশনে নিশ্চিত হয়েছে যে এগুলো ইতিমধ্যে editor.js-এ পূর্ণাঙ্গভাবে
- implemented আছে; শুধু এই প্ল্যান ফাইলটাই stale ছিল, তাই sync করা হলো)
+ =====================================================
+  শেষ আপডেট: v2.11 - Project Save/Load & Auto-Save/Restore সম্পন্ন
+  (LocalStorage এবং IndexedDB ব্যবহার করে ডিবounceড অটো-সেভ ও অটো-রিস্টোর লজিক ইমপ্লিমেন্ট করা হয়েছে। 
+  এছাড়া সেটিংস প্রজেক্ট ব্যাকআপ ও ফুল প্রজেক্ট ব্যাকআপের জন্য JSON এক্সপোর্ট এবং অফলাইন মিডিয়া 
+  রি-লিঙ্কের জন্য প্রিমিয়াম ডাস্টবোর্ড মোডাল ও লুপ ইম্পোর্ট করা হয়েছে।)
 
- Phase 2 থেকে Phase 6 পর্যন্ত সব পরিকল্পিত কাজ এখন [DONE]।
- বাকি আছে শুধু "AI সাজেশন" সেকশনের ভবিষ্যৎ আইডিয়াগুলো (7A-7F) —
- এগুলোর কোনোটাই এখনো plan/implement করা হয়নি।
-=====================================================
+  Phase 2 থেকে Phase 6 এর সকল কাজ এবং সাজেশন 7D এখন [DONE]।
+  বাকি আছে ভবিষ্যৎ আইডিয়াগুলো (7A, 7B, 7C, 7E, 7F) — এগুলোর কোনোটাই এখনো plan/implement করা হয়নি।
+ =====================================================
