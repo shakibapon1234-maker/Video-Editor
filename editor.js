@@ -94,6 +94,12 @@ window.VideoEditor = {
     brightness: 100,
     contrast: 100,
     saturation: 100,
+
+    // Advanced Color Grading — custom per-channel RGB curves (Phase 4C)
+    colorGradeEnabled: false,
+    gradeRShadow: 0, gradeRMid: 0, gradeRHigh: 0,
+    gradeGShadow: 0, gradeGMid: 0, gradeGHigh: 0,
+    gradeBShadow: 0, gradeBMid: 0, gradeBHigh: 0,
     
     // Video layout mode
     layoutMode: 'fit',
@@ -182,7 +188,10 @@ window.VideoEditor = {
 };
 
 // Initialize Canvas
-window.VideoEditor.ctx = window.VideoEditor.canvas.getContext('2d');
+// willReadFrequently: true because Advanced Color Grading (Phase 4C) calls
+// getImageData/putImageData on this context every frame when enabled; the
+// hint avoids a repeated GPU->CPU readback penalty.
+window.VideoEditor.ctx = window.VideoEditor.canvas.getContext('2d', { willReadFrequently: true });
 
 document.addEventListener('DOMContentLoaded', () => {
     const state = window.VideoEditor;
@@ -736,6 +745,51 @@ document.addEventListener('DOMContentLoaded', () => {
             drawFrame();
         });
     });
+
+    // --- Advanced Color Grading / Custom RGB Curves Bindings (Phase 4C) ---
+    const colorGradeToggle = document.getElementById('color-grade-toggle');
+    const colorGradeContainer = document.getElementById('color-grade-container');
+    const resetColorGradeBtn = document.getElementById('reset-color-grade-btn');
+
+    // Maps each slider's DOM id -> { stateKey, valEl } so all 9 sliders can share
+    // one small binding loop instead of nine near-identical blocks.
+    const colorGradeSliderMap = [
+        ['grade-r-shadow', 'gradeRShadow'], ['grade-r-mid', 'gradeRMid'], ['grade-r-high', 'gradeRHigh'],
+        ['grade-g-shadow', 'gradeGShadow'], ['grade-g-mid', 'gradeGMid'], ['grade-g-high', 'gradeGHigh'],
+        ['grade-b-shadow', 'gradeBShadow'], ['grade-b-mid', 'gradeBMid'], ['grade-b-high', 'gradeBHigh'],
+    ];
+
+    colorGradeSliderMap.forEach(([elId, stateKey]) => {
+        const sliderEl = document.getElementById(elId);
+        const valEl = document.getElementById(elId + '-val');
+        if (!sliderEl) return;
+        sliderEl.addEventListener('input', (e) => {
+            state[stateKey] = parseInt(e.target.value);
+            if (valEl) valEl.innerText = state[stateKey];
+            drawFrame();
+        });
+    });
+
+    if (colorGradeToggle) {
+        colorGradeToggle.addEventListener('change', (e) => {
+            state.colorGradeEnabled = e.target.checked;
+            if (colorGradeContainer) colorGradeContainer.style.display = state.colorGradeEnabled ? 'block' : 'none';
+            drawFrame();
+        });
+    }
+
+    if (resetColorGradeBtn) {
+        resetColorGradeBtn.addEventListener('click', () => {
+            colorGradeSliderMap.forEach(([elId, stateKey]) => {
+                state[stateKey] = 0;
+                const sliderEl = document.getElementById(elId);
+                const valEl = document.getElementById(elId + '-val');
+                if (sliderEl) sliderEl.value = 0;
+                if (valEl) valEl.innerText = '0';
+            });
+            drawFrame();
+        });
+    }
 
     // Layout Mode (Fit vs Fill) selector
     const layoutModeBtns = document.querySelectorAll('.layout-mode-btn');
@@ -1497,6 +1551,29 @@ document.addEventListener('DOMContentLoaded', () => {
         return 1 + c3 * Math.pow(x - 1, 3) + c1 * Math.pow(x - 1, 2);
     }
 
+    // Builds a 256-entry per-channel lookup table from Shadows/Midtones/Highlights
+    // control points (Phase 4C - Advanced Color Grading). Piecewise-linear between
+    // (0, shadowAdj), (128, midAdj), (255, highAdj) — simple and predictable, no
+    // overshoot/ringing like a spline could introduce.
+    function buildChannelLUT(shadowAdj, midAdj, highAdj) {
+        const lut = new Uint8ClampedArray(256);
+        const y0 = 0 + shadowAdj;
+        const y1 = 128 + midAdj;
+        const y2 = 255 + highAdj;
+        for (let x = 0; x <= 255; x++) {
+            let y;
+            if (x <= 128) {
+                const t = x / 128;
+                y = y0 + (y1 - y0) * t;
+            } else {
+                const t = (x - 128) / 127;
+                y = y1 + (y2 - y1) * t;
+            }
+            lut[x] = Math.max(0, Math.min(255, Math.round(y)));
+        }
+        return lut;
+    }
+
     function drawFrame() {
         if (!state.duration) return;
         
@@ -1606,6 +1683,33 @@ document.addEventListener('DOMContentLoaded', () => {
             state.ctx.drawImage(mediaSource, sx, sy, sw, sh, drawX, drawY, drawW, drawH);
         }
         state.ctx.restore();
+
+        // --- Step A3: Advanced Color Grading (Custom RGB Curves, Phase 4C) ---
+        // Applied pixel-level (getImageData/putImageData) only over the drawn video
+        // rect, not the full canvas, so black letterbox bars aren't tinted by a
+        // shadow adjustment. This runs on top of the CSS filter preset above, so
+        // it works as a fine-tuning layer even when preset is "Normal".
+        if (state.colorGradeEnabled) {
+            const gradeX = Math.max(0, Math.round(drawX));
+            const gradeY = Math.max(0, Math.round(drawY));
+            const gradeW = Math.max(0, Math.min(canvasW - gradeX, Math.round(drawW)));
+            const gradeH = Math.max(0, Math.min(canvasH - gradeY, Math.round(drawH)));
+
+            if (gradeW > 0 && gradeH > 0) {
+                const lutR = buildChannelLUT(state.gradeRShadow, state.gradeRMid, state.gradeRHigh);
+                const lutG = buildChannelLUT(state.gradeGShadow, state.gradeGMid, state.gradeGHigh);
+                const lutB = buildChannelLUT(state.gradeBShadow, state.gradeBMid, state.gradeBHigh);
+
+                const imageData = state.ctx.getImageData(gradeX, gradeY, gradeW, gradeH);
+                const data = imageData.data;
+                for (let i = 0; i < data.length; i += 4) {
+                    data[i] = lutR[data[i]];
+                    data[i + 1] = lutG[data[i + 1]];
+                    data[i + 2] = lutB[data[i + 2]];
+                }
+                state.ctx.putImageData(imageData, gradeX, gradeY);
+            }
+        }
 
         // Draw Crop Overlay if crop adjustment mode is active
         if (state.isAdjustingCrop) {

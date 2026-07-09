@@ -1448,6 +1448,17 @@ input:checked + .slider:before {
     color: #ffffff;
 }
 
+/* Advanced Color Grading channel label (Phase 4C) */
+.color-grade-channel-label {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 13px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+}
+
 /* Emoji/Sticker Picker Grid (Phase 4A) */
 .emoji-grid {
     display: grid;

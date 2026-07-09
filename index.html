@@ -477,6 +477,101 @@
                                         </div>
                                     </div>
                                 </div>
+
+                                <!-- Advanced Color Grading / Custom RGB Curves (Phase 4C) -->
+                                <div class="toggle-control mt-4">
+                                    <div class="toggle-label">
+                                        <h4>Advanced Color Grading (কালার গ্রেডিং)</h4>
+                                        <p>Shadows/Midtones/Highlights অনুযায়ী প্রতিটি রঙ (R/G/B) আলাদাভাবে ঠিক করুন</p>
+                                    </div>
+                                    <label class="switch">
+                                        <input type="checkbox" id="color-grade-toggle">
+                                        <span class="slider round"></span>
+                                    </label>
+                                </div>
+
+                                <div class="color-grade-container mt-3" id="color-grade-container" style="display: none;">
+                                    <p class="help-text">CSS filter preset-এর উপরে আরও সূক্ষ্মভাবে rendering pixel-level-এ প্রতিটি color channel-এর curve কন্ট্রোল করুন। "Normal" preset হলেও এটি কাজ করবে।</p>
+
+                                    <div class="color-grade-channel mt-3">
+                                        <label class="color-grade-channel-label" style="color:#ef4444;"><i class="fa-solid fa-circle" style="font-size:8px;"></i> Red Channel</label>
+                                        <div class="control-group mt-2">
+                                            <label>Shadows</label>
+                                            <div class="slider-val-container">
+                                                <input type="range" id="grade-r-shadow" min="-100" max="100" value="0">
+                                                <span id="grade-r-shadow-val">0</span>
+                                            </div>
+                                        </div>
+                                        <div class="control-group mt-2">
+                                            <label>Midtones</label>
+                                            <div class="slider-val-container">
+                                                <input type="range" id="grade-r-mid" min="-100" max="100" value="0">
+                                                <span id="grade-r-mid-val">0</span>
+                                            </div>
+                                        </div>
+                                        <div class="control-group mt-2">
+                                            <label>Highlights</label>
+                                            <div class="slider-val-container">
+                                                <input type="range" id="grade-r-high" min="-100" max="100" value="0">
+                                                <span id="grade-r-high-val">0</span>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <div class="color-grade-channel mt-4">
+                                        <label class="color-grade-channel-label" style="color:#22c55e;"><i class="fa-solid fa-circle" style="font-size:8px;"></i> Green Channel</label>
+                                        <div class="control-group mt-2">
+                                            <label>Shadows</label>
+                                            <div class="slider-val-container">
+                                                <input type="range" id="grade-g-shadow" min="-100" max="100" value="0">
+                                                <span id="grade-g-shadow-val">0</span>
+                                            </div>
+                                        </div>
+                                        <div class="control-group mt-2">
+                                            <label>Midtones</label>
+                                            <div class="slider-val-container">
+                                                <input type="range" id="grade-g-mid" min="-100" max="100" value="0">
+                                                <span id="grade-g-mid-val">0</span>
+                                            </div>
+                                        </div>
+                                        <div class="control-group mt-2">
+                                            <label>Highlights</label>
+                                            <div class="slider-val-container">
+                                                <input type="range" id="grade-g-high" min="-100" max="100" value="0">
+                                                <span id="grade-g-high-val">0</span>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <div class="color-grade-channel mt-4">
+                                        <label class="color-grade-channel-label" style="color:#3b82f6;"><i class="fa-solid fa-circle" style="font-size:8px;"></i> Blue Channel</label>
+                                        <div class="control-group mt-2">
+                                            <label>Shadows</label>
+                                            <div class="slider-val-container">
+                                                <input type="range" id="grade-b-shadow" min="-100" max="100" value="0">
+                                                <span id="grade-b-shadow-val">0</span>
+                                            </div>
+                                        </div>
+                                        <div class="control-group mt-2">
+                                            <label>Midtones</label>
+                                            <div class="slider-val-container">
+                                                <input type="range" id="grade-b-mid" min="-100" max="100" value="0">
+                                                <span id="grade-b-mid-val">0</span>
+                                            </div>
+                                        </div>
+                                        <div class="control-group mt-2">
+                                            <label>Highlights</label>
+                                            <div class="slider-val-container">
+                                                <input type="range" id="grade-b-high" min="-100" max="100" value="0">
+                                                <span id="grade-b-high-val">0</span>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <button id="reset-color-grade-btn" class="btn btn-sm btn-outline mt-4">
+                                        <i class="fa-solid fa-rotate-left"></i> Reset All Curves
+                                    </button>
+                                </div>
                             </div>
                         </div>
                     </div>

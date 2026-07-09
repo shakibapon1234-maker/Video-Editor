@@ -50,6 +50,7 @@
   [DONE] Voice Changer Presets (Female, Male, Robot, Echo) - audio.js
   [DONE] News Ticker / Breaking-News Scrolling Text (top/bottom) - editor.js
   [DONE] Sticker/Emoji Overlay (drag & resize)                    - editor.js
+  [DONE] Advanced Color Grading (custom R/G/B shadow/mid/highlight curves) - editor.js
 
 
 -----------------------------------------------------
@@ -443,13 +444,42 @@ PHASE 4 - VISUAL EFFECTS
   - এটি Banner/Logo/B-roll/Text-এর আগে render হয় (video frame
     layer-এর ঠিক উপরে), ফলে export-এও সঠিকভাবে বার্ন-ইন হয়
 
-4C - Color Grading (LUT)   [TODO]
+4C - Color Grading (LUT)   [DONE]
 --------------------------------------
-বর্তমানে: CSS filter দিয়ে preset আছে (Warm, Cool, Vintage)
-উন্নতি করতে হবে:
-  - Custom per-channel curve adjustment (RGB curves)
-  - অথবা predefined LUT JSON apply করা pixel-level-এ
-    (OffscreenCanvas)
+বর্তমানে: CSS filter দিয়ে preset আছে (Warm, Cool, Vintage) — অপরিবর্তিত
+সম্পন্ন হয়েছে (v2.8 - Advanced Color Grading):
+  - "Cinematic Filters & Adjustments" কার্ডে নতুন "Advanced Color
+    Grading" toggle section যুক্ত হয়েছে (Brightness/Contrast/
+    Saturation-এর নিচে)
+  - এটি CSS filter preset-এর সাথে conflict করে না — উপরে আরেকটা
+    fine-tuning লেয়ার হিসেবে কাজ করে (এমনকি "Normal" preset-এ থাকলেও)
+  - Red/Green/Blue — প্রতিটি চ্যানেলের জন্য আলাদা Shadows/Midtones/
+    Highlights স্লাইডার (-100 থেকে +100), মোট ৯টি কন্ট্রোল
+  - state-এ gradeRShadow/gradeRMid/gradeRHigh (এবং G/B-এর জন্য একই)
+    + colorGradeEnabled বুলিয়ান যুক্ত হয়েছে
+  - buildChannelLUT() ফাংশন প্রতিটি চ্যানেলের জন্য (0, shadowAdj),
+    (128, midAdj), (255, highAdj) — এই ৩টি control point দিয়ে একটা
+    256-value piecewise-linear lookup table তৈরি করে (কোনো spline
+    overshoot/ringing ছাড়াই predictable curve)
+  - drawFrame()-এ নতুন Step A3 হিসেবে যুক্ত হয়েছে: মূল video frame
+    আঁকার ঠিক পরে (drawX/drawY/drawW/drawH — অর্থাৎ শুধু ভিডিওর আসল
+    এলাকায়, Fit mode-এর কালো letterbox bar-এ নয়) getImageData() দিয়ে
+    pixel data নিয়ে প্রতিটি pixel-এর R/G/B-কে সংশ্লিষ্ট LUT দিয়ে
+    lookup করে putImageData() দিয়ে ফিরিয়ে দেওয়া হয়
+  - Canvas context তৈরির সময় { willReadFrequently: true } যোগ করা
+    হয়েছে যাতে বারবার getImageData কল করলে performance penalty কম হয়
+  - Export-এ আলাদা কোনো কাজ লাগেনি — exporter.js canvas.captureStream()
+    ব্যবহার করে, আর যেহেতু grading সরাসরি drawFrame()-এর canvas-এই বেক
+    হয়ে যায়, তাই preview আর export দুই জায়গাতেই একই রঙ দেখা যাবে
+  - Reset All Curves বাটন দিয়ে ৯টি স্লাইডার এক ক্লিকে শূন্যে ফেরত
+    আনা যায়
+  - সীমাবদ্ধতা: এটি per-pixel piecewise-linear curve, প্রকৃত 3D LUT
+    (.cube ফাইল) ইমপোর্ট নয় — কালার সায়েন্টিস্টদের ব্যবহৃত পূর্ণাঙ্গ
+    3D LUT ফরম্যাট সাপোর্ট করে না, তবে shadows/midtones/highlights
+    আলাদাভাবে ঠিক করার জন্য যথেষ্ট নমনীয়। বড় ক্যানভাসে (যেমন 1080p)
+    সক্রিয় থাকলে প্রতি ফ্রেমে pixel-level loop চলে, তাই খুব পুরনো/দুর্বল
+    কম্পিউটারে প্রিভিউ কিছুটা ধীর হতে পারে — ফিচারটি ডিফল্টে বন্ধ
+    থাকে, প্রয়োজন হলেই টগল করে চালু করতে হয়
 
 
 PHASE 5 - FACEBOOK/SOCIAL MEDIA SPECIFIC
@@ -652,6 +682,7 @@ Export-এ audio mixing এখানে হয়। নতুন audio track (b
   9. [DONE] Phase 5A - Auto Subtitle
   10. [DONE] Phase 2B - Multi-Clip Timeline (সবচেয়ে জটিল ছিল)
   11. [DONE] Phase 4A - Sticker/Emoji Overlay
+  12. [DONE] Phase 4C - Color Grading (Custom RGB Curves)
 
 
 -----------------------------------------------------
@@ -665,6 +696,6 @@ Export-এ audio mixing এখানে হয়। নতুন audio track (b
 
 
 =====================================================
- শেষ আপডেট: v2.7 - Sticker/Emoji Overlay Release
- (বাকি আছে: 4C Color Grading, 5C Intro/Outro, 6B Export Progress UX)
+ শেষ আপডেট: v2.8 - Advanced Color Grading Release
+ (বাকি আছে: 5C Intro/Outro Template, 6B Export Progress UX)
 =====================================================
