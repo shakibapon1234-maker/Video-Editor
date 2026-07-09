@@ -324,10 +324,29 @@ Feature - নতুন Marker-স্টাইল অ্যানিমেশন 
       লাগে - marker circle-এর মতো)
     - Underline Draw-on: নিচে বাম থেকে ডানে দাগ animate হয়ে আঁকা হয়
     - Checkmark Pop: ✓ (সবুজ) চিহ্ন বাউন্স করে পপ-ইন করে
-  বাকি যেগুলো এখনো বাকি আছে (পরের ধাপে করা হবে): Thinking
-  Character (মুখে হাত দিয়ে ভাবছে এমন আইকন), Arrow Point-in,
-  Highlight Marker Sweep, Typewriter Reveal - এগুলোর জন্য নতুন করে
-  বলবেন কোনটা আগে দরকার, priority অনুযায়ী পরের বার করে দেব।
+
+  [DONE] বাকি ৪টা মার্কার অ্যানিমেশনও এখন সম্পন্ন (editor.js):
+    - Thinking Character: 🤔 থট-বাবল top-right কোণায় পপ করে আসে,
+      দুটো ছোট trailing dot সহ (লাইন ~2505-2530)
+    - Arrow Point-in: hand-drawn arrow entryDirection অনুযায়ী
+      left/right/top/bottom থেকে উড়ে এসে বক্সে পয়েন্ট করে, exit-এ
+      একই পথে ফিরে যায় (লাইন ~2531-2568)
+    - Highlight Marker Sweep: মার্কার-স্টাইল হাইলাইট সুইপ, 'wipe'-এর
+      reveal মেকানিক পুনর্ব্যবহার করে বাস্তবায়িত (লাইন ~2258+)
+    - Typewriter Reveal: character-by-character টেক্সট টাইপ হয়ে
+      আসে, ব্লিঙ্কিং cursor সহ (লাইন ~2197, 2291-2322)
+
+  [BONUS] প্ল্যানে না থাকা আরও ৩টা মার্কার অ্যানিমেশনও যোগ হয়েছে:
+    - Magnifier Zoom (🔍 বটম-রাইট কোণায় বাউন্সি পপ)
+    - Question Mark Bounce (❓ টপ-লেফট কোণায় বাউন্স করে আসে)
+    - Confetti Pop (এন্ট্রিতে one-shot রঙিন পার্টিকল বার্স্ট)
+
+  [BONUS] ৮টা "Wings Fly Custom Preset" কম্বো যোগ হয়েছে (style +
+  entryDirection + soundEffect একসাথে বাছাই করার শর্টকাট):
+  preset-wings-intro, preset-question-pop, preset-checkmark-chime,
+  preset-typewriter-click, preset-zoom-chime, preset-rotate-whoosh,
+  preset-highlight-chime, preset-arrow-whoosh (getBrollPresetValue/
+  applyBrollPresetStyle ফাংশন, লাইন ~4649-4709)
 
 PHASE 2 - VIDEO EDITING CORE (পরবর্তী প্রায়োরিটি)
 ====================================================
@@ -792,7 +811,14 @@ AI সাজেশন — পরবর্তী সম্ভাব্য ফি�
 
 
 =====================================================
- শেষ আপডেট: v2.9 - Intro/Outro Template + Export Progress UX (ETA/Cancel)
- (Phase 5 ও Phase 6-এর সব পরিকল্পিত TODO সম্পন্ন — উপরে "AI সাজেশন"
- সেকশনে নতুন কিছু ভবিষ্যৎ আইডিয়া যোগ করা হয়েছে)
+ শেষ আপডেট: v2.10 - বাকি ৪টা Marker Animation সম্পন্ন
+ (Thinking Character, Arrow Point-in, Highlight Marker Sweep,
+ Typewriter Reveal — প্লাস বোনাস হিসেবে Magnifier Zoom, Question
+ Bounce, Confetti Pop, এবং ৮টা Wings Fly Custom Preset কম্বো।
+ কোড ইন্সপেকশনে নিশ্চিত হয়েছে যে এগুলো ইতিমধ্যে editor.js-এ পূর্ণাঙ্গভাবে
+ implemented আছে; শুধু এই প্ল্যান ফাইলটাই stale ছিল, তাই sync করা হলো)
+
+ Phase 2 থেকে Phase 6 পর্যন্ত সব পরিকল্পিত কাজ এখন [DONE]।
+ বাকি আছে শুধু "AI সাজেশন" সেকশনের ভবিষ্যৎ আইডিয়াগুলো (7A-7F) —
+ এগুলোর কোনোটাই এখনো plan/implement করা হয়নি।
 =====================================================
