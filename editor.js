@@ -792,8 +792,20 @@ document.addEventListener('DOMContentLoaded', () => {
             if (!confirm(confirmMsg)) return;
 
             const clipIndex = state.clips.indexOf(activeClip);
-            const keepFirst = startCut > activeClip.start + 0.15;
-            const keepSecond = endCut < activeClip.end - 0.15;
+
+            let startBound = activeClip.start;
+            let endBound = activeClip.end;
+
+            // If the user has trimmed the active clip to exactly the cut range,
+            // we assume they did this to select the disturbance and want to keep the rest
+            // of the original video file.
+            if (Math.abs(startCut - activeClip.start) < 0.2 && Math.abs(endCut - activeClip.end) < 0.2) {
+                startBound = 0;
+                endBound = activeClip.duration;
+            }
+
+            const keepFirst = startCut > startBound + 0.15;
+            const keepSecond = endCut < endBound - 0.15;
 
             if (!keepFirst && !keepSecond) {
                 alert("পুরো ক্লিপটি একসাথে বাদ দেওয়া যাবে না। ক্লিপ ডিলিট করতে ক্লিপ তালিকার X বাটনে ক্লিক করুন।");
@@ -814,7 +826,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     url: activeClip.url,
                     name: activeClip.name,
                     duration: activeClip.duration,
-                    start: activeClip.start,
+                    start: startBound,
                     end: startCut,
                     cropX: activeClip.cropX,
                     cropY: activeClip.cropY,
@@ -831,7 +843,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     name: activeClip.name,
                     duration: activeClip.duration,
                     start: endCut,
-                    end: activeClip.end,
+                    end: endBound,
                     cropX: activeClip.cropX,
                     cropY: activeClip.cropY,
                     cropW: activeClip.cropW,
