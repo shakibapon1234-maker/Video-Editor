@@ -28,6 +28,38 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
+    // Robustly wait for video.currentTime to actually reach targetTime after a seek.
+    // A single fixed timeout (the old approach) is a race condition: on a slow seek
+    // (large jump, heavy concurrent canvas work, CPU contention) the 'seeked' event
+    // can simply not have fired yet when the timeout expires, so the caller would
+    // start recording from the wrong position. This polls in a loop -- re-checking,
+    // and re-issuing the seek if needed -- until the position actually matches
+    // (within 150ms of playback), only giving up after maxWaitMs so a genuinely
+    // broken seek can't hang the export forever.
+    async function waitForSeek(video, targetTime, maxWaitMs = 4000) {
+        const seekStart = performance.now();
+        video.currentTime = targetTime;
+        while (Math.abs(video.currentTime - targetTime) > 0.15) {
+            if (performance.now() - seekStart > maxWaitMs) {
+                console.warn(`Seek to ${targetTime}s did not complete within ${maxWaitMs}ms (stuck at ${video.currentTime}s). Forcing and continuing.`);
+                video.currentTime = targetTime;
+                break;
+            }
+            await new Promise((resolveSeek) => {
+                const onSeeked = () => {
+                    video.removeEventListener('seeked', onSeeked);
+                    resolveSeek();
+                };
+                video.addEventListener('seeked', onSeeked);
+                // Re-check periodically even if 'seeked' never fires for this attempt
+                setTimeout(resolveSeek, 150);
+            });
+            if (Math.abs(video.currentTime - targetTime) > 0.15) {
+                video.currentTime = targetTime; // re-issue the seek and try again
+            }
+        }
+    }
+
     const renderBtn = document.getElementById('render-btn');
     const renderProgressBox = document.getElementById('render-progress-box');
     const renderProgressFill = document.getElementById('render-progress-fill');
@@ -386,21 +418,20 @@ document.addEventListener('DOMContentLoaded', () => {
                 state.currentTime = clipTrimStart;
             } else {
                 video.currentTime = clipTrimStart;
-                
-                // Wait for video to seek to the starting frame so we don't draw/record a black frame
-                await new Promise((resolveSeek) => {
-                    let resolved = false;
-                    const onSeeked = () => {
-                        if (!resolved) {
-                            resolved = true;
-                            video.removeEventListener('seeked', onSeeked);
-                            resolveSeek();
-                        }
-                    };
-                    video.addEventListener('seeked', onSeeked);
-                    // Safety timeout of 500ms
-                    setTimeout(onSeeked, 500);
-                });
+
+                // Wait for the video to ACTUALLY reach the target position before recording it.
+                // Previously this just waited up to 500ms for a single 'seeked' event and then
+                // moved on regardless -- on a slow/large seek (common under CPU load, e.g. while
+                // Advanced Color Grading is running its own per-frame getImageData/putImageData
+                // pass) the 500ms timeout could fire before the seek actually landed. Recording
+                // would then start from whatever stale position the video was still sitting at
+                // (often much earlier in the file), silently baking extra/wrong footage into the
+                // export -- e.g. a 7 min edit coming out as 10 min, or a B-roll overlay's time
+                // window sliding out of sync with what actually got recorded. This is why it was
+                // intermittent: it only showed up when the seek happened to be slow that run.
+                // Fix: keep polling/re-seeking until currentTime is actually close to the target,
+                // with a generous (but bounded) overall timeout so we never hang forever.
+                await waitForSeek(video, clipTrimStart);
 
                 if (!window.setSpeakerMuted || !window.setSpeakerMuted(true)) {
                     video.volume = 0;
