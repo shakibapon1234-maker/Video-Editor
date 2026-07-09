@@ -895,13 +895,29 @@ document.addEventListener('DOMContentLoaded', () => {
     function updateLoop() {
         if (!state.isPlaying) return;
         
-        // Loop back if reached trim end
+        // Loop back or transition to the next clip if reached trim end
         if (state.video.currentTime >= state.endTime) {
             if (window.isRecordingVoiceover) {
                 // If recording voiceover, stop both recording and playback when reaching trim end
                 pauseVideo();
             } else {
-                state.video.currentTime = state.startTime;
+                const activeClip = state.clips.find(c => c.id === state.activeClipId);
+                const clipIndex = state.clips.indexOf(activeClip);
+                if (activeClip && clipIndex >= 0 && clipIndex < state.clips.length - 1) {
+                    // Transition to next clip and play!
+                    const nextClip = state.clips[clipIndex + 1];
+                    switchActiveClip(nextClip.id, true);
+                    return; // exit loop, playVideo in switchActiveClip will start a new loop
+                } else {
+                    // Loop back to the first clip!
+                    const firstClip = state.clips[0];
+                    if (firstClip && firstClip.id !== state.activeClipId) {
+                        switchActiveClip(firstClip.id, true);
+                        return;
+                    } else {
+                        state.video.currentTime = state.startTime;
+                    }
+                }
             }
         }
         
@@ -1029,7 +1045,7 @@ document.addEventListener('DOMContentLoaded', () => {
         };
     }
 
-    function switchActiveClip(clipId) {
+    function switchActiveClip(clipId, autoPlay = false) {
         const clip = state.clips.find(c => c.id === clipId);
         if (!clip || clip.id === state.activeClipId) return;
 
@@ -1069,6 +1085,10 @@ document.addEventListener('DOMContentLoaded', () => {
             updateCropDimensionsDisplay();
             drawFrame();
             renderClipTimeline();
+
+            if (autoPlay) {
+                playVideo();
+            }
         };
     }
 
