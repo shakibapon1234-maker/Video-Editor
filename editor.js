@@ -1764,7 +1764,23 @@ document.addEventListener('DOMContentLoaded', () => {
                 // sized by its content and positioned by item.x/item.y (drag-anywhere).
                 let boxX, boxY, boxW, boxH;
                 if (item.mode === 'fullscreen') {
-                    boxX = drawX; boxY = drawY; boxW = drawW; boxH = drawH;
+                    const scale = ((item.size !== undefined ? item.size : 100)) / 100;
+                    if (scale >= 0.999) {
+                        // Full coverage (default) — identical to the old behaviour
+                        boxX = drawX; boxY = drawY; boxW = drawW; boxH = drawH;
+                    } else {
+                        // Custom size: scale from the center of the video draw rect.
+                        // item.x/y are set when the user drags the box, otherwise centered.
+                        boxW = drawW * scale;
+                        boxH = drawH * scale;
+                        if (item._fsPosSet) {
+                            boxX = item.x * canvasW;
+                            boxY = item.y * canvasH;
+                        } else {
+                            boxX = drawX + (drawW - boxW) / 2;
+                            boxY = drawY + (drawH - boxH) / 2;
+                        }
+                    }
                 } else {
                     if (item.type === 'text') {
                         state.ctx.font = `bold ${item.fontSize}px "Hind Siliguri", "Plus Jakarta Sans", sans-serif`;
@@ -2289,9 +2305,10 @@ document.addEventListener('DOMContentLoaded', () => {
                     }
                 }
 
-                // Selection box in Step 3 for the active B-roll item being edited (PiP only —
-                // Fullscreen items cover the whole frame so an outline wouldn't be useful).
-                if (state.currentStep === 3 && item.mode === 'pip' && item.id === state.selectedBrollId) {
+                // Selection box in Step 3 for the active B-roll item being edited.
+                // Shown for PiP always, and for Fullscreen when size < 100%.
+                const isFsCustom = item.mode === 'fullscreen' && (item.size !== undefined && item.size < 100);
+                if (state.currentStep === 3 && (item.mode === 'pip' || isFsCustom) && item.id === state.selectedBrollId) {
                     state.ctx.strokeStyle = 'rgba(79, 70, 229, 0.9)';
                     state.ctx.lineWidth = 2;
                     state.ctx.setLineDash([6, 4]);
@@ -2852,18 +2869,29 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         }
 
-        // B-roll PiP drag/select (Phase 5D) — checked before text overlay
+        // B-roll drag/select (Phase 5D) — checked before text overlay
         if (state.brollOverlays && state.brollOverlays.length > 0) {
             const brollHit = findBrollPipAt(coords);
             if (brollHit) {
                 state.selectedBrollId = brollHit.id;
                 state.isDraggingBroll = true;
 
-                if (brollHit.mode === 'fullscreen') {
+                if (brollHit.mode === 'fullscreen' && (brollHit.size === undefined || brollHit.size >= 100)) {
+                    // Fullscreen at 100% — clicking starts a drag but keeps fullscreen mode.
+                    // Mark that the user has set a custom position so scaling uses item.x/y.
+                    brollHit._fsPosSet = true;
+                    brollHit.x = coords.x / canvasW;
+                    brollHit.y = coords.y / canvasH;
+                }
+
+                if (brollHit.mode === 'fullscreen' && brollHit._fsPosSet) {
+                    // Dragging a fullscreen item with custom position — keep in fullscreen
+                    state.dragBrollOffsetX = coords.x - (brollHit.x * canvasW);
+                    state.dragBrollOffsetY = coords.y - (brollHit.y * canvasH);
+                } else if (brollHit.mode === 'fullscreen') {
+                    // Legacy: first drag converts to pip (old behavior for 100% items)
                     brollHit.mode = 'pip';
-                    brollHit.size = 35; // Default PiP size
-                    
-                    // Center the PiP box on click coordinate
+                    brollHit.size = 35;
                     let pw = canvasW * 0.35;
                     let ph = pw;
                     if (brollHit.type === 'text') {
@@ -2876,17 +2904,18 @@ document.addEventListener('DOMContentLoaded', () => {
                     }
                     brollHit.x = (coords.x - pw / 2) / canvasW;
                     brollHit.y = (coords.y - ph / 2) / canvasH;
-                    
-                    // Sync the sidebar controls to reflect these new values
                     if (brollModeSelect) brollModeSelect.value = 'pip';
-                    if (brollSizeSlider) brollSizeSlider.value = 35;
+                    if (brollSizeSlider) { brollSizeSlider.max = 60; brollSizeSlider.value = 35; }
                     if (brollSizeVal) brollSizeVal.innerText = '35%';
                     if (brollSizeContainer) brollSizeContainer.style.display = 'block';
                     renderBrollList();
+                    state.dragBrollOffsetX = coords.x - (brollHit.x * canvasW);
+                    state.dragBrollOffsetY = coords.y - (brollHit.y * canvasH);
+                } else {
+                    state.dragBrollOffsetX = coords.x - (brollHit.x * canvasW);
+                    state.dragBrollOffsetY = coords.y - (brollHit.y * canvasH);
                 }
 
-                state.dragBrollOffsetX = coords.x - (brollHit.x * canvasW);
-                state.dragBrollOffsetY = coords.y - (brollHit.y * canvasH);
                 if (window.onBrollSelected) window.onBrollSelected(brollHit.id);
                 e.preventDefault();
                 return;
@@ -2929,11 +2958,27 @@ document.addEventListener('DOMContentLoaded', () => {
                     px = (canvasW - pipW) / 2;
                     py = (canvasH - pipH) / 2;
                 } else {
-                    // Fullscreen image covers the whole canvas
-                    px = 0;
-                    py = 0;
-                    pipW = canvasW;
-                    pipH = canvasH;
+                    // Fullscreen image — hit-test uses actual scaled box when size < 100%
+                    const scale = (item.size !== undefined ? item.size : 100) / 100;
+                    if (scale >= 0.999) {
+                        px = 0; py = 0; pipW = canvasW; pipH = canvasH;
+                    } else {
+                        const videoAspect = (state.video && state.video.videoWidth && state.video.videoHeight)
+                            ? state.video.videoWidth / state.video.videoHeight : 16 / 9;
+                        const canvasAspect = canvasW / canvasH;
+                        let dvW = canvasW, dvH = canvasH, dvX = 0, dvY = 0;
+                        if (videoAspect > canvasAspect) { dvH = canvasW / videoAspect; dvY = (canvasH - dvH) / 2; }
+                        else if (videoAspect < canvasAspect) { dvW = canvasH * videoAspect; dvX = (canvasW - dvW) / 2; }
+                        pipW = dvW * scale;
+                        pipH = dvH * scale;
+                        if (item._fsPosSet) {
+                            px = item.x * canvasW;
+                            py = item.y * canvasH;
+                        } else {
+                            px = dvX + (dvW - pipW) / 2;
+                            py = dvY + (dvH - pipH) / 2;
+                        }
+                    }
                 }
             } else {
                 // PiP mode
@@ -3760,7 +3805,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 imageImg: img,
                 imageUrl: url,
                 mode: brollModeSelect ? brollModeSelect.value : 'fullscreen',
-                size: brollSizeSlider ? parseInt(brollSizeSlider.value) : 35,
+                size: brollModeSelect && brollModeSelect.value === 'pip'
+                    ? (brollSizeSlider ? parseInt(brollSizeSlider.value) : 35)
+                    : 100,
                 x: 0.05,
                 y: 0.6,
                 startSec: Math.min(state.endTime || state.duration || 5, state.currentTime || 0),
@@ -3970,9 +4017,12 @@ document.addEventListener('DOMContentLoaded', () => {
             brollEndInput.value = item.endSec;
         }
         if (brollModeSelect) brollModeSelect.value = item.mode;
-        if (brollSizeSlider) brollSizeSlider.value = item.size;
-        if (brollSizeVal) brollSizeVal.innerText = item.size + '%';
-        if (brollSizeContainer) brollSizeContainer.style.display = item.mode === 'pip' ? 'block' : 'none';
+        if (brollSizeContainer) brollSizeContainer.style.display = 'block'; // always visible
+        if (brollSizeSlider) {
+            brollSizeSlider.max = item.mode === 'pip' ? 60 : 100;
+            brollSizeSlider.value = item.size !== undefined ? item.size : (item.mode === 'pip' ? 35 : 100);
+            if (brollSizeVal) brollSizeVal.innerText = (item.size !== undefined ? item.size : (item.mode === 'pip' ? 35 : 100)) + '%';
+        }
 
         // Sync the animation/direction/speed/sound controls to this item
         populateBrollAnimStyleOptions(item.mode);
@@ -4172,7 +4222,17 @@ document.addEventListener('DOMContentLoaded', () => {
             const item = state.brollOverlays.find(b => b.id === state.selectedBrollId);
             if (item) {
                 item.mode = e.target.value;
-                if (brollSizeContainer) brollSizeContainer.style.display = item.mode === 'pip' ? 'block' : 'none';
+                if (brollSizeContainer) brollSizeContainer.style.display = 'block'; // always visible
+                if (brollSizeSlider) {
+                    brollSizeSlider.max = item.mode === 'pip' ? 60 : 100;
+                    // When switching to fullscreen, reset to 100% so it covers fully by default
+                    if (item.mode === 'fullscreen') {
+                        item.size = 100;
+                        item._fsPosSet = false;
+                        brollSizeSlider.value = 100;
+                        if (brollSizeVal) brollSizeVal.innerText = '100%';
+                    }
+                }
                 // All animation styles now work in either mode, but we still switch to
                 // that mode's more natural-feeling default when toggling, so it doesn't
                 // suddenly look like nothing changed.
