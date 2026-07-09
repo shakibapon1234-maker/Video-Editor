@@ -109,6 +109,14 @@ window.VideoEditor = {
     brollOverlays: [],
     selectedBrollId: null,
     isDraggingBroll: false,
+    isResizingBroll: false,
+    brollResizeHandle: null,
+    brollResizeStartX: 0,
+    brollResizeStartY: 0,
+    brollResizeStartW: 0,
+    brollResizeStartH: 0,
+    brollResizeStartBoxX: 0,
+    brollResizeStartBoxY: 0,
     isDraggingSeek: false,
     dragBrollOffsetX: 0,
     dragBrollOffsetY: 0,
@@ -1788,8 +1796,14 @@ document.addEventListener('DOMContentLoaded', () => {
                         boxW = metrics.width + 32;
                         boxH = item.fontSize + 24;
                     } else {
-                        boxW = canvasW * (item.size / 100);
-                        boxH = boxW * (item.imageImg.naturalHeight / item.imageImg.naturalWidth);
+                        if (item.pipW !== undefined && item.pipH !== undefined) {
+                            // Free-form resize set by dragging corner/edge handles
+                            boxW = item.pipW * canvasW;
+                            boxH = item.pipH * canvasH;
+                        } else {
+                            boxW = canvasW * (item.size / 100);
+                            boxH = boxW * (item.imageImg.naturalHeight / item.imageImg.naturalWidth);
+                        }
                     }
                     boxX = item.x * canvasW;
                     boxY = item.y * canvasH;
@@ -2031,11 +2045,17 @@ document.addEventListener('DOMContentLoaded', () => {
                         state.ctx.restore();
                     }
                 } else {
-                    // Cover the box, preserving aspect ratio (fill/crop).
+                    // Source rect: cover-crop to fill the box (PiP and fullscreen@100%).
+                    // Exception: fullscreen at < 100% size shows the FULL image (contain)
+                    // so the user can actually see the whole image in the smaller frame.
+                    const fsSmall = item.mode === 'fullscreen' && ((item.size !== undefined ? item.size : 100) < 99.9);
                     const imgAspect = item.imageImg.naturalWidth / item.imageImg.naturalHeight;
                     const boxAspect = boxW / boxH;
                     let sx, sy, sw, sh;
-                    if (imgAspect > boxAspect) {
+                    if (fsSmall) {
+                        // Contain mode — show the whole image, adjust destination rect
+                        sx = 0; sy = 0; sw = item.imageImg.naturalWidth; sh = item.imageImg.naturalHeight;
+                    } else if (imgAspect > boxAspect) {
                         sh = item.imageImg.naturalHeight;
                         sw = sh * boxAspect;
                         sx = (item.imageImg.naturalWidth - sw) / 2;
@@ -2126,7 +2146,20 @@ document.addEventListener('DOMContentLoaded', () => {
                         state.ctx.restore();
                     } else {
                         // Normal drawing of one image
-                        state.ctx.drawImage(item.imageImg, sx, sy, sw, sh, drawBoxX, drawBoxY, boxW, boxH);
+                        if (fsSmall) {
+                            // Contain mode: compute letterboxed destination rect
+                            let dX = drawBoxX, dY = drawBoxY, dW = boxW, dH = boxH;
+                            if (imgAspect > boxAspect) {
+                                dH = boxW / imgAspect;
+                                dY = drawBoxY + (boxH - dH) / 2;
+                            } else {
+                                dW = boxH * imgAspect;
+                                dX = drawBoxX + (boxW - dW) / 2;
+                            }
+                            state.ctx.drawImage(item.imageImg, 0, 0, item.imageImg.naturalWidth, item.imageImg.naturalHeight, dX, dY, dW, dH);
+                        } else {
+                            state.ctx.drawImage(item.imageImg, sx, sy, sw, sh, drawBoxX, drawBoxY, boxW, boxH);
+                        }
                     }
                 }
 
@@ -2305,15 +2338,39 @@ document.addEventListener('DOMContentLoaded', () => {
                     }
                 }
 
-                // Selection box in Step 3 for the active B-roll item being edited.
+                // Selection outline + resize handles in Step 3.
                 // Shown for PiP always, and for Fullscreen when size < 100%.
                 const isFsCustom = item.mode === 'fullscreen' && (item.size !== undefined && item.size < 100);
                 if (state.currentStep === 3 && (item.mode === 'pip' || isFsCustom) && item.id === state.selectedBrollId) {
+                    // Dashed outline
                     state.ctx.strokeStyle = 'rgba(79, 70, 229, 0.9)';
                     state.ctx.lineWidth = 2;
                     state.ctx.setLineDash([6, 4]);
                     state.ctx.strokeRect(drawBoxX, drawBoxY, boxW, boxH);
                     state.ctx.setLineDash([]);
+                    // Resize handles for PiP (8-point: 4 corners + 4 edges)
+                    if (item.mode === 'pip') {
+                        const hs = Math.max(7, Math.min(canvasW, canvasH) * 0.018);
+                        const hpts = [
+                            [drawBoxX,          drawBoxY],
+                            [drawBoxX + boxW/2,  drawBoxY],
+                            [drawBoxX + boxW,    drawBoxY],
+                            [drawBoxX + boxW,    drawBoxY + boxH/2],
+                            [drawBoxX + boxW,    drawBoxY + boxH],
+                            [drawBoxX + boxW/2,  drawBoxY + boxH],
+                            [drawBoxX,           drawBoxY + boxH],
+                            [drawBoxX,           drawBoxY + boxH/2],
+                        ];
+                        state.ctx.fillStyle = '#ffffff';
+                        state.ctx.strokeStyle = 'rgba(79, 70, 229, 0.95)';
+                        state.ctx.lineWidth = 1.5;
+                        hpts.forEach(([hx, hy]) => {
+                            state.ctx.beginPath();
+                            state.ctx.rect(hx - hs/2, hy - hs/2, hs, hs);
+                            state.ctx.fill();
+                            state.ctx.stroke();
+                        });
+                    }
                 }
 
                 state.ctx.restore();
@@ -2869,6 +2926,32 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         }
 
+        // B-roll resize handle check (must come BEFORE drag check)
+        if (state.currentStep === 3 && state.selectedBrollId !== null) {
+            const resizeHandle = findBrollResizeHandle(coords);
+            if (resizeHandle) {
+                const item = state.brollOverlays.find(b => b.id === state.selectedBrollId);
+                if (item) {
+                    state.isResizingBroll = true;
+                    state.brollResizeHandle = resizeHandle;
+                    state.brollResizeStartX = coords.x;
+                    state.brollResizeStartY = coords.y;
+                    state.brollResizeStartBoxX = item.x;
+                    state.brollResizeStartBoxY = item.y;
+                    if (item.pipW !== undefined && item.pipH !== undefined) {
+                        state.brollResizeStartW = item.pipW;
+                        state.brollResizeStartH = item.pipH;
+                    } else {
+                        state.brollResizeStartW = item.size / 100;
+                        const imgAspect = item.imageImg ? (item.imageImg.naturalHeight / item.imageImg.naturalWidth) : 1;
+                        state.brollResizeStartH = (item.size / 100) * (canvasW / canvasH) * imgAspect;
+                    }
+                    e.preventDefault();
+                    return;
+                }
+            }
+        }
+
         // B-roll drag/select (Phase 5D) — checked before text overlay
         if (state.brollOverlays && state.brollOverlays.length > 0) {
             const brollHit = findBrollPipAt(coords);
@@ -2998,6 +3081,44 @@ document.addEventListener('DOMContentLoaded', () => {
             if (coords.x >= px && coords.x <= px + pipW && coords.y >= py && coords.y <= py + pipH) {
                 return item;
             }
+        }
+        return null;
+    }
+
+    // Returns the handle id ('top-left', 'top', 'top-right', 'right', 'bottom-right',
+    // 'bottom', 'bottom-left', 'left') under 'coords' for the currently selected PiP
+    // B-roll item, or null if the pointer isn't near any handle.
+    function findBrollResizeHandle(coords) {
+        const item = state.brollOverlays.find(b => b.id === state.selectedBrollId);
+        if (!item || item.mode !== 'pip') return null;
+        const canvasW = state.canvas.width;
+        const canvasH = state.canvas.height;
+        let bW, bH;
+        if (item.pipW !== undefined && item.pipH !== undefined) {
+            bW = item.pipW * canvasW;
+            bH = item.pipH * canvasH;
+        } else {
+            bW = canvasW * (item.size / 100);
+            bH = item.imageImg ? bW * (item.imageImg.naturalHeight / item.imageImg.naturalWidth) : bW;
+        }
+        const bx = item.x * canvasW;
+        const by = item.y * canvasH;
+        // Physical hit radius: 14px on-screen regardless of canvas resolution
+        const rect = state.canvas.getBoundingClientRect();
+        const physScale = canvasW / rect.width;
+        const hr = 14 * physScale;
+        const hpts = [
+            { id: 'top-left',     x: bx,        y: by },
+            { id: 'top',          x: bx + bW/2,  y: by },
+            { id: 'top-right',    x: bx + bW,    y: by },
+            { id: 'right',        x: bx + bW,    y: by + bH/2 },
+            { id: 'bottom-right', x: bx + bW,    y: by + bH },
+            { id: 'bottom',       x: bx + bW/2,  y: by + bH },
+            { id: 'bottom-left',  x: bx,         y: by + bH },
+            { id: 'left',         x: bx,         y: by + bH/2 },
+        ];
+        for (const h of hpts) {
+            if (Math.hypot(coords.x - h.x, coords.y - h.y) < hr) return h.id;
         }
         return null;
     }
@@ -3235,6 +3356,51 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         // B-roll PiP drag (Phase 5D)
+        if (state.isResizingBroll && state.selectedBrollId !== null) {
+            const coords = getCanvasCoords(e);
+            const canvasW = state.canvas.width;
+            const canvasH = state.canvas.height;
+            const item = state.brollOverlays.find(b => b.id === state.selectedBrollId);
+            if (item) {
+                const dx = (coords.x - state.brollResizeStartX) / canvasW;
+                const dy = (coords.y - state.brollResizeStartY) / canvasH;
+                const handle = state.brollResizeHandle;
+                const sw0 = state.brollResizeStartW;
+                const sh0 = state.brollResizeStartH;
+                const sx0 = state.brollResizeStartBoxX;
+                const sy0 = state.brollResizeStartBoxY;
+                const minSz = 0.04;
+
+                let nW = sw0, nH = sh0, nX = sx0, nY = sy0;
+                // Right edge grows rightward
+                if (handle.includes('right'))  nW = Math.max(minSz, sw0 + dx);
+                // Left edge moves left: x shrinks, width grows
+                if (handle.includes('left'))   { nW = Math.max(minSz, sw0 - dx); nX = sx0 + dx; }
+                // Bottom edge grows downward
+                if (handle.includes('bottom')) nH = Math.max(minSz, sh0 + dy);
+                // Top edge moves up: y shrinks, height grows
+                if (handle.includes('top'))    { nH = Math.max(minSz, sh0 - dy); nY = sy0 + dy; }
+
+                // Clamp to keep box on canvas
+                nW = Math.min(1, nW);
+                nH = Math.min(1, nH);
+                nX = Math.max(0, Math.min(1 - nW, nX));
+                nY = Math.max(0, Math.min(1 - nH, nY));
+
+                item.pipW = nW;
+                item.pipH = nH;
+                item.x = nX;
+                item.y = nY;
+                item.size = Math.round(nW * 100); // keep slider in sync
+                if (brollSizeSlider) brollSizeSlider.value = Math.min(60, item.size);
+                if (brollSizeVal) brollSizeVal.innerText = item.size + '%';
+
+                drawFrame();
+            }
+            e.preventDefault();
+            return;
+        }
+
         if (state.isDraggingBroll && state.selectedBrollId !== null) {
             const coords = getCanvasCoords(e);
             const canvasW = state.canvas.width;
@@ -3335,6 +3501,7 @@ document.addEventListener('DOMContentLoaded', () => {
         state.isResizingLogo = false;
         state.isDraggingTextOverlay = false;
         state.isDraggingBroll = false;
+        state.isResizingBroll = false;
     }
 
     // --- Video Crop Tool Bindings ---
