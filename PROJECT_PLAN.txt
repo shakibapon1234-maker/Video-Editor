@@ -51,6 +51,8 @@
   [DONE] News Ticker / Breaking-News Scrolling Text (top/bottom) - editor.js
   [DONE] Sticker/Emoji Overlay (drag & resize)                    - editor.js
   [DONE] Advanced Color Grading (custom R/G/B shadow/mid/highlight curves) - editor.js
+  [DONE] Intro / Outro Template (canvas-drawn animated title cards) - editor.js + exporter.js
+  [DONE] Export Progress UX (ETA + Cancel Render button)          - exporter.js
 
 
 -----------------------------------------------------
@@ -518,12 +520,40 @@ PHASE 5 - FACEBOOK/SOCIAL MEDIA SPECIFIC
     option" ইতিমধ্যেই বিদ্যমান overlay system দিয়ে কভার হয়ে গেছে
   - প্রিভিউ ইমেজ ও ডাউনলোড লিংক (object URL) দেখানো হয়
 
-5C - Intro/Outro Template   [TODO]
+5C - Intro/Outro Template   [DONE]
 ---------------------------------------
-কী করতে হবে:
-  - কয়েকটি pre-built template (JSON-based) যেগুলো canvas-এ
-    animate করবে
-  - requestAnimationFrame দিয়ে 2-3 second intro animate করা
+সম্পন্ন হয়েছে (v2.9):
+  - state-এ introEnabled/introTemplate/introTitle/introSubtitle/
+    introDuration এবং outroEnabled/outroTemplate/outroTitle/
+    outroSubtitle/outroDuration যোগ করা হয়েছে (editor.js)
+  - Step 5 (Export Studio)-এ নতুন "Intro / Outro Template" কার্ড
+    যুক্ত হয়েছে — আলাদাভাবে Intro আর Outro on/off টগল, ৩টা
+    template (Classic Title / Slide Up / Zoom Pop) বেছে নেওয়ার
+    select, Title/Subtitle টেক্সট ইনপুট, ১-৬ সেকেন্ড Duration
+    স্লাইডার, এবং একটা "Preview" বাটন (মূল ক্যানভাসেই rAF দিয়ে
+    সরাসরি প্রিভিউ চালায়, কোনো ভিডিও এক্সপোর্ট ছাড়াই)
+  - drawIntroOutroSegment() (editor.js) — pure canvas-drawn animated
+    title card, কোনো external image/video asset লাগে না। প্রতিটি
+    template-এর নিজস্ব ব্যাকগ্রাউন্ড (gradient/radial pulse) ও টেক্সট
+    অ্যানিমেশন (fade+slide, bounce slide-up, বা scale/wobble "pop")
+    আছে, শুরু-শেষে সবসময় soft fade in/out envelope থাকে
+  - exporter.js-এ নতুন Step D0 (Intro) ও Step D2 (Outro) render phase
+    যোগ হয়েছে — মূল ক্লিপ-লুপের ঠিক আগে/পরে, একই ticker-worker আর
+    একই ক্যানভাসে (তাই MediaRecorder capture-এও বার্ন-ইন হয়ে যায়)
+    drawIntroOutroSegment() সরাসরি কল করে; ভয়েসওভার/ব্যাকগ্রাউন্ড
+    মিউজিক শুধু আসল ক্লিপ শুরু হওয়ার পর সিঙ্কে শুরু হয় (Intro/Outro
+    কার্ডে অডিও নীরব থাকে) — এটি একটি ইচ্ছাকৃত সীমাবদ্ধতা
+  - Progress bar % হিসাব এখন grandTotal (introDur + clips duration +
+    outroDur) এর ওপর ভিত্তি করে হয়, তাই Intro/Outro চালু থাকলেও
+    প্রোগ্রেস বার সঠিকভাবে ০-১০০% জুড়ে movement দেখায়
+  - Backward-compatible: introEnabled/outroEnabled ডিফল্টে false,
+    তাই আগের প্রজেক্ট/এক্সপোর্টে কোনো পরিবর্তন আসে না যতক্ষণ না
+    ব্যবহারকারী নিজে টগল অন করেন
+  - সীমাবদ্ধতা: টেমপ্লেট শুধু টেক্সট-ভিত্তিক (কোনো লোগো/ছবি বসানো
+    যায় না এই কার্ড থেকে — লোগো চাইলে Step 2-এর Logo Watermark
+    ব্যবহার করা যেতে পারে, যদিও সেটা Intro/Outro সেগমেন্টে দেখাবে না,
+    শুধু মূল ভিডিওতে দেখাবে); মাত্র ৩টা preset template, কোনো
+    custom JSON/keyframe editor নেই
 
 5D - Topic/B-roll Image Overlay   [DONE]
 ----------------------------------------------
@@ -626,11 +656,25 @@ PHASE 6 - EXPORT উন্নতি
   - MediaRecorder-এর videoBitsPerSecond preset অনুযায়ী সেট হয়
   - রেন্ডারিং চলাকালীন quality dropdown disable থাকে
 
-6B - Export Progress UX   [TODO]
+6B - Export Progress UX   [DONE]
 -------------------------------------
-কী করতে হবে:
-  - Real-time estimated time remaining দেখানো
-  - Cancel button যোগ করা (recorder.stop() + cleanup)
+সম্পন্ন হয়েছে (v2.9):
+  - Real-time Estimated Time Remaining (ETA): renderEtaText element
+    প্রতি setProgress() কলে আপডেট হয় — এখন পর্যন্ত যে wall-clock সময়
+    লেগেছে আর overall UI progress (%) থেকে মোট সময় অনুমান করে বাকি
+    সময় "~Xমি Yসে বাকি" ফরম্যাটে দেখায় (প্রথম ~4% পর্যন্ত হাইড থাকে,
+    কারণ অত আগে estimate নির্ভরযোগ্য না)
+  - Cancel বাটন (#cancel-render-btn) প্রোগ্রেস বক্সের ভেতরেই যোগ
+    হয়েছে — ক্লিক করলে exportCancelled ফ্ল্যাগ true হয়, যেটা Intro
+    render loop, প্রতিটি ক্লিপের render loop, এবং Outro render loop —
+    সব জায়গায় চেক হয়
+  - finishCancelled() (exporter.js) — বাতিল করলে recorder.stop() করে
+    দেয় (কোনো blob/download তৈরি হয় না), audio mixing/track cleanup
+    করে, এবং এক্সপোর্টের আগে যে ক্লিপ/ট্রিম/ক্রপ active ছিল ঠিক সেটাই
+    ফিরিয়ে আনে (স্বাভাবিক completion-এর restore logic-এর মতোই),
+    তারপর progress box লুকিয়ে render বাটন আবার enable করে
+  - সীমাবদ্ধতা: cancel করার পর আংশিক রেকর্ড করা ফ্রেমগুলো ডাউনলোড করার
+    কোনো অপশন নেই (সম্পূর্ণ বাতিল হয়ে যায়, partial file পাওয়া যায় না)
 
 
 -----------------------------------------------------
@@ -646,6 +690,8 @@ state object (editor.js-এ window.VideoEditor)
   stickers                          -> Phase 4A
   blurRegions                       -> Phase 4B
   brollOverlays                     -> Phase 5D (সম্পন্ন)
+  introEnabled, introTemplate, introDuration -> Phase 5C (সম্পন্ন)
+  outroEnabled, outroTemplate, outroDuration -> Phase 5C (সম্পন্ন)
 
 drawFrame() ফাংশন (editor.js)
 ---------------------------------
@@ -683,7 +729,57 @@ Export-এ audio mixing এখানে হয়। নতুন audio track (b
   10. [DONE] Phase 2B - Multi-Clip Timeline (সবচেয়ে জটিল ছিল)
   11. [DONE] Phase 4A - Sticker/Emoji Overlay
   12. [DONE] Phase 4C - Color Grading (Custom RGB Curves)
+  13. [DONE] Phase 5C - Intro/Outro Template
+  14. [DONE] Phase 6B - Export Progress UX (ETA + Cancel)
 
+
+-----------------------------------------------------
+AI সাজেশন — পরবর্তী সম্ভাব্য ফিচার (এখনও IMPLEMENT করা হয়নি)
+-----------------------------------------------------
+
+নিচের আইডিয়াগুলো এখনো কোনো Phase-এ যোগ হয়নি, শুধু ভবিষ্যতের জন্য
+বিবেচনা করার মতো সাজেশন হিসেবে রাখা হলো। কোনটা করতে চান বললেই সেটা
+নিয়ে বিস্তারিত প্ল্যান করে ইমপ্লিমেন্ট শুরু করা যাবে।
+
+7A - Auto Silence Trimmer
+--------------------------------
+  ভয়েসওভার/অডিও ট্র্যাক বিশ্লেষণ করে যেসব অংশে অনেকক্ষণ ধরে কথা
+  নেই (নীরবতা) সেগুলো স্বয়ংক্রিয়ভাবে চিহ্নিত করে trim/cut সাজেস্ট
+  করা — Reels/Shorts-এর জন্য ভিডিও টাইট রাখতে খুব কাজের।
+
+7B - Auto Aspect-Ratio Reframe (Smart Crop)
+------------------------------------------------
+  16:9 ভিডিও থেকে 9:16 বা 1:1 বানানোর সময় এখন crop ম্যানুয়ালি
+  বসাতে হয় — ক্যানভাসের মূল বিষয়বস্তু (যেমন মুখ/মানুষ) কোথায় আছে
+  তা মোটামুটি অনুমান করে (canvas pixel-diff/edge-detection ভিত্তিক,
+  কোনো ভারী ML মডেল ছাড়াই) crop অটো-পজিশন করে দেওয়া।
+
+7C - Export Presets per Platform
+----------------------------------------
+  এখন শুধু Aspect Ratio + Quality আলাদা সেট করতে হয় — একটা "Facebook
+  Feed", "Reels/Shorts", "Story" প্রিসেট বাটন যোগ করলে aspect ratio,
+  duration limit warning, আর caption-safe zone guide একসাথে সেট
+  হয়ে যাবে একই ক্লিকে।
+
+7D - Project Save/Load (JSON Export)
+-------------------------------------------
+  পুরো state (overlays, trims, filters, ব্যতীত raw video blob) একটা
+  .json ফাইলে সেভ করে পরে আবার লোড করার সুবিধা — এখন ব্রাউজার
+  রিফ্রেশ হলে সব সেটিং হারিয়ে যায়, এটা যোগ হলে কাজ মাঝপথে রেখে
+  পরে চালিয়ে যাওয়া যাবে।
+
+7E - Batch Watermark/Banner Apply
+----------------------------------------
+  একই লোগো/ব্যানার/intro-outro সেটিংস একাধিক ভিডিও ফাইলে একসাথে
+  (queue করে, একে একে) apply করে এক্সপোর্ট করার সুবিধা — বর্তমানে
+  Multi-Clip Timeline একটা ভিডিওর ভেতরেই কাজ করে, batch-processing
+  আলাদা ফাইলের জন্য না।
+
+7F - Keyboard Shortcuts
+--------------------------------
+  Space (play/pause), I/O (set trim in/out at playhead), Left/Right
+  arrow (frame step) — এডিটিং স্পিড বাড়াতে সাহায্য করবে, বিশেষ করে
+  ডেস্কটপে কাজ করার সময়।
 
 -----------------------------------------------------
 এই ফাইল আপডেট করার নিয়ম
@@ -696,6 +792,7 @@ Export-এ audio mixing এখানে হয়। নতুন audio track (b
 
 
 =====================================================
- শেষ আপডেট: v2.8 - Advanced Color Grading Release
- (বাকি আছে: 5C Intro/Outro Template, 6B Export Progress UX)
+ শেষ আপডেট: v2.9 - Intro/Outro Template + Export Progress UX (ETA/Cancel)
+ (Phase 5 ও Phase 6-এর সব পরিকল্পিত TODO সম্পন্ন — উপরে "AI সাজেশন"
+ সেকশনে নতুন কিছু ভবিষ্যৎ আইডিয়া যোগ করা হয়েছে)
 =====================================================

@@ -1018,6 +1018,17 @@ input:checked + .slider:before {
     transition: width 0.1s linear;
 }
 
+.render-eta-row {
+    display: flex;
+    justify-content: flex-end;
+    margin-top: 6px;
+}
+
+.render-eta-text {
+    font-size: 12px;
+    color: var(--text-muted, #9ca3af);
+}
+
 .render-success-box {
     text-align: center;
     padding: 24px;

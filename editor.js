@@ -157,6 +157,19 @@ window.VideoEditor = {
     isSubtitleRecognitionActive: false,
     subtitlesEnabled: true,
 
+    // Intro / Outro Templates (Phase 5C)
+    introEnabled: false,
+    introTemplate: 'classic',
+    introTitle: '',
+    introSubtitle: '',
+    introDuration: 3,
+
+    outroEnabled: false,
+    outroTemplate: 'classic',
+    outroTitle: '',
+    outroSubtitle: '',
+    outroDuration: 3,
+
     // Multi-Clip Timeline (Phase 2B)
     clips: [],
     activeClipId: null,
@@ -1542,6 +1555,156 @@ document.addEventListener('DOMContentLoaded', () => {
         for (let i = 0; i < lines.length; i++) {
             ctx.fillText(lines[i], x, startY + i * lineHeight);
         }
+    }
+
+    // --- Intro / Outro Templates (Phase 5C) ---
+    // Draws one animated title-card frame for the given normalized progress
+    // t (0..1 across the segment's total duration). Fully canvas-drawn (no
+    // external image/video asset needed), so it works the same in the live
+    // preview and during export (exporter.js calls this directly onto the
+    // same canvas context that MediaRecorder is capturing).
+    function drawIntroOutroSegment(ctx, canvasW, canvasH, opts, t) {
+        const template = (opts && opts.template) || 'classic';
+        const title = ((opts && opts.title) || '').trim();
+        const subtitle = ((opts && opts.subtitle) || '').trim();
+        t = Math.max(0, Math.min(1, t));
+
+        // Overall fade envelope so the segment doesn't pop in/out abruptly
+        const fadeInDur = 0.12, fadeOutDur = 0.18;
+        let envelope = 1;
+        if (t < fadeInDur) envelope = t / fadeInDur;
+        else if (t > 1 - fadeOutDur) envelope = (1 - t) / fadeOutDur;
+
+        ctx.save();
+
+        // Background per template
+        if (template === 'slideUp') {
+            const grad = ctx.createLinearGradient(0, 0, canvasW, canvasH);
+            grad.addColorStop(0, '#4f46e5');
+            grad.addColorStop(1, '#7c3aed');
+            ctx.fillStyle = grad;
+            ctx.fillRect(0, 0, canvasW, canvasH);
+        } else if (template === 'zoomPop') {
+            const pulse = 0.5 + 0.5 * Math.sin(t * Math.PI * 2.4);
+            const grad = ctx.createRadialGradient(
+                canvasW / 2, canvasH / 2, 0,
+                canvasW / 2, canvasH / 2, canvasW * (0.55 + pulse * 0.1)
+            );
+            grad.addColorStop(0, '#1e293b');
+            grad.addColorStop(1, '#0f172a');
+            ctx.fillStyle = grad;
+            ctx.fillRect(0, 0, canvasW, canvasH);
+        } else { // classic
+            const grad = ctx.createLinearGradient(0, 0, 0, canvasH);
+            grad.addColorStop(0, '#111827');
+            grad.addColorStop(1, '#1f2937');
+            ctx.fillStyle = grad;
+            ctx.fillRect(0, 0, canvasW, canvasH);
+        }
+
+        const centerX = canvasW / 2;
+        const centerY = canvasH / 2;
+        const titleFontSize = Math.round(canvasW * 0.07);
+        const subFontSize = Math.round(canvasW * 0.032);
+
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+
+        if (template === 'classic') {
+            const titleProg = Math.min(1, t / 0.5);
+            const eased = 1 - Math.pow(1 - titleProg, 3); // easeOutCubic
+            const offsetY = (1 - eased) * 24;
+            ctx.globalAlpha = envelope * eased;
+            ctx.fillStyle = '#ffffff';
+            ctx.font = `700 ${titleFontSize}px "Hind Siliguri", sans-serif`;
+            if (title) drawWrappedText(ctx, title, centerX, centerY - offsetY, canvasW * 0.85, titleFontSize * 1.2);
+
+            // Expanding accent line under the title
+            const lineProg = Math.max(0, Math.min(1, (t - 0.15) / 0.4));
+            const lineW = canvasW * 0.18 * lineProg;
+            ctx.globalAlpha = envelope * lineProg;
+            ctx.fillStyle = '#6366f1';
+            ctx.fillRect(centerX - lineW / 2, centerY + titleFontSize * 0.75, lineW, Math.max(2, canvasW * 0.0025));
+
+            if (subtitle) {
+                const subProg = Math.max(0, Math.min(1, (t - 0.3) / 0.5));
+                const subEased = 1 - Math.pow(1 - subProg, 3);
+                ctx.globalAlpha = envelope * subEased;
+                ctx.fillStyle = '#cbd5e1';
+                ctx.font = `400 ${subFontSize}px "Hind Siliguri", sans-serif`;
+                drawWrappedText(ctx, subtitle, centerX, centerY + titleFontSize * 1.3, canvasW * 0.8, subFontSize * 1.3);
+            }
+        } else if (template === 'slideUp') {
+            const titleProg = Math.max(0, Math.min(1, t / 0.55));
+            const eased = easeOutBackOvershoot(titleProg);
+            const startOffset = canvasH * 0.35;
+            const offsetY = (1 - eased) * startOffset;
+            ctx.globalAlpha = envelope * Math.min(1, titleProg * 2);
+            ctx.fillStyle = '#ffffff';
+            ctx.font = `800 ${titleFontSize}px "Hind Siliguri", sans-serif`;
+            if (title) drawWrappedText(ctx, title, centerX, centerY + offsetY - 10, canvasW * 0.85, titleFontSize * 1.2);
+
+            if (subtitle) {
+                const subProg = Math.max(0, Math.min(1, (t - 0.2) / 0.55));
+                const subEased = easeOutBackOvershoot(subProg);
+                const subOffsetY = (1 - subEased) * startOffset;
+                ctx.globalAlpha = envelope * Math.min(1, subProg * 2);
+                ctx.fillStyle = '#e0e7ff';
+                ctx.font = `500 ${subFontSize}px "Hind Siliguri", sans-serif`;
+                drawWrappedText(ctx, subtitle, centerX, centerY + titleFontSize * 1.2 + subOffsetY, canvasW * 0.8, subFontSize * 1.3);
+            }
+        } else if (template === 'zoomPop') {
+            const titleProg = Math.max(0, Math.min(1, t / 0.5));
+            const scale = Math.max(0.001, easeOutBackOvershoot(titleProg));
+            const wobble = Math.sin(t * Math.PI * 2) * (1 - titleProg) * 0.04;
+            ctx.save();
+            ctx.translate(centerX, centerY - titleFontSize * 0.3);
+            ctx.rotate(wobble);
+            ctx.scale(scale, scale);
+            ctx.globalAlpha = envelope * Math.min(1, titleProg * 2);
+            ctx.fillStyle = '#fbbf24';
+            ctx.font = `800 ${titleFontSize}px "Hind Siliguri", sans-serif`;
+            if (title) drawWrappedText(ctx, title, 0, 0, canvasW * 0.85, titleFontSize * 1.2);
+            ctx.restore();
+
+            if (subtitle) {
+                const subProg = Math.max(0, Math.min(1, (t - 0.35) / 0.5));
+                ctx.globalAlpha = envelope * subProg;
+                ctx.fillStyle = '#f1f5f9';
+                ctx.font = `400 ${subFontSize}px "Hind Siliguri", sans-serif`;
+                drawWrappedText(ctx, subtitle, centerX, centerY + titleFontSize * 0.9, canvasW * 0.8, subFontSize * 1.3);
+            }
+        }
+
+        ctx.restore();
+    }
+
+    // Runs a standalone rAF preview of an intro/outro segment directly on the
+    // main editor canvas (pauses video if needed, restores the normal frame
+    // via drawFrame() once the preview finishes).
+    function runIntroOutroPreview(config) {
+        if (!state.duration) {
+            alert('প্রিভিউ দেখতে আগে একটি ভিডিও/ছবি লোড করুন।');
+            return;
+        }
+        const canvas = state.canvas;
+        const ctx = state.ctx;
+        if (!state.video.paused) state.video.pause();
+
+        const durationMs = Math.max(500, (config.duration || 3) * 1000);
+        const startTs = performance.now();
+
+        function tick(now) {
+            const elapsed = now - startTs;
+            const t = Math.min(1, elapsed / durationMs);
+            drawIntroOutroSegment(ctx, canvas.width, canvas.height, config, t);
+            if (t < 1) {
+                requestAnimationFrame(tick);
+            } else {
+                drawFrame(); // restore the normal live-preview frame
+            }
+        }
+        requestAnimationFrame(tick);
     }
 
     // --- Drawing the Canvas frame ---
@@ -5017,6 +5180,77 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
+    // --- Intro / Outro Templates (Phase 5C) ---
+    const introEnabledToggle = document.getElementById('intro-enabled-toggle');
+    const introControlsBox = document.getElementById('intro-controls-box');
+    const introTemplateSelect = document.getElementById('intro-template-select');
+    const introTitleInput = document.getElementById('intro-title-input');
+    const introSubtitleInput = document.getElementById('intro-subtitle-input');
+    const introDurationSlider = document.getElementById('intro-duration-slider');
+    const introDurationVal = document.getElementById('intro-duration-val');
+    const introPreviewBtn = document.getElementById('intro-preview-btn');
+
+    if (introEnabledToggle) {
+        introEnabledToggle.addEventListener('change', () => {
+            state.introEnabled = introEnabledToggle.checked;
+            if (introControlsBox) introControlsBox.style.display = state.introEnabled ? 'block' : 'none';
+        });
+    }
+    if (introTemplateSelect) introTemplateSelect.addEventListener('change', () => { state.introTemplate = introTemplateSelect.value; });
+    if (introTitleInput) introTitleInput.addEventListener('input', () => { state.introTitle = introTitleInput.value; });
+    if (introSubtitleInput) introSubtitleInput.addEventListener('input', () => { state.introSubtitle = introSubtitleInput.value; });
+    if (introDurationSlider) {
+        introDurationSlider.addEventListener('input', () => {
+            state.introDuration = parseFloat(introDurationSlider.value) || 3;
+            if (introDurationVal) introDurationVal.innerText = state.introDuration.toFixed(1) + 's';
+        });
+    }
+    if (introPreviewBtn) {
+        introPreviewBtn.addEventListener('click', () => {
+            runIntroOutroPreview({
+                template: introTemplateSelect ? introTemplateSelect.value : 'classic',
+                title: introTitleInput ? introTitleInput.value : '',
+                subtitle: introSubtitleInput ? introSubtitleInput.value : '',
+                duration: introDurationSlider ? parseFloat(introDurationSlider.value) : 3
+            });
+        });
+    }
+
+    const outroEnabledToggle = document.getElementById('outro-enabled-toggle');
+    const outroControlsBox = document.getElementById('outro-controls-box');
+    const outroTemplateSelect = document.getElementById('outro-template-select');
+    const outroTitleInput = document.getElementById('outro-title-input');
+    const outroSubtitleInput = document.getElementById('outro-subtitle-input');
+    const outroDurationSlider = document.getElementById('outro-duration-slider');
+    const outroDurationVal = document.getElementById('outro-duration-val');
+    const outroPreviewBtn = document.getElementById('outro-preview-btn');
+
+    if (outroEnabledToggle) {
+        outroEnabledToggle.addEventListener('change', () => {
+            state.outroEnabled = outroEnabledToggle.checked;
+            if (outroControlsBox) outroControlsBox.style.display = state.outroEnabled ? 'block' : 'none';
+        });
+    }
+    if (outroTemplateSelect) outroTemplateSelect.addEventListener('change', () => { state.outroTemplate = outroTemplateSelect.value; });
+    if (outroTitleInput) outroTitleInput.addEventListener('input', () => { state.outroTitle = outroTitleInput.value; });
+    if (outroSubtitleInput) outroSubtitleInput.addEventListener('input', () => { state.outroSubtitle = outroSubtitleInput.value; });
+    if (outroDurationSlider) {
+        outroDurationSlider.addEventListener('input', () => {
+            state.outroDuration = parseFloat(outroDurationSlider.value) || 3;
+            if (outroDurationVal) outroDurationVal.innerText = state.outroDuration.toFixed(1) + 's';
+        });
+    }
+    if (outroPreviewBtn) {
+        outroPreviewBtn.addEventListener('click', () => {
+            runIntroOutroPreview({
+                template: outroTemplateSelect ? outroTemplateSelect.value : 'classic',
+                title: outroTitleInput ? outroTitleInput.value : '',
+                subtitle: outroSubtitleInput ? outroSubtitleInput.value : '',
+                duration: outroDurationSlider ? parseFloat(outroDurationSlider.value) : 3
+            });
+        });
+    }
+
     // Attach Canvas interaction listeners (Desktop Mouse)
     state.canvas.addEventListener('mousedown', handlePointerDown);
     window.addEventListener('mousemove', handlePointerMove);
@@ -5029,6 +5263,9 @@ document.addEventListener('DOMContentLoaded', () => {
     
     // Export standard frame drawing
     window.drawEditorFrame = drawFrame;
+    // Export intro/outro segment drawing so exporter.js can render it straight
+    // onto the same canvas/stream MediaRecorder is capturing (Phase 5C)
+    window.drawIntroOutroSegment = drawIntroOutroSegment;
     
     // --- Helper Utilities ---
     function formatTime(seconds) {

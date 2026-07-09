@@ -1172,7 +1172,90 @@
 
                     <!-- Step 5: Export Studio -->
                     <div class="step-panel" id="panel-5">
+                        <!-- Intro / Outro Template (Phase 5C) -->
                         <div class="card">
+                            <div class="card-header">
+                                <i class="fa-solid fa-clapperboard card-icon"></i>
+                                <h3>Intro / Outro Template (ইন্ট্রো/আউট্রো)</h3>
+                            </div>
+                            <div class="card-body">
+                                <p class="help-text">এক্সপোর্টের শুরুতে (Intro) ও শেষে (Outro) স্বয়ংক্রিয়ভাবে অ্যানিমেটেড টাইটেল স্ক্রিন যোগ হবে — কোনো আলাদা ছবি/ভিডিও ফাইল লাগবে না, পুরোটাই ক্যানভাসে আঁকা হয়।</p>
+
+                                <!-- INTRO -->
+                                <div class="toggle-control mt-3">
+                                    <div class="toggle-label">
+                                        <h4>Intro যোগ করুন</h4>
+                                        <p>ভিডিও শুরুর আগে একটা টাইটেল স্ক্রিন দেখাবে</p>
+                                    </div>
+                                    <label class="switch">
+                                        <input type="checkbox" id="intro-enabled-toggle">
+                                        <span class="slider round"></span>
+                                    </label>
+                                </div>
+                                <div class="control-group mt-3" id="intro-controls-box" style="display: none;">
+                                    <label>Template স্টাইল</label>
+                                    <select id="intro-template-select" class="form-select">
+                                        <option value="classic">Classic Title (সাদামাটা, প্রফেশনাল)</option>
+                                        <option value="slideUp">Slide Up (নিচ থেকে উঠে আসবে)</option>
+                                        <option value="zoomPop">Zoom Pop (বাউন্স করে বড় হবে)</option>
+                                    </select>
+
+                                    <label class="mt-3">Title লেখা</label>
+                                    <input type="text" id="intro-title-input" class="form-input" placeholder="যেমনঃ Wings Fly Academy">
+
+                                    <label class="mt-3">Subtitle লেখা (ঐচ্ছিক)</label>
+                                    <input type="text" id="intro-subtitle-input" class="form-input" placeholder="যেমনঃ Aviation Training Institute">
+
+                                    <label class="mt-3">সময়কাল (Duration)</label>
+                                    <div class="slider-val-container">
+                                        <input type="range" id="intro-duration-slider" min="1" max="6" step="0.5" value="3">
+                                        <span id="intro-duration-val">3.0s</span>
+                                    </div>
+
+                                    <button id="intro-preview-btn" class="btn btn-secondary btn-block mt-3" type="button">
+                                        <i class="fa-solid fa-eye"></i> Preview Intro
+                                    </button>
+                                </div>
+
+                                <!-- OUTRO -->
+                                <div class="toggle-control mt-4">
+                                    <div class="toggle-label">
+                                        <h4>Outro যোগ করুন</h4>
+                                        <p>ভিডিও শেষে একটা ক্লোজিং স্ক্রিন দেখাবে (যেমনঃ Subscribe/Follow বার্তা)</p>
+                                    </div>
+                                    <label class="switch">
+                                        <input type="checkbox" id="outro-enabled-toggle">
+                                        <span class="slider round"></span>
+                                    </label>
+                                </div>
+                                <div class="control-group mt-3" id="outro-controls-box" style="display: none;">
+                                    <label>Template স্টাইল</label>
+                                    <select id="outro-template-select" class="form-select">
+                                        <option value="classic">Classic Title (সাদামাটা, প্রফেশনাল)</option>
+                                        <option value="slideUp">Slide Up (নিচ থেকে উঠে আসবে)</option>
+                                        <option value="zoomPop">Zoom Pop (বাউন্স করে বড় হবে)</option>
+                                    </select>
+
+                                    <label class="mt-3">Title লেখা</label>
+                                    <input type="text" id="outro-title-input" class="form-input" placeholder="যেমনঃ ধন্যবাদ দেখার জন্য!">
+
+                                    <label class="mt-3">Subtitle লেখা (ঐচ্ছিক)</label>
+                                    <input type="text" id="outro-subtitle-input" class="form-input" placeholder="যেমনঃ Follow করুন আরও ভিডিওর জন্য">
+
+                                    <label class="mt-3">সময়কাল (Duration)</label>
+                                    <div class="slider-val-container">
+                                        <input type="range" id="outro-duration-slider" min="1" max="6" step="0.5" value="3">
+                                        <span id="outro-duration-val">3.0s</span>
+                                    </div>
+
+                                    <button id="outro-preview-btn" class="btn btn-secondary btn-block mt-3" type="button">
+                                        <i class="fa-solid fa-eye"></i> Preview Outro
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="card mt-4">
                             <div class="card-header">
                                 <i class="fa-solid fa-download card-icon"></i>
                                 <h3>Render Final Video</h3>
@@ -1202,6 +1285,12 @@
                                     <div class="progress-bar-container">
                                         <div class="progress-bar-fill" id="render-progress-fill"></div>
                                     </div>
+                                    <div class="render-eta-row">
+                                        <span id="render-eta-text" class="render-eta-text"></span>
+                                    </div>
+                                    <button id="cancel-render-btn" class="btn btn-danger btn-block mt-3" type="button">
+                                        <i class="fa-solid fa-xmark"></i> Cancel Render (বাতিল করুন)
+                                    </button>
                                 </div>
 
                                 <!-- Success & Download -->

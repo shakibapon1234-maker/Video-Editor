@@ -33,9 +33,44 @@ document.addEventListener('DOMContentLoaded', () => {
     const renderProgressFill = document.getElementById('render-progress-fill');
     const renderPercentage = document.getElementById('render-percentage');
     const renderStatusText = document.getElementById('render-status-text');
+    const renderEtaText = document.getElementById('render-eta-text');
+    const cancelRenderBtn = document.getElementById('cancel-render-btn');
     const renderSuccessBox = document.getElementById('render-success-box');
     const downloadLink = document.getElementById('download-link');
     const qualitySelect = document.getElementById('quality-select');
+
+    // Export Progress UX (Phase 6B): cancellation flag checked inside every
+    // render tick loop (intro / clips / outro), plus wall-clock timestamps
+    // used to estimate remaining time.
+    let exportCancelled = false;
+    let exportStartTimestamp = 0;
+
+    if (cancelRenderBtn) {
+        cancelRenderBtn.addEventListener('click', () => {
+            exportCancelled = true;
+            cancelRenderBtn.disabled = true;
+            renderStatusText.innerText = 'বাতিল করা হচ্ছে... (Cancelling...)';
+        });
+    }
+
+    // Estimates remaining time from wall-clock elapsed time vs. overall UI
+    // progress (0-100), and renders it as "~Xm Ys বাকি". Hidden for the first
+    // few percent since the estimate is unreliable that early.
+    function updateEta(uiProgress) {
+        if (!renderEtaText) return;
+        if (!exportStartTimestamp || uiProgress < 4 || uiProgress >= 100) {
+            renderEtaText.innerText = '';
+            return;
+        }
+        const elapsedSec = (performance.now() - exportStartTimestamp) / 1000;
+        const estimatedTotalSec = elapsedSec / (uiProgress / 100);
+        const remainingSec = Math.max(0, Math.round(estimatedTotalSec - elapsedSec));
+        const mins = Math.floor(remainingSec / 60);
+        const secs = remainingSec % 60;
+        renderEtaText.innerText = mins > 0
+            ? `~${mins}মি ${secs}সে বাকি (~${mins}m ${secs}s remaining)`
+            : `~${secs}সে বাকি (~${secs}s remaining)`;
+    }
 
     const QUALITY_PRESETS = {
         '480p': { maxDim: 480, bitrate: 2_000_000 },
@@ -68,6 +103,9 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         // Show progress box
+        exportCancelled = false;
+        exportStartTimestamp = performance.now();
+        if (cancelRenderBtn) cancelRenderBtn.disabled = false;
         renderBtn.disabled = true;
         if (qualitySelect) qualitySelect.disabled = true;
         renderBtn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Rendering...';
@@ -94,13 +132,17 @@ document.addEventListener('DOMContentLoaded', () => {
             await runExportPipeline(totalDuration);
         } catch (err) {
             console.error('Export failed:', err);
-            alert('Export failed. Please try again with a shorter or simpler video.');
+            if (!exportCancelled) {
+                alert('Export failed. Please try again with a shorter or simpler video.');
+            }
+            renderProgressBox.style.display = 'none';
             renderBtn.disabled = false;
             if (qualitySelect) qualitySelect.disabled = false;
             renderBtn.innerHTML = '<i class="fa-solid fa-wand-magic-sparkles"></i> Render & Export Video';
         } finally {
             stopTickerWorker();
             document.removeEventListener('visibilitychange', handleVisibilityChange);
+            if (cancelRenderBtn) cancelRenderBtn.disabled = false;
         }
     }
 
@@ -203,6 +245,101 @@ document.addEventListener('DOMContentLoaded', () => {
             video.volume = 0;
         }
 
+        // Cancellation (Phase 6B): tears down the recorder/audio graph and restores
+        // the editor to its pre-export state without producing a download, then
+        // resets the render UI. Shared by every phase below (intro / clips / outro).
+        async function finishCancelled() {
+            renderStatusText.innerText = 'বাতিল করা হয়েছে (Cancelled)';
+            try {
+                if (recorder.state !== 'inactive') {
+                    await new Promise((resolve) => { recorder.onstop = resolve; recorder.stop(); });
+                }
+            } catch (e) { /* ignore */ }
+
+            if (audioMixResult && audioMixResult.cleanup) {
+                audioMixResult.cleanup();
+            }
+            if (audioTrack) {
+                try { canvasStream.removeTrack(audioTrack); } catch (e) {}
+            }
+
+            if (video.src !== originalSrc) {
+                await new Promise((resolve) => {
+                    video.onloadedmetadata = () => resolve();
+                    video.src = originalSrc;
+                    video.load();
+                });
+            }
+            state.activeClipId = originalActiveClipId;
+            state.duration = originalDuration;
+            state.startTime = originalStartTime;
+            state.endTime = originalEndTime;
+            state.cropX = originalCropX;
+            state.cropY = originalCropY;
+            state.cropW = originalCropW;
+            state.cropH = originalCropH;
+            video.currentTime = state.startTime;
+            if (!window.setSpeakerMuted || !window.setSpeakerMuted(false)) {
+                video.volume = Math.min(1.0, state.videoVolume);
+            }
+            if (window.drawEditorFrame) window.drawEditorFrame();
+
+            renderProgressBox.style.display = 'none';
+            renderBtn.disabled = false;
+            if (qualitySelect) qualitySelect.disabled = false;
+            renderBtn.innerHTML = '<i class="fa-solid fa-wand-magic-sparkles"></i> Render & Export Video';
+            if (renderEtaText) renderEtaText.innerText = '';
+        }
+
+        // --- Step D0: Intro / Outro Templates (Phase 5C) ---
+        // Fully canvas-drawn title cards rendered straight onto the same canvas
+        // MediaRecorder is capturing, before the first clip and after the last one.
+        const introDur = state.introEnabled ? Math.max(0.3, parseFloat(state.introDuration) || 3) : 0;
+        const outroDur = state.outroEnabled ? Math.max(0.3, parseFloat(state.outroDuration) || 3) : 0;
+        const grandTotal = introDur + totalDuration + outroDur;
+
+        async function renderIntroOutroPhase(role, phaseStartElapsed) {
+            const durSec = role === 'intro' ? introDur : outroDur;
+            if (durSec <= 0) return;
+            const config = role === 'intro'
+                ? { template: state.introTemplate, title: state.introTitle, subtitle: state.introSubtitle }
+                : { template: state.outroTemplate, title: state.outroTitle, subtitle: state.outroSubtitle };
+
+            const worker = getTickerWorker();
+            await new Promise((resolve) => {
+                const segStart = performance.now();
+                function tick() {
+                    if (exportCancelled) {
+                        worker.removeEventListener('message', tick);
+                        resolve();
+                        return;
+                    }
+                    const elapsedSec = (performance.now() - segStart) / 1000;
+                    const t = Math.min(1, elapsedSec / durSec);
+
+                    if (window.drawIntroOutroSegment) {
+                        window.drawIntroOutroSegment(state.ctx, canvas.width, canvas.height, config, t);
+                    }
+
+                    const totalElapsed = phaseStartElapsed + Math.min(elapsedSec, durSec);
+                    const progressPercent = grandTotal > 0 ? Math.min(100, (totalElapsed / grandTotal) * 100) : 100;
+                    const uiProgress = 20 + (progressPercent * 0.75);
+                    setProgress(Math.round(uiProgress));
+                    renderStatusText.innerText = role === 'intro' ? 'Rendering intro...' : 'Rendering outro...';
+
+                    if (t >= 1) {
+                        worker.removeEventListener('message', tick);
+                        resolve();
+                    }
+                }
+                worker.addEventListener('message', tick);
+            });
+        }
+
+        renderStatusText.innerText = 'Rendering intro...';
+        await renderIntroOutroPhase('intro', 0);
+        if (exportCancelled) { await finishCancelled(); return; }
+
         // --- Step D: Play through every clip sequentially while recording ---
         renderStatusText.innerText = 'Rendering video frames...';
         setProgress(20);
@@ -211,6 +348,7 @@ document.addEventListener('DOMContentLoaded', () => {
         let voiceoverStarted = false;
 
         for (let clipIndex = 0; clipIndex < state.clips.length; clipIndex++) {
+            if (exportCancelled) break;
             const clip = state.clips[clipIndex];
             const clipTrimStart = clip.start;
             const clipTrimEnd = clip.end;
@@ -288,6 +426,14 @@ document.addEventListener('DOMContentLoaded', () => {
             await new Promise((resolve) => {
                 let lastTickTime = performance.now();
                 function renderTick() {
+                    if (exportCancelled) {
+                        if (clip.type !== 'image' && !video.paused) video.pause();
+                        worker.removeEventListener('message', renderTick);
+                        clearTimeout(safetyTimer);
+                        resolve();
+                        return;
+                    }
+
                     let currentTime;
                     if (clip.type === 'image') {
                         const now = performance.now();
@@ -300,8 +446,8 @@ document.addEventListener('DOMContentLoaded', () => {
                     }
 
                     const elapsedInClip = currentTime - clipTrimStart;
-                    const totalElapsed = clipElapsedBase + elapsedInClip;
-                    const progressPercent = Math.min(100, (totalElapsed / totalDuration) * 100);
+                    const totalElapsed = introDur + clipElapsedBase + elapsedInClip;
+                    const progressPercent = grandTotal > 0 ? Math.min(100, (totalElapsed / grandTotal) * 100) : 100;
 
                     if (window.drawEditorFrame) {
                         window.drawEditorFrame();
@@ -336,6 +482,13 @@ document.addEventListener('DOMContentLoaded', () => {
 
             elapsedBeforeCurrentClip += clipTrimDuration;
         }
+
+        if (exportCancelled) { await finishCancelled(); return; }
+
+        // --- Step D2: Outro (Phase 5C) ---
+        renderStatusText.innerText = 'Rendering outro...';
+        await renderIntroOutroPhase('outro', introDur + totalDuration);
+        if (exportCancelled) { await finishCancelled(); return; }
 
         // --- Step E: Stop recorder and finalize ---
         renderStatusText.innerText = 'Finalizing video file...';
@@ -409,5 +562,6 @@ document.addEventListener('DOMContentLoaded', () => {
     function setProgress(percent) {
         renderProgressFill.style.width = percent + '%';
         renderPercentage.innerText = percent + '%';
+        updateEta(percent);
     }
 });
