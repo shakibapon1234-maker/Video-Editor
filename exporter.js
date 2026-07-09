@@ -248,6 +248,22 @@ document.addEventListener('DOMContentLoaded', () => {
                 state.currentTime = clipTrimStart;
             } else {
                 video.currentTime = clipTrimStart;
+                
+                // Wait for video to seek to the starting frame so we don't draw/record a black frame
+                await new Promise((resolveSeek) => {
+                    let resolved = false;
+                    const onSeeked = () => {
+                        if (!resolved) {
+                            resolved = true;
+                            video.removeEventListener('seeked', onSeeked);
+                            resolveSeek();
+                        }
+                    };
+                    video.addEventListener('seeked', onSeeked);
+                    // Safety timeout of 500ms
+                    setTimeout(onSeeked, 500);
+                });
+
                 if (!window.setSpeakerMuted || !window.setSpeakerMuted(true)) {
                     video.volume = 0;
                 }
