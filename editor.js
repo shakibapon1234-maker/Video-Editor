@@ -2541,6 +2541,33 @@ document.addEventListener('DOMContentLoaded', () => {
             if (brollHit) {
                 state.selectedBrollId = brollHit.id;
                 state.isDraggingBroll = true;
+
+                if (brollHit.mode === 'fullscreen') {
+                    brollHit.mode = 'pip';
+                    brollHit.size = 35; // Default PiP size
+                    
+                    // Center the PiP box on click coordinate
+                    let pw = canvasW * 0.35;
+                    let ph = pw;
+                    if (brollHit.type === 'text') {
+                        state.ctx.font = `bold ${brollHit.fontSize}px "Hind Siliguri", "Plus Jakarta Sans", sans-serif`;
+                        const metrics = state.ctx.measureText(brollHit.text);
+                        pw = metrics.width + 32;
+                        ph = brollHit.fontSize + 24;
+                    } else if (brollHit.imageImg) {
+                        ph = pw * (brollHit.imageImg.naturalHeight / brollHit.imageImg.naturalWidth);
+                    }
+                    brollHit.x = (coords.x - pw / 2) / canvasW;
+                    brollHit.y = (coords.y - ph / 2) / canvasH;
+                    
+                    // Sync the sidebar controls to reflect these new values
+                    if (brollModeSelect) brollModeSelect.value = 'pip';
+                    if (brollSizeSlider) brollSizeSlider.value = 35;
+                    if (brollSizeVal) brollSizeVal.innerText = '35%';
+                    if (brollSizeContainer) brollSizeContainer.style.display = 'block';
+                    renderBrollList();
+                }
+
                 state.dragBrollOffsetX = coords.x - (brollHit.x * canvasW);
                 state.dragBrollOffsetY = coords.y - (brollHit.y * canvasH);
                 if (window.onBrollSelected) window.onBrollSelected(brollHit.id);
@@ -2571,21 +2598,41 @@ document.addEventListener('DOMContentLoaded', () => {
         const canvasH = state.canvas.height;
         for (let i = state.brollOverlays.length - 1; i >= 0; i--) {
             const item = state.brollOverlays[i];
-            if (item.mode !== 'pip') continue;
             if (item.type !== 'text' && !item.imageImg) continue;
 
-            let pipW, pipH;
-            if (item.type === 'text') {
-                state.ctx.font = `bold ${item.fontSize}px "Hind Siliguri", "Plus Jakarta Sans", sans-serif`;
-                const metrics = state.ctx.measureText(item.text);
-                pipW = metrics.width + 32;
-                pipH = item.fontSize + 24;
+            let px, py, pipW, pipH;
+
+            if (item.mode === 'fullscreen') {
+                if (item.type === 'text') {
+                    // Fullscreen text is centered
+                    state.ctx.font = `bold ${item.fontSize}px "Hind Siliguri", "Plus Jakarta Sans", sans-serif`;
+                    const metrics = state.ctx.measureText(item.text);
+                    pipW = metrics.width + 32;
+                    pipH = item.fontSize + 24;
+                    px = (canvasW - pipW) / 2;
+                    py = (canvasH - pipH) / 2;
+                } else {
+                    // Fullscreen image covers the whole canvas
+                    px = 0;
+                    py = 0;
+                    pipW = canvasW;
+                    pipH = canvasH;
+                }
             } else {
-                pipW = canvasW * (item.size / 100);
-                pipH = pipW * (item.imageImg.naturalHeight / item.imageImg.naturalWidth);
+                // PiP mode
+                if (item.type === 'text') {
+                    state.ctx.font = `bold ${item.fontSize}px "Hind Siliguri", "Plus Jakarta Sans", sans-serif`;
+                    const metrics = state.ctx.measureText(item.text);
+                    pipW = metrics.width + 32;
+                    pipH = item.fontSize + 24;
+                } else {
+                    pipW = canvasW * (item.size / 100);
+                    pipH = pipW * (item.imageImg.naturalHeight / item.imageImg.naturalWidth);
+                }
+                px = item.x * canvasW;
+                py = item.y * canvasH;
             }
-            const px = item.x * canvasW;
-            const py = item.y * canvasH;
+
             if (coords.x >= px && coords.x <= px + pipW && coords.y >= py && coords.y <= py + pipH) {
                 return item;
             }
@@ -3230,8 +3277,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const brollTextColorInput = document.getElementById('broll-text-color');
     const brollTextColorVal = document.getElementById('broll-text-color-val');
     const addBrollTextBtn = document.getElementById('add-broll-text-btn');
-    const brollPositionContainer = document.getElementById('broll-position-container');
-    const brollPositionGrid = document.getElementById('broll-position-grid');
+
 
     let brollAddType = 'image';
     if (brollTypeToggle) {
@@ -3543,19 +3589,7 @@ document.addEventListener('DOMContentLoaded', () => {
         return { wFrac: 0.3, hFrac: 0.15 };
     }
 
-    if (brollPositionGrid) {
-        brollPositionGrid.addEventListener('click', (e) => {
-            const btn = e.target.closest('.pos-btn');
-            if (!btn) return;
-            const item = state.brollOverlays.find(b => b.id === state.selectedBrollId);
-            if (!item) return;
-            const { wFrac, hFrac } = computeBrollBoxFrac(item);
-            const { x, y } = presetTopLeftFrac(btn.dataset.pos, wFrac, hFrac);
-            item.x = x;
-            item.y = y;
-            drawFrame();
-        });
-    }
+
 
     function renderBrollList() {
         if (!brollListEl) return;
@@ -3622,7 +3656,6 @@ document.addEventListener('DOMContentLoaded', () => {
         if (brollSizeSlider) brollSizeSlider.value = item.size;
         if (brollSizeVal) brollSizeVal.innerText = item.size + '%';
         if (brollSizeContainer) brollSizeContainer.style.display = item.mode === 'pip' ? 'block' : 'none';
-        if (brollPositionContainer) brollPositionContainer.style.display = item.mode === 'pip' ? 'block' : 'none';
 
         // Sync the animation/direction/speed/sound controls to this item
         populateBrollAnimStyleOptions(item.mode);
@@ -3823,7 +3856,6 @@ document.addEventListener('DOMContentLoaded', () => {
             if (item) {
                 item.mode = e.target.value;
                 if (brollSizeContainer) brollSizeContainer.style.display = item.mode === 'pip' ? 'block' : 'none';
-                if (brollPositionContainer) brollPositionContainer.style.display = item.mode === 'pip' ? 'block' : 'none';
                 // All animation styles now work in either mode, but we still switch to
                 // that mode's more natural-feeling default when toggling, so it doesn't
                 // suddenly look like nothing changed.
