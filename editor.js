@@ -2508,31 +2508,31 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
 
-        // Logo behavior
-        if (!state.logoImg) return;
-        
         const coords = getCanvasCoords(e);
-        const check = isPointerOnLogo(coords);
-        
         const canvasW = state.canvas.width;
         const canvasH = state.canvas.height;
-        const logoW = canvasW * (state.logoSize / 100);
-        const logoH = logoW * (state.logoImg.naturalHeight / state.logoImg.naturalWidth);
-        const lx = state.logoX * canvasW;
-        const ly = state.logoY * canvasH;
-        
-        if (check.isResize) {
-            state.isResizingLogo = true;
-            state.resizeStartSize = state.logoSize;
-            state.resizeStartX = coords.x;
-            e.preventDefault();
-            return;
-        } else if (check.isOver) {
-            state.isDraggingLogo = true;
-            state.dragOffsetX = coords.x - lx;
-            state.dragOffsetY = coords.y - ly;
-            e.preventDefault();
-            return;
+
+        // Logo behavior
+        if (state.logoImg) {
+            const check = isPointerOnLogo(coords);
+            const logoW = canvasW * (state.logoSize / 100);
+            const logoH = logoW * (state.logoImg.naturalHeight / state.logoImg.naturalWidth);
+            const lx = state.logoX * canvasW;
+            const ly = state.logoY * canvasH;
+            
+            if (check.isResize) {
+                state.isResizingLogo = true;
+                state.resizeStartSize = state.logoSize;
+                state.resizeStartX = coords.x;
+                e.preventDefault();
+                return;
+            } else if (check.isOver) {
+                state.isDraggingLogo = true;
+                state.dragOffsetX = coords.x - lx;
+                state.dragOffsetY = coords.y - ly;
+                e.preventDefault();
+                return;
+            }
         }
 
         // B-roll PiP drag/select (Phase 5D) — checked before text overlay
