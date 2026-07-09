@@ -56,6 +56,7 @@
   [DONE] Project Save/Load & Auto-Save/Restore (JSON Export & IndexedDB Cache) - editor.js
   [DONE] Keyboard Shortcuts (space play/pause, I/O trim set, left/right step) - editor.js
   [DONE] Platform Presets per Platform (7C - one-click Facebook/IG/YT setup with duration warnings) - editor.js
+  [DONE] Batch Watermark/Banner Apply (7E - multi-file sequential processing) - exporter.js
 
 
 
@@ -756,6 +757,7 @@ Export-এ audio mixing এখানে হয়। নতুন audio track (b
   12. [DONE] Phase 4C - Color Grading (Custom RGB Curves)
   13. [DONE] Phase 5C - Intro/Outro Template
   14. [DONE] Phase 6B - Export Progress UX (ETA + Cancel)
+  15. [DONE] Phase 7E - Batch Watermark/Banner Apply (Multi-file processing)
 
 
 -----------------------------------------------------
@@ -817,11 +819,9 @@ AI সাজেশন — পরবর্তী সম্ভাব্য ফি�
 
 
  =====================================================
-  শেষ আপডেট: v2.13 - Platform Presets (7C) সম্পন্ন
-  (Facebook Feed, FB Reels, Instagram Reels, Instagram Story, YouTube Shorts
-  এবং YouTube Landscape প্রিসেট যুক্ত করা হয়েছে — এক-ক্লিকে Aspect Ratio, Layout Mode
-  এবং Duration Warning একসাথে সেট হয়ে যায়।)
+  শেষ আপডেট: v2.14 - Batch Video Processing (7E) সম্পন্ন
+  (একই লোগো/ব্যানার/intro-outro সেটিংস একাধিক ভিডিও ফাইলে একসাথে (একে একে) প্রয়োগ করে আলাদা আলাদা ফাইল হিসেবে এক্সপোর্ট করার সুবিধা যুক্ত করা হয়েছে।)
 
-  Phase 2 থেকে Phase 6 এর সকল কাজ এবং সাজেশন 7C, 7D, 7F এখন [DONE]।
-  বাকি আছে ভবিষ্যৎ আইডিয়াগুলো (7A, 7B, 7E) — এগুলোর কোনোটাই এখনো plan/implement করা হয়নি।
+  Phase 2 থেকে Phase 6 এর সকল কাজ এবং সাজেশন 7C, 7D, 7E, 7F এখন [DONE]।
+  বাকি আছে ভবিষ্যৎ আইডিয়াগুলো (7A, 7B) — এগুলোর কোনোটাই এখনো plan/implement করা হয়নি।
  =====================================================

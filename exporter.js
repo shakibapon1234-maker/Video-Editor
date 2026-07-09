@@ -178,7 +178,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    async function runExportPipeline(totalDuration) {
+    async function runExportPipeline(totalDuration, isBatch = false, batchFilename = '', batchIndex = 0, batchCount = 0) {
         const canvas = state.canvas;
         const video = state.video;
 
@@ -357,7 +357,11 @@ document.addEventListener('DOMContentLoaded', () => {
                     const progressPercent = grandTotal > 0 ? Math.min(100, (totalElapsed / grandTotal) * 100) : 100;
                     const uiProgress = 20 + (progressPercent * 0.75);
                     setProgress(Math.round(uiProgress));
-                    renderStatusText.innerText = role === 'intro' ? 'Rendering intro...' : 'Rendering outro...';
+                    if (isBatch) {
+                        renderStatusText.innerText = `[Batch ${batchIndex}/${batchCount}] Rendering ${role} for ${batchFilename}... ${Math.round(progressPercent)}%`;
+                    } else {
+                        renderStatusText.innerText = role === 'intro' ? 'Rendering intro...' : 'Rendering outro...';
+                    }
 
                     if (t >= 1) {
                         worker.removeEventListener('message', tick);
@@ -368,12 +372,20 @@ document.addEventListener('DOMContentLoaded', () => {
             });
         }
 
-        renderStatusText.innerText = 'Rendering intro...';
+        if (isBatch) {
+            renderStatusText.innerText = `[Batch ${batchIndex}/${batchCount}] Rendering intro for ${batchFilename}...`;
+        } else {
+            renderStatusText.innerText = 'Rendering intro...';
+        }
         await renderIntroOutroPhase('intro', 0);
         if (exportCancelled) { await finishCancelled(); return; }
 
         // --- Step D: Play through every clip sequentially while recording ---
-        renderStatusText.innerText = 'Rendering video frames...';
+        if (isBatch) {
+            renderStatusText.innerText = `[Batch ${batchIndex}/${batchCount}] Rendering frames for ${batchFilename}...`;
+        } else {
+            renderStatusText.innerText = 'Rendering video frames...';
+        }
         setProgress(20);
 
         let elapsedBeforeCurrentClip = 0;
@@ -486,7 +498,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
                     const uiProgress = 20 + (progressPercent * 0.75);
                     setProgress(Math.round(uiProgress));
-                    renderStatusText.innerText = `Rendering clip ${clipIndex + 1}/${state.clips.length}... ${Math.round(progressPercent)}%`;
+                    if (isBatch) {
+                        renderStatusText.innerText = `[Batch ${batchIndex}/${batchCount}] Rendering ${batchFilename}... ${Math.round(progressPercent)}%`;
+                    } else {
+                        renderStatusText.innerText = `Rendering clip ${clipIndex + 1}/${state.clips.length}... ${Math.round(progressPercent)}%`;
+                    }
 
                     if (currentTime >= clipTrimEnd || (clip.type !== 'image' && video.ended)) {
                         if (clip.type !== 'image') {
@@ -569,12 +585,26 @@ document.addEventListener('DOMContentLoaded', () => {
         const downloadURL = URL.createObjectURL(finalBlob);
 
         // Suggest a human-readable filename
-        const timestamp = new Date().toISOString().slice(0, 16).replace('T', '_').replace(':', '-');
         const ext = mimeType.toLowerCase().includes('mp4') ? 'mp4' : 'webm';
-        const filename = `facebook-video-${timestamp}.${ext}`;
+        let filename;
+        if (isBatch && batchFilename) {
+            const baseName = batchFilename.substring(0, batchFilename.lastIndexOf('.')) || batchFilename;
+            filename = `${baseName}_edited.${ext}`;
+        } else {
+            const timestamp = new Date().toISOString().slice(0, 16).replace('T', '_').replace(':', '-');
+            filename = `facebook-video-${timestamp}.${ext}`;
+        }
 
         downloadLink.href = downloadURL;
         downloadLink.download = filename;
+
+        if (isBatch) {
+            downloadLink.click();
+            setProgress(100);
+            renderStatusText.innerText = `Saved ${filename}! Proceeding...`;
+            await new Promise(resolve => setTimeout(resolve, 1000));
+            return;
+        }
 
         // --- Done! ---
         setProgress(100);
@@ -594,5 +624,233 @@ document.addEventListener('DOMContentLoaded', () => {
         renderProgressFill.style.width = percent + '%';
         renderPercentage.innerText = percent + '%';
         updateEta(percent);
+    }
+
+    // --- Batch Processing (Phase 7E) ---
+    const batchDropzone = document.getElementById('batch-dropzone');
+    const batchFilesInput = document.getElementById('batch-files-input');
+    const batchQueueContainer = document.getElementById('batch-queue-container');
+    const batchQueueList = document.getElementById('batch-queue-list');
+    const batchRenderBtn = document.getElementById('batch-render-btn');
+    const batchCountBadge = document.getElementById('batch-count-badge');
+
+    let batchQueue = [];
+    let isBatchRenderRunning = false;
+
+    if (batchDropzone && batchFilesInput) {
+        batchDropzone.addEventListener('click', () => batchFilesInput.click());
+
+        batchFilesInput.addEventListener('change', (e) => {
+            addFilesToBatch(e.target.files);
+            batchFilesInput.value = '';
+        });
+
+        batchDropzone.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            batchDropzone.classList.add('hover');
+        });
+
+        batchDropzone.addEventListener('dragleave', () => {
+            batchDropzone.classList.remove('hover');
+        });
+
+        batchDropzone.addEventListener('drop', (e) => {
+            e.preventDefault();
+            batchDropzone.classList.remove('hover');
+            addFilesToBatch(e.dataTransfer.files);
+        });
+    }
+
+    function addFilesToBatch(fileList) {
+        if (isBatchRenderRunning) return;
+        for (const file of fileList) {
+            if (file.type.startsWith('video/')) {
+                const isDuplicate = batchQueue.some(f => f.name === file.name && f.size === file.size);
+                if (!isDuplicate) {
+                    batchQueue.push(file);
+                }
+            }
+        }
+        renderBatchQueue();
+    }
+
+    function renderBatchQueue() {
+        if (!batchQueueList) return;
+        batchQueueList.innerHTML = '';
+
+        if (batchQueue.length > 0) {
+            batchQueueContainer.style.display = 'block';
+            batchCountBadge.innerText = batchQueue.length;
+            batchRenderBtn.disabled = isBatchRenderRunning;
+
+            batchQueue.forEach((file, index) => {
+                const li = document.createElement('li');
+                li.className = 'batch-queue-item';
+
+                const sizeMB = (file.size / (1024 * 1024)).toFixed(2);
+                li.innerHTML = `
+                    <div class="batch-item-info">
+                        <span class="batch-item-name" title="${file.name}">${file.name}</span>
+                        <span class="batch-item-size">${sizeMB} MB</span>
+                    </div>
+                    <button class="btn-remove-batch-item" data-index="${index}" title="তালিকা থেকে বাদ দিন">
+                        <i class="fa-solid fa-trash-can"></i>
+                    </button>
+                `;
+
+                const removeBtn = li.querySelector('.btn-remove-batch-item');
+                if (removeBtn) {
+                    removeBtn.addEventListener('click', (e) => {
+                        e.stopPropagation();
+                        if (isBatchRenderRunning) return;
+                        const idx = parseInt(removeBtn.getAttribute('data-index'));
+                        batchQueue.splice(idx, 1);
+                        renderBatchQueue();
+                    });
+                }
+
+                batchQueueList.appendChild(li);
+            });
+        } else {
+            batchQueueContainer.style.display = 'none';
+            batchRenderBtn.disabled = true;
+        }
+    }
+
+    async function startBatchExport() {
+        if (isBatchRenderRunning || batchQueue.length === 0) return;
+
+        isBatchRenderRunning = true;
+        exportCancelled = false;
+        exportStartTimestamp = performance.now();
+        
+        if (cancelRenderBtn) cancelRenderBtn.disabled = false;
+        renderBtn.disabled = true;
+        batchRenderBtn.disabled = true;
+        if (qualitySelect) qualitySelect.disabled = true;
+        
+        renderProgressBox.style.display = 'block';
+        renderSuccessBox.style.display = 'none';
+        
+        // Save original editor project configurations
+        const originalClips = [...state.clips];
+        const originalActiveClipId = state.activeClipId;
+        const originalStartTime = state.startTime;
+        const originalEndTime = state.endTime;
+        const originalDuration = state.duration;
+        const originalCropX = state.cropX;
+        const originalCropY = state.cropY;
+        const originalCropW = state.cropW;
+        const originalCropH = state.cropH;
+        const originalSrc = video.src;
+
+        try {
+            for (let i = 0; i < batchQueue.length; i++) {
+                if (exportCancelled) {
+                    break;
+                }
+
+                const file = batchQueue[i];
+                renderStatusText.innerText = `[Batch ${i + 1}/${batchQueue.length}] Loading ${file.name}...`;
+                setProgress(0);
+
+                const fileURL = URL.createObjectURL(file);
+
+                // Dynamically fetch file's duration by loading it in a temporary video element
+                const tempVideo = document.createElement('video');
+                tempVideo.src = fileURL;
+                const duration = await new Promise((resolve) => {
+                    tempVideo.onloadedmetadata = () => resolve(tempVideo.duration);
+                    tempVideo.onerror = () => resolve(0);
+                });
+
+                if (duration <= 0) {
+                    console.error(`Could not decode metadata for ${file.name}`);
+                    URL.revokeObjectURL(fileURL);
+                    continue;
+                }
+
+                // Construct a single clip configuration for this batch file
+                const tempClip = {
+                    id: Date.now(),
+                    file: file,
+                    url: fileURL,
+                    name: file.name,
+                    duration: duration,
+                    start: 0,
+                    end: duration,
+                    cropX: originalCropX,
+                    cropY: originalCropY,
+                    cropW: originalCropW,
+                    cropH: originalCropH
+                };
+
+                state.clips = [tempClip];
+                state.activeClipId = tempClip.id;
+                state.duration = duration;
+                state.startTime = 0;
+                state.endTime = duration;
+                state.cropX = originalCropX;
+                state.cropY = originalCropY;
+                state.cropW = originalCropW;
+                state.cropH = originalCropH;
+
+                video.src = fileURL;
+                video.load();
+                await new Promise((resolve) => {
+                    video.onloadedmetadata = () => resolve();
+                });
+
+                await waitForSeek(video, 0);
+
+                // Run rendering pipeline for this batch index
+                await runExportPipeline(duration, true, file.name, i + 1, batchQueue.length);
+
+                URL.revokeObjectURL(fileURL);
+            }
+        } catch (err) {
+            console.error('Batch render error:', err);
+        } finally {
+            // Restore true original user project clips
+            state.clips = originalClips;
+            state.activeClipId = originalActiveClipId;
+            state.duration = originalDuration;
+            state.startTime = originalStartTime;
+            state.endTime = originalEndTime;
+            state.cropX = originalCropX;
+            state.cropY = originalCropY;
+            state.cropW = originalCropW;
+            state.cropH = originalCropH;
+
+            video.src = originalSrc;
+            video.load();
+            await new Promise((resolve) => {
+                video.onloadedmetadata = () => resolve();
+            });
+            await waitForSeek(video, state.startTime);
+
+            if (!window.setSpeakerMuted || !window.setSpeakerMuted(false)) {
+                video.volume = Math.min(1.0, state.videoVolume);
+            }
+            if (window.drawEditorFrame) window.drawEditorFrame();
+
+            isBatchRenderRunning = false;
+            renderBtn.disabled = false;
+            batchRenderBtn.disabled = false;
+            if (qualitySelect) qualitySelect.disabled = false;
+            renderBtn.innerHTML = '<i class="fa-solid fa-wand-magic-sparkles"></i> Render & Export Video';
+            
+            if (exportCancelled) {
+                renderStatusText.innerText = 'Batch Export Cancelled';
+                renderProgressBox.style.display = 'none';
+            } else {
+                renderStatusText.innerText = 'Batch Export Complete!';
+                setProgress(100);
+            }
+        }
+    }
+
+    if (batchRenderBtn) {
+        batchRenderBtn.addEventListener('click', startBatchExport);
     }
 });

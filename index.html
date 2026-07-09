@@ -1362,6 +1362,43 @@
                                     </a>
                                 </div>
                         </div>
+                    </div>
+
+                    <!-- Batch Video Processing Card (Phase 7E) -->
+                    <div class="card mt-4">
+                        <div class="card-header">
+                            <i class="fa-solid fa-layer-group card-icon"></i>
+                            <h3>Batch Video Processing (ব্যাচ ভিডিও রেন্ডার)</h3>
+                        </div>
+                        <div class="card-body">
+                            <p class="help-text">
+                                একই লোগো, ব্যানারের লেখা, প্রগ্রেস বার, কালার ফিল্টার, ইন্ট্রো/আউট্রো সেটিংস একাধিক ভিডিও ফাইলে একসাথে (একে একে) প্রয়োগ করে আলাদা আলাদা ফাইল হিসেবে এক্সপোর্ট করুন।
+                            </p>
+                            
+                            <div class="file-selector-box mt-3" id="batch-dropzone">
+                                <i class="fa-solid fa-file-video"></i>
+                                <span>Drag & Drop Multiple Videos here or Click to Add</span>
+                                <button class="btn btn-sm btn-outline" type="button">Add Videos</button>
+                                <input type="file" id="batch-files-input" accept="video/*" multiple style="display: none;">
+                            </div>
+                            
+                            <div class="batch-queue-container mt-3" id="batch-queue-container" style="display: none;">
+                                <h4 class="batch-queue-title">ভিডিওর তালিকা (Queue List)</h4>
+                                <ul class="batch-queue-list" id="batch-queue-list">
+                                    <!-- Dynamically populated files -->
+                                </ul>
+                                
+                                <div class="multiple-downloads-warning">
+                                    <i class="fa-solid fa-triangle-exclamation"></i>
+                                    <span><strong>সতর্কতা:</strong> ব্রাউজার যদি প্রথম ফাইল ডাউনলোডের পর অন্যগুলো ব্লক করে, তবে ইউআরএল বারের ডানপাশে <em>"Allow multiple downloads"</em> অপশনে ক্লিক করে অনুমতি দিন।</span>
+                                </div>
+                                
+                                <button id="batch-render-btn" class="btn btn-primary btn-block" disabled type="button">
+                                    <i class="fa-solid fa-play"></i> Start Batch Render (<span id="batch-count-badge">0</span> Videos)
+                                </button>
+                            </div>
+                        </div>
+                    </div>
 
                         <!-- Thumbnail Generator (Phase 5B) -->
                         <div class="card mt-4">

@@ -1865,3 +1865,103 @@ input:checked + .slider:before {
     to { transform: scale(1); opacity: 1; }
 }
 
+/* --- Batch Video Processing Styles (Phase 7E) --- */
+.batch-queue-container {
+    background-color: var(--bg-surface-elevated);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+    padding: 16px;
+}
+
+.batch-queue-title {
+    font-family: var(--font-heading);
+    font-size: 13px;
+    font-weight: 600;
+    margin-bottom: 10px;
+    color: var(--text-primary);
+}
+
+.batch-queue-list {
+    list-style: none;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    max-height: 200px;
+    overflow-y: auto;
+    padding-right: 4px;
+    margin-bottom: 15px;
+}
+
+.batch-queue-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    background-color: var(--bg-surface);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-sm);
+    padding: 10px 12px;
+    font-size: 13px;
+    transition: var(--transition-smooth);
+}
+
+.batch-queue-item:hover {
+    border-color: var(--border-hover);
+}
+
+.batch-item-info {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    max-width: 80%;
+    min-width: 0;
+}
+
+.batch-item-name {
+    font-weight: 500;
+    color: var(--text-primary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    font-size: 12px;
+}
+
+.batch-item-size {
+    font-size: 10px;
+    color: var(--text-secondary);
+}
+
+.btn-remove-batch-item {
+    background: transparent;
+    border: none;
+    color: var(--text-secondary);
+    cursor: pointer;
+    padding: 4px 8px;
+    font-size: 13px;
+    transition: var(--transition-smooth);
+    border-radius: 4px;
+}
+
+.btn-remove-batch-item:hover {
+    color: var(--danger);
+    background-color: rgba(239, 68, 68, 0.1);
+}
+
+.multiple-downloads-warning {
+    background: rgba(245, 158, 11, 0.05);
+    border: 1px solid rgba(245, 158, 11, 0.2);
+    border-radius: var(--radius-sm);
+    padding: 10px 12px;
+    margin-bottom: 15px;
+    font-size: 11px;
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    color: #e28a00;
+    line-height: 1.4;
+}
+
+.multiple-downloads-warning i {
+    margin-top: 2px;
+    flex-shrink: 0;
+}
+
