@@ -136,6 +136,9 @@ window.VideoEditor = {
     isDraggingSeek: false,
     dragBrollOffsetX: 0,
     dragBrollOffsetY: 0,
+    isRotatingBroll: false,
+    brollRotateStartAngle: 0,
+    brollRotateStartRotation: 0,
 
     // Blur/Mosaic Regions (Phase 4B)
     blurRegions: [],
@@ -2059,6 +2062,12 @@ document.addEventListener('DOMContentLoaded', () => {
                     }
                 }
 
+                // User-set static rotation (Phase 5D+, manual rotate handle) — composites
+                // on top of any animation-driven rotateAmt set above, so a manually
+                // rotated B-roll box still plays its entry/exit rotation animations
+                // (e.g. 'rotate-in') around its own tilted angle.
+                if (item.rotation) rotateAmt += item.rotation * Math.PI / 180;
+
                 // ---- 3. Draw: box transform (position/scale/rotate/blur/alpha) is the
                 // same regardless of mode; only the content differs (text vs image, and
                 // for images, whether we additionally animate the source crop window). ----
@@ -2484,6 +2493,27 @@ document.addEventListener('DOMContentLoaded', () => {
                             state.ctx.fill();
                             state.ctx.stroke();
                         });
+                    }
+                    // Rotate handle: a small circle above the box's top-center, joined by
+                    // a stem line. Drawn here (still inside the box's own rotate/scale
+                    // ctx transform above) so it visually spins together with the box —
+                    // dragging it sets item.rotation (see findBrollRotateHandle / handlePointerMove).
+                    {
+                        const rCx = drawBoxX + boxW / 2;
+                        const handleDist = Math.max(28, Math.min(canvasW, canvasH) * 0.05);
+                        const rHy = drawBoxY - handleDist;
+                        state.ctx.strokeStyle = 'rgba(79, 70, 229, 0.9)';
+                        state.ctx.lineWidth = 2;
+                        state.ctx.beginPath();
+                        state.ctx.moveTo(rCx, drawBoxY);
+                        state.ctx.lineTo(rCx, rHy);
+                        state.ctx.stroke();
+                        const rHandleR = Math.max(8, Math.min(canvasW, canvasH) * 0.02);
+                        state.ctx.fillStyle = '#ffffff';
+                        state.ctx.beginPath();
+                        state.ctx.arc(rCx, rHy, rHandleR, 0, Math.PI * 2);
+                        state.ctx.fill();
+                        state.ctx.stroke();
                     }
                 }
 
@@ -3075,6 +3105,21 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         }
 
+        // B-roll rotate handle check (must come BEFORE resize/drag checks)
+        if (state.currentStep === 3 && state.selectedBrollId !== null) {
+            if (findBrollRotateHandle(coords)) {
+                const item = state.brollOverlays.find(b => b.id === state.selectedBrollId);
+                if (item) {
+                    const box = getBrollBoxRect(item, canvasW, canvasH);
+                    state.isRotatingBroll = true;
+                    state.brollRotateStartAngle = Math.atan2(coords.y - box.cy, coords.x - box.cx) * 180 / Math.PI;
+                    state.brollRotateStartRotation = item.rotation || 0;
+                    e.preventDefault();
+                    return;
+                }
+            }
+        }
+
         // B-roll resize handle check (must come BEFORE drag check)
         if (state.currentStep === 3 && state.selectedBrollId !== null) {
             const resizeHandle = findBrollResizeHandle(coords);
@@ -3256,11 +3301,89 @@ document.addEventListener('DOMContentLoaded', () => {
                 py = item.y * canvasH;
             }
 
-            if (coords.x >= px && coords.x <= px + pipW && coords.y >= py && coords.y <= py + pipH) {
+            // Rotated box: test in the box's own unrotated frame by rotating the
+            // pointer coords backwards around the box center first.
+            let testX = coords.x, testY = coords.y;
+            if (item.rotation) {
+                const local = rotatePointAround(coords.x, coords.y, px + pipW / 2, py + pipH / 2, -(item.rotation * Math.PI / 180));
+                testX = local.x; testY = local.y;
+            }
+            if (testX >= px && testX <= px + pipW && testY >= py && testY <= py + pipH) {
                 return item;
             }
         }
         return null;
+    }
+
+    // Rotates point (px,py) around center (cx,cy) by angleRad (radians). Used to
+    // translate between screen space and a rotated B-roll box's own local frame.
+    function rotatePointAround(px, py, cx, cy, angleRad) {
+        const dx = px - cx, dy = py - cy;
+        const cosA = Math.cos(angleRad), sinA = Math.sin(angleRad);
+        return { x: cx + dx * cosA - dy * sinA, y: cy + dx * sinA + dy * cosA };
+    }
+
+    // Computes the current (un-animated, un-rotated) box rect for a B-roll item —
+    // matches the box math in the main draw loop and in findBrollPipAt, just
+    // pulled out so hit-testing helpers (resize handle, rotate handle) can share it.
+    function getBrollBoxRect(item, canvasW, canvasH) {
+        let px, py, pipW, pipH;
+        if (item.mode === 'fullscreen') {
+            const scale = (item.size !== undefined ? item.size : 100) / 100;
+            const videoAspect = (state.video && state.video.videoWidth && state.video.videoHeight)
+                ? state.video.videoWidth / state.video.videoHeight : 16 / 9;
+            const canvasAspect = canvasW / canvasH;
+            let dvW = canvasW, dvH = canvasH, dvX = 0, dvY = 0;
+            if (videoAspect > canvasAspect) { dvH = canvasW / videoAspect; dvY = (canvasH - dvH) / 2; }
+            else if (videoAspect < canvasAspect) { dvW = canvasH * videoAspect; dvX = (canvasW - dvW) / 2; }
+            pipW = dvW * scale;
+            pipH = dvH * scale;
+            if (item._fsPosSet) {
+                px = item.x * canvasW;
+                py = item.y * canvasH;
+            } else {
+                px = dvX + (dvW - pipW) / 2;
+                py = dvY + (dvH - pipH) / 2;
+            }
+        } else {
+            if (item.type === 'text') {
+                state.ctx.font = `bold ${item.fontSize}px "Hind Siliguri", "Plus Jakarta Sans", sans-serif`;
+                const metrics = state.ctx.measureText(item.text);
+                pipW = metrics.width + 32;
+                pipH = item.fontSize + 24;
+            } else {
+                if (item.pipW !== undefined && item.pipH !== undefined) {
+                    pipW = item.pipW * canvasW;
+                    pipH = item.pipH * canvasH;
+                } else {
+                    pipW = canvasW * (item.size / 100);
+                    pipH = item.imageImg ? pipW * (item.imageImg.naturalHeight / item.imageImg.naturalWidth) : pipW;
+                }
+            }
+            px = item.x * canvasW;
+            py = item.y * canvasH;
+        }
+        return { x: px, y: py, w: pipW, h: pipH, cx: px + pipW / 2, cy: py + pipH / 2 };
+    }
+
+    // Returns true if 'coords' is on the rotate handle (the small circle above the
+    // top-center of the currently selected B-roll box). Shown for the same items
+    // that get the selection outline: PiP items, and Fullscreen items sized < 100%.
+    function findBrollRotateHandle(coords) {
+        const item = state.brollOverlays.find(b => b.id === state.selectedBrollId);
+        if (!item) return false;
+        const isFsCustom = item.mode === 'fullscreen' && (item.size !== undefined && item.size < 100);
+        if (item.mode !== 'pip' && !isFsCustom) return false;
+        const canvasW = state.canvas.width;
+        const canvasH = state.canvas.height;
+        const box = getBrollBoxRect(item, canvasW, canvasH);
+        const handleDist = Math.max(28, Math.min(canvasW, canvasH) * 0.05);
+        const angleRad = (item.rotation || 0) * Math.PI / 180;
+        const world = rotatePointAround(box.cx, box.y - handleDist, box.cx, box.cy, angleRad);
+        const rect = state.canvas.getBoundingClientRect();
+        const physScale = canvasW / rect.width;
+        const hr = 16 * physScale;
+        return Math.hypot(coords.x - world.x, coords.y - world.y) < hr;
     }
 
     // Returns the handle id ('top-left', 'top', 'top-right', 'right', 'bottom-right',
@@ -3281,6 +3404,13 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         const bx = item.x * canvasW;
         const by = item.y * canvasH;
+        // Rotated box: test in the box's own unrotated frame by rotating the
+        // pointer coords backwards around the box center first.
+        let testX = coords.x, testY = coords.y;
+        if (item.rotation) {
+            const local = rotatePointAround(coords.x, coords.y, bx + bW / 2, by + bH / 2, -(item.rotation * Math.PI / 180));
+            testX = local.x; testY = local.y;
+        }
         // Physical hit radius: 14px on-screen regardless of canvas resolution
         const rect = state.canvas.getBoundingClientRect();
         const physScale = canvasW / rect.width;
@@ -3296,7 +3426,7 @@ document.addEventListener('DOMContentLoaded', () => {
             { id: 'left',         x: bx,         y: by + bH/2 },
         ];
         for (const h of hpts) {
-            if (Math.hypot(coords.x - h.x, coords.y - h.y) < hr) return h.id;
+            if (Math.hypot(testX - h.x, testY - h.y) < hr) return h.id;
         }
         return null;
     }
@@ -3585,6 +3715,29 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
 
+        // B-roll rotate drag: pointer angle around box center sets item.rotation.
+        // Snaps to 15° increments when close (hold Shift to rotate freely).
+        if (state.isRotatingBroll && state.selectedBrollId !== null) {
+            const coords = getCanvasCoords(e);
+            const canvasW = state.canvas.width;
+            const canvasH = state.canvas.height;
+            const item = state.brollOverlays.find(b => b.id === state.selectedBrollId);
+            if (item) {
+                const box = getBrollBoxRect(item, canvasW, canvasH);
+                const currentAngle = Math.atan2(coords.y - box.cy, coords.x - box.cx) * 180 / Math.PI;
+                const delta = currentAngle - state.brollRotateStartAngle;
+                let newRotation = state.brollRotateStartRotation + delta;
+                if (!e.shiftKey) {
+                    const snapped = Math.round(newRotation / 15) * 15;
+                    if (Math.abs(newRotation - snapped) < 4) newRotation = snapped;
+                }
+                item.rotation = ((newRotation % 360) + 360) % 360;
+                drawFrame();
+            }
+            e.preventDefault();
+            return;
+        }
+
         // B-roll PiP drag (Phase 5D)
         if (state.isResizingBroll && state.selectedBrollId !== null) {
             const coords = getCanvasCoords(e);
@@ -3592,8 +3745,20 @@ document.addEventListener('DOMContentLoaded', () => {
             const canvasH = state.canvas.height;
             const item = state.brollOverlays.find(b => b.id === state.selectedBrollId);
             if (item) {
-                const dx = (coords.x - state.brollResizeStartX) / canvasW;
-                const dy = (coords.y - state.brollResizeStartY) / canvasH;
+                // Resizing a rotated box: rotate the on-screen drag vector back into the
+                // box's own local (unrotated) axes first, so dragging the handle along
+                // the box's visual edge still grows/shrinks width/height correctly.
+                let rawDx = coords.x - state.brollResizeStartX;
+                let rawDy = coords.y - state.brollResizeStartY;
+                if (item.rotation) {
+                    const ang = -(item.rotation * Math.PI / 180);
+                    const cosA = Math.cos(ang), sinA = Math.sin(ang);
+                    const rDx = rawDx * cosA - rawDy * sinA;
+                    const rDy = rawDx * sinA + rawDy * cosA;
+                    rawDx = rDx; rawDy = rDy;
+                }
+                const dx = rawDx / canvasW;
+                const dy = rawDy / canvasH;
                 const handle = state.brollResizeHandle;
                 const sw0 = state.brollResizeStartW;
                 const sh0 = state.brollResizeStartH;
@@ -3776,6 +3941,7 @@ document.addEventListener('DOMContentLoaded', () => {
         state.isDraggingTextOverlay = false;
         state.isDraggingBroll = false;
         state.isResizingBroll = false;
+        state.isRotatingBroll = false;
         state.isDraggingSticker = false;
         state.isResizingSticker = false;
     }
@@ -4253,6 +4419,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     : 100,
                 x: 0.05,
                 y: 0.6,
+                rotation: 0, // manual tilt angle in degrees, set via the rotate handle
                 startSec: Math.min(state.endTime || state.duration || 5, state.currentTime || 0),
                 endSec: Math.min(state.endTime || state.duration || 5, (state.currentTime || 0) + 3),
                 // Each B-roll clip enters from a different side so a sequence
@@ -4297,6 +4464,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 size: brollSizeSlider ? parseInt(brollSizeSlider.value) : 35,
                 x: 0.5,
                 y: 0.5,
+                rotation: 0, // manual tilt angle in degrees, set via the rotate handle
                 startSec: Math.min(state.endTime || state.duration || 5, state.currentTime || 0),
                 endSec: Math.min(state.endTime || state.duration || 5, (state.currentTime || 0) + 3),
                 entryDirection: ['left', 'right', 'top', 'bottom'][Math.floor(Math.random() * 4)],
