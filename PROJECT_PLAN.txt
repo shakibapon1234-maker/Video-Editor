@@ -58,6 +58,7 @@
   [DONE] Platform Presets per Platform (7C - one-click Facebook/IG/YT setup with duration warnings) - editor.js
   [DONE] Batch Watermark/Banner Apply (7E - multi-file sequential processing) - exporter.js
   [DONE] Auto Silence Trimmer (7A - অডিও ট্র্যাক বিশ্লেষণ করে নীরব অংশ চিহ্নিত করে স্বয়ংক্রিয় কাটা) - editor.js
+  [DONE] Auto Aspect-Ratio Reframe (7B - ক্যানভাস ফরম্যাট অনুযায়ী মূল অবজেক্ট চিহ্নিত করে অটো-ক্রপ) - editor.js
 
 
 
@@ -820,9 +821,8 @@ AI সাজেশন — পরবর্তী সম্ভাব্য ফি�
 
 
  =====================================================
-  শেষ আপডেট: v2.15 - Auto Silence Trimmer (7A) সম্পন্ন
-  (অডিও ট্র্যাক বিশ্লেষণ করে কথা না থাকা নীরব অংশগুলো স্বয়ংক্রিয়ভাবে চিহ্নিত করে কেটে বাদ দেওয়ার ফিচার যুক্ত করা হয়েছে।)
+  শেষ আপডেট: v2.16 - Project Completed (All suggestions completed including 7A and 7B)
+  (Auto Silence Trimmer এবং Auto Aspect-Ratio Reframe (Smart Crop) সহ সকল রিকোয়ারমেন্ট এবং প্ল্যান সম্পন্ন হয়েছে।)
 
-  Phase 2 থেকে Phase 6 এর সকল কাজ এবং সাজেশন 7A, 7C, 7D, 7E, 7F এখন [DONE]।
-  বাকি আছে ভবিষ্যৎ আইডিয়া (7B) — এটি এখনও plan/implement করা হয়নি।
+  Phase 2 থেকে Phase 7 এর সকল কাজ এবং সাজেশন (7A, 7B, 7C, 7D, 7E, 7F) এখন সম্পূর্ণ [DONE]!
  =====================================================

@@ -4226,6 +4226,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const cropToolToggle = document.getElementById('crop-tool-toggle');
     const cropActionsContainer = document.getElementById('crop-actions-container');
     const resetCropBtn = document.getElementById('reset-crop-btn');
+    const autoReframeBtn = document.getElementById('auto-reframe-btn');
     
     cropToolToggle.addEventListener('change', (e) => {
         state.isAdjustingCrop = e.target.checked;
@@ -4339,6 +4340,205 @@ document.addEventListener('DOMContentLoaded', () => {
         updateCanvasDimensions();
         drawFrame();
     });
+
+    if (autoReframeBtn) {
+        autoReframeBtn.addEventListener('click', () => {
+            const activeClip = state.clips.find(c => c.id === state.activeClipId);
+            if (!activeClip) {
+                alert("দয়া করে প্রথমে একটি ভিডিও ক্লিপ সিলেক্ট করুন।");
+                return;
+            }
+            if (activeClip.type === 'image') {
+                alert("অটো-রিফ্রেম শুধু ভিডিও ক্লিপের জন্য প্রযোজ্য।");
+                return;
+            }
+            if (state.aspectRatio === 'original') {
+                alert("অটো-রিফ্রেম করার জন্য প্রথমে একটি ক্যানভাস ফরম্যাট (যেমন ১:১, ৪:৫ বা ৯:১৬) সিলেক্ট করুন।");
+                return;
+            }
+
+            try {
+                const originalText = autoReframeBtn.innerHTML;
+                autoReframeBtn.disabled = true;
+                autoReframeBtn.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin"></i> Analyzing...';
+
+                setTimeout(() => {
+                    performAutoReframe(activeClip);
+                    autoReframeBtn.disabled = false;
+                    autoReframeBtn.innerHTML = originalText;
+                }, 100);
+            } catch (err) {
+                console.error("Auto Reframe error:", err);
+                alert("অটো-রিফ্রেম ব্যর্থ হয়েছে।");
+                autoReframeBtn.disabled = false;
+                autoReframeBtn.innerHTML = '<i class="fa-solid fa-wand-magic-sparkles"></i> Auto Reframe (Smart Crop)';
+            }
+        });
+    }
+
+    function performAutoReframe(activeClip) {
+        const video = state.video;
+        if (!video.videoWidth || !video.videoHeight) {
+            alert("ভিডিও ফাইলটি পুরোপুরি লোড হয়নি। দয়া করে একটু অপেক্ষা করুন।");
+            return;
+        }
+
+        const videoW = video.videoWidth;
+        const videoH = video.videoHeight;
+        const videoRatio = videoW / videoH;
+
+        let targetRatio = 1.0;
+        switch (state.aspectRatio) {
+            case '1-1':
+                targetRatio = 1.0;
+                break;
+            case '4-5':
+                targetRatio = 0.8;
+                break;
+            case '9-16':
+                targetRatio = 9 / 16;
+                break;
+            case '16-9':
+                targetRatio = 16 / 9;
+                break;
+            default:
+                targetRatio = videoRatio;
+        }
+
+        const ow = 320;
+        const oh = Math.round(320 / videoRatio);
+        const offscreen = document.createElement('canvas');
+        offscreen.width = ow;
+        offscreen.height = oh;
+        const octx = offscreen.getContext('2d');
+
+        octx.drawImage(video, 0, 0, ow, oh);
+        const imgData = octx.getImageData(0, 0, ow, oh);
+        const pixels = imgData.data;
+
+        if (targetRatio < videoRatio) {
+            const targetWNorm = targetRatio / videoRatio;
+            const targetWPixels = Math.round(targetWNorm * ow);
+
+            const columnScores = new Float32Array(ow);
+            for (let x = 0; x < ow - 1; x++) {
+                for (let y = 0; y < oh; y++) {
+                    const idx = (y * ow + x) * 4;
+                    const rDiff = Math.abs(pixels[idx] - pixels[idx + 4]);
+                    const gDiff = Math.abs(pixels[idx + 1] - pixels[idx + 5]);
+                    const bDiff = Math.abs(pixels[idx + 2] - pixels[idx + 6]);
+                    columnScores[x] += rDiff + gDiff + bDiff;
+                }
+            }
+
+            const smoothScores = new Float32Array(ow);
+            const kSize = Math.max(3, Math.floor(ow / 24));
+            for (let x = 0; x < ow; x++) {
+                let sum = 0;
+                let count = 0;
+                for (let k = -kSize; k <= kSize; k++) {
+                    const col = x + k;
+                    if (col >= 0 && col < ow) {
+                        sum += columnScores[col];
+                        count++;
+                    }
+                }
+                smoothScores[x] = sum / count;
+            }
+
+            let bestX = 0;
+            let maxScore = -1;
+            const limit = ow - targetWPixels;
+
+            for (let x = 0; x <= limit; x++) {
+                let score = 0;
+                for (let k = 0; k < targetWPixels; k++) {
+                    score += smoothScores[x + k];
+                }
+                const distFromCenter = Math.abs(x + targetWPixels / 2 - ow / 2) / (ow / 2);
+                const bias = 1.0 - 0.1 * distFromCenter;
+                const biasedScore = score * bias;
+
+                if (biasedScore > maxScore) {
+                    maxScore = biasedScore;
+                    bestX = x;
+                }
+            }
+
+            state.cropX = bestX / ow;
+            state.cropY = 0;
+            state.cropW = targetWNorm;
+            state.cropH = 1.0;
+
+        } else if (targetRatio > videoRatio) {
+            const targetHNorm = videoRatio / targetRatio;
+            const targetHPixels = Math.round(targetHNorm * oh);
+
+            const rowScores = new Float32Array(oh);
+            for (let y = 0; y < oh - 1; y++) {
+                for (let x = 0; x < ow; x++) {
+                    const idx = (y * ow + x) * 4;
+                    const nextIdx = ((y + 1) * ow + x) * 4;
+                    const rDiff = Math.abs(pixels[idx] - pixels[nextIdx]);
+                    const gDiff = Math.abs(pixels[idx + 1] - pixels[nextIdx + 1]);
+                    const bDiff = Math.abs(pixels[idx + 2] - pixels[nextIdx + 2]);
+                    rowScores[y] += rDiff + gDiff + bDiff;
+                }
+            }
+
+            const smoothScores = new Float32Array(oh);
+            const kSize = Math.max(3, Math.floor(oh / 24));
+            for (let y = 0; y < oh; y++) {
+                let sum = 0;
+                let count = 0;
+                for (let k = -kSize; k <= kSize; k++) {
+                    const row = y + k;
+                    if (row >= 0 && row < oh) {
+                        sum += rowScores[row];
+                        count++;
+                    }
+                }
+                smoothScores[y] = sum / count;
+            }
+
+            let bestY = 0;
+            let maxScore = -1;
+            const limit = oh - targetHPixels;
+
+            for (let y = 0; y <= limit; y++) {
+                let score = 0;
+                for (let k = 0; k < targetHPixels; k++) {
+                    score += smoothScores[y + k];
+                }
+                const distFromCenter = Math.abs(y + targetHPixels / 2 - oh / 2) / (oh / 2);
+                const bias = 1.0 - 0.1 * distFromCenter;
+                const biasedScore = score * bias;
+
+                if (biasedScore > maxScore) {
+                    maxScore = biasedScore;
+                    bestY = y;
+                }
+            }
+
+            state.cropX = 0;
+            state.cropY = bestY / oh;
+            state.cropW = 1.0;
+            state.cropH = targetHNorm;
+
+        } else {
+            state.cropX = 0;
+            state.cropY = 0;
+            state.cropW = 1.0;
+            state.cropH = 1.0;
+        }
+
+        syncCropToActiveClip();
+        updateCropDimensionsDisplay();
+        updateCanvasDimensions();
+        drawFrame();
+
+        if (typeof triggerAutoSave === 'function') triggerAutoSave();
+    }
 
     function updateCropDimensionsDisplay() {
         const cropDimensionsVal = document.getElementById('crop-dimensions-val');

@@ -415,9 +415,14 @@
                                     </label>
                                 </div>
                                 <div class="crop-actions mt-3" id="crop-actions-container" style="display: none;">
-                                    <button id="reset-crop-btn" class="btn btn-sm btn-danger" data-tooltip="ক্রপ এরিয়া রিসেট করে স্বাভাবিক অবস্থায় ফিরিয়ে আনুন (Reset crop area to full video)">
-                                        <i class="fa-solid fa-arrow-rotate-left"></i> Reset Crop
-                                    </button>
+                                    <div style="display: flex; gap: 8px;">
+                                        <button id="auto-reframe-btn" class="btn btn-sm btn-primary" type="button" data-tooltip="ভিডিওর মূল বিষয়বস্তু সনাক্ত করে অটো ক্রপ পজিশন করুন (Smart auto crop center on subject)">
+                                            <i class="fa-solid fa-wand-magic-sparkles"></i> Auto Reframe (Smart Crop)
+                                        </button>
+                                        <button id="reset-crop-btn" class="btn btn-sm btn-danger" type="button" data-tooltip="ক্রপ এরিয়া রিসেট করে স্বাভাবিক অবস্থায় ফিরিয়ে আনুন (Reset crop area to full video)">
+                                            <i class="fa-solid fa-arrow-rotate-left"></i> Reset Crop
+                                        </button>
+                                    </div>
                                     <div class="crop-info mt-2">
                                         <span class="help-text">Crop Area: <span id="crop-dimensions-val">100% x 100%</span></span>
                                     </div>
