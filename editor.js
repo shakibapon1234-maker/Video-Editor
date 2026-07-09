@@ -541,6 +541,114 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     });
 
+    // --- Platform Presets (7C) ---
+    const PLATFORM_PRESETS = {
+        'fb-feed': {
+            name: 'Facebook Feed',
+            ratio: '4-5',
+            layoutMode: 'fill',
+            maxDuration: 240,
+            warning: 'Facebook Feed ভিডিওর সর্বোচ্চ দৈর্ঘ্য ২৪০ সেকেন্ড (৪ মিনিট)। ক্যাপশনের জন্য নিচে ও উপরে ব্যানার ব্যবহার করুন।'
+        },
+        'fb-reels': {
+            name: 'Facebook Reels',
+            ratio: '9-16',
+            layoutMode: 'fill',
+            maxDuration: 90,
+            warning: 'Facebook Reels-এর সর্বোচ্চ সময়সীমা ৯০ সেকেন্ড। ভিডিওটি সে অনুযায়ী Trim করুন।'
+        },
+        'ig-reels': {
+            name: 'Instagram Reels',
+            ratio: '9-16',
+            layoutMode: 'fill',
+            maxDuration: 90,
+            warning: 'Instagram Reels সর্বোচ্চ ৯০ সেকেন্ড পর্যন্ত সাপোর্ট করে। নিশ্চিত করুন ভিডিওটির দৈর্ঘ্য সীমার মধ্যে আছে।'
+        },
+        'ig-story': {
+            name: 'Instagram Story',
+            ratio: '9-16',
+            layoutMode: 'fill',
+            maxDuration: 60,
+            warning: 'Instagram Story সর্বোচ্চ ৬০ সেকেন্ড। দীর্ঘ ভিডিও স্বয়ংক্রিয়ভাবে কেটে যায়।'
+        },
+        'yt-shorts': {
+            name: 'YouTube Shorts',
+            ratio: '9-16',
+            layoutMode: 'fill',
+            maxDuration: 60,
+            warning: 'YouTube Shorts সর্বোচ্চ ৬০ সেকেন্ড। ভিডিও ট্রিম করে সীমার মধ্যে রাখুন।'
+        },
+        'yt-long': {
+            name: 'YouTube Landscape',
+            ratio: '16-9',
+            layoutMode: 'fit',
+            maxDuration: null,
+            warning: null
+        }
+    };
+
+    const platformPresetBtns = document.querySelectorAll('.platform-preset-btn');
+    const platformPresetWarning = document.getElementById('platform-preset-warning');
+    const platformPresetWarningText = document.getElementById('platform-preset-warning-text');
+    const platformPresetActiveLabel = document.getElementById('platform-preset-active-label');
+    const platformPresetActiveName = document.getElementById('platform-preset-active-name');
+
+    function applyPlatformPreset(presetKey) {
+        const preset = PLATFORM_PRESETS[presetKey];
+        if (!preset) return;
+
+        // 1. Set Aspect Ratio
+        state.aspectRatio = preset.ratio;
+        aspectButtons.forEach(b => {
+            b.classList.toggle('active', b.dataset.ratio === preset.ratio);
+        });
+
+        // 2. Set Layout Mode
+        state.layoutMode = preset.layoutMode;
+        const layoutBtns = document.querySelectorAll('.layout-mode-btn');
+        layoutBtns.forEach(b => {
+            b.classList.toggle('active', b.dataset.mode === preset.layoutMode);
+        });
+
+        // 3. Update canvas
+        updateCanvasDimensions();
+        drawFrame();
+
+        // 4. Show duration warning if clip exceeds max
+        if (platformPresetWarning && platformPresetWarningText) {
+            const totalDuration = state.clips.reduce((sum, c) => sum + (c.duration || 0), 0);
+            const exceedsDuration = preset.maxDuration && totalDuration > preset.maxDuration;
+
+            if (preset.warning || exceedsDuration) {
+                let warningMsg = preset.warning || '';
+                if (exceedsDuration) {
+                    warningMsg += ` ⚠️ বর্তমান ভিডিওর দৈর্ঘ্য ${totalDuration.toFixed(0)}s, যা সীমার (${preset.maxDuration}s) বেশি।`;
+                }
+                platformPresetWarningText.textContent = warningMsg;
+                platformPresetWarning.style.display = 'flex';
+            } else {
+                platformPresetWarning.style.display = 'none';
+            }
+        }
+
+        // 5. Show active label
+        if (platformPresetActiveLabel && platformPresetActiveName) {
+            platformPresetActiveName.textContent = preset.name;
+            platformPresetActiveLabel.style.display = 'block';
+        }
+
+        // 6. Mark active button
+        platformPresetBtns.forEach(b => {
+            b.classList.toggle('active', b.dataset.preset === presetKey);
+        });
+
+        triggerAutoSave();
+    }
+
+    platformPresetBtns.forEach(btn => {
+        btn.addEventListener('click', () => applyPlatformPreset(btn.dataset.preset));
+    });
+
     // --- Facebook Banners & Headlines Bindings ---
     const bannerStyleSelect = document.getElementById('banner-style-select');
     const bannerInputsContainer = document.getElementById('banner-inputs-container');
@@ -5496,7 +5604,7 @@ document.addEventListener('DOMContentLoaded', () => {
         // News Ticker
         if (tickerEnableToggle) {
             tickerEnableToggle.checked = state.tickerEnabled;
-            if (tickerControlsBox) tickerControlsBox.style.display = state.tickerEnabled ? 'block' : 'none';
+            if (tickerInputsContainer) tickerInputsContainer.style.display = state.tickerEnabled ? 'block' : 'none';
         }
         if (tickerTextInput) tickerTextInput.value = state.tickerText;
         if (tickerLabelInput) tickerLabelInput.value = state.tickerLabel;
@@ -6422,6 +6530,75 @@ document.addEventListener('DOMContentLoaded', () => {
     setTimeout(async () => {
         await restoreProjectFromBrowserStorage();
     }, 500);
+
+    // --- Keyboard Shortcuts (Phase 7F) ---
+    window.addEventListener('keydown', (e) => {
+        // Ignore shortcuts if the user is typing in any input field or textarea
+        const activeEl = document.activeElement;
+        if (activeEl && (
+            activeEl.tagName === 'INPUT' || 
+            activeEl.tagName === 'TEXTAREA' || 
+            activeEl.isContentEditable
+        )) {
+            return;
+        }
+
+        const activeClip = state.clips.find(c => c.id === state.activeClipId);
+        if (!activeClip) return;
+
+        switch (e.key.toLowerCase()) {
+            case ' ':
+                // Spacebar: Toggle play / pause
+                e.preventDefault(); // Prevent page scrolling
+                if (playPauseBtn) playPauseBtn.click();
+                break;
+            case 'i':
+                // Set Trim Start
+                e.preventDefault();
+                let newStart = state.currentTime;
+                if (newStart >= state.endTime) {
+                    newStart = state.endTime - 0.1;
+                }
+                state.startTime = newStart;
+                if (trimStart) trimStart.value = newStart;
+                if (startVal) startVal.value = formatTime(newStart);
+                updatePlayhead();
+                syncActiveClipTrim();
+                if (typeof triggerAutoSave === 'function') triggerAutoSave();
+                drawFrame();
+                break;
+            case 'o':
+                // Set Trim End
+                e.preventDefault();
+                let newEnd = state.currentTime;
+                if (newEnd <= state.startTime) {
+                    newEnd = state.startTime + 0.1;
+                }
+                state.endTime = newEnd;
+                if (trimEnd) trimEnd.value = newEnd;
+                if (endVal) endVal.value = formatTime(newEnd);
+                updatePlayhead();
+                syncActiveClipTrim();
+                if (typeof triggerAutoSave === 'function') triggerAutoSave();
+                drawFrame();
+                break;
+            case 'arrowleft':
+                // Step backward by 0.05s
+                e.preventDefault();
+                let targetPrevTime = Math.max(0, state.currentTime - 0.05);
+                state.currentTime = targetPrevTime;
+                updatePlayhead();
+                break;
+            case 'arrowright':
+                // Step forward by 0.05s
+                e.preventDefault();
+                let maxDuration = activeClip.duration || state.duration || 5;
+                let targetNextTime = Math.min(maxDuration, state.currentTime + 0.05);
+                state.currentTime = targetNextTime;
+                updatePlayhead();
+                break;
+        }
+    });
 
     // Bind global trigger to allow re-render on demands
     window.triggerCanvasRedraw = drawFrame;

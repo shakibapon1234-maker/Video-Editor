@@ -54,6 +54,10 @@
   [DONE] Intro / Outro Template (canvas-drawn animated title cards) - editor.js + exporter.js
   [DONE] Export Progress UX (ETA + Cancel Render button)          - exporter.js
   [DONE] Project Save/Load & Auto-Save/Restore (JSON Export & IndexedDB Cache) - editor.js
+  [DONE] Keyboard Shortcuts (space play/pause, I/O trim set, left/right step) - editor.js
+  [DONE] Platform Presets per Platform (7C - one-click Facebook/IG/YT setup with duration warnings) - editor.js
+
+
 
 
 
@@ -813,11 +817,11 @@ AI সাজেশন — পরবর্তী সম্ভাব্য ফি�
 
 
  =====================================================
-  শেষ আপডেট: v2.11 - Project Save/Load & Auto-Save/Restore সম্পন্ন
-  (LocalStorage এবং IndexedDB ব্যবহার করে ডিবounceড অটো-সেভ ও অটো-রিস্টোর লজিক ইমপ্লিমেন্ট করা হয়েছে। 
-  এছাড়া সেটিংস প্রজেক্ট ব্যাকআপ ও ফুল প্রজেক্ট ব্যাকআপের জন্য JSON এক্সপোর্ট এবং অফলাইন মিডিয়া 
-  রি-লিঙ্কের জন্য প্রিমিয়াম ডাস্টবোর্ড মোডাল ও লুপ ইম্পোর্ট করা হয়েছে।)
+  শেষ আপডেট: v2.13 - Platform Presets (7C) সম্পন্ন
+  (Facebook Feed, FB Reels, Instagram Reels, Instagram Story, YouTube Shorts
+  এবং YouTube Landscape প্রিসেট যুক্ত করা হয়েছে — এক-ক্লিকে Aspect Ratio, Layout Mode
+  এবং Duration Warning একসাথে সেট হয়ে যায়।)
 
-  Phase 2 থেকে Phase 6 এর সকল কাজ এবং সাজেশন 7D এখন [DONE]।
-  বাকি আছে ভবিষ্যৎ আইডিয়াগুলো (7A, 7B, 7C, 7E, 7F) — এগুলোর কোনোটাই এখনো plan/implement করা হয়নি।
+  Phase 2 থেকে Phase 6 এর সকল কাজ এবং সাজেশন 7C, 7D, 7F এখন [DONE]।
+  বাকি আছে ভবিষ্যৎ আইডিয়াগুলো (7A, 7B, 7E) — এগুলোর কোনোটাই এখনো plan/implement করা হয়নি।
  =====================================================

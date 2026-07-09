@@ -747,6 +747,97 @@ body {
     font-weight: 600;
 }
 
+/* --- Platform Presets (7C) --- */
+.platform-preset-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 8px;
+}
+
+.platform-preset-btn {
+    background: var(--bg-surface-elevated);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-sm);
+    padding: 10px 6px;
+    color: var(--text-secondary);
+    cursor: pointer;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+    transition: var(--transition-smooth);
+    position: relative;
+    overflow: hidden;
+}
+
+.platform-preset-btn::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(135deg, transparent 60%, rgba(79,70,229,0.06));
+    opacity: 0;
+    transition: opacity 0.2s;
+}
+
+.platform-preset-btn:hover {
+    border-color: var(--border-hover);
+    color: var(--text-primary);
+    transform: translateY(-1px);
+}
+
+.platform-preset-btn:hover::before { opacity: 1; }
+
+.platform-preset-btn.active {
+    background: rgba(79, 70, 229, 0.12);
+    border-color: var(--primary);
+    color: var(--text-primary);
+    box-shadow: 0 0 0 1px rgba(79, 70, 229, 0.3);
+}
+
+.preset-icon {
+    font-size: 18px;
+    line-height: 1;
+}
+
+.preset-icon .fa-facebook { color: #1877f2; }
+.preset-icon .fa-instagram { color: #e1306c; }
+.preset-icon .fa-youtube { color: #ff0000; }
+
+.preset-label {
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.2px;
+}
+
+.preset-ratio {
+    font-size: 9px;
+    color: var(--text-muted);
+    font-weight: 500;
+}
+
+.platform-preset-btn.active .preset-ratio {
+    color: var(--primary-light);
+}
+
+.export-warning-banner {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    background: rgba(234, 179, 8, 0.1);
+    border: 1px solid rgba(234, 179, 8, 0.35);
+    border-radius: var(--radius-sm);
+    padding: 10px 12px;
+    font-size: 12px;
+    color: #fde047;
+    line-height: 1.5;
+}
+
+.export-warning-banner i {
+    margin-top: 2px;
+    flex-shrink: 0;
+    color: #facc15;
+}
+
 /* --- Audio Controls & Switch --- */
 .toggle-control {
     display: flex;

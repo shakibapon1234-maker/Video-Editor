@@ -230,6 +230,55 @@
                                     </div>
                                 </div>
                                 <p class="help-text mt-2">Voiceover Volume, Background Music (Loop/একাধিক Track) ও Auto-Ducking অপশন পাবেন Step 3: Audio &amp; Voice-এ।</p>
+                                <p class="help-text mt-2" style="border-top: 1px solid rgba(255,255,255,0.08); padding-top: 8px;"><i class="fa-solid fa-keyboard"></i> <strong>শর্টকাট কীসমূহ:</strong> [Space] প্লে/পজ, [I] স্টার্ট ট্রিম, [O] এন্ড ট্রিম, [←] / [→] বাম/ডান অ্যারো (0.05s সিক)।</p>
+                            </div>
+                        </div>
+
+                        <!-- Platform Presets (7C) -->
+                        <div class="card mt-4" id="platform-presets-card">
+                            <div class="card-header">
+                                <i class="fa-solid fa-layer-group card-icon"></i>
+                                <h3>Platform Presets (এক-ক্লিক সেটআপ)</h3>
+                            </div>
+                            <div class="card-body">
+                                <p class="help-text" style="margin-bottom:10px;">প্ল্যাটফর্ম বাছাই করুন — Aspect Ratio, Safe Zone ও Duration সতর্কতা একসাথে সেট হবে।</p>
+                                <div class="platform-preset-grid" id="platform-preset-grid">
+                                    <button class="platform-preset-btn" data-preset="fb-feed" id="preset-fb-feed">
+                                        <span class="preset-icon"><i class="fa-brands fa-facebook"></i></span>
+                                        <span class="preset-label">Facebook Feed</span>
+                                        <span class="preset-ratio">4:5 · max 240s</span>
+                                    </button>
+                                    <button class="platform-preset-btn" data-preset="fb-reels" id="preset-fb-reels">
+                                        <span class="preset-icon"><i class="fa-brands fa-facebook"></i></span>
+                                        <span class="preset-label">FB Reels</span>
+                                        <span class="preset-ratio">9:16 · max 90s</span>
+                                    </button>
+                                    <button class="platform-preset-btn" data-preset="ig-reels" id="preset-ig-reels">
+                                        <span class="preset-icon"><i class="fa-brands fa-instagram"></i></span>
+                                        <span class="preset-label">IG Reels</span>
+                                        <span class="preset-ratio">9:16 · max 90s</span>
+                                    </button>
+                                    <button class="platform-preset-btn" data-preset="ig-story" id="preset-ig-story">
+                                        <span class="preset-icon"><i class="fa-brands fa-instagram"></i></span>
+                                        <span class="preset-label">IG Story</span>
+                                        <span class="preset-ratio">9:16 · max 60s</span>
+                                    </button>
+                                    <button class="platform-preset-btn" data-preset="yt-shorts" id="preset-yt-shorts">
+                                        <span class="preset-icon"><i class="fa-brands fa-youtube"></i></span>
+                                        <span class="preset-label">YT Shorts</span>
+                                        <span class="preset-ratio">9:16 · max 60s</span>
+                                    </button>
+                                    <button class="platform-preset-btn" data-preset="yt-long" id="preset-yt-long">
+                                        <span class="preset-icon"><i class="fa-brands fa-youtube"></i></span>
+                                        <span class="preset-label">YT Landscape</span>
+                                        <span class="preset-ratio">16:9 · unlimited</span>
+                                    </button>
+                                </div>
+                                <div id="platform-preset-warning" style="display:none; margin-top:10px;" class="export-warning-banner">
+                                    <i class="fa-solid fa-triangle-exclamation"></i>
+                                    <span id="platform-preset-warning-text"></span>
+                                </div>
+                                <p id="platform-preset-active-label" class="help-text" style="margin-top:8px; display:none; color: var(--accent);"><i class="fa-solid fa-circle-check"></i> <span id="platform-preset-active-name"></span> প্রিসেট সক্রিয়</p>
                             </div>
                         </div>
 
