@@ -42,12 +42,19 @@
                 <div class="step-item" data-step="3" id="step-btn-3">
                     <div class="step-number">3</div>
                     <div class="step-info">
-                        <h3>Audio & Voice</h3>
-                        <p>Noise cancel & voiceover</p>
+                        <h3>Overlays & B-roll</h3>
+                        <p>Texts & B-roll animations</p>
                     </div>
                 </div>
                 <div class="step-item" data-step="4" id="step-btn-4">
                     <div class="step-number">4</div>
+                    <div class="step-info">
+                        <h3>Audio & Voice</h3>
+                        <p>Noise cancel & voiceover</p>
+                    </div>
+                </div>
+                <div class="step-item" data-step="5" id="step-btn-5">
+                    <div class="step-number">5</div>
                     <div class="step-info">
                         <h3>Export Studio</h3>
                         <p>Render & Download</p>
@@ -88,10 +95,10 @@
                         <!-- Drag-and-drop placeholder when no video -->
                         <div class="upload-placeholder" id="video-dropzone">
                             <i class="fa-solid fa-cloud-arrow-up upload-icon"></i>
-                            <h3>Drag & Drop Video Here</h3>
-                            <p>Or click to browse files (MP4, WebM, MOV)</p>
-                            <span class="file-spec">Support up to 1080p recommendation</span>
-                            <input type="file" id="video-input" accept="video/*" style="display: none;">
+                            <h3>Drag & Drop Video or Photo Here</h3>
+                            <p>Or click to browse files (MP4, WebM, PNG, JPG)</p>
+                            <span class="file-spec">Create video slideshows using photos</span>
+                            <input type="file" id="video-input" accept="video/*, image/*" style="display: none;">
                         </div>
 
                         <!-- Video playhead/timeline overlay (subtle) -->
@@ -150,8 +157,8 @@
                             </div>
                             <div class="file-selector-box" id="add-clip-dropzone" style="padding: 10px; margin-top: 8px;">
                                 <i class="fa-solid fa-plus"></i>
-                                <span>Add Another Clip (আরেকটি ক্লিপ যোগ করুন)</span>
-                                <input type="file" id="add-clip-input" accept="video/*" style="display: none;">
+                                <span>Add Another Clip / Photo (আরেকটি ক্লিপ বা ছবি যোগ করুন)</span>
+                                <input type="file" id="add-clip-input" accept="video/*, image/*" style="display: none;">
                             </div>
                         </div>
                     </div>
@@ -429,8 +436,55 @@
                             </div>
                         </div>
 
-                        <!-- News Ticker (Breaking News style scrolling strip) -->
+                        <!-- Cinematic Color Grading & Filters (Phase 4A) -->
                         <div class="card mt-4">
+                            <div class="card-header">
+                                <i class="fa-solid fa-sliders card-icon"></i>
+                                <h3>Cinematic Filters & Adjustments</h3>
+                            </div>
+                            <div class="card-body">
+                                <div class="control-group">
+                                    <label>Preset Filters</label>
+                                    <div class="filter-presets-grid">
+                                        <button class="filter-preset-btn active" data-filter="normal">Normal</button>
+                                        <button class="filter-preset-btn" data-filter="cinematic">Cinematic</button>
+                                        <button class="filter-preset-btn" data-filter="warm">Warm Glow</button>
+                                        <button class="filter-preset-btn" data-filter="cool">Cool Breeze</button>
+                                        <button class="filter-preset-btn" data-filter="vintage">Vintage Sepia</button>
+                                        <button class="filter-preset-btn" data-filter="bw">B&W Film</button>
+                                    </div>
+                                </div>
+                                <div class="adjustments-group mt-4">
+                                    <div class="control-group">
+                                        <label>Brightness</label>
+                                        <div class="slider-val-container">
+                                            <input type="range" id="brightness-slider" min="50" max="150" value="100">
+                                            <span id="brightness-val">100%</span>
+                                        </div>
+                                    </div>
+                                    <div class="control-group mt-3">
+                                        <label>Contrast</label>
+                                        <div class="slider-val-container">
+                                            <input type="range" id="contrast-slider" min="50" max="150" value="100">
+                                            <span id="contrast-val">100%</span>
+                                        </div>
+                                    </div>
+                                    <div class="control-group mt-3">
+                                        <label>Saturation</label>
+                                        <div class="slider-val-container">
+                                            <input type="range" id="saturation-slider" min="0" max="200" value="100">
+                                            <span id="saturation-val">100%</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Step 3: Overlays & B-roll -->
+                    <div class="step-panel" id="panel-3">
+                        <!-- News Ticker (Breaking News style scrolling strip) -->
+                        <div class="card">
                             <div class="card-header">
                                 <i class="fa-solid fa-rss card-icon"></i>
                                 <h3>News Ticker (নিউজ স্ক্রলিং টেক্সট)</h3>
@@ -582,8 +636,6 @@
                             </div>
                             <div class="card-body">
                                 <p class="help-text">আপনি যেই টপিক নিয়ে কথা বলছেন, সেই সম্পর্কিত ছবি বা টেক্সট নির্দিষ্ট সময়ে স্ক্রিনে দেখান (যেমনঃ airlines নিয়ে কথা বললে প্লেনের ছবি)। এটি ভিডিও এডিটিং-এ "B-roll" নামে পরিচিত।</p>
-
-
 
                                 <div class="control-group">
                                     <label>Content Type</label>
@@ -765,54 +817,10 @@
                                 </div>
                             </div>
                         </div>
-
-                        <!-- Cinematic Filters & Adjustments -->
-                        <div class="card mt-4">
-                            <div class="card-header">
-                                <i class="fa-solid fa-sliders card-icon"></i>
-                                <h3>Cinematic Filters & Adjustments</h3>
-                            </div>
-                            <div class="card-body">
-                                <div class="control-group">
-                                    <label>Preset Filters</label>
-                                    <div class="filter-presets-grid">
-                                        <button class="filter-preset-btn active" data-filter="normal">Normal</button>
-                                        <button class="filter-preset-btn" data-filter="cinematic">Cinematic</button>
-                                        <button class="filter-preset-btn" data-filter="warm">Warm Glow</button>
-                                        <button class="filter-preset-btn" data-filter="cool">Cool Breeze</button>
-                                        <button class="filter-preset-btn" data-filter="vintage">Vintage Sepia</button>
-                                        <button class="filter-preset-btn" data-filter="bw">B&W Film</button>
-                                    </div>
-                                </div>
-                                <div class="adjustments-group mt-4">
-                                    <div class="control-group">
-                                        <label>Brightness</label>
-                                        <div class="slider-val-container">
-                                            <input type="range" id="brightness-slider" min="50" max="150" value="100">
-                                            <span id="brightness-val">100%</span>
-                                        </div>
-                                    </div>
-                                    <div class="control-group mt-3">
-                                        <label>Contrast</label>
-                                        <div class="slider-val-container">
-                                            <input type="range" id="contrast-slider" min="50" max="150" value="100">
-                                            <span id="contrast-val">100%</span>
-                                        </div>
-                                    </div>
-                                    <div class="control-group mt-3">
-                                        <label>Saturation</label>
-                                        <div class="slider-val-container">
-                                            <input type="range" id="saturation-slider" min="0" max="200" value="100">
-                                            <span id="saturation-val">100%</span>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
                     </div>
 
-                    <!-- Step 3: Audio & Voice -->
-                    <div class="step-panel" id="panel-3">
+                    <!-- Step 4: Audio & Voice -->
+                    <div class="step-panel" id="panel-4">
                         <div class="card">
                             <div class="card-header">
                                 <i class="fa-solid fa-wand-magic-sparkles card-icon"></i>
@@ -1012,8 +1020,8 @@
                         </div>
                     </div>
 
-                    <!-- Step 4: Export Studio -->
-                    <div class="step-panel" id="panel-4">
+                    <!-- Step 5: Export Studio -->
+                    <div class="step-panel" id="panel-5">
                         <div class="card">
                             <div class="card-header">
                                 <i class="fa-solid fa-download card-icon"></i>

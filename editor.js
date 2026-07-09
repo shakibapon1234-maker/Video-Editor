@@ -134,6 +134,31 @@ window.VideoEditor = {
     clips: [],
     activeClipId: null,
 
+    // Image/photo playhead emulation
+    imagePlayheadTime: 0,
+    lastImageTickTime: 0,
+    get currentTime() {
+        const activeClip = this.clips.find(c => c.id === this.activeClipId);
+        if (activeClip && activeClip.type === 'image') {
+            return this.imagePlayheadTime || 0;
+        }
+        return this.video.currentTime || 0;
+    },
+    set currentTime(val) {
+        const activeClip = this.clips.find(c => c.id === this.activeClipId);
+        if (activeClip && activeClip.type === 'image') {
+            this.imagePlayheadTime = val;
+            if (!this.isPlaying) {
+                // We'll define a redraw call or trigger it manually
+                if (window.redrawPausedFrameGlobal) {
+                    window.redrawPausedFrameGlobal();
+                }
+            }
+        } else {
+            this.video.currentTime = val;
+        }
+    },
+
     // Navigation Step
     currentStep: 1
 };
@@ -190,7 +215,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // --- Step Navigation System ---
     function updateNavigation() {
         // Toggle step buttons in sidebar
-        for (let i = 1; i <= 4; i++) {
+        for (let i = 1; i <= 5; i++) {
             const btn = document.getElementById(`step-btn-${i}`);
             const panel = document.getElementById(`panel-${i}`);
             if (i === state.currentStep) {
@@ -204,10 +229,11 @@ document.addEventListener('DOMContentLoaded', () => {
         
         // Update Title & Subtitle
         const titles = {
-            1: ["Media Import", "Start by uploading your video clip and branding logo"],
+            1: ["Media Import", "Start by uploading your video/photo clips and branding logo"],
             2: ["Trim & Layout", "Cut video duration and adjust the canvas format"],
-            3: ["Audio & Voice", "Enhance audio quality and record background voiceover"],
-            4: ["Export Studio", "Render and download your final video for Facebook"]
+            3: ["Overlays & B-roll", "Add news tickers, text overlays, and B-roll animations"],
+            4: ["Audio & Voice", "Enhance audio quality and record background voiceover"],
+            5: ["Export Studio", "Render and download your final video for Facebook"]
         };
         
         document.getElementById('current-step-title').innerText = titles[state.currentStep][0];
@@ -220,7 +246,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (state.currentStep === 1 && !state.duration) {
             nextBtn.disabled = true;
         } else {
-            nextBtn.disabled = (state.currentStep === 4);
+            nextBtn.disabled = (state.currentStep === 5);
         }
     }
     
@@ -233,13 +259,13 @@ document.addEventListener('DOMContentLoaded', () => {
     });
     
     nextBtn.addEventListener('click', () => {
-        if (state.currentStep < 4) {
+        if (state.currentStep < 5) {
             state.currentStep++;
             updateNavigation();
         }
     });
     
-    for (let i = 1; i <= 4; i++) {
+    for (let i = 1; i <= 5; i++) {
         document.getElementById(`step-btn-${i}`).addEventListener('click', () => {
             if (state.duration || i === 1) {
                 state.currentStep = i;
@@ -249,82 +275,138 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     
     // --- Video Source Loading ---
+    // --- Video/Image Source Loading ---
     function handleVideoFile(file) {
         if (!file) return;
         
         // Show loading state
         const originalText = videoDropzone.querySelector('h3').innerText;
-        videoDropzone.querySelector('h3').innerText = "Loading Video File...";
+        videoDropzone.querySelector('h3').innerText = "Loading File...";
         
         const fileURL = URL.createObjectURL(file);
-        state.video.src = fileURL;
-        state.video.load();
         
-        state.video.onloadedmetadata = () => {
-            state.duration = state.video.duration;
-            state.startTime = 0;
-            state.endTime = state.duration;
+        if (file.type.startsWith('image/')) {
+            const img = new Image();
+            img.onload = () => {
+                state.duration = 5.0;
+                state.startTime = 0;
+                state.endTime = 5.0;
 
-            // Register this as the first clip in the Multi-Clip Timeline (Phase 2B)
-            const firstClip = {
-                id: Date.now(),
-                file: file,
-                url: fileURL,
-                name: file.name,
-                duration: state.duration,
-                start: 0,
-                end: state.duration,
-                cropX: 0,
-                cropY: 0,
-                cropW: 1,
-                cropH: 1
+                const firstClip = {
+                    id: Date.now(),
+                    file: file,
+                    url: fileURL,
+                    name: file.name,
+                    duration: 5.0,
+                    start: 0,
+                    end: 5.0,
+                    cropX: 0,
+                    cropY: 0,
+                    cropW: 1,
+                    cropH: 1,
+                    type: 'image',
+                    imageImg: img
+                };
+                state.clips = [firstClip];
+                state.activeClipId = firstClip.id;
+                if (window.renderClipTimeline) window.renderClipTimeline();
+                
+                state.cropX = 0;
+                state.cropY = 0;
+                state.cropW = 1;
+                state.cropH = 1;
+                state.isAdjustingCrop = false;
+                if (cropToolToggle) cropToolToggle.checked = false;
+                if (cropActionsContainer) cropActionsContainer.style.display = 'none';
+                
+                trimStart.max = 5.0;
+                trimStart.value = 0;
+                trimEnd.max = 5.0;
+                trimEnd.value = 5.0;
+                
+                startVal.value = formatTime(0);
+                endVal.value = formatTime(5.0);
+                
+                updateCanvasDimensions();
+                
+                document.getElementById('timeline-controls').style.display = 'flex';
+                document.querySelector('.canvas-overlay-controls').style.display = 'block';
+                videoDropzone.style.display = 'none';
+                
+                document.getElementById('selected-video-name').innerText = file.name;
+                nextBtn.disabled = false;
+                updateNavigation();
+                
+                if (window.initializeAudioSource) {
+                    window.initializeAudioSource();
+                }
+                
+                state.currentTime = 0;
+                updatePlayhead();
+                drawFrame();
             };
-            state.clips = [firstClip];
-            state.activeClipId = firstClip.id;
-            if (window.renderClipTimeline) window.renderClipTimeline();
+            img.src = fileURL;
+        } else {
+            state.video.src = fileURL;
+            state.video.load();
             
-            // Reset crop state on new video load
-            state.cropX = 0;
-            state.cropY = 0;
-            state.cropW = 1;
-            state.cropH = 1;
-            state.isAdjustingCrop = false;
-            if (cropToolToggle) cropToolToggle.checked = false;
-            if (cropActionsContainer) cropActionsContainer.style.display = 'none';
-            
-            // Configure Sliders
-            trimStart.max = state.duration;
-            trimStart.value = 0;
-            trimEnd.max = state.duration;
-            trimEnd.value = state.duration;
-            
-            // Format slider text values
-            startVal.value = formatTime(0);
-            endVal.value = formatTime(state.duration);
-            
-            // Setup canvas size based on video
-            updateCanvasDimensions();
-            
-            // Show timeline controls
-            document.getElementById('timeline-controls').style.display = 'flex';
-            document.querySelector('.canvas-overlay-controls').style.display = 'block';
-            videoDropzone.style.display = 'none';
-            
-            // Update UI
-            document.getElementById('selected-video-name').innerText = file.name;
-            nextBtn.disabled = false;
-            updateNavigation();
-            
-            // Initialize Web Audio source node (inside audio.js)
-            if (window.initializeAudioSource) {
-                window.initializeAudioSource();
-            }
-            
-            // Render first frame
-            state.video.currentTime = 0;
-            updatePlayhead();
-            drawFrame();
-        };
+            state.video.onloadedmetadata = () => {
+                state.duration = state.video.duration;
+                state.startTime = 0;
+                state.endTime = state.duration;
+
+                const firstClip = {
+                    id: Date.now(),
+                    file: file,
+                    url: fileURL,
+                    name: file.name,
+                    duration: state.duration,
+                    start: 0,
+                    end: state.duration,
+                    cropX: 0,
+                    cropY: 0,
+                    cropW: 1,
+                    cropH: 1
+                };
+                state.clips = [firstClip];
+                state.activeClipId = firstClip.id;
+                if (window.renderClipTimeline) window.renderClipTimeline();
+                
+                state.cropX = 0;
+                state.cropY = 0;
+                state.cropW = 1;
+                state.cropH = 1;
+                state.isAdjustingCrop = false;
+                if (cropToolToggle) cropToolToggle.checked = false;
+                if (cropActionsContainer) cropActionsContainer.style.display = 'none';
+                
+                trimStart.max = state.duration;
+                trimStart.value = 0;
+                trimEnd.max = state.duration;
+                trimEnd.value = state.duration;
+                
+                startVal.value = formatTime(0);
+                endVal.value = formatTime(state.duration);
+                
+                updateCanvasDimensions();
+                
+                document.getElementById('timeline-controls').style.display = 'flex';
+                document.querySelector('.canvas-overlay-controls').style.display = 'block';
+                videoDropzone.style.display = 'none';
+                
+                document.getElementById('selected-video-name').innerText = file.name;
+                nextBtn.disabled = false;
+                updateNavigation();
+                
+                if (window.initializeAudioSource) {
+                    window.initializeAudioSource();
+                }
+                
+                state.currentTime = 0;
+                updatePlayhead();
+                drawFrame();
+            };
+        }
     }
     
     // Dropzone logic
@@ -727,7 +809,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const activeClip = state.clips.find(c => c.id === state.activeClipId);
             if (!activeClip) return;
 
-            const currentTime = state.video.currentTime || 0;
+            const currentTime = state.currentTime || 0;
             if (currentTime <= activeClip.start + 0.15 || currentTime >= activeClip.end - 0.15) {
                 alert("ক্লিপটি প্লেহেড পজিশনে বিভক্ত করা সম্ভব নয় (একেবারে শুরুতে বা শেষে বিভক্ত করা যায় না)।");
                 return;
@@ -766,7 +848,7 @@ document.addEventListener('DOMContentLoaded', () => {
             renderClipTimeline();
 
             // Set playhead to the split point
-            state.video.currentTime = currentTime;
+            state.currentTime = currentTime;
 
             // Switch focus to the first half
             switchActiveClip(activeClip.id);
@@ -866,12 +948,18 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!state.duration) return;
         
         // If playhead is outside the trimmed region, loop it
-        if (state.video.currentTime >= state.endTime || state.video.currentTime < state.startTime) {
-            state.video.currentTime = state.startTime;
+        if (state.currentTime >= state.endTime || state.currentTime < state.startTime) {
+            state.currentTime = state.startTime;
         }
         
-        state.video.play();
-        state.isPlaying = true;
+        const activeClip = state.clips.find(c => c.id === state.activeClipId);
+        if (activeClip && activeClip.type === 'image') {
+            state.isPlaying = true;
+            state.lastImageTickTime = performance.now();
+        } else {
+            state.video.play();
+            state.isPlaying = true;
+        }
         playPauseBtn.innerHTML = '<i class="fa-solid fa-pause"></i>';
         
         // Start playback event listeners for voiceover sync
@@ -883,8 +971,13 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     
     function pauseVideo() {
-        state.video.pause();
-        state.isPlaying = false;
+        const activeClip = state.clips.find(c => c.id === state.activeClipId);
+        if (activeClip && activeClip.type === 'image') {
+            state.isPlaying = false;
+        } else {
+            state.video.pause();
+            state.isPlaying = false;
+        }
         playPauseBtn.innerHTML = '<i class="fa-solid fa-play"></i>';
         
         if (window.onPlaybackStop) {
@@ -895,13 +988,21 @@ document.addEventListener('DOMContentLoaded', () => {
     function updateLoop() {
         if (!state.isPlaying) return;
         
+        const activeClip = state.clips.find(c => c.id === state.activeClipId);
+        if (activeClip && activeClip.type === 'image') {
+            // Emulate playhead movement
+            const now = performance.now();
+            const elapsed = (now - state.lastImageTickTime) / 1000;
+            state.lastImageTickTime = now;
+            state.currentTime += elapsed;
+        }
+        
         // Loop back or transition to the next clip if reached trim end
-        if (state.video.currentTime >= state.endTime) {
+        if (state.currentTime >= state.endTime) {
             if (window.isRecordingVoiceover) {
                 // If recording voiceover, stop both recording and playback when reaching trim end
                 pauseVideo();
             } else {
-                const activeClip = state.clips.find(c => c.id === state.activeClipId);
                 const clipIndex = state.clips.indexOf(activeClip);
                 if (activeClip && clipIndex >= 0 && clipIndex < state.clips.length - 1) {
                     // Transition to next clip and play!
@@ -915,7 +1016,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         switchActiveClip(firstClip.id, true);
                         return;
                     } else {
-                        state.video.currentTime = state.startTime;
+                        state.currentTime = state.startTime;
                     }
                 }
             }
@@ -935,6 +1036,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
     window.redrawPausedFrame = redrawPausedFrame;
+    window.redrawPausedFrameGlobal = redrawPausedFrame;
     
     // Redraw canvas whenever the video's current frame changes while paused (e.g. after seek)
     state.video.addEventListener('seeked', () => {
@@ -946,7 +1048,7 @@ document.addEventListener('DOMContentLoaded', () => {
     
     // Update playhead UI position
     function updatePlayhead() {
-        const current = state.video.currentTime;
+        const current = state.currentTime;
         const total = state.duration;
         
         document.getElementById('canvas-time-display').innerText = `${formatTime(current)} / ${formatTime(total)}`;
@@ -1017,32 +1119,56 @@ document.addEventListener('DOMContentLoaded', () => {
             e.preventDefault();
             addClipDropzone.classList.remove('drag-over');
             const file = e.dataTransfer.files[0];
-            if (file && file.type.startsWith('video/')) addClipToTimeline(file);
+            if (file && (file.type.startsWith('video/') || file.type.startsWith('image/'))) addClipToTimeline(file);
         });
     }
 
     function addClipToTimeline(file) {
         const url = URL.createObjectURL(file);
-        const probe = document.createElement('video');
-        probe.preload = 'metadata';
-        probe.src = url;
-        probe.onloadedmetadata = () => {
-            const newClip = {
-                id: Date.now(),
-                file: file,
-                url: url,
-                name: file.name,
-                duration: probe.duration,
-                start: 0,
-                end: probe.duration,
-                cropX: 0,
-                cropY: 0,
-                cropW: 1,
-                cropH: 1
+        if (file.type.startsWith('image/')) {
+            const img = new Image();
+            img.onload = () => {
+                const newClip = {
+                    id: Date.now(),
+                    file: file,
+                    url: url,
+                    name: file.name,
+                    duration: 5.0,
+                    start: 0,
+                    end: 5.0,
+                    cropX: 0,
+                    cropY: 0,
+                    cropW: 1,
+                    cropH: 1,
+                    type: 'image',
+                    imageImg: img
+                };
+                state.clips.push(newClip);
+                renderClipTimeline();
             };
-            state.clips.push(newClip);
-            renderClipTimeline();
-        };
+            img.src = url;
+        } else {
+            const probe = document.createElement('video');
+            probe.preload = 'metadata';
+            probe.src = url;
+            probe.onloadedmetadata = () => {
+                const newClip = {
+                    id: Date.now(),
+                    file: file,
+                    url: url,
+                    name: file.name,
+                    duration: probe.duration,
+                    start: 0,
+                    end: probe.duration,
+                    cropX: 0,
+                    cropY: 0,
+                    cropW: 1,
+                    cropH: 1
+                };
+                state.clips.push(newClip);
+                renderClipTimeline();
+            };
+        }
     }
 
     function switchActiveClip(clipId, autoPlay = false) {
@@ -1058,8 +1184,6 @@ document.addEventListener('DOMContentLoaded', () => {
         if (playPauseBtnEl) playPauseBtnEl.innerHTML = '<i class="fa-solid fa-play"></i>';
 
         state.activeClipId = clip.id;
-        state.video.src = clip.url;
-        state.video.load();
 
         // Load this clip's own crop area (falls back to full-frame if it was created before this feature existed).
         state.cropX = clip.cropX || 0;
@@ -1067,29 +1191,59 @@ document.addEventListener('DOMContentLoaded', () => {
         state.cropW = (clip.cropW !== undefined) ? clip.cropW : 1;
         state.cropH = (clip.cropH !== undefined) ? clip.cropH : 1;
 
-        state.video.onloadedmetadata = () => {
-            state.duration = clip.duration;
-            state.startTime = clip.start;
-            state.endTime = clip.end;
+        if (clip.type === 'image') {
+            state.video.src = '';
+            setTimeout(() => {
+                state.duration = clip.duration;
+                state.startTime = clip.start;
+                state.endTime = clip.end;
 
-            trimStart.max = state.duration;
-            trimStart.value = state.startTime;
-            trimEnd.max = state.duration;
-            trimEnd.value = state.endTime;
-            startVal.value = formatTime(state.startTime);
-            endVal.value = formatTime(state.endTime);
+                trimStart.max = state.duration;
+                trimStart.value = state.startTime;
+                trimEnd.max = state.duration;
+                trimEnd.value = state.endTime;
+                startVal.value = formatTime(state.startTime);
+                endVal.value = formatTime(state.endTime);
 
-            updateCanvasDimensions();
-            state.video.currentTime = state.startTime;
-            updatePlayhead();
-            updateCropDimensionsDisplay();
-            drawFrame();
-            renderClipTimeline();
+                updateCanvasDimensions();
+                state.currentTime = state.startTime;
+                updatePlayhead();
+                updateCropDimensionsDisplay();
+                drawFrame();
+                renderClipTimeline();
 
-            if (autoPlay) {
-                playVideo();
-            }
-        };
+                if (autoPlay) {
+                    playVideo();
+                }
+            }, 0);
+        } else {
+            state.video.src = clip.url;
+            state.video.load();
+
+            state.video.onloadedmetadata = () => {
+                state.duration = clip.duration;
+                state.startTime = clip.start;
+                state.endTime = clip.end;
+
+                trimStart.max = state.duration;
+                trimStart.value = state.startTime;
+                trimEnd.max = state.duration;
+                trimEnd.value = state.endTime;
+                startVal.value = formatTime(state.startTime);
+                endVal.value = formatTime(state.endTime);
+
+                updateCanvasDimensions();
+                state.currentTime = state.startTime;
+                updatePlayhead();
+                updateCropDimensionsDisplay();
+                drawFrame();
+                renderClipTimeline();
+
+                if (autoPlay) {
+                    playVideo();
+                }
+            };
+        }
     }
 
     function renderClipTimeline() {
@@ -1173,7 +1327,7 @@ document.addEventListener('DOMContentLoaded', () => {
             state.startTime = val;
         }
         startVal.value = formatTime(state.startTime);
-        state.video.currentTime = state.startTime; // triggers 'seeked' event → redraws canvas
+        state.currentTime = state.startTime; // triggers 'seeked' event → redraws canvas
         updatePlayhead();
         syncActiveClipTrim();
     });
@@ -1187,7 +1341,7 @@ document.addEventListener('DOMContentLoaded', () => {
             state.endTime = val;
         }
         endVal.value = formatTime(state.endTime);
-        state.video.currentTime = state.endTime; // triggers 'seeked' event → redraws canvas
+        state.currentTime = state.endTime; // triggers 'seeked' event → redraws canvas
         updatePlayhead();
         syncActiveClipTrim();
     });
@@ -1210,7 +1364,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         seekSlider.addEventListener('input', (e) => {
             const val = parseFloat(e.target.value) || 0;
-            state.video.currentTime = val; // triggers 'seeked' event → redraws canvas
+            state.currentTime = val; // triggers 'seeked' event → redraws canvas
             if (seekFill && state.duration) {
                 seekFill.style.width = Math.max(0, Math.min(100, (val / state.duration) * 100)) + '%';
             }
@@ -1258,7 +1412,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!isNaN(sec) && sec >= 0 && sec < state.endTime) {
             state.startTime = sec;
             trimStart.value = sec;
-            state.video.currentTime = sec;
+            state.currentTime = sec;
             updatePlayhead();
             drawFrame();
             syncActiveClipTrim();
@@ -1272,7 +1426,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!isNaN(sec) && sec > state.startTime && sec <= state.duration) {
             state.endTime = sec;
             trimEnd.value = sec;
-            state.video.currentTime = sec;
+            state.currentTime = sec;
             updatePlayhead();
             drawFrame();
             syncActiveClipTrim();
@@ -1330,8 +1484,14 @@ document.addEventListener('DOMContentLoaded', () => {
         
         const canvasW = state.canvas.width;
         const canvasH = state.canvas.height;
-        const videoW = state.video.videoWidth;
-        const videoH = state.video.videoHeight;
+
+        const activeClip = state.clips.find(c => c.id === state.activeClipId);
+        const isImageClip = activeClip && activeClip.type === 'image';
+
+        const videoW = isImageClip ? (activeClip.imageImg?.naturalWidth || 640) : state.video.videoWidth;
+        const videoH = isImageClip ? (activeClip.imageImg?.naturalHeight || 360) : state.video.videoHeight;
+
+        const mediaSource = isImageClip ? activeClip.imageImg : state.video;
         
         // Clear Canvas with black
         state.ctx.fillStyle = '#000000';
@@ -1419,13 +1579,13 @@ document.addEventListener('DOMContentLoaded', () => {
         
         // Draw current video frame with filters applied
         if (state.isAdjustingCrop) {
-            state.ctx.drawImage(state.video, drawX, drawY, drawW, drawH);
+            state.ctx.drawImage(mediaSource, drawX, drawY, drawW, drawH);
         } else {
             const sx = (state.cropX || 0) * videoW;
             const sy = (state.cropY || 0) * videoH;
             const sw = (state.cropW || 1) * videoW;
             const sh = (state.cropH || 1) * videoH;
-            state.ctx.drawImage(state.video, sx, sy, sw, sh, drawX, drawY, drawW, drawH);
+            state.ctx.drawImage(mediaSource, sx, sy, sw, sh, drawX, drawY, drawW, drawH);
         }
         state.ctx.restore();
 
@@ -1497,13 +1657,13 @@ document.addEventListener('DOMContentLoaded', () => {
                 // so the blur only affects this rectangle instead of the whole canvas.
                 state.ctx.filter = `blur(${region.intensity}px)`;
                 if (state.isAdjustingCrop) {
-                    state.ctx.drawImage(state.video, drawX, drawY, drawW, drawH);
+                    state.ctx.drawImage(mediaSource, drawX, drawY, drawW, drawH);
                 } else {
                     const sx = (state.cropX || 0) * videoW;
                     const sy = (state.cropY || 0) * videoH;
                     const sw = (state.cropW || 1) * videoW;
                     const sh = (state.cropH || 1) * videoH;
-                    state.ctx.drawImage(state.video, sx, sy, sw, sh, drawX, drawY, drawW, drawH);
+                    state.ctx.drawImage(mediaSource, sx, sy, sw, sh, drawX, drawY, drawW, drawH);
                 }
                 state.ctx.filter = 'none';
                 state.ctx.restore();
@@ -1606,7 +1766,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 const gap = Math.max(60, canvasW * 0.15); // blank space between repeated loops
                 const cycleW = textW + gap;
                 const speed = Math.max(10, state.tickerSpeed || 90);
-                const elapsed = state.video.currentTime || 0;
+                const elapsed = state.currentTime || 0;
                 // Right-to-left continuous scroll: one copy starts just off the right
                 // edge and marches left; once it's fully passed, the next copy (spaced
                 // by cycleW) is already lined up behind it, so the loop is seamless.
@@ -1653,7 +1813,7 @@ document.addEventListener('DOMContentLoaded', () => {
         
         // --- Step D: Draw Visual Progress Bar ---
         if (state.enableProgressBar) {
-            const progress = state.video.currentTime / state.duration;
+            const progress = state.currentTime / state.duration;
             const barThickness = state.progressBarHeight;
             
             state.ctx.save();
@@ -1685,7 +1845,7 @@ document.addEventListener('DOMContentLoaded', () => {
         // position of the box being animated (full video frame vs. a small
         // floating corner box), not which effects are available.
         if (state.brollOverlays && state.brollOverlays.length > 0) {
-            const currentTime = state.video.currentTime;
+            const currentTime = state.currentTime;
             const brollEaseOut = (p) => 1 - Math.pow(1 - Math.max(0, Math.min(1, p)), 3);
             // Distance (in px) to slide a box fully off-canvas in a given direction —
             // used by both 'slide' and 'slide-pop'. Works for any box size/position:
@@ -1709,9 +1869,9 @@ document.addEventListener('DOMContentLoaded', () => {
                     item._sfxExitPlayed = false;
                 }
 
-                // While paused in Step 2 we always show the overlay so it can be positioned/sized.
+                // While paused in Step 3 we always show the overlay so it can be positioned/sized.
                 // Once playing (in any step), respect the real start/end timing so preview matches export.
-                const inRange = (state.currentStep === 2 && !state.isPlaying)
+                const inRange = (state.currentStep === 3 && !state.isPlaying)
                     ? true
                     : (currentTime >= item.startSec && currentTime <= item.endSec);
                 if (!inRange) return;
@@ -1724,12 +1884,12 @@ document.addEventListener('DOMContentLoaded', () => {
                     : item.exitDirection;
 
                 // Whether animations/sounds should actively play right now. They're only
-                // suppressed when the user is parked in Step 2 WITHOUT playback (so the
+                // suppressed when the user is parked in Step 3 WITHOUT playback (so the
                 // overlay sits still and full-opacity for easy positioning/sizing). The
-                // moment playback starts — even while still on Step 2 previewing the
+                // moment playback starts — even while still on Step 3 previewing the
                 // B-roll they just added — animations and sound must run for real,
                 // otherwise "testing" the effect right where you configure it looks broken.
-                const brollAnimActive = !(state.currentStep === 2 && !state.isPlaying);
+                const brollAnimActive = !(state.currentStep === 3 && !state.isPlaying);
 
                 // Fire entry/exit sound effects (Web Audio, synthesized — see audio.js)
                 // in real time during actual playback/export, timed to line up with
@@ -2275,9 +2435,9 @@ document.addEventListener('DOMContentLoaded', () => {
                     }
                 }
 
-                // Selection box in Step 2 for the active B-roll item being edited (PiP only —
+                // Selection box in Step 3 for the active B-roll item being edited (PiP only —
                 // Fullscreen items cover the whole frame so an outline wouldn't be useful).
-                if (state.currentStep === 2 && item.mode === 'pip' && item.id === state.selectedBrollId) {
+                if (state.currentStep === 3 && item.mode === 'pip' && item.id === state.selectedBrollId) {
                     state.ctx.strokeStyle = 'rgba(79, 70, 229, 0.9)';
                     state.ctx.lineWidth = 2;
                     state.ctx.setLineDash([6, 4]);
@@ -2331,9 +2491,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
         // --- Step F: Draw Text Overlays (Phase 2C) ---
         if (state.textOverlays && state.textOverlays.length > 0) {
-            const currentTime = state.video.currentTime;
+            const currentTime = state.currentTime;
             state.textOverlays.forEach((item) => {
-                const isVisible = (state.currentStep === 2 && !state.isPlaying)
+                const isVisible = (state.currentStep === 3 && !state.isPlaying)
                     ? true
                     : (currentTime >= item.startSec && currentTime <= item.endSec);
                 if (!isVisible) return;
@@ -2353,8 +2513,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 state.ctx.strokeText(item.text, tx, ty);
                 state.ctx.fillText(item.text, tx, ty);
 
-                // Selection box in Step 2 for the active overlay being edited
-                if (state.currentStep === 2 && item.id === state.selectedTextOverlayId) {
+                // Selection box in Step 3 for the active overlay being edited
+                if (state.currentStep === 3 && item.id === state.selectedTextOverlayId) {
                     const metrics = state.ctx.measureText(item.text);
                     const boxW = metrics.width + 20;
                     const boxH = item.fontSize + 16;
@@ -2371,7 +2531,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         // --- Step G: Draw Auto Subtitle (Phase 5A) ---
         if (state.subtitlesEnabled && state.subtitles && state.subtitles.length > 0) {
-            const currentTime = state.video.currentTime;
+            const currentTime = state.currentTime;
             const activeSub = state.subtitles.find(s => currentTime >= s.startSec && currentTime <= s.endSec);
             if (activeSub) {
                 const fontSize = Math.max(16, Math.round(canvasH * 0.045));
@@ -2502,7 +2662,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     
     function handlePointerDown(e) {
-        if (state.currentStep !== 2) return;
+        if (state.currentStep !== 2 && state.currentStep !== 3) return;
 
         if (state.isAdjustingCrop) {
             const coords = getCanvasCoords(e);
@@ -2823,7 +2983,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     
     function handlePointerMove(e) {
-        if (state.currentStep !== 2) return;
+        if (state.currentStep !== 2 && state.currentStep !== 3) return;
 
         if (state.isAdjustingCrop) {
             const coords = getCanvasCoords(e);
@@ -3608,8 +3768,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 size: brollSizeSlider ? parseInt(brollSizeSlider.value) : 35,
                 x: 0.05,
                 y: 0.6,
-                startSec: Math.min(state.endTime || state.duration || 5, state.video.currentTime || 0),
-                endSec: Math.min(state.endTime || state.duration || 5, (state.video.currentTime || 0) + 3),
+                startSec: Math.min(state.endTime || state.duration || 5, state.currentTime || 0),
+                endSec: Math.min(state.endTime || state.duration || 5, (state.currentTime || 0) + 3),
                 // Each B-roll clip enters from a different side so a sequence
                 // of images doesn't always pop in from the same corner. This is
                 // just the starting default — fully editable from the panel.
@@ -3652,8 +3812,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 size: brollSizeSlider ? parseInt(brollSizeSlider.value) : 35,
                 x: 0.5,
                 y: 0.5,
-                startSec: Math.min(state.endTime || state.duration || 5, state.video.currentTime || 0),
-                endSec: Math.min(state.endTime || state.duration || 5, (state.video.currentTime || 0) + 3),
+                startSec: Math.min(state.endTime || state.duration || 5, state.currentTime || 0),
+                endSec: Math.min(state.endTime || state.duration || 5, (state.currentTime || 0) + 3),
                 entryDirection: ['left', 'right', 'top', 'bottom'][Math.floor(Math.random() * 4)],
                 exitDirection: 'same',
                 animationStyle: brollModeSelect && brollModeSelect.value === 'pip' ? 'slide-pop' : 'zoom',

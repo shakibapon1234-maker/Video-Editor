@@ -217,19 +217,26 @@ document.addEventListener('DOMContentLoaded', () => {
             const clipTrimDuration = Math.max(0, clipTrimEnd - clipTrimStart);
             if (clipTrimDuration <= 0) continue;
 
-            // Load this clip into the shared video element if it isn't already active
-            if (video.src !== clip.url) {
-                await new Promise((resolve) => {
-                    video.onloadedmetadata = () => resolve();
-                    video.src = clip.url;
-                    video.load();
-                });
+            // Load this clip into the shared video element if it isn't already active (video clips only)
+            if (clip.type === 'image') {
+                video.src = '';
+                state.duration = clip.duration;
+                state.startTime = clipTrimStart;
+                state.endTime = clipTrimEnd;
+                state.activeClipId = clip.id;
+            } else {
+                if (video.src !== clip.url) {
+                    await new Promise((resolve) => {
+                        video.onloadedmetadata = () => resolve();
+                        video.src = clip.url;
+                        video.load();
+                    });
+                }
+                state.duration = clip.duration;
+                state.startTime = clipTrimStart;
+                state.endTime = clipTrimEnd;
+                state.activeClipId = clip.id;
             }
-
-            state.duration = clip.duration;
-            state.startTime = clipTrimStart;
-            state.endTime = clipTrimEnd;
-            state.activeClipId = clip.id;
 
             // Apply this clip's own crop area (each clip can have a different crop).
             state.cropX = clip.cropX || 0;
@@ -237,11 +244,15 @@ document.addEventListener('DOMContentLoaded', () => {
             state.cropW = (clip.cropW !== undefined) ? clip.cropW : 1;
             state.cropH = (clip.cropH !== undefined) ? clip.cropH : 1;
 
-            video.currentTime = clipTrimStart;
-            if (!window.setSpeakerMuted || !window.setSpeakerMuted(true)) {
-                video.volume = 0;
+            if (clip.type === 'image') {
+                state.currentTime = clipTrimStart;
+            } else {
+                video.currentTime = clipTrimStart;
+                if (!window.setSpeakerMuted || !window.setSpeakerMuted(true)) {
+                    video.volume = 0;
+                }
+                await video.play();
             }
-            await video.play();
 
             // Start voiceover & background music once, right after the very first clip begins playing,
             // so they stay in sync with the start of the full stitched timeline.
@@ -259,8 +270,19 @@ document.addEventListener('DOMContentLoaded', () => {
             const worker = getTickerWorker();
 
             await new Promise((resolve) => {
+                let lastTickTime = performance.now();
                 function renderTick() {
-                    const currentTime = video.currentTime;
+                    let currentTime;
+                    if (clip.type === 'image') {
+                        const now = performance.now();
+                        const elapsed = (now - lastTickTime) / 1000;
+                        lastTickTime = now;
+                        state.currentTime += elapsed;
+                        currentTime = state.currentTime;
+                    } else {
+                        currentTime = video.currentTime;
+                    }
+
                     const elapsedInClip = currentTime - clipTrimStart;
                     const totalElapsed = clipElapsedBase + elapsedInClip;
                     const progressPercent = Math.min(100, (totalElapsed / totalDuration) * 100);
@@ -273,8 +295,10 @@ document.addEventListener('DOMContentLoaded', () => {
                     setProgress(Math.round(uiProgress));
                     renderStatusText.innerText = `Rendering clip ${clipIndex + 1}/${state.clips.length}... ${Math.round(progressPercent)}%`;
 
-                    if (currentTime >= clipTrimEnd || video.ended) {
-                        video.pause();
+                    if (currentTime >= clipTrimEnd || (clip.type !== 'image' && video.ended)) {
+                        if (clip.type !== 'image') {
+                            video.pause();
+                        }
                         worker.removeEventListener('message', renderTick);
                         clearTimeout(safetyTimer);
                         resolve();
@@ -286,11 +310,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
                 // Safety timeout per-clip (max 10 minutes per clip)
                 const safetyTimer = setTimeout(() => {
-                    if (!video.paused) {
+                    if (clip.type !== 'image' && !video.paused) {
                         video.pause();
-                        worker.removeEventListener('message', renderTick);
-                        resolve();
                     }
+                    worker.removeEventListener('message', renderTick);
+                    resolve();
                 }, 600_000);
             });
 
