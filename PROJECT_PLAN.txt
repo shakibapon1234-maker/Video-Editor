@@ -57,6 +57,7 @@
   [DONE] Keyboard Shortcuts (space play/pause, I/O trim set, left/right step) - editor.js
   [DONE] Platform Presets per Platform (7C - one-click Facebook/IG/YT setup with duration warnings) - editor.js
   [DONE] Batch Watermark/Banner Apply (7E - multi-file sequential processing) - exporter.js
+  [DONE] Auto Silence Trimmer (7A - অডিও ট্র্যাক বিশ্লেষণ করে নীরব অংশ চিহ্নিত করে স্বয়ংক্রিয় কাটা) - editor.js
 
 
 
@@ -819,9 +820,9 @@ AI সাজেশন — পরবর্তী সম্ভাব্য ফি�
 
 
  =====================================================
-  শেষ আপডেট: v2.14 - Batch Video Processing (7E) সম্পন্ন
-  (একই লোগো/ব্যানার/intro-outro সেটিংস একাধিক ভিডিও ফাইলে একসাথে (একে একে) প্রয়োগ করে আলাদা আলাদা ফাইল হিসেবে এক্সপোর্ট করার সুবিধা যুক্ত করা হয়েছে।)
+  শেষ আপডেট: v2.15 - Auto Silence Trimmer (7A) সম্পন্ন
+  (অডিও ট্র্যাক বিশ্লেষণ করে কথা না থাকা নীরব অংশগুলো স্বয়ংক্রিয়ভাবে চিহ্নিত করে কেটে বাদ দেওয়ার ফিচার যুক্ত করা হয়েছে।)
 
-  Phase 2 থেকে Phase 6 এর সকল কাজ এবং সাজেশন 7C, 7D, 7E, 7F এখন [DONE]।
-  বাকি আছে ভবিষ্যৎ আইডিয়াগুলো (7A, 7B) — এগুলোর কোনোটাই এখনো plan/implement করা হয়নি।
+  Phase 2 থেকে Phase 6 এর সকল কাজ এবং সাজেশন 7A, 7C, 7D, 7E, 7F এখন [DONE]।
+  বাকি আছে ভবিষ্যৎ আইডিয়া (7B) — এটি এখনও plan/implement করা হয়নি।
  =====================================================

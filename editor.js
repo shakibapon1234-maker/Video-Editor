@@ -1512,6 +1512,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
             clipTimelineListEl.appendChild(block);
         });
+        if (window.updateSilenceTrimmerVisibility) {
+            window.updateSilenceTrimmerVisibility();
+        }
     }
 
     window.renderClipTimeline = renderClipTimeline;
@@ -6530,6 +6533,408 @@ document.addEventListener('DOMContentLoaded', () => {
     setTimeout(async () => {
         await restoreProjectFromBrowserStorage();
     }, 500);
+
+    // --- Auto Silence Trimmer (Phase 7A) ---
+    let detectedSilences = [];
+
+    const silenceThresholdSlider = document.getElementById('silence-threshold-slider');
+    const silenceThresholdVal = document.getElementById('silence-threshold-val');
+    const silenceDurationSlider = document.getElementById('silence-duration-slider');
+    const silenceDurationVal = document.getElementById('silence-duration-val');
+    const silencePaddingSlider = document.getElementById('silence-padding-slider');
+    const silencePaddingVal = document.getElementById('silence-padding-val');
+    
+    const silenceScanBtn = document.getElementById('silence-scan-btn');
+    const silenceApplyBtn = document.getElementById('silence-apply-btn');
+    const silenceCancelBtn = document.getElementById('silence-cancel-btn');
+
+    if (silenceThresholdSlider && silenceThresholdVal) {
+        silenceThresholdSlider.addEventListener('input', (e) => {
+            silenceThresholdVal.innerText = `${e.target.value} dB`;
+        });
+    }
+    if (silenceDurationSlider && silenceDurationVal) {
+        silenceDurationSlider.addEventListener('input', (e) => {
+            silenceDurationVal.innerText = `${parseFloat(e.target.value).toFixed(1)}s`;
+        });
+    }
+    if (silencePaddingSlider && silencePaddingVal) {
+        silencePaddingSlider.addEventListener('input', (e) => {
+            silencePaddingVal.innerText = `${parseFloat(e.target.value).toFixed(2)}s`;
+        });
+    }
+
+    if (silenceScanBtn) {
+        silenceScanBtn.addEventListener('click', async () => {
+            const activeClip = state.clips.find(c => c.id === state.activeClipId);
+            if (!activeClip) {
+                alert("দয়া করে প্রথমে একটি ভিডিও ক্লিপ সিলেক্ট করুন।");
+                return;
+            }
+            if (activeClip.type === 'image') {
+                alert("নীরবতা ছাঁটাই শুধু ভিডিও ক্লিপের জন্য প্রযোজ্য।");
+                return;
+            }
+            
+            const threshold = parseFloat(silenceThresholdSlider.value);
+            const duration = parseFloat(silenceDurationSlider.value);
+            const padding = parseFloat(silencePaddingSlider.value);
+            
+            await runSilenceAnalysis(activeClip, threshold, duration, padding);
+        });
+    }
+
+    if (silenceApplyBtn) {
+        silenceApplyBtn.addEventListener('click', async () => {
+            await applySilenceCuts();
+        });
+    }
+
+    if (silenceCancelBtn) {
+        silenceCancelBtn.addEventListener('click', () => {
+            resetSilenceTrimmerUI();
+        });
+    }
+
+    async function runSilenceAnalysis(activeClip, threshold, minDuration, padding) {
+        const statusEl = document.getElementById('silence-status');
+        const resultsEl = document.getElementById('silence-results-container');
+        const listEl = document.getElementById('silence-segments-list');
+
+        if (!statusEl || !resultsEl || !listEl) return;
+
+        // Show scanning state
+        statusEl.style.display = 'flex';
+        statusEl.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin"></i> অডিও ফাইল প্রসেস করা হচ্ছে...';
+        statusEl.style.color = 'var(--text-secondary)';
+        resultsEl.style.display = 'none';
+        listEl.innerHTML = '';
+        detectedSilences = [];
+
+        try {
+            // Read arrayBuffer from activeClip file
+            const arrayBuffer = await activeClip.file.arrayBuffer();
+            statusEl.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin"></i> অডিও ডিকোড করা হচ্ছে...';
+
+            const tempCtx = new (window.AudioContext || window.webkitAudioContext)();
+            const audioBuffer = await tempCtx.decodeAudioData(arrayBuffer);
+
+            statusEl.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin"></i> নীরব অংশ খোঁজা হচ্ছে...';
+
+            const sampleRate = audioBuffer.sampleRate;
+            const channelData = audioBuffer.getChannelData(0);
+            const totalSamples = channelData.length;
+
+            const windowSizeSec = 0.05; // 50ms window
+            const windowSizeSamples = Math.floor(windowSizeSec * sampleRate);
+            const amplitudeThreshold = Math.pow(10, threshold / 20);
+
+            let inSilence = false;
+            let silenceStart = null;
+            let silenceEnd = null;
+
+            const rawSegments = [];
+
+            for (let i = 0; i < totalSamples; i += windowSizeSamples) {
+                const endIdx = Math.min(i + windowSizeSamples, totalSamples);
+                const size = endIdx - i;
+                if (size <= 0) break;
+
+                let sumSquares = 0;
+                for (let j = i; j < endIdx; j++) {
+                    sumSquares += channelData[j] * channelData[j];
+                }
+                const rms = Math.sqrt(sumSquares / size);
+                const currentTime = i / sampleRate;
+                const isSilent = rms < amplitudeThreshold;
+
+                if (isSilent) {
+                    if (!inSilence) {
+                        inSilence = true;
+                        silenceStart = currentTime;
+                    }
+                    silenceEnd = currentTime + (size / sampleRate);
+                } else {
+                    if (inSilence) {
+                        inSilence = false;
+                        if (silenceEnd - silenceStart >= minDuration) {
+                            rawSegments.push({ start: silenceStart, end: silenceEnd });
+                        }
+                    }
+                }
+            }
+
+            if (inSilence) {
+                if (silenceEnd - silenceStart >= minDuration) {
+                    rawSegments.push({ start: silenceStart, end: silenceEnd });
+                }
+            }
+
+            tempCtx.close();
+
+            // Filter segments that fall within active clip's range [activeClip.start, activeClip.end]
+            const clipStart = activeClip.start;
+            const clipEnd = activeClip.end;
+
+            const finalSegments = [];
+            let segmentId = 1;
+
+            rawSegments.forEach(seg => {
+                const segStart = Math.max(clipStart, seg.start);
+                const segEnd = Math.min(clipEnd, seg.end);
+
+                if (segEnd - segStart >= minDuration) {
+                    finalSegments.push({
+                        id: segmentId++,
+                        start: segStart,
+                        end: segEnd,
+                        duration: segEnd - segStart
+                    });
+                }
+            });
+
+            if (finalSegments.length === 0) {
+                statusEl.innerHTML = '<i class="fa-solid fa-circle-check" style="color: var(--success);"></i> কোনো নীরব অংশ পাওয়া যায়নি।';
+                statusEl.style.color = 'var(--success)';
+                return;
+            }
+
+            detectedSilences = finalSegments;
+            statusEl.innerHTML = `<i class="fa-solid fa-circle-check" style="color: var(--success);"></i> স্ক্যান সম্পন্ন: ${finalSegments.length}টি নীরব অংশ পাওয়া গেছে।`;
+            statusEl.style.color = 'var(--success)';
+
+            renderSilenceSegmentsList();
+            resultsEl.style.display = 'block';
+            updateSilenceSelectedCount();
+
+        } catch (err) {
+            console.error("Silence analysis error:", err);
+            statusEl.innerHTML = '<i class="fa-solid fa-circle-exclamation" style="color: var(--danger);"></i> অডিও বিশ্লেষণ ব্যর্থ হয়েছে। ফাইলে অডিও ট্র্যাক নাও থাকতে পারে।';
+            statusEl.style.color = 'var(--danger)';
+        }
+    }
+
+    function renderSilenceSegmentsList() {
+        const listEl = document.getElementById('silence-segments-list');
+        if (!listEl) return;
+        listEl.innerHTML = '';
+
+        detectedSilences.forEach(seg => {
+            const item = document.createElement('div');
+            item.className = 'silence-item';
+            item.id = `silence-item-${seg.id}`;
+
+            const check = document.createElement('input');
+            check.type = 'checkbox';
+            check.className = 'silence-check';
+            check.checked = true;
+            check.dataset.id = seg.id;
+            check.addEventListener('change', () => {
+                updateSilenceSelectedCount();
+            });
+
+            const text = document.createElement('span');
+            text.className = 'silence-time';
+            text.innerText = `${formatTime(seg.start)} - ${formatTime(seg.end)}`;
+
+            const dur = document.createElement('span');
+            dur.className = 'silence-dur';
+            dur.innerText = `${seg.duration.toFixed(1)}s`;
+
+            const previewBtn = document.createElement('button');
+            previewBtn.className = 'silence-preview-btn';
+            previewBtn.type = 'button';
+            previewBtn.title = 'Preview Segment';
+            previewBtn.innerHTML = '<i class="fa-solid fa-play"></i>';
+            
+            previewBtn.addEventListener('click', () => {
+                // Highlight playing item
+                document.querySelectorAll('.silence-item').forEach(el => el.classList.remove('playing'));
+                item.classList.add('playing');
+
+                state.currentTime = seg.start;
+                playVideo();
+
+                const stopHandler = () => {
+                    if (state.currentTime >= seg.end) {
+                        pauseVideo();
+                        item.classList.remove('playing');
+                        state.video.removeEventListener('timeupdate', stopHandler);
+                    }
+                };
+
+                if (window.activeSilencePreviewHandler) {
+                    state.video.removeEventListener('timeupdate', window.activeSilencePreviewHandler);
+                }
+                window.activeSilencePreviewHandler = stopHandler;
+                state.video.addEventListener('timeupdate', stopHandler);
+            });
+
+            item.appendChild(check);
+            item.appendChild(text);
+            item.appendChild(dur);
+            item.appendChild(previewBtn);
+            listEl.appendChild(item);
+        });
+    }
+
+    function updateSilenceSelectedCount() {
+        const checks = document.querySelectorAll('#silence-segments-list .silence-check');
+        let count = 0;
+        checks.forEach(c => {
+            if (c.checked) count++;
+        });
+        
+        const countEl = document.getElementById('silence-selected-count');
+        if (countEl) countEl.innerText = count;
+
+        const toggleBtn = document.getElementById('silence-toggle-all-btn');
+        if (toggleBtn) {
+            toggleBtn.innerText = count === 0 ? "Select All" : "Deselect All";
+        }
+    }
+
+    const toggleAllBtn = document.getElementById('silence-toggle-all-btn');
+    if (toggleAllBtn) {
+        toggleAllBtn.addEventListener('click', () => {
+            const checks = document.querySelectorAll('#silence-segments-list .silence-check');
+            const anyChecked = Array.from(checks).some(c => c.checked);
+            checks.forEach(c => {
+                c.checked = !anyChecked;
+            });
+            updateSilenceSelectedCount();
+        });
+    }
+
+    async function applySilenceCuts() {
+        const activeClip = state.clips.find(c => c.id === state.activeClipId);
+        if (!activeClip) return;
+
+        const checks = document.querySelectorAll('#silence-segments-list .silence-check');
+        const selectedIds = Array.from(checks)
+            .filter(c => c.checked)
+            .map(c => parseInt(c.dataset.id));
+
+        if (selectedIds.length === 0) {
+            alert("বাদ দেওয়ার জন্য অনুগ্রহ করে কমপক্ষে একটি নীরব অংশ সিলেক্ট করুন।");
+            return;
+        }
+
+        const padding = parseFloat(silencePaddingSlider.value) || 0;
+        const cuts = detectedSilences
+            .filter(seg => selectedIds.includes(seg.id))
+            .map(seg => {
+                return {
+                    start: Math.max(activeClip.start, seg.start + padding),
+                    end: Math.min(activeClip.end, seg.end - padding)
+                };
+            })
+            .filter(cut => cut.end > cut.start + 0.15);
+
+        if (cuts.length === 0) {
+            alert("সেফটি বাফার (Padding) বাদ দেওয়ার পর কোনো উপযুক্ত নীরব অংশ পাওয়া যায়নি। অনুগ্রহ করে প্যাডিং এর মান কমিয়ে দেখুন।");
+            return;
+        }
+
+        cuts.sort((a, b) => a.start - b.start);
+
+        if (state.isPlaying) {
+            pauseVideo();
+        }
+
+        const clipIndex = state.clips.indexOf(activeClip);
+        const newClips = [];
+        let currentStart = activeClip.start;
+        const endBound = activeClip.end;
+
+        cuts.forEach((cut, index) => {
+            if (cut.start > currentStart + 0.15) {
+                newClips.push({
+                    id: Date.now() + index * 10,
+                    file: activeClip.file,
+                    url: activeClip.url,
+                    name: activeClip.name,
+                    duration: activeClip.duration,
+                    start: currentStart,
+                    end: cut.start,
+                    cropX: activeClip.cropX,
+                    cropY: activeClip.cropY,
+                    cropW: activeClip.cropW,
+                    cropH: activeClip.cropH
+                });
+            }
+            currentStart = cut.end;
+        });
+
+        if (endBound > currentStart + 0.15) {
+            newClips.push({
+                id: Date.now() + cuts.length * 10,
+                file: activeClip.file,
+                url: activeClip.url,
+                name: activeClip.name,
+                duration: activeClip.duration,
+                start: currentStart,
+                end: endBound,
+                cropX: activeClip.cropX,
+                cropY: activeClip.cropY,
+                cropW: activeClip.cropW,
+                cropH: activeClip.cropH
+            });
+        }
+
+        if (newClips.length === 0) {
+            alert("সবগুলো নীরবতা বাদ দিলে পুরো ভিডিওটিই বাদ পড়ে যায়! অনুগ্রহ করে কিছু নীরবতা আনচেক করুন বা থ্রেশহোল্ড বাড়ান।");
+            return;
+        }
+
+        state.clips.splice(clipIndex, 1, ...newClips);
+        renderClipTimeline();
+        switchActiveClip(newClips[0].id);
+        resetSilenceTrimmerUI();
+
+        alert(`সফলভাবে ${cuts.length}টি নীরব অংশ কেটে বাদ দেওয়া হয়েছে। ভিডিওটি এখন ${newClips.length}টি ক্লিপে বিভক্ত করা হয়েছে।`);
+        if (typeof triggerAutoSave === 'function') triggerAutoSave();
+    }
+
+    function resetSilenceTrimmerUI() {
+        const resultsEl = document.getElementById('silence-results-container');
+        const statusEl = document.getElementById('silence-status');
+        const listEl = document.getElementById('silence-segments-list');
+        if (resultsEl) resultsEl.style.display = 'none';
+        if (statusEl) statusEl.style.display = 'none';
+        if (listEl) listEl.innerHTML = '';
+        detectedSilences = [];
+        if (window.activeSilencePreviewHandler) {
+            state.video.removeEventListener('timeupdate', window.activeSilencePreviewHandler);
+            window.activeSilencePreviewHandler = null;
+        }
+    }
+    window.resetSilenceTrimmerUI = resetSilenceTrimmerUI;
+
+    function updateSilenceTrimmerVisibility() {
+        const trimmerCard = document.getElementById('silence-trimmer-card');
+        if (!trimmerCard) return;
+
+        const activeClip = state.clips.find(c => c.id === state.activeClipId);
+        if (!activeClip || activeClip.type === 'image') {
+            if (silenceScanBtn) {
+                silenceScanBtn.disabled = true;
+                silenceScanBtn.innerHTML = '<i class="fa-solid fa-ban"></i> Video Only (শুধু ভিডিওর জন্য)';
+            }
+            resetSilenceTrimmerUI();
+        } else {
+            if (silenceScanBtn) {
+                silenceScanBtn.disabled = false;
+                silenceScanBtn.innerHTML = '<i class="fa-solid fa-magnifying-glass-chart"></i> Scan for Silence (নীরবতা স্ক্যান করুন)';
+            }
+        }
+    }
+    window.updateSilenceTrimmerVisibility = updateSilenceTrimmerVisibility;
+
+    // Call visibility update initially
+    setTimeout(() => {
+        updateSilenceTrimmerVisibility();
+    }, 1000);
 
     // --- Keyboard Shortcuts (Phase 7F) ---
     window.addEventListener('keydown', (e) => {

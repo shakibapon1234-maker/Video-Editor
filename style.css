@@ -1965,3 +1965,87 @@ input:checked + .slider:before {
     flex-shrink: 0;
 }
 
+/* --- Auto Silence Trimmer --- */
+.silence-segments-list {
+    margin-top: 8px;
+    scrollbar-width: thin;
+    scrollbar-color: rgba(255, 255, 255, 0.2) transparent;
+}
+
+.silence-segments-list::-webkit-scrollbar {
+    width: 6px;
+}
+
+.silence-segments-list::-webkit-scrollbar-thumb {
+    background-color: rgba(255, 255, 255, 0.2);
+    border-radius: 3px;
+}
+
+.silence-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 10px;
+    margin-bottom: 4px;
+    background-color: rgba(255, 255, 255, 0.02);
+    border: 1px solid rgba(255, 255, 255, 0.04);
+    border-radius: var(--radius-sm);
+    transition: all 0.2s ease;
+}
+
+.silence-item:hover {
+    background-color: rgba(255, 255, 255, 0.06);
+    border-color: rgba(255, 255, 255, 0.08);
+}
+
+.silence-item .silence-check {
+    cursor: pointer;
+    accent-color: var(--primary);
+    width: 14px;
+    height: 14px;
+}
+
+.silence-item .silence-time {
+    font-size: 11.5px;
+    color: var(--text-primary);
+    font-family: var(--font-body);
+}
+
+.silence-item .silence-dur {
+    font-size: 11px;
+    color: var(--text-secondary);
+    background: rgba(255, 255, 255, 0.05);
+    padding: 1px 4px;
+    border-radius: 3px;
+}
+
+.silence-item .silence-preview-btn {
+    background: none;
+    border: none;
+    color: var(--primary);
+    cursor: pointer;
+    margin-left: auto;
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background-color 0.2s, color 0.2s;
+}
+
+.silence-item .silence-preview-btn:hover {
+    background-color: rgba(79, 70, 229, 0.15);
+    color: var(--primary-hover);
+}
+
+.silence-item .silence-preview-btn i {
+    font-size: 10px;
+}
+
+.silence-item.playing {
+    background-color: rgba(79, 70, 229, 0.08);
+    border-color: rgba(79, 70, 229, 0.3);
+}
+
+
