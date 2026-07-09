@@ -577,6 +577,8 @@ document.addEventListener('DOMContentLoaded', () => {
     let videoGainNode = null;
     let highpassNode = null;
     let lowpassNode = null;
+    let noiseGateGainNode = null;
+    let noiseGateAnalyser = null;
     let compressorNode = null;
     let makeupGainNode = null; // Auto-compensates volume lost to the noise-cancel compressor
     let speakerMuteGain = null; // Isolated speaker on/off switch that never touches the export tap
@@ -712,6 +714,14 @@ document.addEventListener('DOMContentLoaded', () => {
             makeupGainNode = audioCtx.createGain();
             makeupGainNode.gain.setValueAtTime(1, 0);
 
+            // Noise gate nodes
+            noiseGateGainNode = audioCtx.createGain();
+            noiseGateGainNode.gain.setValueAtTime(1, 0);
+            window.noiseGateGainNode = noiseGateGainNode;
+
+            noiseGateAnalyser = audioCtx.createAnalyser();
+            noiseGateAnalyser.fftSize = 256;
+
             // Speaker-only mute switch. This sits AFTER makeupGainNode so it only
             // affects what comes out of the computer speakers during export/preview
             // muting. The export tap in getMixedAudioDestinationStream connects
@@ -720,11 +730,13 @@ document.addEventListener('DOMContentLoaded', () => {
             speakerMuteGain = audioCtx.createGain();
             speakerMuteGain.gain.setValueAtTime(1, 0);
 
-            // Link DSP chain: Source -> Volume -> Highpass -> Lowpass -> Compressor -> MakeupGain -> SpeakerMute -> Destination
+            // Link DSP chain: Source -> Volume -> Highpass -> Lowpass -> NoiseGate -> Compressor -> MakeupGain -> SpeakerMute -> Destination
             videoSourceNode.connect(videoGainNode);
             videoGainNode.connect(highpassNode);
             highpassNode.connect(lowpassNode);
-            lowpassNode.connect(compressorNode);
+            lowpassNode.connect(noiseGateGainNode);
+            lowpassNode.connect(noiseGateAnalyser); // Measure audio level before gating it
+            noiseGateGainNode.connect(compressorNode);
             compressorNode.connect(makeupGainNode);
             makeupGainNode.connect(speakerMuteGain);
             speakerMuteGain.connect(audioCtx.destination);
@@ -741,16 +753,40 @@ document.addEventListener('DOMContentLoaded', () => {
             // from silencing the audio: the filters/gate still cut hiss and
             // low-level noise, but real speech gets its volume restored.
             (function pumpMakeupGain() {
-                if (compressorNode && makeupGainNode && audioCtx) {
-                    if (state.isNoiseCancelActive) {
-                        const reductionDb = compressorNode.reduction || 0; // negative dB
-                        // Cap compensation at +14dB (~5x) so we don't also blast
-                        // residual background noise back up to full volume.
-                        const compensationDb = Math.min(14, -reductionDb);
-                        const targetGain = Math.pow(10, compensationDb / 20);
-                        makeupGainNode.gain.setTargetAtTime(targetGain, audioCtx.currentTime, 0.08);
-                    } else {
-                        makeupGainNode.gain.setTargetAtTime(1, audioCtx.currentTime, 0.08);
+                if (audioCtx) {
+                    // 1. Process Noise Gate envelope follower
+                    if (state.isNoiseCancelActive && noiseGateAnalyser && noiseGateGainNode) {
+                        const array = new Float32Array(noiseGateAnalyser.fftSize);
+                        noiseGateAnalyser.getFloatTimeDomainData(array);
+                        
+                        let sum = 0;
+                        for (let i = 0; i < array.length; i++) {
+                            sum += array[i] * array[i];
+                        }
+                        const rms = Math.sqrt(sum / array.length);
+                        const db = rms > 0 ? 20 * Math.log10(rms) : -99;
+                        
+                        // If below threshold, attenuate to 0.05 (soft gate). Otherwise, pass at 1.0.
+                        const targetGateGain = (db < state.noiseGateThreshold) ? 0.05 : 1.0;
+                        // Fast attack time (10ms) to avoid clipping speech starts; slower release time (150ms) to avoid speech truncation.
+                        const timeConstant = (targetGateGain === 1.0) ? 0.01 : 0.15;
+                        noiseGateGainNode.gain.setTargetAtTime(targetGateGain, audioCtx.currentTime, timeConstant);
+                    } else if (noiseGateGainNode) {
+                        noiseGateGainNode.gain.setTargetAtTime(1.0, audioCtx.currentTime, 0.05);
+                    }
+
+                    // 2. Process Compressor Auto Makeup Gain
+                    if (compressorNode && makeupGainNode) {
+                        if (state.isNoiseCancelActive) {
+                            const reductionDb = compressorNode.reduction || 0; // negative dB
+                            // Cap compensation at +14dB (~5x) so we don't also blast
+                            // residual background noise back up to full volume.
+                            const compensationDb = Math.min(14, -reductionDb);
+                            const targetGain = Math.pow(10, compensationDb / 20);
+                            makeupGainNode.gain.setTargetAtTime(targetGain, audioCtx.currentTime, 0.08);
+                        } else {
+                            makeupGainNode.gain.setTargetAtTime(1, audioCtx.currentTime, 0.08);
+                        }
                     }
                 }
                 requestAnimationFrame(pumpMakeupGain);
@@ -821,7 +857,7 @@ document.addEventListener('DOMContentLoaded', () => {
         
         if (state.isNoiseCancelActive) {
             // Apply human speech optimized bandpass filters (cuts sub-hum and static hiss)
-            highpassNode.frequency.setValueAtTime(120, audioCtx.currentTime); // Cut frequencies below 120Hz
+            highpassNode.frequency.setValueAtTime(150, audioCtx.currentTime); // Cut frequencies below 150Hz
             lowpassNode.frequency.setValueAtTime(7000, audioCtx.currentTime); // Cut frequencies above 7000Hz
             
             // Apply heavier compression threshold to act as a soft noise gate

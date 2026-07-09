@@ -52,7 +52,7 @@ window.VideoEditor = {
     voiceoverRecorded: false,
     voiceoverProfile: 'none',
     isNoiseCancelActive: false,
-    noiseGateThreshold: -50,
+    noiseGateThreshold: -38,
 
     // Background Music state (Phase 3A, upgraded to multi-track timeline in v2.3)
     // Each track: { id, blob, url, name, duration, volume, startSec, endSec, loopMode }
