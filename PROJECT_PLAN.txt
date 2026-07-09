@@ -49,6 +49,7 @@
   [DONE] Background Music (multi-track timeline, per-track loop/once, volume, ducking) - audio.js
   [DONE] Voice Changer Presets (Female, Male, Robot, Echo) - audio.js
   [DONE] News Ticker / Breaking-News Scrolling Text (top/bottom) - editor.js
+  [DONE] Sticker/Emoji Overlay (drag & resize)                    - editor.js
 
 
 -----------------------------------------------------
@@ -403,13 +404,29 @@ PHASE 3 - AUDIO উন্নতি
 PHASE 4 - VISUAL EFFECTS
 ==========================
 
-4A - Sticker/Emoji Overlay   [TODO]
+4A - Sticker/Emoji Overlay   [DONE]
 ----------------------------------------
-কী করতে হবে:
-  - state.stickers array
-  - Emoji picker UI (HTML entity list)
-  - Canvas drag & resize (same system as logo)
-  - drawFrame()-এ sticker render
+সম্পন্ন হয়েছে (v2.7):
+  - state.stickers array যুক্ত হয়েছে, প্রতিটি item-এ: id, emoji,
+    x, y (normalized 0-1 center position), size (% of canvas width)
+  - selectedStickerId, isDraggingSticker, isResizingSticker স্টেট
+    যুক্ত হয়েছে (লোগোর প্যাটার্ন অনুসরণ করে)
+  - Step 3 প্যানেলে "Sticker / Emoji" card যুক্ত হয়েছে: ২৪টি ইমোজির
+    grid picker (👍❤️🔥🎉 ইত্যাদি), ক্লিক করলেই ক্যানভাসের মাঝখানে
+    নতুন sticker যোগ হয় ও সিলেক্ট হয়ে যায়
+  - প্রতিটি sticker আলাদাভাবে প্রিভিউতে ড্র্যাগ করে position আর
+    bottom-right কোণা ধরে resize করা যায় — ঠিক Logo watermark-এর
+    মতোই একই hit-testing প্যাটার্ন (getStickerBox/findStickerAt/
+    findStickerResizeHandle) ব্যবহার করা হয়েছে
+  - Sticker list-এ ক্লিক করেও সিলেক্ট করা যায়, Size slider দিয়ে
+    নিখুঁতভাবে সাইজ ঠিক করা যায়, এবং Remove বাটন দিয়ে ডিলিট করা যায়
+  - drawFrame()-এ নতুন Step F2 হিসেবে render লজিক যুক্ত হয়েছে
+    (Text Overlay-এর ঠিক পরে, Subtitle-এর আগে) — canvas.fillText()
+    দিয়ে ইমোজি আঁকা হয়, তাই Export-এও (MediaRecorder canvas capture
+    যেহেতু পুরো canvas রেকর্ড করে) আলাদা কোনো কাজ ছাড়াই sticker
+    স্বয়ংক্রিয়ভাবে বার্ন-ইন হয়ে যায়
+  - handlePointerDown/Move/Up এবং idle cursor feedback — সব জায়গায়
+    B-roll ও Logo-র মতোই আচরণ (move cursor, resize cursor ইত্যাদি)
 
 4B - Blur/Mosaic Tool   [DONE]
 -----------------------------------
@@ -634,6 +651,7 @@ Export-এ audio mixing এখানে হয়। নতুন audio track (b
   8. [DONE] Phase 4B - Blur Tool
   9. [DONE] Phase 5A - Auto Subtitle
   10. [DONE] Phase 2B - Multi-Clip Timeline (সবচেয়ে জটিল ছিল)
+  11. [DONE] Phase 4A - Sticker/Emoji Overlay
 
 
 -----------------------------------------------------
@@ -647,5 +665,6 @@ Export-এ audio mixing এখানে হয়। নতুন audio track (b
 
 
 =====================================================
- শেষ আপডেট: v2.0 - Multi-Clip Timeline Release (সব Phase সম্পন্ন)
+ শেষ আপডেট: v2.7 - Sticker/Emoji Overlay Release
+ (বাকি আছে: 4C Color Grading, 5C Intro/Outro, 6B Export Progress UX)
 =====================================================

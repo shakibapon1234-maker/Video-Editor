@@ -773,6 +773,61 @@
                             </div>
                         </div>
 
+                        <!-- Sticker / Emoji Overlay (Phase 4A) -->
+                        <div class="card mt-4">
+                            <div class="card-header">
+                                <i class="fa-solid fa-face-smile card-icon"></i>
+                                <h3>Sticker / Emoji (স্টিকার ও ইমোজি)</h3>
+                            </div>
+                            <div class="card-body">
+                                <p class="help-text">নিচে থেকে একটি ইমোজি ক্লিক করলে সেটি প্রিভিউতে যোগ হবে, এরপর প্রিভিউ স্ক্রিনে ড্র্যাগ করে অবস্থান আর কোণা ধরে সাইজ ঠিক করতে পারবেন — ঠিক লোগোর মতোই।</p>
+
+                                <div class="emoji-grid" id="emoji-grid">
+                                    <button type="button" class="emoji-btn" data-emoji="😀">😀</button>
+                                    <button type="button" class="emoji-btn" data-emoji="😂">😂</button>
+                                    <button type="button" class="emoji-btn" data-emoji="❤️">❤️</button>
+                                    <button type="button" class="emoji-btn" data-emoji="🔥">🔥</button>
+                                    <button type="button" class="emoji-btn" data-emoji="👍">👍</button>
+                                    <button type="button" class="emoji-btn" data-emoji="🎉">🎉</button>
+                                    <button type="button" class="emoji-btn" data-emoji="😮">😮</button>
+                                    <button type="button" class="emoji-btn" data-emoji="😢">😢</button>
+                                    <button type="button" class="emoji-btn" data-emoji="💯">💯</button>
+                                    <button type="button" class="emoji-btn" data-emoji="✅">✅</button>
+                                    <button type="button" class="emoji-btn" data-emoji="❌">❌</button>
+                                    <button type="button" class="emoji-btn" data-emoji="⭐">⭐</button>
+                                    <button type="button" class="emoji-btn" data-emoji="🎬">🎬</button>
+                                    <button type="button" class="emoji-btn" data-emoji="📢">📢</button>
+                                    <button type="button" class="emoji-btn" data-emoji="🚨">🚨</button>
+                                    <button type="button" class="emoji-btn" data-emoji="💰">💰</button>
+                                    <button type="button" class="emoji-btn" data-emoji="🎁">🎁</button>
+                                    <button type="button" class="emoji-btn" data-emoji="👀">👀</button>
+                                    <button type="button" class="emoji-btn" data-emoji="🙌">🙌</button>
+                                    <button type="button" class="emoji-btn" data-emoji="💡">💡</button>
+                                    <button type="button" class="emoji-btn" data-emoji="⚡">⚡</button>
+                                    <button type="button" class="emoji-btn" data-emoji="🏆">🏆</button>
+                                    <button type="button" class="emoji-btn" data-emoji="📌">📌</button>
+                                    <button type="button" class="emoji-btn" data-emoji="💬">💬</button>
+                                </div>
+
+                                <div class="sticker-list mt-4" id="sticker-list">
+                                    <!-- Dynamically populated list of added stickers -->
+                                </div>
+
+                                <div class="sticker-controls mt-3" id="sticker-controls-container" style="display: none;">
+                                    <div class="control-group">
+                                        <label>Sticker Size (% of canvas width)</label>
+                                        <div class="slider-val-container">
+                                            <input type="range" id="sticker-size-slider" min="4" max="60" value="12">
+                                            <span id="sticker-size-val">12%</span>
+                                        </div>
+                                    </div>
+                                    <button id="delete-sticker-btn" class="btn-text-danger mt-2">
+                                        <i class="fa-solid fa-trash-can"></i> Remove This Sticker
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+
                         <!-- Video Progress Bar -->
                         <div class="card mt-4">
                             <div class="card-header">

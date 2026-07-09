@@ -1448,6 +1448,32 @@ input:checked + .slider:before {
     color: #ffffff;
 }
 
+/* Emoji/Sticker Picker Grid (Phase 4A) */
+.emoji-grid {
+    display: grid;
+    grid-template-columns: repeat(6, 1fr);
+    gap: 6px;
+}
+.emoji-grid .emoji-btn {
+    aspect-ratio: 1 / 1;
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--border-color);
+    background: rgba(255, 255, 255, 0.04);
+    font-size: 20px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background 0.15s ease, border-color 0.15s ease, transform 0.1s ease;
+}
+.emoji-grid .emoji-btn:hover {
+    background: rgba(79, 70, 229, 0.15);
+    border-color: var(--primary);
+}
+.emoji-grid .emoji-btn:active {
+    transform: scale(0.9);
+}
+
 /* Segmented Toggle (e.g. B-roll Content Type: Image / Text) */
 .segmented-toggle {
     display: flex;

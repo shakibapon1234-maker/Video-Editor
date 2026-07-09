@@ -105,6 +105,16 @@ window.VideoEditor = {
     dragTextOffsetX: 0,
     dragTextOffsetY: 0,
 
+    // Sticker / Emoji Overlays (Phase 4A)
+    stickers: [],
+    selectedStickerId: null,
+    isDraggingSticker: false,
+    isResizingSticker: false,
+    dragStickerOffsetX: 0,
+    dragStickerOffsetY: 0,
+    stickerResizeStartX: 0,
+    stickerResizeStartSize: 12,
+
     // B-roll / Topic Image Overlays (Phase 5D)
     brollOverlays: [],
     selectedBrollId: null,
@@ -2598,6 +2608,41 @@ document.addEventListener('DOMContentLoaded', () => {
             });
         }
 
+        // --- Step F2: Draw Sticker/Emoji Overlays (Phase 4A) ---
+        if (state.stickers && state.stickers.length > 0) {
+            state.stickers.forEach((item) => {
+                const fontSize = canvasW * (item.size / 100);
+                const sx = item.x * canvasW;
+                const sy = item.y * canvasH;
+
+                state.ctx.save();
+                state.ctx.font = `${fontSize}px "Segoe UI Emoji", "Apple Color Emoji", "Noto Color Emoji", sans-serif`;
+                state.ctx.textAlign = 'center';
+                state.ctx.textBaseline = 'middle';
+                state.ctx.fillText(item.emoji, sx, sy);
+                state.ctx.restore();
+
+                // Selection box + resize handle in Step 3 for the active sticker being edited
+                if (state.currentStep === 3 && item.id === state.selectedStickerId) {
+                    const boxW = fontSize * 1.15;
+                    const boxH = fontSize * 1.15;
+
+                    state.ctx.save();
+                    state.ctx.strokeStyle = 'rgba(79, 70, 229, 0.9)';
+                    state.ctx.lineWidth = 2;
+                    state.ctx.setLineDash([6, 4]);
+                    state.ctx.strokeRect(sx - boxW / 2, sy - boxH / 2, boxW, boxH);
+                    state.ctx.setLineDash([]);
+
+                    state.ctx.fillStyle = '#ffffff';
+                    state.ctx.fillRect(sx + boxW / 2 - 6, sy + boxH / 2 - 6, 12, 12);
+                    state.ctx.strokeStyle = '#4f46e5';
+                    state.ctx.strokeRect(sx + boxW / 2 - 6, sy + boxH / 2 - 6, 12, 12);
+                    state.ctx.restore();
+                }
+            });
+        }
+
         // --- Step G: Draw Auto Subtitle (Phase 5A) ---
         if (state.subtitlesEnabled && state.subtitles && state.subtitles.length > 0) {
             const currentTime = state.currentTime;
@@ -3005,6 +3050,35 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         }
 
+        // Sticker/Emoji resize handle check (Phase 4A) — must come before drag check
+        if (state.currentStep === 3 && state.selectedStickerId !== null) {
+            if (findStickerResizeHandle(coords)) {
+                const item = state.stickers.find(s => s.id === state.selectedStickerId);
+                if (item) {
+                    state.isResizingSticker = true;
+                    state.stickerResizeStartX = coords.x;
+                    state.stickerResizeStartSize = item.size;
+                    e.preventDefault();
+                    return;
+                }
+            }
+        }
+
+        // Sticker/Emoji drag/select (Phase 4A) — stickers render on top of B-roll/banners,
+        // so they're checked before text overlays but after logo/B-roll.
+        if (state.stickers && state.stickers.length > 0) {
+            const stickerHit = findStickerAt(coords);
+            if (stickerHit) {
+                state.selectedStickerId = stickerHit.id;
+                state.isDraggingSticker = true;
+                state.dragStickerOffsetX = coords.x - (stickerHit.x * canvasW);
+                state.dragStickerOffsetY = coords.y - (stickerHit.y * canvasH);
+                if (window.onStickerSelected) window.onStickerSelected(stickerHit.id);
+                e.preventDefault();
+                return;
+            }
+        }
+
         // Text overlay drag/select (Phase 2C) — checked last so logo/crop take priority
         if (state.textOverlays && state.textOverlays.length > 0) {
             const hit = findTextOverlayAt(coords);
@@ -3121,6 +3195,58 @@ document.addEventListener('DOMContentLoaded', () => {
             if (Math.hypot(coords.x - h.x, coords.y - h.y) < hr) return h.id;
         }
         return null;
+    }
+
+    function getStickerBox(item, canvasW, canvasH) {
+        const fontSize = canvasW * (item.size / 100);
+        const boxW = fontSize * 1.15;
+        const boxH = fontSize * 1.15;
+        return {
+            cx: item.x * canvasW,
+            cy: item.y * canvasH,
+            boxW,
+            boxH,
+            fontSize
+        };
+    }
+
+    function findStickerAt(coords) {
+        const canvasW = state.canvas.width;
+        const canvasH = state.canvas.height;
+        // Search topmost (last drawn / last added) first
+        for (let i = state.stickers.length - 1; i >= 0; i--) {
+            const item = state.stickers[i];
+            const box = getStickerBox(item, canvasW, canvasH);
+            if (coords.x >= box.cx - box.boxW / 2 && coords.x <= box.cx + box.boxW / 2 &&
+                coords.y >= box.cy - box.boxH / 2 && coords.y <= box.cy + box.boxH / 2) {
+                return item;
+            }
+        }
+        return null;
+    }
+
+    function findStickerResizeHandle(coords) {
+        if (state.selectedStickerId === null) return false;
+        const item = state.stickers.find(s => s.id === state.selectedStickerId);
+        if (!item) return false;
+
+        const canvasW = state.canvas.width;
+        const canvasH = state.canvas.height;
+        const box = getStickerBox(item, canvasW, canvasH);
+
+        const rect = state.canvas.getBoundingClientRect();
+        const w_rect = rect.width;
+        const h_rect = rect.height;
+        if (w_rect === 0 || h_rect === 0) return false;
+
+        const r_canvas = canvasW / canvasH;
+        const r_rect = w_rect / h_rect;
+        const w_render = (r_canvas > r_rect) ? w_rect : h_rect * r_canvas;
+        const pad = 20 * (canvasW / w_render);
+
+        const handleX = box.cx + box.boxW / 2;
+        const handleY = box.cy + box.boxH / 2;
+        return Math.abs(coords.x - handleX) <= pad && Math.abs(coords.y - handleY) <= pad;
     }
 
     function findTextOverlayAt(coords) {
@@ -3418,6 +3544,46 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
 
+        // Sticker/Emoji resize (Phase 4A)
+        if (state.isResizingSticker && state.selectedStickerId !== null) {
+            const coords = getCanvasCoords(e);
+            const canvasW = state.canvas.width;
+            const item = state.stickers.find(s => s.id === state.selectedStickerId);
+            if (item) {
+                const deltaX = coords.x - state.stickerResizeStartX;
+                const scaleFactor = (deltaX / canvasW) * 100;
+                let newSize = state.stickerResizeStartSize + scaleFactor;
+                newSize = Math.max(4, Math.min(60, newSize));
+                item.size = newSize;
+
+                if (stickerSizeSlider) stickerSizeSlider.value = Math.round(newSize);
+                if (stickerSizeVal) stickerSizeVal.innerText = Math.round(newSize) + '%';
+
+                drawFrame();
+            }
+            e.preventDefault();
+            return;
+        }
+
+        // Sticker/Emoji drag (Phase 4A)
+        if (state.isDraggingSticker && state.selectedStickerId !== null) {
+            const coords = getCanvasCoords(e);
+            const canvasW = state.canvas.width;
+            const canvasH = state.canvas.height;
+            const item = state.stickers.find(s => s.id === state.selectedStickerId);
+            if (item) {
+                let newX = (coords.x - state.dragStickerOffsetX) / canvasW;
+                let newY = (coords.y - state.dragStickerOffsetY) / canvasH;
+                newX = Math.max(0, Math.min(1, newX));
+                newY = Math.max(0, Math.min(1, newY));
+                item.x = newX;
+                item.y = newY;
+                drawFrame();
+            }
+            e.preventDefault();
+            return;
+        }
+
         // Text overlay drag (Phase 2C)
         if (state.isDraggingTextOverlay && state.selectedTextOverlayId !== null) {
             const coords = getCanvasCoords(e);
@@ -3451,6 +3617,10 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         }
         if (state.brollOverlays && state.brollOverlays.length > 0 && findBrollPipAt(idleCoords)) {
+            state.canvas.style.cursor = 'move';
+            return;
+        }
+        if (state.stickers && state.stickers.length > 0 && findStickerAt(idleCoords)) {
             state.canvas.style.cursor = 'move';
             return;
         }
@@ -3502,6 +3672,8 @@ document.addEventListener('DOMContentLoaded', () => {
         state.isDraggingTextOverlay = false;
         state.isDraggingBroll = false;
         state.isResizingBroll = false;
+        state.isDraggingSticker = false;
+        state.isResizingSticker = false;
     }
 
     // --- Video Crop Tool Bindings ---
@@ -4438,6 +4610,119 @@ document.addEventListener('DOMContentLoaded', () => {
     window.onBrollSelected = function(id) {
         renderBrollList();
         showBrollTimingFor(id);
+    };
+
+    // --- Sticker / Emoji Overlay Bindings (Phase 4A) ---
+    const emojiGrid = document.getElementById('emoji-grid');
+    const stickerListEl = document.getElementById('sticker-list');
+    const stickerControlsContainer = document.getElementById('sticker-controls-container');
+    const stickerSizeSlider = document.getElementById('sticker-size-slider');
+    const stickerSizeVal = document.getElementById('sticker-size-val');
+    const deleteStickerBtn = document.getElementById('delete-sticker-btn');
+
+    let stickerIdCounter = 1;
+
+    function addSticker(emoji) {
+        const newItem = {
+            id: stickerIdCounter++,
+            emoji: emoji,
+            x: 0.5,
+            y: 0.5,
+            size: 12 // percent of canvas width
+        };
+        state.stickers.push(newItem);
+        state.selectedStickerId = newItem.id;
+
+        renderStickerList();
+        showStickerControlsFor(newItem.id);
+        drawFrame();
+    }
+
+    if (emojiGrid) {
+        emojiGrid.querySelectorAll('.emoji-btn').forEach((btn) => {
+            btn.addEventListener('click', () => {
+                const emoji = btn.getAttribute('data-emoji');
+                if (emoji) addSticker(emoji);
+            });
+        });
+    }
+
+    function renderStickerList() {
+        if (!stickerListEl) return;
+        stickerListEl.innerHTML = '';
+        state.stickers.forEach((item) => {
+            const row = document.createElement('div');
+            row.className = 'sticker-list-item' + (item.id === state.selectedStickerId ? ' active' : '');
+            row.style.display = 'flex';
+            row.style.alignItems = 'center';
+            row.style.justifyContent = 'space-between';
+            row.style.padding = '8px 12px';
+            row.style.borderRadius = '6px';
+            row.style.marginBottom = '6px';
+            row.style.cursor = 'pointer';
+            row.style.background = item.id === state.selectedStickerId ? 'rgba(79, 70, 229, 0.12)' : 'rgba(255,255,255,0.04)';
+            row.style.border = item.id === state.selectedStickerId ? '1px solid var(--primary)' : '1px solid transparent';
+
+            const label = document.createElement('span');
+            label.innerText = item.emoji;
+            label.style.fontSize = '20px';
+
+            const sizeLabel = document.createElement('span');
+            sizeLabel.innerText = Math.round(item.size) + '%';
+            sizeLabel.style.fontSize = '11px';
+            sizeLabel.style.opacity = '0.6';
+
+            row.appendChild(label);
+            row.appendChild(sizeLabel);
+
+            row.addEventListener('click', () => {
+                state.selectedStickerId = item.id;
+                renderStickerList();
+                showStickerControlsFor(item.id);
+                drawFrame();
+            });
+
+            stickerListEl.appendChild(row);
+        });
+    }
+
+    function showStickerControlsFor(id) {
+        const item = state.stickers.find(s => s.id === id);
+        if (!item) {
+            if (stickerControlsContainer) stickerControlsContainer.style.display = 'none';
+            return;
+        }
+        if (stickerControlsContainer) stickerControlsContainer.style.display = 'block';
+        if (stickerSizeSlider) stickerSizeSlider.value = Math.round(item.size);
+        if (stickerSizeVal) stickerSizeVal.innerText = Math.round(item.size) + '%';
+    }
+
+    if (stickerSizeSlider) {
+        stickerSizeSlider.addEventListener('input', (e) => {
+            const item = state.stickers.find(s => s.id === state.selectedStickerId);
+            if (item) {
+                item.size = parseInt(e.target.value);
+                if (stickerSizeVal) stickerSizeVal.innerText = item.size + '%';
+                renderStickerList();
+                drawFrame();
+            }
+        });
+    }
+
+    if (deleteStickerBtn) {
+        deleteStickerBtn.addEventListener('click', () => {
+            state.stickers = state.stickers.filter(s => s.id !== state.selectedStickerId);
+            state.selectedStickerId = null;
+            renderStickerList();
+            showStickerControlsFor(null);
+            drawFrame();
+        });
+    }
+
+    // Allows canvas-click selection (from handlePointerDown) to sync the side-panel list & controls
+    window.onStickerSelected = function(id) {
+        renderStickerList();
+        showStickerControlsFor(id);
     };
 
     // --- Thumbnail Generator (Phase 5B) ---
