@@ -150,6 +150,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const videoDropzone = document.getElementById('video-dropzone');
     const logoDropzone = document.getElementById('logo-dropzone');
     const playPauseBtn = document.getElementById('play-pause-btn');
+    const splitClipBtn = document.getElementById('split-clip-btn');
     const trimStart = document.getElementById('trim-start');
     const trimEnd = document.getElementById('trim-end');
     const startVal = document.getElementById('start-time-val');
@@ -719,6 +720,59 @@ document.addEventListener('DOMContentLoaded', () => {
             playVideo();
         }
     });
+
+    if (splitClipBtn) {
+        splitClipBtn.addEventListener('click', () => {
+            const activeClip = state.clips.find(c => c.id === state.activeClipId);
+            if (!activeClip) return;
+
+            const currentTime = state.video.currentTime || 0;
+            if (currentTime <= activeClip.start + 0.15 || currentTime >= activeClip.end - 0.15) {
+                alert("ক্লিপটি প্লেহেড পজিশনে বিভক্ত করা সম্ভব নয় (একেবারে শুরুতে বা শেষে বিভক্ত করা যায় না)।");
+                return;
+            }
+
+            const clipIndex = state.clips.indexOf(activeClip);
+            const endOfFirstHalf = currentTime;
+            const startOfSecondHalf = currentTime;
+
+            const newClip = {
+                id: Date.now(),
+                file: activeClip.file,
+                url: activeClip.url,
+                name: activeClip.name,
+                duration: activeClip.duration,
+                start: startOfSecondHalf,
+                end: activeClip.end,
+                cropX: activeClip.cropX,
+                cropY: activeClip.cropY,
+                cropW: activeClip.cropW,
+                cropH: activeClip.cropH
+            };
+
+            // Pause if playing
+            if (state.isPlaying) {
+                pauseVideo();
+            }
+
+            // Update active clip end
+            activeClip.end = endOfFirstHalf;
+
+            // Insert newClip after activeClip
+            state.clips.splice(clipIndex + 1, 0, newClip);
+
+            // Re-render
+            renderClipTimeline();
+
+            // Set playhead to the split point
+            state.video.currentTime = currentTime;
+
+            // Switch focus to the first half
+            switchActiveClip(activeClip.id);
+            
+            console.log("Split clip at:", currentTime);
+        });
+    }
     
     function playVideo() {
         if (!state.duration) return;
