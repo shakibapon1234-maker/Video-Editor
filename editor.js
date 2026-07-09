@@ -1688,155 +1688,9 @@ document.addEventListener('DOMContentLoaded', () => {
             });
         }
 
-        // --- Step B: Draw Facebook Top & Bottom Banners ---
-        if (state.bannerStyle !== 'none') {
-            const bannerH = canvasH * (state.bannerHeightPercent / 100);
-            state.ctx.save();
-            state.ctx.fillStyle = state.bannerBgColor;
-            
-            // Draw Banner shapes
-            if (state.bannerStyle === 'top' || state.bannerStyle === 'both') {
-                state.ctx.fillRect(0, 0, canvasW, bannerH);
-            }
-            if (state.bannerStyle === 'bottom' || state.bannerStyle === 'both') {
-                state.ctx.fillRect(0, canvasH - bannerH, canvasW, bannerH);
-            }
-            
-            // Render Text on Banners
-            state.ctx.fillStyle = state.bannerTextColor;
-            state.ctx.textAlign = 'center';
-            state.ctx.textBaseline = 'middle';
-            state.ctx.font = `bold ${state.bannerFontSize}px "${state.bannerFontFamily}", "Plus Jakarta Sans", sans-serif`;
-            
-            const textPadding = 40;
-            const maxWidth = canvasW - textPadding;
-            const lineHeight = state.bannerFontSize * 1.3;
-            
-            if ((state.bannerStyle === 'top' || state.bannerStyle === 'both') && state.headerText) {
-                drawWrappedText(state.ctx, state.headerText, canvasW / 2, bannerH / 2, maxWidth, lineHeight);
-            }
-            
-            if ((state.bannerStyle === 'bottom' || state.bannerStyle === 'both') && state.footerText) {
-                drawWrappedText(state.ctx, state.footerText, canvasW / 2, canvasH - (bannerH / 2), maxWidth, lineHeight);
-            }
-            
-            state.ctx.restore();
-        }
-
-        // --- Step B2: Draw News Ticker (right-to-left scrolling headline strip) ---
-        if (state.tickerEnabled && (state.tickerText || state.tickerLabel)) {
-            const tickerH = Math.max(24, canvasH * (state.tickerHeightPercent / 100));
-            const tickerY = state.tickerPosition === 'top' ? 0 : canvasH - tickerH;
-
-            state.ctx.save();
-
-            // Background strip
-            state.ctx.fillStyle = state.tickerBgColor;
-            state.ctx.fillRect(0, tickerY, canvasW, tickerH);
-
-            // Optional fixed "BREAKING" style tag on the left edge, on top of the
-            // scrolling text so it never moves while the headline scrolls under it.
-            let labelW = 0;
-            if (state.tickerLabel) {
-                state.ctx.font = `bold ${Math.round(state.tickerFontSize * 0.95)}px "Hind Siliguri", "Plus Jakarta Sans", sans-serif`;
-                const metrics = state.ctx.measureText(state.tickerLabel);
-                labelW = metrics.width + tickerH * 0.7;
-                state.ctx.fillStyle = 'rgba(0,0,0,0.35)';
-                state.ctx.fillRect(0, tickerY, labelW, tickerH);
-                state.ctx.fillStyle = state.tickerTextColor;
-                state.ctx.textAlign = 'left';
-                state.ctx.textBaseline = 'middle';
-                state.ctx.fillText(state.tickerLabel, tickerH * 0.35, tickerY + tickerH / 2);
-            }
-
-            // Scrolling headline text, clipped to the remaining strip area so it
-            // never spills over the fixed label. Time-driven (not frame-driven),
-            // so scroll speed stays identical in preview and in exported video.
-            if (state.tickerText) {
-                state.ctx.beginPath();
-                state.ctx.rect(labelW, tickerY, canvasW - labelW, tickerH);
-                state.ctx.clip();
-
-                state.ctx.font = `600 ${state.tickerFontSize}px "Hind Siliguri", "Plus Jakarta Sans", sans-serif`;
-                state.ctx.fillStyle = state.tickerTextColor;
-                state.ctx.textAlign = 'left';
-                state.ctx.textBaseline = 'middle';
-
-                const textW = state.ctx.measureText(state.tickerText).width;
-                const gap = Math.max(60, canvasW * 0.15); // blank space between repeated loops
-                const cycleW = textW + gap;
-                const speed = Math.max(10, state.tickerSpeed || 90);
-                const elapsed = state.currentTime || 0;
-                // Right-to-left continuous scroll: one copy starts just off the right
-                // edge and marches left; once it's fully passed, the next copy (spaced
-                // by cycleW) is already lined up behind it, so the loop is seamless.
-                const offset = (elapsed * speed) % cycleW;
-                let x = canvasW - offset;
-                while (x + textW > labelW) {
-                    if (x < canvasW) {
-                        state.ctx.fillText(state.tickerText, x, tickerY + tickerH / 2);
-                    }
-                    x -= cycleW;
-                }
-            }
-
-            state.ctx.restore();
-        }
-
-        // --- Step C: Draw Watermark Logo ---
-        if (state.logoImg) {
-            const logoW = canvasW * (state.logoSize / 100);
-            const logoH = logoW * (state.logoImg.naturalHeight / state.logoImg.naturalWidth);
-            
-            // Convert normalized top-left coordinates to absolute canvas pixels (keeps anchor steady on resize)
-            const x = state.logoX * canvasW;
-            const y = state.logoY * canvasH;
-            
-            state.ctx.save();
-            state.ctx.globalAlpha = state.logoOpacity;
-            state.ctx.drawImage(state.logoImg, x, y, logoW, logoH);
-            
-            // Draw visual resizing handle / bounding outline in setup step 2
-            if (state.currentStep === 2) {
-                state.ctx.strokeStyle = 'rgba(79, 70, 229, 0.8)';
-                state.ctx.lineWidth = 2;
-                state.ctx.strokeRect(x, y, logoW, logoH);
-                
-                // Draw bottom right resize anchor handle
-                state.ctx.fillStyle = '#ffffff';
-                state.ctx.fillRect(x + logoW - 6, y + logoH - 6, 12, 12);
-                state.ctx.strokeStyle = '#4f46e5';
-                state.ctx.strokeRect(x + logoW - 6, y + logoH - 6, 12, 12);
-            }
-            state.ctx.restore();
-        }
-        
-        // --- Step D: Draw Visual Progress Bar ---
-        if (state.enableProgressBar) {
-            const progress = state.currentTime / state.duration;
-            const barThickness = state.progressBarHeight;
-            
-            state.ctx.save();
-            state.ctx.fillStyle = state.progressBarColor;
-            
-            switch (state.progressBarPosition) {
-                case 'top-canvas':
-                    state.ctx.fillRect(0, 0, canvasW * progress, barThickness);
-                    break;
-                case 'bottom-canvas':
-                    state.ctx.fillRect(0, canvasH - barThickness, canvasW * progress, barThickness);
-                    break;
-                case 'top-video':
-                    state.ctx.fillRect(drawX, drawY, drawW * progress, barThickness);
-                    break;
-                case 'bottom-video':
-                    state.ctx.fillRect(drawX, drawY + drawH - barThickness, drawW * progress, barThickness);
-                    break;
-            }
-            state.ctx.restore();
-        }
-
         // --- Step E: Draw B-roll / Topic Image Overlays (Phase 5D, unified in v2.5) ---
+        // NOTE: Steps B/B2/C/D (banners, ticker, logo, progress bar) have been moved
+        // to render AFTER this step so they always appear on top of fullscreen B-roll images.
         // Fullscreen and PiP used to run two separate animation engines with two
         // separate dropdown option lists (e.g. "Wipe Reveal" only existed for
         // Fullscreen, "Spin Pop" only for PiP). They're unified here: every style
@@ -2487,6 +2341,147 @@ document.addEventListener('DOMContentLoaded', () => {
                     state.ctx.restore();
                 }
             });
+        }
+
+        // --- Step B: Draw Facebook Top & Bottom Banners ---
+        // (Rendered after B-roll so banners always appear on top of fullscreen images)
+        if (state.bannerStyle !== 'none') {
+            const bannerH = canvasH * (state.bannerHeightPercent / 100);
+            state.ctx.save();
+            state.ctx.fillStyle = state.bannerBgColor;
+            
+            // Draw Banner shapes
+            if (state.bannerStyle === 'top' || state.bannerStyle === 'both') {
+                state.ctx.fillRect(0, 0, canvasW, bannerH);
+            }
+            if (state.bannerStyle === 'bottom' || state.bannerStyle === 'both') {
+                state.ctx.fillRect(0, canvasH - bannerH, canvasW, bannerH);
+            }
+            
+            // Render Text on Banners
+            state.ctx.fillStyle = state.bannerTextColor;
+            state.ctx.textAlign = 'center';
+            state.ctx.textBaseline = 'middle';
+            state.ctx.font = `bold ${state.bannerFontSize}px "${state.bannerFontFamily}", "Plus Jakarta Sans", sans-serif`;
+            
+            const textPadding = 40;
+            const maxWidth = canvasW - textPadding;
+            const lineHeight = state.bannerFontSize * 1.3;
+            
+            if ((state.bannerStyle === 'top' || state.bannerStyle === 'both') && state.headerText) {
+                drawWrappedText(state.ctx, state.headerText, canvasW / 2, bannerH / 2, maxWidth, lineHeight);
+            }
+            
+            if ((state.bannerStyle === 'bottom' || state.bannerStyle === 'both') && state.footerText) {
+                drawWrappedText(state.ctx, state.footerText, canvasW / 2, canvasH - (bannerH / 2), maxWidth, lineHeight);
+            }
+            
+            state.ctx.restore();
+        }
+
+        // --- Step B2: Draw News Ticker (right-to-left scrolling headline strip) ---
+        // (Rendered after B-roll so ticker always appears on top of fullscreen images)
+        if (state.tickerEnabled && (state.tickerText || state.tickerLabel)) {
+            const tickerH = Math.max(24, canvasH * (state.tickerHeightPercent / 100));
+            const tickerY = state.tickerPosition === 'top' ? 0 : canvasH - tickerH;
+
+            state.ctx.save();
+
+            // Background strip
+            state.ctx.fillStyle = state.tickerBgColor;
+            state.ctx.fillRect(0, tickerY, canvasW, tickerH);
+
+            // Optional fixed "BREAKING" style tag on the left edge
+            let labelW = 0;
+            if (state.tickerLabel) {
+                state.ctx.font = `bold ${Math.round(state.tickerFontSize * 0.95)}px "Hind Siliguri", "Plus Jakarta Sans", sans-serif`;
+                const metrics = state.ctx.measureText(state.tickerLabel);
+                labelW = metrics.width + tickerH * 0.7;
+                state.ctx.fillStyle = 'rgba(0,0,0,0.35)';
+                state.ctx.fillRect(0, tickerY, labelW, tickerH);
+                state.ctx.fillStyle = state.tickerTextColor;
+                state.ctx.textAlign = 'left';
+                state.ctx.textBaseline = 'middle';
+                state.ctx.fillText(state.tickerLabel, tickerH * 0.35, tickerY + tickerH / 2);
+            }
+
+            if (state.tickerText) {
+                state.ctx.beginPath();
+                state.ctx.rect(labelW, tickerY, canvasW - labelW, tickerH);
+                state.ctx.clip();
+
+                state.ctx.font = `600 ${state.tickerFontSize}px "Hind Siliguri", "Plus Jakarta Sans", sans-serif`;
+                state.ctx.fillStyle = state.tickerTextColor;
+                state.ctx.textAlign = 'left';
+                state.ctx.textBaseline = 'middle';
+
+                const textW = state.ctx.measureText(state.tickerText).width;
+                const gap = Math.max(60, canvasW * 0.15);
+                const cycleW = textW + gap;
+                const speed = Math.max(10, state.tickerSpeed || 90);
+                const elapsed = state.currentTime || 0;
+                const offset = (elapsed * speed) % cycleW;
+                let x = canvasW - offset;
+                while (x + textW > labelW) {
+                    if (x < canvasW) {
+                        state.ctx.fillText(state.tickerText, x, tickerY + tickerH / 2);
+                    }
+                    x -= cycleW;
+                }
+            }
+
+            state.ctx.restore();
+        }
+
+        // --- Step C: Draw Watermark Logo ---
+        // (Rendered after B-roll so logo always appears on top of fullscreen images)
+        if (state.logoImg) {
+            const logoW = canvasW * (state.logoSize / 100);
+            const logoH = logoW * (state.logoImg.naturalHeight / state.logoImg.naturalWidth);
+            
+            const x = state.logoX * canvasW;
+            const y = state.logoY * canvasH;
+            
+            state.ctx.save();
+            state.ctx.globalAlpha = state.logoOpacity;
+            state.ctx.drawImage(state.logoImg, x, y, logoW, logoH);
+            
+            if (state.currentStep === 2) {
+                state.ctx.strokeStyle = 'rgba(79, 70, 229, 0.8)';
+                state.ctx.lineWidth = 2;
+                state.ctx.strokeRect(x, y, logoW, logoH);
+                state.ctx.fillStyle = '#ffffff';
+                state.ctx.fillRect(x + logoW - 6, y + logoH - 6, 12, 12);
+                state.ctx.strokeStyle = '#4f46e5';
+                state.ctx.strokeRect(x + logoW - 6, y + logoH - 6, 12, 12);
+            }
+            state.ctx.restore();
+        }
+        
+        // --- Step D: Draw Visual Progress Bar ---
+        // (Rendered after B-roll so progress bar always appears on top of fullscreen images)
+        if (state.enableProgressBar) {
+            const progress = state.currentTime / state.duration;
+            const barThickness = state.progressBarHeight;
+            
+            state.ctx.save();
+            state.ctx.fillStyle = state.progressBarColor;
+            
+            switch (state.progressBarPosition) {
+                case 'top-canvas':
+                    state.ctx.fillRect(0, 0, canvasW * progress, barThickness);
+                    break;
+                case 'bottom-canvas':
+                    state.ctx.fillRect(0, canvasH - barThickness, canvasW * progress, barThickness);
+                    break;
+                case 'top-video':
+                    state.ctx.fillRect(drawX, drawY, drawW * progress, barThickness);
+                    break;
+                case 'bottom-video':
+                    state.ctx.fillRect(drawX, drawY + drawH - barThickness, drawW * progress, barThickness);
+                    break;
+            }
+            state.ctx.restore();
         }
 
         // --- Step F: Draw Text Overlays (Phase 2C) ---

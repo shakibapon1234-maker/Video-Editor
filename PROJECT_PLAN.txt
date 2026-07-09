@@ -535,6 +535,33 @@ PHASE 5 - FACEBOOK/SOCIAL MEDIA SPECIFIC
     রাখে, তাই আগের এক্সপোর্ট করা প্রজেক্টে কোনো পার্থক্য আসবে না
 
 
+v2.6 - Render Layer Order Fix (সম্পন্ন)
+-----------------------------------------
+
+Bug 10 - Fullscreen B-roll ছবি Banner/Ticker/Logo ঢেকে দিত (editor.js)
+  সমস্যা : drawFrame()-এর render order ছিল:
+             (1) ভিডিও ফ্রেম
+             (2) Banners + Ticker   ← আগে আঁকা হতো
+             (3) Logo + Progress bar ← আগে আঁকা হতো
+             (4) B-roll overlays    ← পরে আঁকা হতো, তাই ঢেকে দিত
+             (5) Text overlays
+           ফলে Fullscreen B-roll image চালু থাকলে সেটা Banner,
+           News Ticker, Logo watermark, এবং Progress bar-এর উপর
+           পেইন্ট করে সব ঢেকে দিত — এই UI element গুলো দেখাই যেত না।
+  সমাধান: Steps B (banners), B2 (ticker), C (logo), D (progress bar)
+           কে B-roll render block-এর পরে সরিয়ে দেওয়া হয়েছে।
+           নতুন order:
+             (1) ভিডিও ফ্রেম
+             (2) Blur regions
+             (3) B-roll overlays (fullscreen/PiP)
+             (4) Banners + Ticker  ← এখন সবার উপরে
+             (5) Logo + Progress bar ← এখন সবার উপরে
+             (6) Text overlays
+             (7) Subtitles
+           এখন Fullscreen B-roll সক্রিয় থাকলেও Banner, Ticker, Logo
+           এবং Progress bar সবসময় দৃশ্যমান থাকে।
+
+
 PHASE 6 - EXPORT উন্নতি
 ==========================
 
