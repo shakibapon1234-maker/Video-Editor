@@ -343,6 +343,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const noiseLevelContainer = document.getElementById('noise-level-container');
     const noiseGateSlider = document.getElementById('noise-gate-threshold');
     const noiseGateVal = document.getElementById('noise-gate-val');
+    const aiDenoiseToggle = document.getElementById('ai-denoise-toggle');
+    const aiDenoiseStatus = document.getElementById('ai-denoise-status');
     
     const micStatus = document.getElementById('mic-status');
     const recordVoiceBtn = document.getElementById('record-voice-btn');
@@ -582,6 +584,12 @@ document.addEventListener('DOMContentLoaded', () => {
     let lowpassNode = null;
     let noiseGateGainNode = null;
     let noiseGateAnalyser = null;
+    // Hysteresis state prevents the gate from rapidly fluttering open/closed
+    // when a voice sits close to the selected threshold.
+    let noiseGateIsOpen = true;
+    let aiDenoiseNode = null;
+    let aiDenoiseWorkletLoaded = false;
+    let aiDenoiseLoadPromise = null;
     let compressorNode = null;
     let makeupGainNode = null; // Auto-compensates volume lost to the noise-cancel compressor
     let speakerMuteGain = null; // Isolated speaker on/off switch that never touches the export tap
@@ -674,6 +682,91 @@ document.addEventListener('DOMContentLoaded', () => {
     
     // Expose Node references to window
     window.videoGainNode = null;
+
+    function setAIDenoiseStatus(message, isError) {
+        if (!aiDenoiseStatus) return;
+        aiDenoiseStatus.textContent = message;
+        aiDenoiseStatus.style.color = isError ? '#fca5a5' : '';
+    }
+
+    // The AI node sits between the speech filter and the existing gate. Keeping
+    // the gate after RNNoise removes any residual room noise in pauses, while the
+    // neural model handles noise overlapping the spoken frequency range.
+    function routeAIDenoise(enabled) {
+        if (!lowpassNode || !noiseGateGainNode || !noiseGateAnalyser) return;
+        try { lowpassNode.disconnect(); } catch (e) {}
+        try { if (aiDenoiseNode) aiDenoiseNode.disconnect(); } catch (e) {}
+
+        if (enabled && aiDenoiseNode) {
+            lowpassNode.connect(aiDenoiseNode);
+            aiDenoiseNode.connect(noiseGateGainNode);
+            aiDenoiseNode.connect(noiseGateAnalyser);
+        } else {
+            lowpassNode.connect(noiseGateGainNode);
+            lowpassNode.connect(noiseGateAnalyser);
+        }
+    }
+
+    async function setAIDenoiseEnabled(enabled) {
+        if (!enabled) {
+            state.isAiDenoiseActive = false;
+            routeAIDenoise(false);
+            if (aiDenoiseToggle) aiDenoiseToggle.checked = false;
+            setAIDenoiseStatus('AI denoise বন্ধ। সাধারণ noise filter এখনো ব্যবহার করতে পারবেন।');
+            return;
+        }
+
+        if (!audioCtx || !audioCtx.audioWorklet || !window.WebAssembly) {
+            state.isAiDenoiseActive = false;
+            if (aiDenoiseToggle) aiDenoiseToggle.checked = false;
+            setAIDenoiseStatus('এই browser-এ AI denoise-এর জন্য প্রয়োজনীয় AudioWorklet/WebAssembly নেই।', true);
+            return;
+        }
+        if (audioCtx.sampleRate !== 48000) {
+            state.isAiDenoiseActive = false;
+            if (aiDenoiseToggle) aiDenoiseToggle.checked = false;
+            setAIDenoiseStatus('AI denoise বর্তমানে 48 kHz audio device-এ কাজ করে। সাধারণ noise filter চালু আছে।', true);
+            return;
+        }
+
+        try {
+            if (!aiDenoiseNode) {
+                setAIDenoiseStatus('Local AI model প্রস্তুত হচ্ছে…');
+                if (!aiDenoiseWorkletLoaded) {
+                    aiDenoiseLoadPromise = aiDenoiseLoadPromise || audioCtx.audioWorklet.addModule('vendor/rnnoise/ai-denoise-worklet.js');
+                    await aiDenoiseLoadPromise;
+                    aiDenoiseWorkletLoaded = true;
+                }
+                // The user may have turned the option off while its local model
+                // was loading; do not reconnect it after that explicit choice.
+                if (!aiDenoiseToggle || !aiDenoiseToggle.checked) return;
+                aiDenoiseNode = new AudioWorkletNode(audioCtx, 'ai-denoise-processor', {
+                    channelCount: 2,
+                    channelCountMode: 'explicit',
+                    outputChannelCount: [2]
+                });
+                aiDenoiseNode.port.onmessage = (event) => {
+                    if (event.data && event.data.type === 'error') {
+                        console.error('AI denoise worklet error:', event.data.message);
+                        state.isAiDenoiseActive = false;
+                        routeAIDenoise(false);
+                        if (aiDenoiseToggle) aiDenoiseToggle.checked = false;
+                        setAIDenoiseStatus('AI denoise চালু করা যায়নি; সাধারণ filter ব্যবহার হচ্ছে।', true);
+                    }
+                };
+            }
+            routeAIDenoise(true);
+            state.isAiDenoiseActive = true;
+            if (aiDenoiseToggle) aiDenoiseToggle.checked = true;
+            setAIDenoiseStatus('AI denoise চালু — audio আপনার browser-এর মধ্যেই process হচ্ছে।');
+        } catch (error) {
+            console.error('AI denoise setup failed:', error);
+            state.isAiDenoiseActive = false;
+            routeAIDenoise(false);
+            if (aiDenoiseToggle) aiDenoiseToggle.checked = false;
+            setAIDenoiseStatus((error && error.message) || 'AI denoise চালু করা যায়নি; সাধারণ filter ব্যবহার হচ্ছে।', true);
+        }
+    }
     
     // --- 1. Initialize Audio Context & DSP Chain ---
     window.initializeAudioSource = function() {
@@ -714,13 +807,15 @@ document.addEventListener('DOMContentLoaded', () => {
             // Default bypass: 22000Hz (doesn't filter speech)
             lowpassNode.frequency.setValueAtTime(22000, 0);
             
-            // Compressor to act as automatic volume stabilizer & peak limiter
+            // Compressor acts as a gentle voice leveler and peak limiter. The
+            // gate below is responsible for reducing silence; using a very high
+            // compressor ratio here would otherwise make noise more noticeable.
             compressorNode = audioCtx.createDynamicsCompressor();
-            compressorNode.threshold.setValueAtTime(-24, 0);
-            compressorNode.knee.setValueAtTime(30, 0);
-            compressorNode.ratio.setValueAtTime(12, 0);
-            compressorNode.attack.setValueAtTime(0.003, 0);
-            compressorNode.release.setValueAtTime(0.25, 0);
+            compressorNode.threshold.setValueAtTime(-20, 0);
+            compressorNode.knee.setValueAtTime(18, 0);
+            compressorNode.ratio.setValueAtTime(3, 0);
+            compressorNode.attack.setValueAtTime(0.008, 0);
+            compressorNode.release.setValueAtTime(0.18, 0);
             
             // Makeup gain: automatically restores the loudness the compressor
             // takes away when Noise Cancellation is on. Without this, a low
@@ -782,18 +877,24 @@ document.addEventListener('DOMContentLoaded', () => {
                         const rms = Math.sqrt(sum / array.length);
                         const db = rms > 0 ? 20 * Math.log10(rms) : -99;
                         
-                        // If below threshold, attenuate hard (soft-muted, not fully to
-                        // zero, so it doesn't sound like a hard cut). Otherwise pass at 1.0.
-                        // Deeper than before (was 0.05 / -26dB) because at 0.05 a lot of
-                        // steady background noise (fan/AC/traffic) was still clearly
-                        // audible between words.
-                        const targetGateGain = (db < state.noiseGateThreshold) ? 0.02 : 1.0;
-                        // Fast attack time (10ms) to avoid clipping speech starts; slightly
-                        // slower release (180ms) than the attack so trailing consonants
-                        // ("s", "t", "sh" sounds) aren't chopped off as the gate closes.
-                        const timeConstant = (targetGateGain === 1.0) ? 0.01 : 0.18;
+                        // Use a 5 dB hysteresis window: it only opens once speech is
+                        // clearly above the threshold, but stays open until the level
+                        // has genuinely fallen below it. This removes gate chatter and
+                        // protects quiet syllables at the end of words.
+                        const closeAt = state.noiseGateThreshold;
+                        const openAt = closeAt + 5;
+                        if (noiseGateIsOpen && db < closeAt) noiseGateIsOpen = false;
+                        else if (!noiseGateIsOpen && db > openAt) noiseGateIsOpen = true;
+
+                        // Keep a small residual signal rather than hard-zeroing it;
+                        // -34 dB is deep enough to hide room/fan noise in pauses while
+                        // avoiding audible digital-looking cuts. Smooth ramps preserve
+                        // consonant onsets and word tails.
+                        const targetGateGain = noiseGateIsOpen ? 1.0 : 0.02;
+                        const timeConstant = noiseGateIsOpen ? 0.012 : 0.16;
                         noiseGateGainNode.gain.setTargetAtTime(targetGateGain, audioCtx.currentTime, timeConstant);
                     } else if (noiseGateGainNode) {
+                        noiseGateIsOpen = true;
                         noiseGateGainNode.gain.setTargetAtTime(1.0, audioCtx.currentTime, 0.05);
                     }
 
@@ -801,9 +902,9 @@ document.addEventListener('DOMContentLoaded', () => {
                     if (compressorNode && makeupGainNode) {
                         if (state.isNoiseCancelActive) {
                             const reductionDb = compressorNode.reduction || 0; // negative dB
-                            // Cap compensation at +14dB (~5x) so we don't also blast
+                            // Cap compensation at +9dB so we don't also blast
                             // residual background noise back up to full volume.
-                            const compensationDb = Math.min(14, -reductionDb);
+                            const compensationDb = Math.min(9, -reductionDb);
                             const targetGain = Math.pow(10, compensationDb / 20);
                             makeupGainNode.gain.setTargetAtTime(targetGain, audioCtx.currentTime, 0.08);
                         } else {
@@ -848,6 +949,12 @@ document.addEventListener('DOMContentLoaded', () => {
             
             // Try requesting Mic access early for step 3 prep
             requestMicrophoneAccess();
+
+            // A restored project may have its enhancement settings ready before
+            // the media element creates this audio graph. Apply them now that the
+            // graph exists instead of silently dropping the AI preference.
+            applyNoiseCancelSettings();
+            if (state.isAiDenoiseActive) setAIDenoiseEnabled(true);
         } catch (e) {
             console.error("Failed to initialize Web Audio API", e);
         }
@@ -874,17 +981,20 @@ document.addEventListener('DOMContentLoaded', () => {
     });
     
     // --- 2. DSP Settings Changes (Noise Cancel) ---
-    noiseCancelToggle.addEventListener('change', (e) => {
-        state.isNoiseCancelActive = e.target.checked;
+    function applyNoiseCancelSettings() {
+        if (!audioCtx || !highpassNode || !lowpassNode || !compressorNode) return;
         
         if (state.isNoiseCancelActive) {
-            // Apply human speech optimized bandpass filters (cuts sub-hum and static hiss)
-            highpassNode.frequency.setValueAtTime(150, audioCtx.currentTime); // Cut frequencies below 150Hz
-            lowpassNode.frequency.setValueAtTime(7000, audioCtx.currentTime); // Cut frequencies above 7000Hz
+            // Speech-focused bandpass: removes low fan/handling rumble and the
+            // highest hiss while preserving the body and clarity of most voices.
+            highpassNode.frequency.setValueAtTime(110, audioCtx.currentTime);
+            lowpassNode.frequency.setValueAtTime(8000, audioCtx.currentTime);
             
-            // Apply heavier compression threshold to act as a soft noise gate
-            compressorNode.threshold.setValueAtTime(state.noiseGateThreshold, audioCtx.currentTime);
-            compressorNode.ratio.setValueAtTime(16, audioCtx.currentTime);
+            // The dedicated gate uses the user-selected threshold. Keep the
+            // compressor moderate so it levels speech instead of crushing it.
+            compressorNode.threshold.setValueAtTime(-20, audioCtx.currentTime);
+            compressorNode.ratio.setValueAtTime(3, audioCtx.currentTime);
+            noiseGateIsOpen = true;
             
             noiseLevelContainer.style.display = 'block';
         } else {
@@ -893,21 +1003,36 @@ document.addEventListener('DOMContentLoaded', () => {
             lowpassNode.frequency.setValueAtTime(22000, audioCtx.currentTime);
             
             // Reset compressor to mild settings
-            compressorNode.threshold.setValueAtTime(-24, audioCtx.currentTime);
-            compressorNode.ratio.setValueAtTime(12, audioCtx.currentTime);
+            compressorNode.threshold.setValueAtTime(-20, audioCtx.currentTime);
+            compressorNode.ratio.setValueAtTime(3, audioCtx.currentTime);
+            noiseGateIsOpen = true;
+            if (state.isAiDenoiseActive) setAIDenoiseEnabled(false);
             
             noiseLevelContainer.style.display = 'none';
         }
+    }
+
+    noiseCancelToggle.addEventListener('change', (e) => {
+        state.isNoiseCancelActive = e.target.checked;
+        applyNoiseCancelSettings();
     });
     
     noiseGateSlider.addEventListener('input', (e) => {
         state.noiseGateThreshold = parseInt(e.target.value);
         noiseGateVal.innerText = state.noiseGateThreshold + ' dB';
         
-        if (state.isNoiseCancelActive) {
-            compressorNode.threshold.setValueAtTime(state.noiseGateThreshold, audioCtx.currentTime);
-        }
     });
+
+    if (aiDenoiseToggle) {
+        aiDenoiseToggle.addEventListener('change', async (e) => {
+            if (e.target.checked && !state.isNoiseCancelActive) {
+                state.isNoiseCancelActive = true;
+                if (noiseCancelToggle) noiseCancelToggle.checked = true;
+                applyNoiseCancelSettings();
+            }
+            await setAIDenoiseEnabled(e.target.checked);
+        });
+    }
     
     // --- 3. Microphone Access Check ---
     async function requestMicrophoneAccess() {
@@ -1641,6 +1766,13 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         if (noiseGateVal) {
             noiseGateVal.innerText = state.noiseGateThreshold + ' dB';
+        }
+        if (aiDenoiseToggle) {
+            aiDenoiseToggle.checked = !!state.isAiDenoiseActive;
+        }
+        applyNoiseCancelSettings();
+        if (state.isAiDenoiseActive && audioCtx) {
+            setAIDenoiseEnabled(true);
         }
         if (voiceoverVolumeSlider) {
             voiceoverVolumeSlider.value = state.voiceoverVolume * 100;

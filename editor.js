@@ -54,6 +54,7 @@ window.VideoEditor = {
     applyVoiceChangerToVideo: false, // when true, voiceoverProfile is also applied to the original video's own audio track
     isNoiseCancelActive: false,
     noiseGateThreshold: -38,
+    isAiDenoiseActive: false,
 
     // Background Music state (Phase 3A, upgraded to multi-track timeline in v2.3)
     // Each track: { id, blob, url, name, duration, volume, startSec, endSec, loopMode }
@@ -5994,6 +5995,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     applyVoiceChangerToVideo: state.applyVoiceChangerToVideo,
                     isNoiseCancelActive: state.isNoiseCancelActive,
                     noiseGateThreshold: state.noiseGateThreshold,
+                    isAiDenoiseActive: state.isAiDenoiseActive,
                     bgMusicDuckingEnabled: state.bgMusicDuckingEnabled,
                     bannerStyle: state.bannerStyle,
                     headerText: state.headerText,
@@ -6424,6 +6426,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     applyVoiceChangerToVideo: state.applyVoiceChangerToVideo,
                     isNoiseCancelActive: state.isNoiseCancelActive,
                     noiseGateThreshold: state.noiseGateThreshold,
+                    isAiDenoiseActive: state.isAiDenoiseActive,
                     bgMusicDuckingEnabled: state.bgMusicDuckingEnabled,
                     bannerStyle: state.bannerStyle,
                     headerText: state.headerText,

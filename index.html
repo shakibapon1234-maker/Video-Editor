@@ -1105,7 +1105,7 @@
                                 <div class="toggle-control">
                                     <div class="toggle-label">
                                         <h4>Noise Cancellation (নয়েজ ফিল্টার)</h4>
-                                        <p>Reduce fan hums and low frequency static hiss</p>
+                                        <p>ফ্রি local voice cleanup: fan hum, room hiss ও নীরব অংশের noise কমায়। কথার সাথে মিশে থাকা traffic/fan noise পুরো সরাতে ভবিষ্যতে AI denoise লাগবে।</p>
                                     </div>
                                     <label class="switch">
                                         <input type="checkbox" id="noise-cancel-toggle">
@@ -1113,11 +1113,21 @@
                                     </label>
                                 </div>
                                 <div class="control-group mt-3" id="noise-level-container" style="display: none;">
-                                    <label>Noise Suppression Power</label>
+                                    <label>Noise Gate Threshold <span class="help-text">(কম হলে নরম কথা বেশি থাকে; বেশি হলে বিরতির noise বেশি কাটে)</span></label>
                                     <div class="slider-val-container">
                                         <input type="range" id="noise-gate-threshold" min="-80" max="-20" value="-38" step="1">
                                         <span id="noise-gate-val">-38 dB</span>
                                     </div>
+                                </div>
+                                <div class="toggle-control mt-3" id="ai-denoise-control">
+                                    <div class="toggle-label">
+                                        <h4>AI Voice Denoise <span class="help-text">(Free · Local Beta)</span></h4>
+                                        <p id="ai-denoise-status">কথার সাথে মিশে থাকা fan/traffic noise কমাতে local AI ব্যবহার করে। প্রথমবার model load হতে কিছু সময় লাগতে পারে।</p>
+                                    </div>
+                                    <label class="switch">
+                                        <input type="checkbox" id="ai-denoise-toggle">
+                                        <span class="slider round"></span>
+                                    </label>
                                 </div>
                             </div>
                         </div>
