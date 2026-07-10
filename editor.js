@@ -158,6 +158,22 @@ window.VideoEditor = {
     subtitles: [],
     isSubtitleRecognitionActive: false,
     subtitlesEnabled: true,
+    // Subtitle caption styling (driven by the "Bangla Caption Style" preset)
+    subtitleStyle: {
+        fontFamily: '"Hind Siliguri", "Plus Jakarta Sans", sans-serif',
+        fontSizePct: 0.045,   // caption height as a fraction of canvas height
+        fontWeight: 600,
+        color: '#ffffff',
+        outlineColor: '#000000',
+        outlineWidth: 3,      // px (at 1080p-ish canvas)
+        bgPillEnabled: true,
+        bgPillColor: 'rgba(0, 0, 0, 0.6)',
+        bgPillRadius: 8,     // px; large value => pill shape
+        position: 'bottom',   // 'bottom' | 'top'
+        positionPct: 0.1,     // distance from the chosen edge, fraction of canvas height
+        highlightEnabled: false, // word-by-word TikTok-style highlight
+        highlightColor: '#ffe600'
+    },
 
     // Intro / Outro Templates (Phase 5C)
     introEnabled: false,
@@ -3059,39 +3075,110 @@ document.addEventListener('DOMContentLoaded', () => {
         if (state.subtitlesEnabled && state.subtitles && state.subtitles.length > 0) {
             const currentTime = state.currentTime;
             const activeSub = state.subtitles.find(s => currentTime >= s.startSec && currentTime <= s.endSec);
-            if (activeSub) {
-                const fontSize = Math.max(16, Math.round(canvasH * 0.045));
-                const subY = canvasH - (canvasH * 0.1);
-                const maxWidth = canvasW * 0.85;
+            if (activeSub && activeSub.text) {
+                const st = state.subtitleStyle || {};
+                const canvasW = state.canvas.width;
+                const canvasH = state.canvas.height;
+                const fontSize = Math.max(14, Math.round(canvasH * (st.fontSizePct || 0.045)));
+                const fontFamily = st.fontFamily || '"Hind Siliguri", "Plus Jakarta Sans", sans-serif';
+                const fontWeight = st.fontWeight || 600;
+                const maxWidth = canvasW * 0.86;
+                const lineHeight = fontSize * 1.35;
 
-                state.ctx.save();
-                state.ctx.font = `600 ${fontSize}px "Hind Siliguri", "Plus Jakarta Sans", sans-serif`;
-                state.ctx.textAlign = 'center';
-                state.ctx.textBaseline = 'middle';
+                const ctx = state.ctx;
+                ctx.save();
+                ctx.font = `${fontWeight} ${fontSize}px ${fontFamily}`;
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                ctx.lineJoin = 'round';
 
-                // Background pill behind subtitle text for readability
-                const metrics = state.ctx.measureText(activeSub.text);
-                const padX = 18;
-                const padY = 10;
-                const boxW = Math.min(maxWidth, metrics.width + padX * 2);
-                const boxH = fontSize + padY * 2;
+                // Word-by-word progress for TikTok-style caption highlight.
+                const words = activeSub.text.split(/\s+/).filter(Boolean);
+                const span = Math.max(0.001, activeSub.endSec - activeSub.startSec);
+                const progress = Math.min(1, Math.max(0, (currentTime - activeSub.startSec) / span));
+                const highlightEnabled = !!st.highlightEnabled && words.length > 1;
+                const activeWordIndex = Math.min(words.length - 1, Math.floor(progress * words.length));
 
-                state.ctx.fillStyle = 'rgba(0, 0, 0, 0.6)';
-                state.ctx.beginPath();
-                const rx = canvasW / 2 - boxW / 2;
-                const ry = subY - boxH / 2;
-                const radius = 8;
-                state.ctx.moveTo(rx + radius, ry);
-                state.ctx.arcTo(rx + boxW, ry, rx + boxW, ry + boxH, radius);
-                state.ctx.arcTo(rx + boxW, ry + boxH, rx, ry + boxH, radius);
-                state.ctx.arcTo(rx, ry + boxH, rx, ry, radius);
-                state.ctx.arcTo(rx, ry, rx + boxW, ry, radius);
-                state.ctx.closePath();
-                state.ctx.fill();
+                // Greedy word-wrap into lines bounded by maxWidth.
+                const lines = [];
+                let curLine = [];
+                let curWidth = 0;
+                for (let i = 0; i < words.length; i++) {
+                    const w = words[i];
+                    const ww = ctx.measureText(w + ' ').width;
+                    if (curLine.length > 0 && curWidth + ww > maxWidth) {
+                        lines.push(curLine);
+                        curLine = [w];
+                        curWidth = ww;
+                    } else {
+                        curLine.push(w);
+                        curWidth += ww;
+                    }
+                }
+                if (curLine.length) lines.push(curLine);
 
-                state.ctx.fillStyle = '#ffffff';
-                state.ctx.fillText(activeSub.text, canvasW / 2, subY, maxWidth - padX * 2);
-                state.ctx.restore();
+                // Block metrics (for the background pill).
+                let blockW = 0;
+                lines.forEach(line => {
+                    const w = ctx.measureText(line.join(' ')).width;
+                    if (w > blockW) blockW = w;
+                });
+                const blockH = lines.length * lineHeight;
+                const padX = Math.max(14, fontSize * 0.4);
+                const padY = Math.max(8, fontSize * 0.25);
+
+                const posFrac = (st.positionPct != null) ? st.positionPct : 0.1;
+                const blockCenterY = (st.position === 'top')
+                    ? canvasH * posFrac + blockH / 2
+                    : canvasH - canvasH * posFrac - blockH / 2;
+                const centerX = canvasW / 2;
+
+                // Background pill behind caption text for readability.
+                if (st.bgPillEnabled !== false) {
+                    const boxW = Math.min(maxWidth + padX * 2, blockW + padX * 2);
+                    const boxH = blockH + padY * 2;
+                    const rx = centerX - boxW / 2;
+                    const ry = blockCenterY - boxH / 2;
+                    ctx.fillStyle = st.bgPillColor || 'rgba(0, 0, 0, 0.6)';
+                    ctx.beginPath();
+                    ctx.roundRect(rx, ry, boxW, boxH, st.bgPillRadius != null ? st.bgPillRadius : 8);
+                    ctx.fill();
+                }
+
+                // Draw caption line by line, word by word (so highlight can be
+                // applied per word). Outline stroke first, then fill on top.
+                const outlineWidth = (st.outlineWidth != null) ? st.outlineWidth : 3;
+                const outlineColor = st.outlineColor || '#000000';
+                const baseColor = st.color || '#ffffff';
+                const highlightColor = st.highlightColor || '#ffe600';
+                let wordCursor = 0;
+
+                for (let li = 0; li < lines.length; li++) {
+                    const line = lines[li];
+                    const lineText = line.join(' ');
+                    const lineW = ctx.measureText(lineText).width;
+                    const startX = centerX - lineW / 2;
+                    const lineY = blockCenterY - blockH / 2 + lineHeight * (li + 0.5);
+                    let cx = startX;
+                    for (let wi = 0; wi < line.length; wi++) {
+                        const w = line[wi];
+                        const isLast = (wi === line.length - 1);
+                        const wordW = ctx.measureText(w + (isLast ? '' : ' ')).width;
+                        const wordIdx = wordCursor;
+                        const isHighlight = highlightEnabled && wordIdx <= activeWordIndex;
+
+                        ctx.font = `${fontWeight} ${fontSize}px ${fontFamily}`;
+                        ctx.lineWidth = outlineWidth;
+                        ctx.strokeStyle = outlineColor;
+                        ctx.strokeText(w, cx + wordW / 2, lineY);
+                        ctx.fillStyle = isHighlight ? highlightColor : baseColor;
+                        ctx.fillText(w, cx + wordW / 2, lineY);
+
+                        cx += wordW;
+                        wordCursor++;
+                    }
+                }
+                ctx.restore();
             }
         }
     }
@@ -6044,6 +6131,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     outroSubtitle: state.outroSubtitle,
                     outroDuration: state.outroDuration,
                     subtitlesEnabled: state.subtitlesEnabled,
+                    subtitleStyle: state.subtitleStyle,
                     activeClipId: state.activeClipId,
                     voiceoverRecorded: state.voiceoverRecorded
                 },
@@ -6475,6 +6563,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     outroSubtitle: state.outroSubtitle,
                     outroDuration: state.outroDuration,
                     subtitlesEnabled: state.subtitlesEnabled,
+                    subtitleStyle: state.subtitleStyle,
                     activeClipId: state.activeClipId,
                     voiceoverRecorded: state.voiceoverRecorded
                 },
@@ -6758,6 +6847,78 @@ document.addEventListener('DOMContentLoaded', () => {
     setTimeout(async () => {
         await restoreProjectFromBrowserStorage();
     }, 500);
+
+    // --- Shared Audio Analysis (reused by 7A Silence Trimmer + Subtitle Snap) ---
+    // Decodes a clip's audio and runs the exact same RMS/silence-detection loop
+    // used by the Auto Silence Trimmer, but returns the *inverse* — the actual
+    // speech regions (runs of non-silent audio) — so other features (like the
+    // silence-aware subtitle sync) can snap timings to real spoken moments.
+    window.computeSpeechRegions = async function(activeClip, thresholdDb, minDurationSec) {
+        const arrayBuffer = await activeClip.file.arrayBuffer();
+        const tempCtx = new (window.AudioContext || window.webkitAudioContext)();
+        const audioBuffer = await tempCtx.decodeAudioData(arrayBuffer);
+
+        const sampleRate = audioBuffer.sampleRate;
+        const channelData = audioBuffer.getChannelData(0);
+        const totalSamples = channelData.length;
+
+        const windowSizeSec = 0.05; // 50ms window (same as 7A)
+        const windowSizeSamples = Math.floor(windowSizeSec * sampleRate);
+        const amplitudeThreshold = Math.pow(10, thresholdDb / 20);
+
+        let inSilence = false;
+        let silenceStart = null;
+        let silenceEnd = null;
+        const silenceSegments = [];
+
+        for (let i = 0; i < totalSamples; i += windowSizeSamples) {
+            const endIdx = Math.min(i + windowSizeSamples, totalSamples);
+            const size = endIdx - i;
+            if (size <= 0) break;
+
+            let sumSquares = 0;
+            for (let j = i; j < endIdx; j++) {
+                sumSquares += channelData[j] * channelData[j];
+            }
+            const rms = Math.sqrt(sumSquares / size);
+            const currentTime = i / sampleRate;
+            const isSilent = rms < amplitudeThreshold;
+
+            if (isSilent) {
+                if (!inSilence) {
+                    inSilence = true;
+                    silenceStart = currentTime;
+                }
+                silenceEnd = currentTime + (size / sampleRate);
+            } else {
+                if (inSilence) {
+                    inSilence = false;
+                    if (silenceEnd - silenceStart >= minDurationSec) {
+                        silenceSegments.push({ start: silenceStart, end: silenceEnd });
+                    }
+                }
+            }
+        }
+        if (inSilence && silenceEnd - silenceStart >= minDurationSec) {
+            silenceSegments.push({ start: silenceStart, end: silenceEnd });
+        }
+        tempCtx.close();
+
+        // Invert silence segments into speech regions covering [0, duration].
+        const duration = audioBuffer.duration || (totalSamples / sampleRate);
+        const speechRegions = [];
+        let cursor = 0;
+        silenceSegments.forEach(seg => {
+            if (seg.start > cursor) {
+                speechRegions.push({ start: cursor, end: seg.start });
+            }
+            cursor = Math.max(cursor, seg.end);
+        });
+        if (cursor < duration) {
+            speechRegions.push({ start: cursor, end: duration });
+        }
+        return { speechRegions, silenceSegments, duration };
+    };
 
     // --- Auto Silence Trimmer (Phase 7A) ---
     let detectedSilences = [];

@@ -1308,6 +1308,49 @@
                                     <!-- Dynamically populated transcript list -->
                                 </div>
 
+                                <div class="subtitle-actions mt-3">
+                                    <button id="subtitle-bangla-preset-btn" class="btn btn-primary btn-block">
+                                        <i class="fa-solid fa-wand-magic-sparkles"></i> Bangla Caption Style (রীলস প্রিসেট লাগান)
+                                    </button>
+                                    <button id="subtitle-snap-btn" class="btn btn-outline mt-2" style="width: 100%;" type="button">
+                                        <i class="fa-solid fa-wave-square"></i> Auto-Snap to Speech (সাইলেন্স-অ্যাওয়ার সিঙ্ক)
+                                    </button>
+                                    <p class="help-text mt-2" id="subtitle-snap-status" style="display: none;"></p>
+                                </div>
+
+                                <div class="control-group mt-3" id="subtitle-style-controls">
+                                    <label>Font Size (সাইজ)</label>
+                                    <input type="range" id="subtitle-fontsize-slider" min="2" max="9" step="0.5" value="4.5">
+
+                                    <div class="toggle-control mt-3">
+                                        <div class="toggle-label">
+                                            <h4>Word-by-Word Highlight</h4>
+                                            <p>TikTok-স্টাইল কথা বলার সাথে হাইলাইট</p>
+                                        </div>
+                                        <label class="switch">
+                                            <input type="checkbox" id="subtitle-highlight-toggle">
+                                            <span class="slider round"></span>
+                                        </label>
+                                    </div>
+
+                                    <label class="mt-3">Caption Position (অবস্থান)</label>
+                                    <select id="subtitle-position-select" class="form-select">
+                                        <option value="bottom">নিচে (Bottom)</option>
+                                        <option value="top">উপরে (Top)</option>
+                                    </select>
+
+                                    <div class="toggle-control mt-3">
+                                        <div class="toggle-label">
+                                            <h4>Background Pill</h4>
+                                            <p>ক্যাপশনের পেছনে ব্যাকগ্রাউন্ড</p>
+                                        </div>
+                                        <label class="switch">
+                                            <input type="checkbox" id="subtitle-bgpill-toggle" checked>
+                                            <span class="slider round"></span>
+                                        </label>
+                                    </div>
+                                </div>
+
                                 <p class="help-text mt-2" id="subtitle-browser-warning" style="display: none; color: #f87171;">
                                     আপনার ব্রাউজার Speech Recognition সাপোর্ট করে না। Chrome ব্যবহার করার চেষ্টা করুন।
                                 </p>

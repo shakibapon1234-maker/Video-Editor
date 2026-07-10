@@ -1754,6 +1754,155 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
+    // --- Subtitle Styling + Silence-Aware Snap (Phase 5A enhancements) ---
+    const banglaPresetBtn = document.getElementById('subtitle-bangla-preset-btn');
+    const subtitleSnapBtn = document.getElementById('subtitle-snap-btn');
+    const subtitleSnapStatus = document.getElementById('subtitle-snap-status');
+    const subtitleFontsizeSlider = document.getElementById('subtitle-fontsize-slider');
+    const subtitleHighlightToggle = document.getElementById('subtitle-highlight-toggle');
+    const subtitlePositionSelect = document.getElementById('subtitle-position-select');
+    const subtitleBgpillToggle = document.getElementById('subtitle-bgpill-toggle');
+
+    // Returns the active (non-image) video clip whose audio we can decode, so the
+    // same clip the subtitles were generated from is the one we snap against.
+    function getActiveSubtitleClip() {
+        const clip = state.clips.find(c => c.id === state.activeClipId);
+        if (!clip || clip.type === 'image' || !clip.file) return null;
+        return clip;
+    }
+
+    // Finds the speech region closest to time `t` (by distance to the segment),
+    // but only if it is within `tol` seconds — so we never yank a caption onto a
+    // completely different spoken phrase that happens to be nearby.
+    function nearestSpeechBoundary(speechRegions, t, tol) {
+        let best = null, bestDist = Infinity;
+        for (const seg of speechRegions) {
+            let d;
+            if (t >= seg.start && t <= seg.end) d = 0;
+            else if (t < seg.start) d = seg.start - t;
+            else d = t - seg.end;
+            if (d < bestDist && d <= tol) { bestDist = d; best = seg; }
+        }
+        return best;
+    }
+
+    // One-Click "Bangla Caption Style" Preset — Facebook/Reels-friendly Bengali
+    // captions: big bold outlined lowercase-free text, pill background, bottom
+    // anchored, with word-by-word TikTok-style highlight animation.
+    if (banglaPresetBtn) {
+        banglaPresetBtn.addEventListener('click', () => {
+            state.subtitleStyle = {
+                fontFamily: '"Hind Siliguri", "Plus Jakarta Sans", sans-serif',
+                fontSizePct: 0.06,
+                fontWeight: 800,
+                color: '#ffffff',
+                outlineColor: '#000000',
+                outlineWidth: 6,
+                bgPillEnabled: true,
+                bgPillColor: 'rgba(0, 0, 0, 0.55)',
+                bgPillRadius: 9999,
+                position: 'bottom',
+                positionPct: 0.08,
+                highlightEnabled: true,
+                highlightColor: '#ffe600'
+            };
+            syncSubtitleStyleUI();
+            if (window.drawEditorFrame) window.drawEditorFrame();
+        });
+    }
+
+    // Auto Silence-Aware Subtitle Timing Sync — reuses the 7A silence-detection
+    // engine to find real speech moments, then snaps each caption's start/end to
+    // the nearest spoken onset/offset so timings line up with actual speech.
+    if (subtitleSnapBtn) {
+        subtitleSnapBtn.addEventListener('click', async () => {
+            if (!state.subtitles || state.subtitles.length === 0) {
+                alert('আগে "Listen & Generate" দিয়ে সাবটাইটেল তৈরি করুন।');
+                return;
+            }
+            const clip = getActiveSubtitleClip();
+            if (!clip || !window.computeSpeechRegions) {
+                alert('সাবটাইটেল সিঙ্ক করতে ভিডিও ক্লিপটি লোড করুন।');
+                return;
+            }
+
+            if (subtitleSnapStatus) {
+                subtitleSnapStatus.style.display = 'block';
+                subtitleSnapStatus.style.color = 'var(--text-secondary)';
+                subtitleSnapStatus.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin"></i> অডিও বিশ্লেষণ করা হচ্ছে...';
+            }
+            subtitleSnapBtn.disabled = true;
+
+            try {
+                const { speechRegions } = await window.computeSpeechRegions(clip, -40, 0.15);
+
+                const maxLook = 2.0;   // seconds to search for the nearest speech boundary
+                const padding = 0.05;  // tiny pad so the first/last sound isn't clipped
+
+                state.subtitles.forEach(s => {
+                    const onsetSeg = nearestSpeechBoundary(speechRegions, s.startSec, maxLook);
+                    if (onsetSeg) s.startSec = Math.max(0, onsetSeg.start - padding);
+
+                    const offsetSeg = nearestSpeechBoundary(speechRegions, s.endSec, maxLook);
+                    if (offsetSeg) s.endSec = offsetSeg.end + padding;
+
+                    if (s.endSec <= s.startSec) s.endSec = s.startSec + 0.4;
+                });
+
+                renderSubtitleList();
+                if (window.drawEditorFrame) window.drawEditorFrame();
+
+                if (subtitleSnapStatus) {
+                    subtitleSnapStatus.style.color = 'var(--success)';
+                    subtitleSnapStatus.innerHTML = '<i class="fa-solid fa-circle-check"></i> সাবটাইটেল স্পিচ মুহূর্তের সাথে সিঙ্ক করা হয়েছে।';
+                }
+            } catch (err) {
+                console.error('Subtitle snap failed:', err);
+                if (subtitleSnapStatus) {
+                    subtitleSnapStatus.style.color = 'var(--danger)';
+                    subtitleSnapStatus.innerHTML = '<i class="fa-solid fa-circle-exclamation"></i> সিঙ্ক ব্যর্থ — ফাইলে অডিও ট্র্যাক থাকতে হবে।';
+                }
+            } finally {
+                subtitleSnapBtn.disabled = false;
+            }
+        });
+    }
+
+    // Reflect current state.subtitleStyle into the style controls.
+    function syncSubtitleStyleUI() {
+        const st = state.subtitleStyle || {};
+        if (subtitleFontsizeSlider) subtitleFontsizeSlider.value = (st.fontSizePct != null ? st.fontSizePct * 100 : 4.5);
+        if (subtitleHighlightToggle) subtitleHighlightToggle.checked = !!st.highlightEnabled;
+        if (subtitlePositionSelect) subtitlePositionSelect.value = st.position || 'bottom';
+        if (subtitleBgpillToggle) subtitleBgpillToggle.checked = (st.bgPillEnabled !== false);
+    }
+
+    if (subtitleFontsizeSlider) {
+        subtitleFontsizeSlider.addEventListener('input', (e) => {
+            state.subtitleStyle.fontSizePct = parseFloat(e.target.value) / 100;
+            if (window.drawEditorFrame) window.drawEditorFrame();
+        });
+    }
+    if (subtitleHighlightToggle) {
+        subtitleHighlightToggle.addEventListener('change', (e) => {
+            state.subtitleStyle.highlightEnabled = e.target.checked;
+            if (window.drawEditorFrame) window.drawEditorFrame();
+        });
+    }
+    if (subtitlePositionSelect) {
+        subtitlePositionSelect.addEventListener('change', (e) => {
+            state.subtitleStyle.position = e.target.value;
+            if (window.drawEditorFrame) window.drawEditorFrame();
+        });
+    }
+    if (subtitleBgpillToggle) {
+        subtitleBgpillToggle.addEventListener('change', (e) => {
+            state.subtitleStyle.bgPillEnabled = e.target.checked;
+            if (window.drawEditorFrame) window.drawEditorFrame();
+        });
+    }
+    syncSubtitleStyleUI();
+
     window.syncAudioUIFromStateGlobal = function() {
         if (noiseCancelToggle) {
             noiseCancelToggle.checked = state.isNoiseCancelActive;
@@ -1801,6 +1950,7 @@ document.addEventListener('DOMContentLoaded', () => {
             window.renderBgMusicTrackListGlobal();
         }
         renderSubtitleList();
+        syncSubtitleStyleUI();
     };
 
     // Stop listening automatically once the trimmed playback range ends or video is paused
