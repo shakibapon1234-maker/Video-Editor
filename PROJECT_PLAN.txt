@@ -820,9 +820,77 @@ AI সাজেশন — পরবর্তী সম্ভাব্য ফি�
   - "বর্তমান ফিচার" তালিকায় নতুন লাইন যোগ করতে হবে
 
 
- =====================================================
-  শেষ আপডেট: v2.16 - Project Completed (All suggestions completed including 7A and 7B)
-  (Auto Silence Trimmer এবং Auto Aspect-Ratio Reframe (Smart Crop) সহ সকল রিকোয়ারমেন্ট এবং প্ল্যান সম্পন্ন হয়েছে।)
+v2.17 - Voice Changer Scope + Noise Cancellation Tuning + Subtitle Reliability (সম্পন্ন)
+--------------------------------------------------------------------------------------------
 
-  Phase 2 থেকে Phase 7 এর সকল কাজ এবং সাজেশন (7A, 7B, 7C, 7D, 7E, 7F) এখন সম্পূর্ণ [DONE]!
+Bug 10 - Voice Changer "কোনো প্রিসেটেই কাজ করছিল না" (audio.js + index.html)
+  সমস্যা : আসলে বাগ ছিল না, scope-এর ভুল বোঝাবুঝি ছিল। VoiceChangerEffect
+           শুধুমাত্র রেকর্ড করা Voiceover প্লেব্যাক এলিমেন্ট
+           (#voiceover-audio-preview)-এর সাথে কানেক্ট করা ছিল, মূল ভিডিওর
+           নিজস্ব অডিও পাথ (videoGainNode -> highpass -> ...) তে এই effect
+           কখনোই যুক্ত ছিল না। তাই কেউ যদি শুধু মূল ভিডিও চালিয়ে প্রিসেট
+           বদলান, কোনো পরিবর্তনই শোনা যেত না।
+  সমাধান: একটা সম্পূর্ণ আলাদা দ্বিতীয় VoiceChangerEffect instance
+           (videoVoiceChanger) তৈরি করে মূল ভিডিওর চেইনে যোগ করা হয়েছে:
+           videoGainNode -> videoVoiceChanger.input -> videoVoiceChanger.output
+           -> highpassNode (আগে videoGainNode সরাসরি highpassNode-এ যেত)।
+           index.html-এ Voice Changer কার্ডে নতুন একটা toggle switch যোগ
+           হয়েছে: "Also Apply to Original Video Audio" — ডিফল্ট বন্ধ থাকে
+           (state.applyVoiceChangerToVideo = false), যাতে আগের behavior
+           (শুধু voiceover-এ প্রয়োগ) ভাঙে না। toggle অন করলে ড্রপডাউনের
+           বাছাই করা প্রোফাইল videoVoiceChanger-এও mirror হয়। state save/
+           load (JSON export + IndexedDB auto-restore) এবং syncUIFromState()
+           দুই জায়গাতেই এই নতুন ফিল্ড ও লাইভ effect state restore করা হয়।
+
+Improvement - Noise Cancellation আরও কার্যকর করা (audio.js)
+  সীমাবদ্ধতা (অপরিবর্তিত, honest note): এই ফিচার pure Web Audio filter +
+           compressor/gate ভিত্তিক, কোনো spectral/AI denoise (যেমন RNNoise)
+           না। তাই যেই noise কথা বলার ঠিক একই ফ্রিকোয়েন্সি রেঞ্জে
+           (150Hz-7000Hz) ওভারল্যাপ করে এবং কথার সাথে সাথেই চলতে থাকে
+           (ফ্যান/AC/ট্রাফিক/ভিড়), সেটা ফিল্টার ধরতে পারে না — এটা
+           architecture-এর সীমাবদ্ধতা, bug না।
+  যা উন্নত করা হয়েছে:
+    - Recording mic-এর getUserMedia constraints-এ এখন explicit ভাবে
+      echoCancellation, noiseSuppression, autoGainControl সব true করে
+      চাওয়া হয় (আগে শুধু {audio: true} ছিল, ব্রাউজার ডিফল্টের উপর নির্ভর
+      করত) — ব্রাউজারের নিজস্ব native adaptive noise suppression চালু
+      নিশ্চিত করা হলো, যেটা static filter-এর চেয়ে ভালো কাজ করে। constraint
+      reject হলে plain {audio:true}-এ fallback করে।
+    - Noise gate-এর নীরবতার সময়ের attenuation 0.05 (-26dB) থেকে গভীর করে
+      0.02 (-34dB) করা হয়েছে, যাতে শব্দের মাঝে background noise আরও
+      স্পষ্টভাবে কমে যায়। release time 150ms থেকে 180ms করা হয়েছে যাতে
+      কথার শেষের ব্যঞ্জনধ্বনি (স, ত, শ) কেটে না যায়।
+
+Bug 11 - Auto Subtitle "শুধু একটা শব্দ ঠিকভাবে লিখতে পারে" (audio.js)
+  সমস্যা : speechRecognizer.interimResults = false ছিল এবং শুধু isFinal
+           result-এই subtitle push হতো। Chrome-এর bn-BD continuous
+           recognition session প্রায়ই মাঝপথে (নেটওয়ার্ক/নীরবতা ডিটেকশনে)
+           নিজে থেকে বন্ধ হয়ে যায় (onend ফায়ার করে) — আর সেশন শেষ হওয়ার
+           আগে যদি কখনো isFinal result না আসে, তাহলে সেই পুরো অংশে যা বলা
+           হয়েছিল তার কিছুই কোথাও সংরক্ষিত হতো না, শুধু silently হারিয়ে
+           যেত। এটাই মূল কারণ ছিল "মাত্র একটা শব্দ ধরা পড়ে" সমস্যার —
+           প্রতিটা restart cycle-এ প্রায় পুরোটাই হারিয়ে যাচ্ছিল।
+  সমাধান: interimResults = true করা হয়েছে এবং একটা running
+           latestInterimText buffer রাখা হয় যেটা প্রতিটা non-final result
+           দিয়ে আপডেট হতে থাকে। এখন তিনটা জায়গায় flush হয়:
+             (1) result.isFinal true হলে (আগের মতোই, স্বাভাবিক পথ)
+             (2) speechRecognizer.onend ফায়ার হলে (session cut off হলে,
+                 flushInterimAsSegment() দিয়ে যা আছে তা-ই subtitle হিসেবে
+                 বসিয়ে দেয়, তারপর restart করে)
+             (3) ব্যবহারকারী "Stop Listening" চাপলে (stopSubtitleRecognition)
+           ফলে কোনো বলা কথাই আর "কোথাও যায়নি" অবস্থায় হারায় না।
+  সীমাবদ্ধতা (অপরিবর্তিত): এটা এখনও ব্রাউজারের built-in bn-BD engine-এর
+           উপরই নির্ভরশীল (Chrome সবচেয়ে ভালো), আর ভিডিওর অডিও ট্র্যাক
+           থেকে সরাসরি না নিয়ে speaker->mic দিয়ে "শুনে" কাজ করে বলে রুম
+           শান্ত রাখা ও স্পিকার volume ঠিকঠাক রাখা এখনও accuracy-র জন্য
+           জরুরি। পুরোপুরি নির্ভরযোগ্য বাংলা transcription চাইলে external
+           speech-to-text API (Whisper/Google Cloud Speech) লাগবে, যা এই
+           browser-only architecture-এর বাইরে একটা বড় future upgrade।
+
+
+ =====================================================
+  শেষ আপডেট: v2.17 - Voice Changer এখন optionally মূল ভিডিও অডিওতেও কাজ করে,
+  Noise Cancellation এবং Auto Subtitle reliability উন্নত করা হয়েছে (বিস্তারিত উপরে v2.17 সেকশনে)।
+
+  Phase 2 থেকে Phase 7 এর সকল কাজ এবং সাজেশন (7A, 7B, 7C, 7D, 7E, 7F) সম্পূর্ণ [DONE]!
  =====================================================

@@ -356,6 +356,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const voiceoverVolumeSlider = document.getElementById('voiceover-volume-slider');
     const voiceoverVolumeVal = document.getElementById('voiceover-volume-val');
     const voiceChangerSelect = document.getElementById('voice-changer-select');
+    const voiceChangerApplyVideoToggle = document.getElementById('voice-changer-apply-video-toggle');
 
     // Background Music UI selectors (multi-track timeline, v2.3)
     const bgMusicDropzone = document.getElementById('bgmusic-dropzone');
@@ -576,6 +577,7 @@ document.addEventListener('DOMContentLoaded', () => {
     
     // DSP Nodes
     let videoGainNode = null;
+    let videoVoiceChanger = null; // Voice Changer applied to the ORIGINAL video's own audio (separate from voiceoverVoiceChanger below)
     let highpassNode = null;
     let lowpassNode = null;
     let noiseGateGainNode = null;
@@ -688,7 +690,19 @@ document.addEventListener('DOMContentLoaded', () => {
             videoGainNode = audioCtx.createGain();
             videoGainNode.gain.setValueAtTime(state.videoVolume, 0);
             window.videoGainNode = videoGainNode;
-            
+
+            // Voice Changer for the original video's own audio. Reuses the exact
+            // same VoiceChangerEffect class as the voiceover, but is a SEPARATE
+            // instance/profile so the video's own voice and the recorded voiceover
+            // can (in theory) be changed independently. Defaults to 'none' (bypass)
+            // and is only driven away from 'none' when the user checks the
+            // "Also apply to original video audio" toggle.
+            videoVoiceChanger = new VoiceChangerEffect(audioCtx);
+            // Sync with whatever the user had already selected/toggled before the
+            // video (and therefore this audio graph) finished loading.
+            videoVoiceChanger.setProfile(state.applyVoiceChangerToVideo ? (state.voiceoverProfile || 'none') : 'none');
+            window.videoVoiceChanger = videoVoiceChanger;
+
             // Create Biquad Filters for Noise Cancellation
             highpassNode = audioCtx.createBiquadFilter();
             highpassNode.type = 'highpass';
@@ -731,9 +745,10 @@ document.addEventListener('DOMContentLoaded', () => {
             speakerMuteGain = audioCtx.createGain();
             speakerMuteGain.gain.setValueAtTime(1, 0);
 
-            // Link DSP chain: Source -> Volume -> Highpass -> Lowpass -> NoiseGate -> Compressor -> MakeupGain -> SpeakerMute -> Destination
+            // Link DSP chain: Source -> Volume -> VideoVoiceChanger -> Highpass -> Lowpass -> NoiseGate -> Compressor -> MakeupGain -> SpeakerMute -> Destination
             videoSourceNode.connect(videoGainNode);
-            videoGainNode.connect(highpassNode);
+            videoGainNode.connect(videoVoiceChanger.input);
+            videoVoiceChanger.output.connect(highpassNode);
             highpassNode.connect(lowpassNode);
             lowpassNode.connect(noiseGateGainNode);
             lowpassNode.connect(noiseGateAnalyser); // Measure audio level before gating it
@@ -767,10 +782,16 @@ document.addEventListener('DOMContentLoaded', () => {
                         const rms = Math.sqrt(sum / array.length);
                         const db = rms > 0 ? 20 * Math.log10(rms) : -99;
                         
-                        // If below threshold, attenuate to 0.05 (soft gate). Otherwise, pass at 1.0.
-                        const targetGateGain = (db < state.noiseGateThreshold) ? 0.05 : 1.0;
-                        // Fast attack time (10ms) to avoid clipping speech starts; slower release time (150ms) to avoid speech truncation.
-                        const timeConstant = (targetGateGain === 1.0) ? 0.01 : 0.15;
+                        // If below threshold, attenuate hard (soft-muted, not fully to
+                        // zero, so it doesn't sound like a hard cut). Otherwise pass at 1.0.
+                        // Deeper than before (was 0.05 / -26dB) because at 0.05 a lot of
+                        // steady background noise (fan/AC/traffic) was still clearly
+                        // audible between words.
+                        const targetGateGain = (db < state.noiseGateThreshold) ? 0.02 : 1.0;
+                        // Fast attack time (10ms) to avoid clipping speech starts; slightly
+                        // slower release (180ms) than the attack so trailing consonants
+                        // ("s", "t", "sh" sounds) aren't chopped off as the gate closes.
+                        const timeConstant = (targetGateGain === 1.0) ? 0.01 : 0.18;
                         noiseGateGainNode.gain.setTargetAtTime(targetGateGain, audioCtx.currentTime, timeConstant);
                     } else if (noiseGateGainNode) {
                         noiseGateGainNode.gain.setTargetAtTime(1.0, audioCtx.currentTime, 0.05);
@@ -891,7 +912,27 @@ document.addEventListener('DOMContentLoaded', () => {
     // --- 3. Microphone Access Check ---
     async function requestMicrophoneAccess() {
         try {
-            micStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+            // Explicitly request the browser's own native noise-reduction DSP
+            // (separate from our own highpass/lowpass/gate chain below). Chrome/
+            // Edge/Firefox all implement real adaptive noise suppression + echo
+            // cancellation + auto-gain at the OS/browser level for getUserMedia,
+            // which does a much better job on noise that overlaps the speech
+            // frequency range than a static filter ever can. Falls back to plain
+            // { audio: true } if a browser rejects these as invalid constraints.
+            const micConstraints = {
+                audio: {
+                    echoCancellation: true,
+                    noiseSuppression: true,
+                    autoGainControl: true,
+                    channelCount: 1
+                }
+            };
+            try {
+                micStream = await navigator.mediaDevices.getUserMedia(micConstraints);
+            } catch (constraintErr) {
+                console.warn('Advanced mic constraints rejected, falling back to basic audio:true', constraintErr);
+                micStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+            }
 
             // Analyser tap for the auto-ducking engine (live mic input while recording).
             // Connected for analysis only — never routed to any destination, so it can't cause feedback.
@@ -1010,6 +1051,24 @@ document.addEventListener('DOMContentLoaded', () => {
             state.voiceoverProfile = e.target.value;
             if (window.voiceoverVoiceChanger) {
                 window.voiceoverVoiceChanger.setProfile(state.voiceoverProfile);
+            }
+            // Keep the original video's own voice changer in sync, but only if
+            // the user has opted into applying it there too.
+            if (window.videoVoiceChanger && state.applyVoiceChangerToVideo) {
+                window.videoVoiceChanger.setProfile(state.voiceoverProfile);
+            }
+        });
+    }
+
+    // "Also apply to original video audio" toggle
+    if (voiceChangerApplyVideoToggle) {
+        voiceChangerApplyVideoToggle.checked = !!state.applyVoiceChangerToVideo;
+        voiceChangerApplyVideoToggle.addEventListener('change', (e) => {
+            state.applyVoiceChangerToVideo = e.target.checked;
+            if (window.videoVoiceChanger) {
+                // When ON, mirror whatever profile is currently selected.
+                // When OFF, force back to 'none' so the video's own audio is untouched.
+                window.videoVoiceChanger.setProfile(state.applyVoiceChangerToVideo ? (state.voiceoverProfile || 'none') : 'none');
             }
         });
     }
@@ -1388,6 +1447,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const SpeechRecognitionImpl = window.SpeechRecognition || window.webkitSpeechRecognition;
     let speechRecognizer = null;
     let subtitleSegmentStartTime = 0;
+    let latestInterimText = ''; // running not-yet-final transcript, flushed if a session ends before finalizing
 
     if (subtitleEnabledToggle) {
         subtitleEnabledToggle.addEventListener('change', (e) => {
@@ -1419,40 +1479,56 @@ document.addEventListener('DOMContentLoaded', () => {
 
         speechRecognizer = new SpeechRecognitionImpl();
         speechRecognizer.continuous = true;
-        speechRecognizer.interimResults = false;
+        // Turned ON (was false). With interimResults:false, Chrome's bn-BD
+        // recognizer often only delivers a "final" result right as a session
+        // ends — and these sessions auto-terminate every so often (network
+        // timeout / silence detection). If that termination happened mid-
+        // sentence, NOTHING had been finalized yet, so onend fired, we
+        // restarted, and everything spoken in that window was silently lost —
+        // this is why only one word at a time was making it through. Now we
+        // track the latest interim (non-final) text as we go, and flush
+        // whatever we have (final or not) both when a result finalizes AND
+        // when the session ends, instead of only ever trusting isFinal.
+        speechRecognizer.interimResults = true;
         speechRecognizer.lang = 'bn-BD'; // Bangla recognition; falls back gracefully if unsupported
 
         subtitleSegmentStartTime = state.video.currentTime;
+        latestInterimText = '';
 
         speechRecognizer.onresult = (event) => {
-            const result = event.results[event.results.length - 1];
-            if (!result.isFinal) return;
+            // event.results is a running list; only look at newly-updated results
+            // from resultIndex onward (older ones were already handled).
+            for (let i = event.resultIndex; i < event.results.length; i++) {
+                const result = event.results[i];
+                const transcriptText = (result[0] && result[0].transcript || '').trim();
+                if (!transcriptText) continue;
 
-            const transcriptText = result[0].transcript.trim();
-            if (!transcriptText) return;
-
-            const endTime = state.video.currentTime;
-            const startTime = Math.max(subtitleSegmentStartTime, endTime - 4); // cap a single line to ~4s if recognition was slow
-
-            state.subtitles.push({
-                id: Date.now(),
-                text: transcriptText,
-                startSec: startTime,
-                endSec: Math.max(startTime + 0.5, endTime)
-            });
-
-            subtitleSegmentStartTime = endTime;
-            renderSubtitleList();
+                if (result.isFinal) {
+                    commitSubtitleSegment(transcriptText);
+                    latestInterimText = '';
+                } else {
+                    // Keep the running partial text so it isn't lost if the
+                    // session ends before Google's engine ever finalizes it.
+                    latestInterimText = transcriptText;
+                }
+            }
         };
 
         speechRecognizer.onerror = (event) => {
             console.warn('Speech recognition error:', event.error);
             if (event.error === 'no-speech') return; // keep listening through silence
+            // Flush any not-yet-finalized text before giving up, so a hard
+            // error doesn't silently drop the last thing that was said.
+            flushInterimAsSegment();
             stopSubtitleRecognition();
         };
 
         speechRecognizer.onend = () => {
-            // Browsers auto-stop recognition periodically; restart while still actively listening and video still playing
+            // Browser cut the session (periodic auto-stop, silence, network
+            // hiccup, etc). Flush whatever partial text we were holding so it
+            // still ends up as a subtitle line instead of vanishing, then
+            // restart if the user is still actively listening.
+            flushInterimAsSegment();
             if (state.isSubtitleRecognitionActive && !state.video.paused) {
                 try { speechRecognizer.start(); } catch (e) { /* already started */ }
             }
@@ -1472,8 +1548,36 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
+    // Pushes a finished piece of transcript into state.subtitles with a
+    // timestamp window, and advances the segment start marker for the next line.
+    function commitSubtitleSegment(transcriptText) {
+        const endTime = state.video.currentTime;
+        const startTime = Math.max(subtitleSegmentStartTime, endTime - 4); // cap a single line to ~4s if recognition was slow
+
+        state.subtitles.push({
+            id: Date.now() + Math.random(),
+            text: transcriptText,
+            startSec: startTime,
+            endSec: Math.max(startTime + 0.5, endTime)
+        });
+
+        subtitleSegmentStartTime = endTime;
+        renderSubtitleList();
+    }
+
+    // Commits whatever interim (not-yet-"final") text is still pending, so a
+    // session cutting off mid-sentence doesn't just discard it.
+    function flushInterimAsSegment() {
+        const text = (latestInterimText || '').trim();
+        latestInterimText = '';
+        if (text) {
+            commitSubtitleSegment(text);
+        }
+    }
+
     function stopSubtitleRecognition() {
         state.isSubtitleRecognitionActive = false;
+        flushInterimAsSegment();
         if (speechRecognizer) {
             try { speechRecognizer.stop(); } catch (e) {}
         }

@@ -51,6 +51,7 @@ window.VideoEditor = {
     voiceoverUrl: null,
     voiceoverRecorded: false,
     voiceoverProfile: 'none',
+    applyVoiceChangerToVideo: false, // when true, voiceoverProfile is also applied to the original video's own audio track
     isNoiseCancelActive: false,
     noiseGateThreshold: -38,
 
@@ -5766,6 +5767,25 @@ document.addEventListener('DOMContentLoaded', () => {
             if (videoVolumeValStep2) videoVolumeValStep2.innerText = Math.round(state.videoVolume * 100) + '%';
         }
 
+        // Voice Changer (dropdown + "also apply to original video" checkbox) —
+        // restore both the UI controls and the live Web Audio effect params
+        // after a project load/auto-restore, since these aren't driven by
+        // 'change' events firing.
+        const voiceChangerSelectEl = document.getElementById('voice-changer-select');
+        if (voiceChangerSelectEl) {
+            voiceChangerSelectEl.value = state.voiceoverProfile || 'none';
+        }
+        const voiceChangerApplyVideoToggleEl = document.getElementById('voice-changer-apply-video-toggle');
+        if (voiceChangerApplyVideoToggleEl) {
+            voiceChangerApplyVideoToggleEl.checked = !!state.applyVoiceChangerToVideo;
+        }
+        if (window.voiceoverVoiceChanger) {
+            window.voiceoverVoiceChanger.setProfile(state.voiceoverProfile || 'none');
+        }
+        if (window.videoVoiceChanger) {
+            window.videoVoiceChanger.setProfile(state.applyVoiceChangerToVideo ? (state.voiceoverProfile || 'none') : 'none');
+        }
+
         // Logo configuration
         if (state.logoImg) {
             if (logoPreviewBox) logoPreviewBox.style.display = 'flex';
@@ -5971,6 +5991,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     videoVolume: state.videoVolume,
                     voiceoverVolume: state.voiceoverVolume,
                     voiceoverProfile: state.voiceoverProfile,
+                    applyVoiceChangerToVideo: state.applyVoiceChangerToVideo,
                     isNoiseCancelActive: state.isNoiseCancelActive,
                     noiseGateThreshold: state.noiseGateThreshold,
                     bgMusicDuckingEnabled: state.bgMusicDuckingEnabled,
@@ -6400,6 +6421,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     videoVolume: state.videoVolume,
                     voiceoverVolume: state.voiceoverVolume,
                     voiceoverProfile: state.voiceoverProfile,
+                    applyVoiceChangerToVideo: state.applyVoiceChangerToVideo,
                     isNoiseCancelActive: state.isNoiseCancelActive,
                     noiseGateThreshold: state.noiseGateThreshold,
                     bgMusicDuckingEnabled: state.bgMusicDuckingEnabled,
