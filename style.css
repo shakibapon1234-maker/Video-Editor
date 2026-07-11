@@ -1176,6 +1176,49 @@ input:checked + .slider:before {
     box-shadow: 0 0 0 2px var(--primary-glow);
 }
 
+/* Voice typing controls, shown beside text inputs that support dictation. */
+.voice-type-field {
+    display: flex;
+    gap: 8px;
+    align-items: stretch;
+}
+
+.voice-type-field .form-input {
+    min-width: 0;
+    flex: 1 1 auto;
+}
+
+.voice-language-select {
+    width: auto;
+    min-width: 82px;
+    padding: 0 7px;
+    font-size: 11px;
+}
+
+.voice-type-btn {
+    width: 42px;
+    min-width: 42px;
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-sm);
+    background: var(--bg-base);
+    color: var(--text-secondary);
+    cursor: pointer;
+    transition: var(--transition-smooth);
+}
+
+.voice-type-btn:hover, .voice-type-btn:focus-visible {
+    border-color: var(--primary);
+    color: var(--primary);
+    outline: none;
+}
+
+.voice-type-btn.is-listening {
+    color: #fff;
+    background: var(--danger);
+    border-color: var(--danger);
+    animation: pulse 1.2s infinite;
+}
+
 .color-pickers-row {
     display: grid;
     grid-template-columns: repeat(2, 1fr);

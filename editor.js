@@ -7391,6 +7391,103 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
+    // --- Voice typing for text fields ---
+    // Chrome/Edge provide this Web Speech API; each field receives its own
+    // language selector so Bangla and English dictation can both be used.
+    const VoiceRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    const activeVoiceInput = { recognition: null, button: null };
+
+    function stopVoiceTyping() {
+        if (activeVoiceInput.recognition) {
+            try { activeVoiceInput.recognition.stop(); } catch (err) { /* already stopped */ }
+        }
+    }
+
+    function addVoiceTypingControl(input) {
+        if (!VoiceRecognition || input.dataset.voiceTypingReady) return;
+        input.dataset.voiceTypingReady = 'true';
+
+        const wrapper = document.createElement('div');
+        wrapper.className = 'voice-type-field';
+        input.parentNode.insertBefore(wrapper, input);
+        wrapper.appendChild(input);
+
+        const language = document.createElement('select');
+        language.className = 'form-select voice-language-select';
+        language.setAttribute('aria-label', 'Voice typing language');
+        language.innerHTML = '<option value="bn-BD">বাংলা</option><option value="en-US">English</option>';
+
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.className = 'voice-type-btn';
+        button.title = 'মাইক্রোফোন চাপুন, তারপর কথা বলুন';
+        button.setAttribute('aria-label', 'Start voice typing');
+        button.innerHTML = '<i class="fa-solid fa-microphone"></i>';
+        wrapper.append(language, button);
+
+        button.addEventListener('click', () => {
+            if (activeVoiceInput.button === button) {
+                stopVoiceTyping();
+                return;
+            }
+
+            stopVoiceTyping();
+            const recognition = new VoiceRecognition();
+            recognition.lang = language.value;
+            recognition.continuous = true;
+            recognition.interimResults = false;
+
+            recognition.onresult = (event) => {
+                let text = '';
+                for (let i = event.resultIndex; i < event.results.length; i++) {
+                    if (event.results[i].isFinal) text += event.results[i][0].transcript;
+                }
+                if (!text) return;
+
+                const start = input.selectionStart == null ? input.value.length : input.selectionStart;
+                const end = input.selectionEnd == null ? input.value.length : input.selectionEnd;
+                const spacer = start > 0 && input.value[start - 1] && !/\s$/.test(input.value.slice(0, start)) ? ' ' : '';
+                input.value = input.value.slice(0, start) + spacer + text.trim() + input.value.slice(end);
+                const caret = start + spacer.length + text.trim().length;
+                input.setSelectionRange(caret, caret);
+                input.dispatchEvent(new Event('input', { bubbles: true }));
+                input.dispatchEvent(new Event('change', { bubbles: true }));
+                input.focus();
+            };
+
+            recognition.onerror = (event) => {
+                if (event.error === 'not-allowed' || event.error === 'service-not-allowed') {
+                    alert('Voice typing ব্যবহার করতে ব্রাউজার থেকে Microphone permission Allow করুন।');
+                }
+            };
+
+            recognition.onend = () => {
+                if (activeVoiceInput.recognition === recognition) {
+                    button.classList.remove('is-listening');
+                    button.innerHTML = '<i class="fa-solid fa-microphone"></i>';
+                    button.title = 'মাইক্রোফোন চাপুন, তারপর কথা বলুন';
+                    button.setAttribute('aria-label', 'Start voice typing');
+                    activeVoiceInput.recognition = null;
+                    activeVoiceInput.button = null;
+                }
+            };
+
+            try {
+                recognition.start();
+                activeVoiceInput.recognition = recognition;
+                activeVoiceInput.button = button;
+                button.classList.add('is-listening');
+                button.innerHTML = '<i class="fa-solid fa-stop"></i>';
+                button.title = 'Voice typing বন্ধ করুন';
+                button.setAttribute('aria-label', 'Stop voice typing');
+            } catch (err) {
+                console.warn('Unable to start voice typing:', err);
+            }
+        });
+    }
+
+    document.querySelectorAll('input.form-input[type="text"], textarea.form-input').forEach(addVoiceTypingControl);
+
     // Bind global trigger to allow re-render on demands
     window.triggerCanvasRedraw = drawFrame;
 });
