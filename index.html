@@ -1553,6 +1553,59 @@
                             </div>
                         </div>
 
+                        <!-- Video → Audio Converter (Phase 8A) -->
+                        <div class="card mt-4">
+                            <div class="card-header">
+                                <i class="fa-solid fa-file-audio card-icon"></i>
+                                <h3>Video → Audio কনভার্টার</h3>
+                            </div>
+                            <div class="card-body">
+                                <p class="help-text">যেকোনো ভিডিও ফাইল থেকে শুধু অডিও ট্র্যাক বের করে নিন। এটি বর্তমান প্রজেক্টের ভিডিওর সাথে সম্পর্কহীন — সরাসরি নতুন যেকোনো ভিডিও ফাইল এখানে আপলোড করুন এবং WAV বা MP3 হিসেবে ডাউনলোড করুন।</p>
+
+                                <div class="file-selector-box mt-3" id="v2a-dropzone">
+                                    <i class="fa-solid fa-file-video"></i>
+                                    <span id="v2a-dropzone-label">Drag & Drop Video here or Click to Select</span>
+                                    <button class="btn btn-sm btn-outline" type="button">Select Video</button>
+                                    <input type="file" id="v2a-file-input" accept="video/*" style="display: none;">
+                                </div>
+
+                                <div class="control-group mt-3" id="v2a-format-box" style="display: none;">
+                                    <label>আউটপুট ফরম্যাট (Output Format)</label>
+                                    <select id="v2a-format-select" class="form-select">
+                                        <option value="wav">WAV (লসলেস কোয়ালিটি, ফাইল সাইজ বড়)</option>
+                                        <option value="mp3" id="v2a-mp3-option">MP3 (ছোট সাইজ, সব ডিভাইসে চলবে)</option>
+                                    </select>
+
+                                    <button id="v2a-convert-btn" class="btn btn-primary btn-block mt-3" type="button">
+                                        <i class="fa-solid fa-music"></i> Convert to Audio
+                                    </button>
+                                </div>
+
+                                <!-- Conversion Progress -->
+                                <div class="render-progress-box mt-4" id="v2a-progress-box" style="display: none;">
+                                    <div class="progress-info">
+                                        <span id="v2a-status-text">Processing...</span>
+                                        <span id="v2a-percentage">0%</span>
+                                    </div>
+                                    <div class="progress-bar-container">
+                                        <div class="progress-bar-fill" id="v2a-progress-fill"></div>
+                                    </div>
+                                </div>
+
+                                <!-- Success & Download -->
+                                <div class="render-success-box mt-4" id="v2a-success-box" style="display: none;">
+                                    <div class="success-icon-container">
+                                        <i class="fa-solid fa-circle-check"></i>
+                                    </div>
+                                    <h3>Audio Ready!</h3>
+                                    <p id="v2a-success-desc">আপনার অডিও ফাইল প্রস্তুত।</p>
+                                    <a id="v2a-download-link" href="#" download="audio.wav" class="btn btn-success btn-block mt-3">
+                                        <i class="fa-solid fa-download"></i> Download Audio
+                                    </a>
+                                </div>
+                            </div>
+                        </div>
+
                         <!-- Facebook Posting checklist -->
                         <div class="card mt-4">
                             <div class="card-header">
