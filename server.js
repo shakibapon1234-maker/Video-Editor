@@ -134,9 +134,16 @@ function compileVideo(ws, tempDir, filename, totalFrames) {
 
     const hasAudio = fs.existsSync(audioPath);
     const inputPattern = path.join(tempDir, 'frame_%05d.jpg').replace(/\\/g, '/');
+    // JPEG image sequences do not contain a reliable frame-rate marker.  FFmpeg
+    // otherwise assumes 25 FPS, which makes a 30 FPS export too long.  Apply the
+    // frame rate to both sides of the pipeline explicitly.
     let command = ffmpeg()
         .input(inputPattern)
-        .inputFPS(30);
+        .inputOptions(['-framerate 30'])
+        .fps(30)
+        // H.264 with yuv420p requires even dimensions.  Cropping to the nearest
+        // even pixel prevents exports such as 1080x585 from failing at frame 0.
+        .videoFilters('scale=trunc(iw/2)*2:trunc(ih/2)*2');
 
     if (hasAudio) {
         command = command.input(audioPath.replace(/\\/g, '/'));
@@ -147,8 +154,7 @@ function compileVideo(ws, tempDir, filename, totalFrames) {
             '-c:v libx264',
             '-pix_fmt yuv420p',
             '-preset medium',
-            '-crf 23',
-            '-vf', 'scale=trunc(iw/2)*2:trunc(ih/2)*2'
+            '-crf 23'
         ])
         .output(compiledPath.replace(/\\/g, '/'));
 

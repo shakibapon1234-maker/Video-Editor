@@ -715,6 +715,10 @@ document.addEventListener('DOMContentLoaded', () => {
     async function startBatchExport() {
         if (isBatchRenderRunning || batchQueue.length === 0) return;
 
+        // Batch export also restores the editor's active media after finishing.
+        // Keep a local reference just like the single-export pipeline does.
+        const video = state.video;
+
         isBatchRenderRunning = true;
         exportCancelled = false;
         exportStartTimestamp = performance.now();
