@@ -165,7 +165,7 @@ document.addEventListener('DOMContentLoaded', () => {
         } catch (err) {
             console.error('Export failed:', err);
             if (!exportCancelled) {
-                alert('Export failed. Please try again with a shorter or simpler video.');
+                alert('Export failed: ' + err.message + '\n\nPlease try again with a shorter or simpler video.');
             }
             renderProgressBox.style.display = 'none';
             renderBtn.disabled = false;
@@ -354,10 +354,65 @@ document.addEventListener('DOMContentLoaded', () => {
             await waitForSeek(video, clipTrimStart);
             
             let clipFrameIndex = 0;
-            video.playbackRate = 0.25; // Play slower to give plenty of time for capturing/sending
+            video.playbackRate = 1.0; // Play at normal speed since we pause on every frame anyway
 
             return new Promise((resolve) => {
+                let safetyTimeout = null;
+
+                function clearSafety() {
+                    if (safetyTimeout) {
+                        clearTimeout(safetyTimeout);
+                        safetyTimeout = null;
+                    }
+                }
+
+                function triggerSafety() {
+                    clearSafety();
+                    console.warn(`Safety timeout fired at frame ${clipFrameIndex + 1}/${clipFrames}. Forcing frame capture.`);
+                    video.pause();
+                    captureFrameAndAdvance();
+                }
+
+                async function captureFrameAndAdvance() {
+                    if (exportCancelled) {
+                        resolve();
+                        return;
+                    }
+
+                    if (window.drawEditorFrame) {
+                        window.drawEditorFrame();
+                    }
+
+                    const frameBlob = await new Promise(r => canvas.toBlob(r, 'image/jpeg', 0.95));
+                    ws.send(frameBlob);
+
+                    clipFrameIndex++;
+                    frameIndex++;
+
+                    const elapsed = video.currentTime - clipTrimStart;
+                    const totalElapsed = elapsedBeforeCurrentClip + elapsed;
+                    const progressPercent = grandTotalDuration > 0 ? Math.min(100, (totalElapsed / grandTotalDuration) * 100) : 100;
+                    const uiProgress = 10 + Math.round(progressPercent * 0.8);
+                    setProgress(uiProgress);
+                    
+                    if (isBatch) {
+                        renderStatusText.innerText = `[Batch ${batchIndex}/${batchCount}] rendering ${batchFilename}... ${Math.round((frameIndex / grandTotalFrames) * 100)}%`;
+                    } else {
+                        renderStatusText.innerText = `ক্লিপ ${clipIndex + 1}/${state.clips.length} প্রসেস হচ্ছে... (ফ্রেম: ${clipFrameIndex}/${clipFrames})`;
+                    }
+
+                    if (clipFrameIndex >= clipFrames || video.currentTime >= clipTrimEnd || video.ended) {
+                        resolve();
+                        return;
+                    }
+
+                    video.requestVideoFrameCallback(onFrame);
+                    safetyTimeout = setTimeout(triggerSafety, 600);
+                    video.play().catch(err => { /* ignore */ });
+                }
+
                 async function onFrame(now, metadata) {
+                    clearSafety();
                     if (exportCancelled || clipFrameIndex >= clipFrames) {
                         video.pause();
                         resolve();
@@ -366,44 +421,19 @@ document.addEventListener('DOMContentLoaded', () => {
 
                     const targetTime = clipTrimStart + (clipFrameIndex / 30);
                     
-                    if (video.currentTime >= targetTime - 0.015) {
+                    if (video.currentTime >= targetTime - 0.015 || video.ended) {
                         video.pause(); // Pause immediately to hold the frame
-
-                        if (window.drawEditorFrame) {
-                            window.drawEditorFrame();
-                        }
-
-                        const frameBlob = await new Promise(r => canvas.toBlob(r, 'image/jpeg', 0.95));
-                        ws.send(frameBlob);
-
-                        clipFrameIndex++;
-                        frameIndex++;
-
-                        const elapsed = video.currentTime - clipTrimStart;
-                        const totalElapsed = elapsedBeforeCurrentClip + elapsed;
-                        const progressPercent = grandTotalDuration > 0 ? Math.min(100, (totalElapsed / grandTotalDuration) * 100) : 100;
-                        const uiProgress = 10 + Math.round(progressPercent * 0.8);
-                        setProgress(uiProgress);
-                        
-                        if (isBatch) {
-                            renderStatusText.innerText = `[Batch ${batchIndex}/${batchCount}] rendering ${batchFilename}... ${Math.round((frameIndex / grandTotalFrames) * 100)}%`;
-                        } else {
-                            renderStatusText.innerText = `ক্লিপ ${clipIndex + 1}/${state.clips.length} প্রসেস হচ্ছে... (ফ্রেম: ${clipFrameIndex}/${clipFrames})`;
-                        }
-
-                        if (clipFrameIndex >= clipFrames || video.currentTime >= clipTrimEnd) {
-                            resolve();
-                            return;
-                        }
+                        await captureFrameAndAdvance();
+                    } else {
+                        video.requestVideoFrameCallback(onFrame);
+                        safetyTimeout = setTimeout(triggerSafety, 600);
+                        video.play().catch(err => { /* ignore */ });
                     }
-
-                    // Request next frame and play to advance
-                    video.requestVideoFrameCallback(onFrame);
-                    video.play().catch(err => { /* ignore */ });
                 }
 
-                // Initial play triggers the loop
+                // Start the loop
                 video.requestVideoFrameCallback(onFrame);
+                safetyTimeout = setTimeout(triggerSafety, 1000);
                 video.play().catch(err => { /* ignore */ });
             });
         }

@@ -81,6 +81,7 @@ wss.on('connection', (ws) => {
                     const audioPath = path.join(tempDir, 'audio.wav');
                     fs.writeFileSync(audioPath, message);
                     console.log('Saved mixed WAV audio file.');
+                    mode = 'frames'; // Switch mode to receive video frames
                     ws.send(JSON.stringify({ type: 'audio_ok' }));
                 }
             }
@@ -146,7 +147,8 @@ function compileVideo(ws, tempDir, filename, totalFrames) {
             '-c:v libx264',
             '-pix_fmt yuv420p',
             '-preset medium',
-            '-crf 23'
+            '-crf 23',
+            '-vf', 'scale=trunc(iw/2)*2:trunc(ih/2)*2'
         ])
         .output(compiledPath.replace(/\\/g, '/'));
 
@@ -174,8 +176,14 @@ function compileVideo(ws, tempDir, filename, totalFrames) {
                 cleanupDir(tempDir);
             }, 5000);
         })
-        .on('error', (err) => {
+        .on('error', (err, stdout, stderr) => {
             console.error('FFmpeg compile error:', err);
+            console.error('FFmpeg stderr:', stderr);
+            try {
+                fs.writeFileSync(path.join(__dirname, 'ffmpeg_error.log'), `Error: ${err.message}\nStdout:\n${stdout}\nStderr:\n${stderr}`);
+            } catch (writeErr) {
+                console.error('Failed to write ffmpeg_error.log:', writeErr);
+            }
             ws.send(JSON.stringify({ type: 'error', message: `FFmpeg error: ${err.message}` }));
             cleanupDir(tempDir);
         })
