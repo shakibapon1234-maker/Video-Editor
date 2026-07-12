@@ -36,10 +36,10 @@ document.addEventListener('DOMContentLoaded', () => {
     // and re-issuing the seek if needed -- until the position actually matches
     // (within 150ms of playback), only giving up after maxWaitMs so a genuinely
     // broken seek can't hang the export forever.
-    async function waitForSeek(video, targetTime, maxWaitMs = 4000) {
+    async function waitForSeek(video, targetTime, maxWaitMs = 4000, tolerance = 0.01) {
         const seekStart = performance.now();
         video.currentTime = targetTime;
-        while (Math.abs(video.currentTime - targetTime) > 0.15) {
+        while (Math.abs(video.currentTime - targetTime) > tolerance) {
             if (performance.now() - seekStart > maxWaitMs) {
                 console.warn(`Seek to ${targetTime}s did not complete within ${maxWaitMs}ms (stuck at ${video.currentTime}s). Forcing and continuing.`);
                 video.currentTime = targetTime;
@@ -52,9 +52,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 };
                 video.addEventListener('seeked', onSeeked);
                 // Re-check periodically even if 'seeked' never fires for this attempt
-                setTimeout(resolveSeek, 150);
+                setTimeout(resolveSeek, 50);
             });
-            if (Math.abs(video.currentTime - targetTime) > 0.15) {
+            if (Math.abs(video.currentTime - targetTime) > tolerance) {
                 video.currentTime = targetTime; // re-issue the seek and try again
             }
         }
@@ -349,7 +349,65 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         }
 
-        // C2. Render Clips
+        // C2. Render Clips using requestVideoFrameCallback play/pause sequential capture
+        async function captureVideoClipSequential(clip, clipTrimStart, clipTrimEnd, clipFrames, clipIndex) {
+            await waitForSeek(video, clipTrimStart);
+            
+            let clipFrameIndex = 0;
+            video.playbackRate = 0.25; // Play slower to give plenty of time for capturing/sending
+
+            return new Promise((resolve) => {
+                async function onFrame(now, metadata) {
+                    if (exportCancelled || clipFrameIndex >= clipFrames) {
+                        video.pause();
+                        resolve();
+                        return;
+                    }
+
+                    const targetTime = clipTrimStart + (clipFrameIndex / 30);
+                    
+                    if (video.currentTime >= targetTime - 0.015) {
+                        video.pause(); // Pause immediately to hold the frame
+
+                        if (window.drawEditorFrame) {
+                            window.drawEditorFrame();
+                        }
+
+                        const frameBlob = await new Promise(r => canvas.toBlob(r, 'image/jpeg', 0.95));
+                        ws.send(frameBlob);
+
+                        clipFrameIndex++;
+                        frameIndex++;
+
+                        const elapsed = video.currentTime - clipTrimStart;
+                        const totalElapsed = elapsedBeforeCurrentClip + elapsed;
+                        const progressPercent = grandTotalDuration > 0 ? Math.min(100, (totalElapsed / grandTotalDuration) * 100) : 100;
+                        const uiProgress = 10 + Math.round(progressPercent * 0.8);
+                        setProgress(uiProgress);
+                        
+                        if (isBatch) {
+                            renderStatusText.innerText = `[Batch ${batchIndex}/${batchCount}] rendering ${batchFilename}... ${Math.round((frameIndex / grandTotalFrames) * 100)}%`;
+                        } else {
+                            renderStatusText.innerText = `ক্লিপ ${clipIndex + 1}/${state.clips.length} প্রসেস হচ্ছে... (ফ্রেম: ${clipFrameIndex}/${clipFrames})`;
+                        }
+
+                        if (clipFrameIndex >= clipFrames || video.currentTime >= clipTrimEnd) {
+                            resolve();
+                            return;
+                        }
+                    }
+
+                    // Request next frame and play to advance
+                    video.requestVideoFrameCallback(onFrame);
+                    video.play().catch(err => { /* ignore */ });
+                }
+
+                // Initial play triggers the loop
+                video.requestVideoFrameCallback(onFrame);
+                video.play().catch(err => { /* ignore */ });
+            });
+        }
+
         let elapsedBeforeCurrentClip = 0;
         for (let clipIndex = 0; clipIndex < state.clips.length; clipIndex++) {
             if (exportCancelled) break;
@@ -359,7 +417,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const clipTrimDuration = Math.max(0, clipTrimEnd - clipTrimStart);
             if (clipTrimDuration <= 0) continue;
 
-            // Load clip into video element
+            // Load clip
             if (clip.type === 'image') {
                 video.src = '';
                 state.duration = clip.duration;
@@ -386,35 +444,36 @@ document.addEventListener('DOMContentLoaded', () => {
             state.cropH = (clip.cropH !== undefined) ? clip.cropH : 1;
 
             const clipFrames = Math.ceil(clipTrimDuration * 30);
-            for (let f = 0; f < clipFrames; f++) {
-                if (exportCancelled) break;
+            
+            if (clip.type === 'image') {
+                for (let f = 0; f < clipFrames; f++) {
+                    if (exportCancelled) break;
 
-                const elapsedSecInClip = f / 30;
-                const targetTime = clipTrimStart + elapsedSecInClip;
-
-                if (clip.type === 'image') {
+                    const elapsedSecInClip = f / 30;
+                    const targetTime = clipTrimStart + elapsedSecInClip;
                     state.currentTime = targetTime;
-                } else {
-                    await waitForSeek(video, targetTime);
-                }
 
-                if (window.drawEditorFrame) {
-                    window.drawEditorFrame();
-                }
+                    if (window.drawEditorFrame) {
+                        window.drawEditorFrame();
+                    }
 
-                const frameBlob = await new Promise(resolve => canvas.toBlob(resolve, 'image/jpeg', 0.95));
-                ws.send(frameBlob);
+                    const frameBlob = await new Promise(resolve => canvas.toBlob(resolve, 'image/jpeg', 0.95));
+                    ws.send(frameBlob);
 
-                frameIndex++;
-                const uiProgress = 10 + Math.round((frameIndex / grandTotalFrames) * 80);
-                setProgress(uiProgress);
-                
-                if (isBatch) {
-                    renderStatusText.innerText = `[Batch ${batchIndex}/${batchCount}] rendering ${batchFilename}... ${Math.round((frameIndex / grandTotalFrames) * 100)}%`;
-                } else {
-                    renderStatusText.innerText = `ক্লিপ ${clipIndex + 1}/${state.clips.length} প্রসেস হচ্ছে... (ফ্রেম: ${f + 1}/${clipFrames})`;
+                    frameIndex++;
+                    const uiProgress = 10 + Math.round((frameIndex / grandTotalFrames) * 80);
+                    setProgress(uiProgress);
+                    
+                    if (isBatch) {
+                        renderStatusText.innerText = `[Batch ${batchIndex}/${batchCount}] rendering ${batchFilename}... ${Math.round((frameIndex / grandTotalFrames) * 100)}%`;
+                    } else {
+                        renderStatusText.innerText = `ক্লিপ ${clipIndex + 1}/${state.clips.length} প্রসেস হচ্ছে... (ফ্রেম: ${f + 1}/${clipFrames})`;
+                    }
                 }
+            } else {
+                await captureVideoClipSequential(clip, clipTrimStart, clipTrimEnd, clipFrames, clipIndex);
             }
+            
             elapsedBeforeCurrentClip += clipTrimDuration;
         }
 
@@ -484,9 +543,10 @@ document.addEventListener('DOMContentLoaded', () => {
         state.endTime = originalEndTime;
         state.cropX = originalCropX;
         state.cropY = originalCropY;
-        state.cropW = originalCropW;
-        state.cropH = originalCropH;
+        state.cropW = (originalCropW !== undefined) ? originalCropW : 1;
+        state.cropH = (originalCropH !== undefined) ? originalCropH : 1;
         video.currentTime = state.startTime;
+        video.playbackRate = 1.0; // Restore standard playback speed
         if (!window.setSpeakerMuted || !window.setSpeakerMuted(false)) {
             video.volume = Math.min(1.0, state.videoVolume);
         }

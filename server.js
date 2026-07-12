@@ -132,12 +132,13 @@ function compileVideo(ws, tempDir, filename, totalFrames) {
     ws.send(JSON.stringify({ type: 'progress', step: 'compiling', current: 0, total: 100 }));
 
     const hasAudio = fs.existsSync(audioPath);
+    const inputPattern = path.join(tempDir, 'frame_%05d.jpg').replace(/\\/g, '/');
     let command = ffmpeg()
-        .input(path.join(tempDir, 'frame_%05d.jpg'))
+        .input(inputPattern)
         .inputFPS(30);
 
     if (hasAudio) {
-        command = command.input(audioPath);
+        command = command.input(audioPath.replace(/\\/g, '/'));
     }
 
     command
@@ -147,7 +148,7 @@ function compileVideo(ws, tempDir, filename, totalFrames) {
             '-preset medium',
             '-crf 23'
         ])
-        .output(compiledPath);
+        .output(compiledPath.replace(/\\/g, '/'));
 
     if (hasAudio) {
         command = command.outputOptions([
