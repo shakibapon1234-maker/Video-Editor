@@ -1952,6 +1952,303 @@ document.addEventListener('DOMContentLoaded', () => {
         renderSubtitleList();
         syncSubtitleStyleUI();
     };
+    // Offline audio rendering engine using OfflineAudioContext
+    window.renderAudioOffline = async function(totalDuration) {
+        if (!state.clips || state.clips.length === 0) {
+            return null;
+        }
+
+        const OfflineCtx = window.OfflineAudioContext || window.webkitOfflineAudioContext;
+        const sampleRate = 48000;
+        const offlineCtx = new OfflineCtx(2, sampleRate * totalDuration, sampleRate);
+
+        // DSP nodes on the Speech path (video clips & voiceover)
+        const hp = offlineCtx.createBiquadFilter();
+        hp.type = 'highpass';
+        hp.frequency.setValueAtTime(state.isNoiseCancelActive ? Math.max(10, state.highpassFreq || 80) : 10, 0);
+
+        const lp = offlineCtx.createBiquadFilter();
+        lp.type = 'lowpass';
+        lp.frequency.setValueAtTime(state.isNoiseCancelActive ? Math.min(22000, state.lowpassFreq || 8000) : 22000, 0);
+
+        // Compressor
+        const comp = offlineCtx.createDynamicsCompressor();
+        comp.threshold.setValueAtTime(-20, 0);
+        comp.knee.setValueAtTime(18, 0);
+        comp.ratio.setValueAtTime(3, 0);
+        comp.attack.setValueAtTime(0.008, 0);
+        comp.release.setValueAtTime(0.18, 0);
+
+        const makeup = offlineCtx.createGain();
+        makeup.gain.setValueAtTime(1.0, 0);
+
+        const speechGate = offlineCtx.createGain();
+        speechGate.gain.setValueAtTime(1.0, 0);
+
+        // AI Denoise (RNNoise AudioWorklet) — the live preview graph inserts this
+        // between the lowpass filter and the noise gate (see routeAIDenoise/
+        // setAIDenoiseEnabled above). AudioWorkletNodes cannot be shared across
+        // contexts, so a fresh worklet module load + node is required here for
+        // the OfflineAudioContext used by the server-render pipeline. Without
+        // this, "AI Denoise" would appear enabled in the UI but silently have
+        // zero effect on the actual rendered/exported file.
+        let offlineAiDenoiseNode = null;
+        if (state.isAiDenoiseActive && offlineCtx.audioWorklet && window.WebAssembly) {
+            try {
+                await offlineCtx.audioWorklet.addModule('vendor/rnnoise/ai-denoise-worklet.js');
+                offlineAiDenoiseNode = new AudioWorkletNode(offlineCtx, 'ai-denoise-processor', {
+                    channelCount: 2,
+                    channelCountMode: 'explicit',
+                    outputChannelCount: [2]
+                });
+            } catch (err) {
+                console.error('Offline AI denoise setup failed; exporting with standard filter only:', err);
+                offlineAiDenoiseNode = null;
+            }
+        }
+
+        // Route: hp -> lp -> [aiDenoise if enabled] -> speechGate -> comp -> makeup -> offlineCtx.destination
+        hp.connect(lp);
+        if (offlineAiDenoiseNode) {
+            lp.connect(offlineAiDenoiseNode);
+            offlineAiDenoiseNode.connect(speechGate);
+        } else {
+            lp.connect(speechGate);
+        }
+        speechGate.connect(comp);
+        comp.connect(makeup);
+        makeup.connect(offlineCtx.destination);
+
+        // --- 1. Video Clips Audio ---
+        let timelineTime = 0;
+        const decodedVideoBuffers = [];
+
+        // Pre-decode all video clips
+        for (let i = 0; i < state.clips.length; i++) {
+            const clip = state.clips[i];
+            const clipTrimDuration = Math.max(0, clip.end - clip.start);
+            if (clipTrimDuration <= 0) continue;
+
+            if (clip.type !== 'image' && clip.file) {
+                try {
+                    const arrayBuffer = await clip.file.arrayBuffer();
+                    const decodeCtx = new (window.AudioContext || window.webkitAudioContext)();
+                    const audioBuffer = await decodeCtx.decodeAudioData(arrayBuffer);
+                    await decodeCtx.close();
+
+                    decodedVideoBuffers.push({
+                        buffer: audioBuffer,
+                        clip,
+                        timelineStart: timelineTime,
+                        clipTrimDuration
+                    });
+                } catch (err) {
+                    console.error(`Error decoding audio for clip ${clip.name}:`, err);
+                }
+            }
+            timelineTime += clipTrimDuration;
+        }
+
+        // Add Video clips to offlineCtx
+        decodedVideoBuffers.forEach(({ buffer, clip, timelineStart, clipTrimDuration }) => {
+            const source = offlineCtx.createBufferSource();
+            source.buffer = buffer;
+
+            const clipGain = offlineCtx.createGain();
+            clipGain.gain.setValueAtTime(state.videoVolume, 0);
+
+            // Connect voice changer if enabled on original video
+            if (state.applyVoiceChangerToVideo && state.voiceoverProfile && state.voiceoverProfile !== 'none') {
+                const changer = new VoiceChangerEffect(offlineCtx);
+                changer.setProfile(state.voiceoverProfile);
+                source.connect(changer.input);
+                changer.output.connect(clipGain);
+            } else {
+                source.connect(clipGain);
+            }
+
+            clipGain.connect(hp);
+
+            // Play the trimmed portion
+            source.start(timelineStart, clip.start, clipTrimDuration);
+        });
+
+        // --- 2. Voiceover ---
+        let voiceoverBuffer = null;
+        if (state.voiceoverRecorded && state.voiceoverBlob) {
+            try {
+                const arrayBuffer = await state.voiceoverBlob.arrayBuffer();
+                const decodeCtx = new (window.AudioContext || window.webkitAudioContext)();
+                voiceoverBuffer = await decodeCtx.decodeAudioData(arrayBuffer);
+                await decodeCtx.close();
+
+                const source = offlineCtx.createBufferSource();
+                source.buffer = voiceoverBuffer;
+
+                const voGain = offlineCtx.createGain();
+                voGain.gain.setValueAtTime(Math.min(1.0, state.voiceoverVolume), 0);
+
+                if (state.voiceoverProfile && state.voiceoverProfile !== 'none') {
+                    const changer = new VoiceChangerEffect(offlineCtx);
+                    changer.setProfile(state.voiceoverProfile);
+                    source.connect(changer.input);
+                    changer.output.connect(voGain);
+                } else {
+                    source.connect(voGain);
+                }
+
+                voGain.connect(hp);
+                source.start(0);
+            } catch (err) {
+                console.error('Error decoding voiceover audio:', err);
+            }
+        }
+
+        // --- 3. Noise Gate & Compressor Auto Makeup (Envelope Analysis) ---
+        if (state.isNoiseCancelActive) {
+            const interval = 0.05; // 50ms
+            const threshold = Math.pow(10, state.noiseGateThreshold / 20);
+            const openAt = threshold * 1.78; // +5dB hysteresis
+            
+            let gateOpen = true;
+            for (let t = 0; t < totalDuration; t += interval) {
+                let maxRms = 0;
+                
+                // Check voiceover
+                if (voiceoverBuffer) {
+                    const sampleOffset = Math.floor(t * voiceoverBuffer.sampleRate);
+                    if (sampleOffset < voiceoverBuffer.length) {
+                        const len = Math.min(voiceoverBuffer.length - sampleOffset, Math.floor(interval * voiceoverBuffer.sampleRate));
+                        const data = voiceoverBuffer.getChannelData(0);
+                        let sum = 0;
+                        for (let j = 0; j < len; j++) sum += data[sampleOffset + j] * data[sampleOffset + j];
+                        const rms = Math.sqrt(sum / Math.max(1, len));
+                        if (rms > maxRms) maxRms = rms;
+                    }
+                }
+                
+                // Check video clips
+                decodedVideoBuffers.forEach(({ buffer, clip, timelineStart, clipTrimDuration }) => {
+                    if (t >= timelineStart && t < timelineStart + clipTrimDuration) {
+                        const clipTime = clip.start + (t - timelineStart);
+                        const sampleOffset = Math.floor(clipTime * buffer.sampleRate);
+                        if (sampleOffset < buffer.length) {
+                            const len = Math.min(buffer.length - sampleOffset, Math.floor(interval * buffer.sampleRate));
+                            const data = buffer.getChannelData(0);
+                            let sum = 0;
+                            for (let j = 0; j < len; j++) sum += data[sampleOffset + j] * data[sampleOffset + j];
+                            const rms = Math.sqrt(sum / Math.max(1, len));
+                            if (rms > maxRms) maxRms = rms;
+                        }
+                    }
+                });
+                
+                if (gateOpen && maxRms < threshold) gateOpen = false;
+                else if (!gateOpen && maxRms > openAt) gateOpen = true;
+                
+                const targetGate = gateOpen ? 1.0 : 0.02;
+                speechGate.gain.setValueAtTime(targetGate, t);
+            }
+            makeup.gain.setValueAtTime(1.5, 0); // compensation for compressor
+        }
+
+        // --- 4. Background Music Tracks ---
+        const bgMusicGains = [];
+        for (let i = 0; i < state.bgMusicTracks.length; i++) {
+            const track = state.bgMusicTracks[i];
+            if (track.blob) {
+                try {
+                    const arrayBuffer = await track.blob.arrayBuffer();
+                    const decodeCtx = new (window.AudioContext || window.webkitAudioContext)();
+                    const musicBuffer = await decodeCtx.decodeAudioData(arrayBuffer);
+                    await decodeCtx.close();
+
+                    const source = offlineCtx.createBufferSource();
+                    source.buffer = musicBuffer;
+                    source.loop = (track.loopMode === 'loop');
+
+                    const trackGain = offlineCtx.createGain();
+                    trackGain.gain.setValueAtTime(Math.min(1.0, track.volume), 0);
+
+                    source.connect(trackGain);
+                    trackGain.connect(offlineCtx.destination);
+
+                    const windowStart = track.startSec || 0;
+                    const windowEnd = (track.endSec == null || !isFinite(track.endSec))
+                        ? totalDuration
+                        : track.endSec;
+
+                    source.start(Math.max(0, windowStart));
+                    try { source.stop(Math.max(windowStart + 0.05, windowEnd)); } catch(e) {}
+
+                    bgMusicGains.push({
+                        gainNode: trackGain,
+                        track,
+                        windowStart,
+                        windowEnd
+                    });
+                } catch (err) {
+                    console.error('Error decoding background music:', err);
+                }
+            }
+        }
+
+        // --- 5. Ducking Automation on Background Music ---
+        if (state.bgMusicDuckingEnabled && bgMusicGains.length > 0) {
+            const interval = 0.05; // 50ms chunks
+            const threshold = 0.018; // DUCK_RMS_THRESHOLD
+            
+            for (let t = 0; t < totalDuration; t += interval) {
+                let speechActive = false;
+                
+                if (voiceoverBuffer) {
+                    const sampleOffset = Math.floor(t * voiceoverBuffer.sampleRate);
+                    if (sampleOffset < voiceoverBuffer.length) {
+                        const len = Math.min(voiceoverBuffer.length - sampleOffset, Math.floor(interval * voiceoverBuffer.sampleRate));
+                        const data = voiceoverBuffer.getChannelData(0);
+                        let sum = 0;
+                        for (let j = 0; j < len; j++) sum += data[sampleOffset + j] * data[sampleOffset + j];
+                        const rms = Math.sqrt(sum / Math.max(1, len));
+                        if (rms > threshold) speechActive = true;
+                    }
+                }
+                
+                decodedVideoBuffers.forEach(({ buffer, clip, timelineStart, clipTrimDuration }) => {
+                    if (t >= timelineStart && t < timelineStart + clipTrimDuration) {
+                        const clipTime = clip.start + (t - timelineStart);
+                        const sampleOffset = Math.floor(clipTime * buffer.sampleRate);
+                        if (sampleOffset < buffer.length) {
+                            const len = Math.min(buffer.length - sampleOffset, Math.floor(interval * buffer.sampleRate));
+                            const data = buffer.getChannelData(0);
+                            let sum = 0;
+                            for (let j = 0; j < len; j++) sum += data[sampleOffset + j] * data[sampleOffset + j];
+                            const rms = Math.sqrt(sum / Math.max(1, len));
+                            if (rms > threshold) speechActive = true;
+                        }
+                    }
+                });
+
+                if (speechActive) {
+                    bgMusicGains.forEach(({ gainNode, track }) => {
+                        const fullLevel = Math.min(1.0, track.volume);
+                        const duckedLevel = fullLevel * 0.25; // DUCK_DEPTH
+                        gainNode.gain.setValueAtTime(duckedLevel, t);
+                    });
+                } else {
+                    bgMusicGains.forEach(({ gainNode, track }) => {
+                        const fullLevel = Math.min(1.0, track.volume);
+                        gainNode.gain.setValueAtTime(fullLevel, t);
+                    });
+                }
+            }
+        }
+
+        // --- 6. Render Offline Audio ---
+        console.log('Rendering audio offline...');
+        const renderedBuffer = await offlineCtx.startRendering();
+        console.log('Audio rendering complete.');
+        return renderedBuffer;
+    };
 
     // Stop listening automatically once the trimmed playback range ends or video is paused
     state.video.addEventListener('pause', () => {

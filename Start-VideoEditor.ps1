@@ -23,11 +23,14 @@ if ($existing) {
     Start-Sleep -Milliseconds 500
 }
 
-# Start serve server — serve root folder directly (index.html is here)
+# Start Node.js Express & WebSocket server
 $serverJob = Start-Job -ScriptBlock {
     param($dir)
     Set-Location $dir
-    npx serve . -p 4000 --no-clipboard
+    if (-not (Test-Path "node_modules")) {
+        npm install
+    }
+    node server.js
 } -ArgumentList $scriptDir
 
 # Wait for server to start

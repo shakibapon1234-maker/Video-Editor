@@ -1,0 +1,15 @@
+{
+  "name": "studio-flow-video-editor",
+  "version": "1.0.0",
+  "description": "Studio Flow Video Editor with Server-Side Rendering support",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "express": "^4.19.2",
+    "ws": "^8.16.0",
+    "fluent-ffmpeg": "^2.1.2",
+    "ffmpeg-static": "^5.2.0"
+  }
+}

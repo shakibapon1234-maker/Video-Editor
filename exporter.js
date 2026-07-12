@@ -193,108 +193,25 @@ document.addEventListener('DOMContentLoaded', () => {
         const originalCropW = state.cropW;
         const originalCropH = state.cropH;
 
-        // --- Step A: Set up canvas capture stream ---
-        renderStatusText.innerText = 'Capturing canvas stream...';
-        setProgress(5);
+        // Establish WebSocket connection to the local render server
+        renderStatusText.innerText = 'সার্ভারের সাথে কানেক্ট করা হচ্ছে... (Connecting to render server...)';
+        setProgress(2);
 
-        // Capture canvas at 30fps
-        const canvasStream = canvas.captureStream(30);
+        const wsUrl = `ws://${window.location.hostname || 'localhost'}:4000`;
+        const ws = new WebSocket(wsUrl);
 
-        // Apply quality preset: scale down captured resolution if canvas exceeds the target max dimension
-        const qualityKey = qualitySelect ? qualitySelect.value : '720p';
-        const preset = QUALITY_PRESETS[qualityKey] || QUALITY_PRESETS['720p'];
-
-        const videoTrack = canvasStream.getVideoTracks()[0];
-        if (videoTrack) {
-            const canvasMaxDim = Math.max(canvas.width, canvas.height);
-            if (canvasMaxDim > preset.maxDim) {
-                const scale = preset.maxDim / canvasMaxDim;
-                try {
-                    await videoTrack.applyConstraints({
-                        width: Math.round(canvas.width * scale),
-                        height: Math.round(canvas.height * scale)
-                    });
-                } catch (err) {
-                    console.warn('Resolution constraint not supported, exporting at native canvas size:', err);
-                }
-            }
+        try {
+            await new Promise((resolve, reject) => {
+                ws.onopen = resolve;
+                ws.onerror = () => reject(new Error('Render server connection failed. Please run start-video-editor.bat.'));
+            });
+        } catch (err) {
+            throw err;
         }
 
-        // --- Step B: Set up mixed audio ---
-        renderStatusText.innerText = 'Mixing audio tracks...';
-        setProgress(10);
-
-        let audioMixResult = null;
-        let audioTrack = null;
-
-        if (window.getMixedAudioDestinationStream) {
-            audioMixResult = window.getMixedAudioDestinationStream();
-
-            if (audioMixResult && audioMixResult.stream.getAudioTracks().length > 0) {
-                audioTrack = audioMixResult.stream.getAudioTracks()[0];
-                canvasStream.addTrack(audioTrack);
-            }
-        }
-
-        // --- Step C: Start MediaRecorder ---
-        renderStatusText.innerText = 'Starting recorder...';
-        setProgress(15);
-
-        // Choose best supported format
-        let mimeType = 'video/webm;codecs=vp9,opus';
-        const candidateTypes = [
-            'video/mp4;codecs=h264,aac',
-            'video/mp4;codecs=h264',
-            'video/mp4',
-            'video/webm;codecs=vp9,opus',
-            'video/webm;codecs=vp8,opus',
-            'video/webm;codecs=h264,opus',
-            'video/webm'
-        ];
-        for (const candidate of candidateTypes) {
-            if (MediaRecorder.isTypeSupported(candidate)) {
-                mimeType = candidate;
-                break;
-            }
-        }
-
-        const recorder = new MediaRecorder(canvasStream, {
-            mimeType,
-            videoBitsPerSecond: preset.bitrate
-        });
-
-        const chunks = [];
-        recorder.ondataavailable = (e) => {
-            if (e.data.size > 0) {
-                chunks.push(e.data);
-            }
-        };
-
-        recorder.start(100); // Collect data every 100ms
-        // Mute speaker output during export without muting the Web Audio graph
-        // (video.volume = 0 would silence the MediaRecorder's audio tap too in Chrome)
-        if (!window.setSpeakerMuted || !window.setSpeakerMuted(true)) {
-            video.volume = 0;
-        }
-
-        // Cancellation (Phase 6B): tears down the recorder/audio graph and restores
-        // the editor to its pre-export state without producing a download, then
-        // resets the render UI. Shared by every phase below (intro / clips / outro).
+        // Cancellation handler
         async function finishCancelled() {
             renderStatusText.innerText = 'বাতিল করা হয়েছে (Cancelled)';
-            try {
-                if (recorder.state !== 'inactive') {
-                    await new Promise((resolve) => { recorder.onstop = resolve; recorder.stop(); });
-                }
-            } catch (e) { /* ignore */ }
-
-            if (audioMixResult && audioMixResult.cleanup) {
-                audioMixResult.cleanup();
-            }
-            if (audioTrack) {
-                try { canvasStream.removeTrack(audioTrack); } catch (e) {}
-            }
-
             if (video.src !== originalSrc) {
                 await new Promise((resolve) => {
                     video.onloadedmetadata = () => resolve();
@@ -323,74 +240,117 @@ document.addEventListener('DOMContentLoaded', () => {
             if (renderEtaText) renderEtaText.innerText = '';
         }
 
-        // --- Step D0: Intro / Outro Templates (Phase 5C) ---
-        // Fully canvas-drawn title cards rendered straight onto the same canvas
-        // MediaRecorder is capturing, before the first clip and after the last one.
+        // --- Step A: Offline Audio Rendering ---
+        renderStatusText.innerText = 'অডিও মিক্স করা হচ্ছে... (Mixing audio offline...)';
+        setProgress(5);
+
         const introDur = state.introEnabled ? Math.max(0.3, parseFloat(state.introDuration) || 3) : 0;
         const outroDur = state.outroEnabled ? Math.max(0.3, parseFloat(state.outroDuration) || 3) : 0;
-        const grandTotal = introDur + totalDuration + outroDur;
+        const grandTotalDuration = introDur + totalDuration + outroDur;
+        const grandTotalFrames = Math.ceil(grandTotalDuration * 30);
 
-        async function renderIntroOutroPhase(role, phaseStartElapsed) {
-            const durSec = role === 'intro' ? introDur : outroDur;
-            if (durSec <= 0) return;
-            const config = role === 'intro'
-                ? { template: state.introTemplate, title: state.introTitle, subtitle: state.introSubtitle }
-                : { template: state.outroTemplate, title: state.outroTitle, subtitle: state.outroSubtitle };
-
-            const worker = getTickerWorker();
-            await new Promise((resolve) => {
-                const segStart = performance.now();
-                function tick() {
-                    if (exportCancelled) {
-                        worker.removeEventListener('message', tick);
-                        resolve();
-                        return;
-                    }
-                    const elapsedSec = (performance.now() - segStart) / 1000;
-                    const t = Math.min(1, elapsedSec / durSec);
-
-                    if (window.drawIntroOutroSegment) {
-                        window.drawIntroOutroSegment(state.ctx, canvas.width, canvas.height, config, t);
-                    }
-
-                    const totalElapsed = phaseStartElapsed + Math.min(elapsedSec, durSec);
-                    const progressPercent = grandTotal > 0 ? Math.min(100, (totalElapsed / grandTotal) * 100) : 100;
-                    const uiProgress = 20 + (progressPercent * 0.75);
-                    setProgress(Math.round(uiProgress));
-                    if (isBatch) {
-                        renderStatusText.innerText = `[Batch ${batchIndex}/${batchCount}] Rendering ${role} for ${batchFilename}... ${Math.round(progressPercent)}%`;
-                    } else {
-                        renderStatusText.innerText = role === 'intro' ? 'Rendering intro...' : 'Rendering outro...';
-                    }
-
-                    if (t >= 1) {
-                        worker.removeEventListener('message', tick);
-                        resolve();
-                    }
+        let audioBlob = null;
+        if (window.renderAudioOffline) {
+            try {
+                const audioBuffer = await window.renderAudioOffline(grandTotalDuration);
+                if (audioBuffer) {
+                    audioBlob = v2aAudioBufferToWavBlob(audioBuffer);
                 }
-                worker.addEventListener('message', tick);
+            } catch (err) {
+                console.error('Offline audio rendering failed:', err);
+            }
+        }
+
+        if (exportCancelled) { ws.close(); await finishCancelled(); return; }
+
+        // --- Step B: Initialize WebSocket Session ---
+        let filename;
+        if (isBatch && batchFilename) {
+            const baseName = batchFilename.substring(0, batchFilename.lastIndexOf('.')) || batchFilename;
+            filename = `${baseName}_edited.mp4`;
+        } else {
+            const timestamp = new Date().toISOString().slice(0, 16).replace('T', '_').replace(':', '-');
+            filename = `facebook-video-${timestamp}.mp4`;
+        }
+
+        ws.send(JSON.stringify({
+            type: 'init',
+            totalFrames: grandTotalFrames,
+            filename: filename
+        }));
+
+        await new Promise((resolve) => {
+            const onMsg = (event) => {
+                const data = JSON.parse(event.data);
+                if (data.type === 'init_ok') {
+                    ws.removeEventListener('message', onMsg);
+                    resolve();
+                }
+            };
+            ws.addEventListener('message', onMsg);
+        });
+
+        // Send audio file if we rendered one
+        if (audioBlob && !exportCancelled) {
+            ws.send(JSON.stringify({ type: 'audio_start' }));
+            await new Promise((resolve) => {
+                const onMsg = (event) => {
+                    const data = JSON.parse(event.data);
+                    if (data.type === 'audio_ready') {
+                        ws.removeEventListener('message', onMsg);
+                        resolve();
+                    }
+                };
+                ws.addEventListener('message', onMsg);
+            });
+            ws.send(audioBlob);
+            await new Promise((resolve) => {
+                const onMsg = (event) => {
+                    const data = JSON.parse(event.data);
+                    if (data.type === 'audio_ok') {
+                        ws.removeEventListener('message', onMsg);
+                        resolve();
+                    }
+                };
+                ws.addEventListener('message', onMsg);
             });
         }
 
-        if (isBatch) {
-            renderStatusText.innerText = `[Batch ${batchIndex}/${batchCount}] Rendering intro for ${batchFilename}...`;
-        } else {
-            renderStatusText.innerText = 'Rendering intro...';
-        }
-        await renderIntroOutroPhase('intro', 0);
-        if (exportCancelled) { await finishCancelled(); return; }
+        if (exportCancelled) { ws.close(); await finishCancelled(); return; }
 
-        // --- Step D: Play through every clip sequentially while recording ---
-        if (isBatch) {
-            renderStatusText.innerText = `[Batch ${batchIndex}/${batchCount}] Rendering frames for ${batchFilename}...`;
-        } else {
-            renderStatusText.innerText = 'Rendering video frames...';
-        }
-        setProgress(20);
+        // --- Step C: Frame-by-Frame Canvas Drawing & Streaming ---
+        renderStatusText.innerText = 'ফ্রেম প্রসেস করা হচ্ছে... (Processing frames...)';
+        setProgress(10);
 
+        let frameIndex = 0;
+
+        // C1. Render Intro if enabled
+        if (state.introEnabled && introDur > 0) {
+            const introFrames = Math.ceil(introDur * 30);
+            for (let f = 0; f < introFrames; f++) {
+                if (exportCancelled) break;
+
+                const t = f / (introFrames - 1 || 1);
+                if (window.drawIntroOutroSegment) {
+                    window.drawIntroOutroSegment(state.ctx, canvas.width, canvas.height, {
+                        template: state.introTemplate,
+                        title: state.introTitle,
+                        subtitle: state.introSubtitle
+                    }, t);
+                }
+
+                const frameBlob = await new Promise(resolve => canvas.toBlob(resolve, 'image/jpeg', 0.95));
+                ws.send(frameBlob);
+
+                frameIndex++;
+                const uiProgress = 10 + Math.round((frameIndex / grandTotalFrames) * 80);
+                setProgress(uiProgress);
+                renderStatusText.innerText = `ইন্ট্রো ফ্রেম প্রসেস হচ্ছে... (Intro: ${f + 1}/${introFrames})`;
+            }
+        }
+
+        // C2. Render Clips
         let elapsedBeforeCurrentClip = 0;
-        let voiceoverStarted = false;
-
         for (let clipIndex = 0; clipIndex < state.clips.length; clipIndex++) {
             if (exportCancelled) break;
             const clip = state.clips[clipIndex];
@@ -399,7 +359,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const clipTrimDuration = Math.max(0, clipTrimEnd - clipTrimStart);
             if (clipTrimDuration <= 0) continue;
 
-            // Load this clip into the shared video element if it isn't already active (video clips only)
+            // Load clip into video element
             if (clip.type === 'image') {
                 video.src = '';
                 state.duration = clip.duration;
@@ -420,142 +380,97 @@ document.addEventListener('DOMContentLoaded', () => {
                 state.activeClipId = clip.id;
             }
 
-            // Apply this clip's own crop area (each clip can have a different crop).
             state.cropX = clip.cropX || 0;
             state.cropY = clip.cropY || 0;
             state.cropW = (clip.cropW !== undefined) ? clip.cropW : 1;
             state.cropH = (clip.cropH !== undefined) ? clip.cropH : 1;
 
-            if (clip.type === 'image') {
-                state.currentTime = clipTrimStart;
-            } else {
-                video.currentTime = clipTrimStart;
+            const clipFrames = Math.ceil(clipTrimDuration * 30);
+            for (let f = 0; f < clipFrames; f++) {
+                if (exportCancelled) break;
 
-                // Wait for the video to ACTUALLY reach the target position before recording it.
-                // Previously this just waited up to 500ms for a single 'seeked' event and then
-                // moved on regardless -- on a slow/large seek (common under CPU load, e.g. while
-                // Advanced Color Grading is running its own per-frame getImageData/putImageData
-                // pass) the 500ms timeout could fire before the seek actually landed. Recording
-                // would then start from whatever stale position the video was still sitting at
-                // (often much earlier in the file), silently baking extra/wrong footage into the
-                // export -- e.g. a 7 min edit coming out as 10 min, or a B-roll overlay's time
-                // window sliding out of sync with what actually got recorded. This is why it was
-                // intermittent: it only showed up when the seek happened to be slow that run.
-                // Fix: keep polling/re-seeking until currentTime is actually close to the target,
-                // with a generous (but bounded) overall timeout so we never hang forever.
-                await waitForSeek(video, clipTrimStart);
+                const elapsedSecInClip = f / 30;
+                const targetTime = clipTrimStart + elapsedSecInClip;
 
-                if (!window.setSpeakerMuted || !window.setSpeakerMuted(true)) {
-                    video.volume = 0;
+                if (clip.type === 'image') {
+                    state.currentTime = targetTime;
+                } else {
+                    await waitForSeek(video, targetTime);
                 }
-                await video.play();
-            }
 
-            // Start voiceover & background music once, right after the very first clip begins playing,
-            // so they stay in sync with the start of the full stitched timeline.
-            if (!voiceoverStarted) {
-                voiceoverStarted = true;
-                if (audioMixResult && audioMixResult.startVoiceover) {
-                    await audioMixResult.startVoiceover();
+                if (window.drawEditorFrame) {
+                    window.drawEditorFrame();
                 }
-                if (audioMixResult && audioMixResult.startBgMusic) {
-                    await audioMixResult.startBgMusic();
+
+                const frameBlob = await new Promise(resolve => canvas.toBlob(resolve, 'image/jpeg', 0.95));
+                ws.send(frameBlob);
+
+                frameIndex++;
+                const uiProgress = 10 + Math.round((frameIndex / grandTotalFrames) * 80);
+                setProgress(uiProgress);
+                
+                if (isBatch) {
+                    renderStatusText.innerText = `[Batch ${batchIndex}/${batchCount}] rendering ${batchFilename}... ${Math.round((frameIndex / grandTotalFrames) * 100)}%`;
+                } else {
+                    renderStatusText.innerText = `ক্লিপ ${clipIndex + 1}/${state.clips.length} প্রসেস হচ্ছে... (ফ্রেম: ${f + 1}/${clipFrames})`;
                 }
             }
-
-            const clipElapsedBase = elapsedBeforeCurrentClip;
-            const worker = getTickerWorker();
-
-            await new Promise((resolve) => {
-                let lastTickTime = performance.now();
-                function renderTick() {
-                    if (exportCancelled) {
-                        if (clip.type !== 'image' && !video.paused) video.pause();
-                        worker.removeEventListener('message', renderTick);
-                        clearTimeout(safetyTimer);
-                        resolve();
-                        return;
-                    }
-
-                    let currentTime;
-                    if (clip.type === 'image') {
-                        const now = performance.now();
-                        const elapsed = (now - lastTickTime) / 1000;
-                        lastTickTime = now;
-                        state.currentTime += elapsed;
-                        currentTime = state.currentTime;
-                    } else {
-                        currentTime = video.currentTime;
-                    }
-
-                    const elapsedInClip = currentTime - clipTrimStart;
-                    const totalElapsed = introDur + clipElapsedBase + elapsedInClip;
-                    const progressPercent = grandTotal > 0 ? Math.min(100, (totalElapsed / grandTotal) * 100) : 100;
-
-                    if (window.drawEditorFrame) {
-                        window.drawEditorFrame();
-                    }
-
-                    const uiProgress = 20 + (progressPercent * 0.75);
-                    setProgress(Math.round(uiProgress));
-                    if (isBatch) {
-                        renderStatusText.innerText = `[Batch ${batchIndex}/${batchCount}] Rendering ${batchFilename}... ${Math.round(progressPercent)}%`;
-                    } else {
-                        renderStatusText.innerText = `Rendering clip ${clipIndex + 1}/${state.clips.length}... ${Math.round(progressPercent)}%`;
-                    }
-
-                    if (currentTime >= clipTrimEnd || (clip.type !== 'image' && video.ended)) {
-                        if (clip.type !== 'image') {
-                            video.pause();
-                        }
-                        worker.removeEventListener('message', renderTick);
-                        clearTimeout(safetyTimer);
-                        resolve();
-                        return;
-                    }
-                }
-
-                worker.addEventListener('message', renderTick);
-
-                // Safety timeout per-clip (max 10 minutes per clip)
-                const safetyTimer = setTimeout(() => {
-                    if (clip.type !== 'image' && !video.paused) {
-                        video.pause();
-                    }
-                    worker.removeEventListener('message', renderTick);
-                    resolve();
-                }, 600_000);
-            });
-
             elapsedBeforeCurrentClip += clipTrimDuration;
         }
 
-        if (exportCancelled) { await finishCancelled(); return; }
+        // C3. Render Outro if enabled
+        if (state.outroEnabled && outroDur > 0 && !exportCancelled) {
+            const outroFrames = Math.ceil(outroDur * 30);
+            for (let f = 0; f < outroFrames; f++) {
+                if (exportCancelled) break;
 
-        // --- Step D2: Outro (Phase 5C) ---
-        renderStatusText.innerText = 'Rendering outro...';
-        await renderIntroOutroPhase('outro', introDur + totalDuration);
-        if (exportCancelled) { await finishCancelled(); return; }
+                const t = f / (outroFrames - 1 || 1);
+                if (window.drawIntroOutroSegment) {
+                    window.drawIntroOutroSegment(state.ctx, canvas.width, canvas.height, {
+                        template: state.outroTemplate,
+                        title: state.outroTitle,
+                        subtitle: state.outroSubtitle
+                    }, t);
+                }
 
-        // --- Step E: Stop recorder and finalize ---
-        renderStatusText.innerText = 'Finalizing video file...';
-        setProgress(95);
+                const frameBlob = await new Promise(resolve => canvas.toBlob(resolve, 'image/jpeg', 0.95));
+                ws.send(frameBlob);
 
-        await new Promise((resolve) => {
-            recorder.onstop = resolve;
-            recorder.stop();
+                frameIndex++;
+                const uiProgress = 10 + Math.round((frameIndex / grandTotalFrames) * 80);
+                setProgress(uiProgress);
+                renderStatusText.innerText = `আউটরো ফ্রেম প্রসেস হচ্ছে... (Outro: ${f + 1}/${outroFrames})`;
+            }
+        }
+
+        if (exportCancelled) { ws.close(); await finishCancelled(); return; }
+
+        // --- Step D: Server Compilation ---
+        renderStatusText.innerText = 'সার্ভারে ভিডিও তৈরি হচ্ছে... (Compiling video on server...)';
+        setProgress(90);
+
+        ws.send(JSON.stringify({ type: 'compile' }));
+
+        const compileResult = await new Promise((resolve, reject) => {
+            const onMsg = (event) => {
+                const data = JSON.parse(event.data);
+                if (data.type === 'progress' && data.step === 'compiling') {
+                    const percent = 90 + Math.round(data.current * 0.08); // 90% to 98%
+                    setProgress(percent);
+                }
+                else if (data.type === 'complete') {
+                    ws.removeEventListener('message', onMsg);
+                    resolve(data);
+                }
+                else if (data.type === 'error') {
+                    ws.removeEventListener('message', onMsg);
+                    reject(new Error(data.message));
+                }
+            };
+            ws.addEventListener('message', onMsg);
         });
 
-        // Cleanup audio routing
-        if (audioMixResult && audioMixResult.cleanup) {
-            audioMixResult.cleanup();
-        }
-        // Remove the injected audio track from canvas stream
-        if (audioTrack) {
-            try { canvasStream.removeTrack(audioTrack); } catch(e) {}
-        }
-
-        // Restore the editor back to whichever clip/trim was active before export started
+        // Restore editor settings
         if (video.src !== originalSrc) {
             await new Promise((resolve) => {
                 video.onloadedmetadata = () => resolve();
@@ -577,40 +492,30 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         if (window.drawEditorFrame) window.drawEditorFrame();
 
-        // --- Step F: Create download blob ---
-        renderStatusText.innerText = 'Preparing download...';
+        // Finalize Download
         setProgress(98);
+        renderStatusText.innerText = 'ডাউনলোড প্রস্তুত করা হচ্ছে... (Preparing download...)';
 
-        const finalBlob = new Blob(chunks, { type: mimeType });
-        const downloadURL = URL.createObjectURL(finalBlob);
-
-        // Suggest a human-readable filename
-        const ext = mimeType.toLowerCase().includes('mp4') ? 'mp4' : 'webm';
-        let filename;
-        if (isBatch && batchFilename) {
-            const baseName = batchFilename.substring(0, batchFilename.lastIndexOf('.')) || batchFilename;
-            filename = `${baseName}_edited.${ext}`;
-        } else {
-            const timestamp = new Date().toISOString().slice(0, 16).replace('T', '_').replace(':', '-');
-            filename = `facebook-video-${timestamp}.${ext}`;
-        }
+        const downloadURL = compileResult.downloadUrl;
+        const finalFilename = compileResult.filename;
 
         downloadLink.href = downloadURL;
-        downloadLink.download = filename;
+        downloadLink.download = finalFilename;
 
         if (isBatch) {
             downloadLink.click();
             setProgress(100);
-            renderStatusText.innerText = `Saved ${filename}! Proceeding...`;
+            renderStatusText.innerText = `Saved ${finalFilename}! Proceeding...`;
             await new Promise(resolve => setTimeout(resolve, 1000));
+            ws.close();
             return;
         }
 
-        // --- Done! ---
-        setProgress(100);
-        renderStatusText.innerText = 'Complete!';
+        ws.close();
 
-        // Show success box
+        setProgress(100);
+        renderStatusText.innerText = 'সম্পন্ন! (Complete!)';
+
         setTimeout(() => {
             renderProgressBox.style.display = 'none';
             renderSuccessBox.style.display = 'block';
