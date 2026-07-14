@@ -174,6 +174,9 @@ document.addEventListener('DOMContentLoaded', () => {
         } finally {
             stopTickerWorker();
             document.removeEventListener('visibilitychange', handleVisibilityChange);
+            // Ensure the overlay clock override never leaks back into the editor.
+            state.customExportTime = undefined;
+            state.exportTickerTime = undefined;
             if (cancelRenderBtn) cancelRenderBtn.disabled = false;
         }
     }
@@ -192,7 +195,6 @@ document.addEventListener('DOMContentLoaded', () => {
         const originalCropY = state.cropY;
         const originalCropW = state.cropW;
         const originalCropH = state.cropH;
-
         // Establish WebSocket connection to the local render server
         renderStatusText.innerText = 'সার্ভারের সাথে কানেক্ট করা হচ্ছে... (Connecting to render server...)';
         setProgress(2);
@@ -238,6 +240,8 @@ document.addEventListener('DOMContentLoaded', () => {
             if (qualitySelect) qualitySelect.disabled = false;
             renderBtn.innerHTML = '<i class="fa-solid fa-wand-magic-sparkles"></i> Render & Export Video';
             if (renderEtaText) renderEtaText.innerText = '';
+            state.customExportTime = undefined;
+            state.exportTickerTime = undefined;
         }
 
         // --- Step A: Offline Audio Rendering ---
@@ -339,7 +343,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     }, t);
                 }
 
-                const frameBlob = await new Promise(resolve => canvas.toBlob(resolve, 'image/jpeg', 0.95));
+                const frameBlob = await new Promise(resolve => canvas.toBlob(resolve, 'image/jpeg', 0.85));
                 ws.send(frameBlob);
 
                 frameIndex++;
@@ -349,92 +353,89 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         }
 
-        // C2. Render Clips using requestVideoFrameCallback play/pause sequential capture
+        // C2. Render video sequentially. Seeking and re-decoding every single
+        // frame is extremely slow for long clips; pause on each decoded frame,
+        // capture it, then advance to the next one instead.
         async function captureVideoClipSequential(clip, clipTrimStart, clipTrimEnd, clipFrames, clipIndex) {
             await waitForSeek(video, clipTrimStart);
-            
+            video.playbackRate = 1.0;
             let clipFrameIndex = 0;
-            video.playbackRate = 1.0; // Play at normal speed since we pause on every frame anyway
 
-            return new Promise((resolve) => {
-                let safetyTimeout = null;
+            await new Promise((resolve) => {
+                let safetyTimer = null;
+                let frameCallbackId = null;
+                let isCapturing = false;
+                let finished = false;
 
-                function clearSafety() {
-                    if (safetyTimeout) {
-                        clearTimeout(safetyTimeout);
-                        safetyTimeout = null;
+                const finish = () => {
+                    if (finished) return;
+                    finished = true;
+                    if (safetyTimer) clearTimeout(safetyTimer);
+                    if (frameCallbackId !== null && video.cancelVideoFrameCallback) {
+                        video.cancelVideoFrameCallback(frameCallbackId);
                     }
-                }
-
-                function triggerSafety() {
-                    clearSafety();
-                    console.warn(`Safety timeout fired at frame ${clipFrameIndex + 1}/${clipFrames}. Forcing frame capture.`);
                     video.pause();
-                    captureFrameAndAdvance();
-                }
+                    resolve();
+                };
 
-                async function captureFrameAndAdvance() {
-                    if (exportCancelled) {
-                        resolve();
+                const queueNextFrame = () => {
+                    if (finished || exportCancelled || clipFrameIndex >= clipFrames) {
+                        finish();
+                        return;
+                    }
+                    frameCallbackId = video.requestVideoFrameCallback(captureFrame);
+                    safetyTimer = setTimeout(() => {
+                        // Keep the export moving if a browser fails to emit a frame callback.
+                        if (frameCallbackId !== null && video.cancelVideoFrameCallback) {
+                            video.cancelVideoFrameCallback(frameCallbackId);
+                        }
+                        frameCallbackId = null;
+                        video.pause();
+                        captureCurrentFrame();
+                    }, 1000);
+                    video.play().catch(() => captureCurrentFrame());
+                };
+
+                const captureCurrentFrame = async () => {
+                    if (finished || isCapturing) return;
+                    isCapturing = true;
+                    if (safetyTimer) {
+                        clearTimeout(safetyTimer);
+                        safetyTimer = null;
+                    }
+                    frameCallbackId = null;
+                    if (exportCancelled || clipFrameIndex >= clipFrames) {
+                        isCapturing = false;
+                        finish();
                         return;
                     }
 
-                    if (window.drawEditorFrame) {
-                        window.drawEditorFrame();
-                    }
+                    video.pause();
+                    const timelineTime = clipTrimStart + (clipFrameIndex / 30);
+                    state.customExportTime = timelineTime;
+                    state.exportTickerTime = elapsedBeforeCurrentClip + (clipFrameIndex / 30);
+                    if (window.drawEditorFrame) window.drawEditorFrame();
 
-                    const frameBlob = await new Promise(r => canvas.toBlob(r, 'image/jpeg', 0.95));
-                    ws.send(frameBlob);
+                    const frameBlob = await new Promise(r => canvas.toBlob(r, 'image/jpeg', 0.85));
+                    if (frameBlob) ws.send(frameBlob);
 
                     clipFrameIndex++;
                     frameIndex++;
-
-                    const elapsed = video.currentTime - clipTrimStart;
-                    const totalElapsed = elapsedBeforeCurrentClip + elapsed;
+                    const totalElapsed = elapsedBeforeCurrentClip + (clipFrameIndex / 30);
                     const progressPercent = grandTotalDuration > 0 ? Math.min(100, (totalElapsed / grandTotalDuration) * 100) : 100;
-                    const uiProgress = 10 + Math.round(progressPercent * 0.8);
-                    setProgress(uiProgress);
-                    
+                    setProgress(10 + Math.round(progressPercent * 0.8));
+
                     if (isBatch) {
                         renderStatusText.innerText = `[Batch ${batchIndex}/${batchCount}] rendering ${batchFilename}... ${Math.round((frameIndex / grandTotalFrames) * 100)}%`;
                     } else {
                         renderStatusText.innerText = `ক্লিপ ${clipIndex + 1}/${state.clips.length} প্রসেস হচ্ছে... (ফ্রেম: ${clipFrameIndex}/${clipFrames})`;
                     }
+                    isCapturing = false;
+                    queueNextFrame();
+                };
 
-                    if (clipFrameIndex >= clipFrames || video.currentTime >= clipTrimEnd || video.ended) {
-                        resolve();
-                        return;
-                    }
-
-                    video.requestVideoFrameCallback(onFrame);
-                    safetyTimeout = setTimeout(triggerSafety, 600);
-                    video.play().catch(err => { /* ignore */ });
-                }
-
-                async function onFrame(now, metadata) {
-                    clearSafety();
-                    if (exportCancelled || clipFrameIndex >= clipFrames) {
-                        video.pause();
-                        resolve();
-                        return;
-                    }
-
-                    const targetTime = clipTrimStart + (clipFrameIndex / 30);
-                    
-                    if (video.currentTime >= targetTime - 0.015 || video.ended) {
-                        video.pause(); // Pause immediately to hold the frame
-                        await captureFrameAndAdvance();
-                    } else {
-                        video.requestVideoFrameCallback(onFrame);
-                        safetyTimeout = setTimeout(triggerSafety, 600);
-                        video.play().catch(err => { /* ignore */ });
-                    }
-                }
-
-                // Start the loop
-                video.requestVideoFrameCallback(onFrame);
-                safetyTimeout = setTimeout(triggerSafety, 1000);
-                video.play().catch(err => { /* ignore */ });
+                const captureFrame = () => captureCurrentFrame();
+                queueNextFrame();
             });
         }
 
@@ -483,11 +484,16 @@ document.addEventListener('DOMContentLoaded', () => {
                     const targetTime = clipTrimStart + elapsedSecInClip;
                     state.currentTime = targetTime;
 
+                    // Same explicit-clock fix as the video path above so the
+                    // ticker/B-roll clock is exact and independent of any lag.
+                    state.customExportTime = targetTime;
+                    state.exportTickerTime = elapsedBeforeCurrentClip + elapsedSecInClip;
+
                     if (window.drawEditorFrame) {
                         window.drawEditorFrame();
                     }
 
-                    const frameBlob = await new Promise(resolve => canvas.toBlob(resolve, 'image/jpeg', 0.95));
+                    const frameBlob = await new Promise(resolve => canvas.toBlob(resolve, 'image/jpeg', 0.85));
                     ws.send(frameBlob);
 
                     frameIndex++;
@@ -507,6 +513,11 @@ document.addEventListener('DOMContentLoaded', () => {
             elapsedBeforeCurrentClip += clipTrimDuration;
         }
 
+        // Done drawing clips — stop overriding the clock so live preview (and the
+        // post-export restore draw) reads the real video.currentTime again.
+        state.customExportTime = undefined;
+        state.exportTickerTime = undefined;
+
         // C3. Render Outro if enabled
         if (state.outroEnabled && outroDur > 0 && !exportCancelled) {
             const outroFrames = Math.ceil(outroDur * 30);
@@ -522,7 +533,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     }, t);
                 }
 
-                const frameBlob = await new Promise(resolve => canvas.toBlob(resolve, 'image/jpeg', 0.95));
+                const frameBlob = await new Promise(resolve => canvas.toBlob(resolve, 'image/jpeg', 0.85));
                 ws.send(frameBlob);
 
                 frameIndex++;

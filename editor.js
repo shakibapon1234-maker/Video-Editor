@@ -195,7 +195,14 @@ window.VideoEditor = {
     // Image/photo playhead emulation
     imagePlayheadTime: 0,
     lastImageTickTime: 0,
+    // Export-only clocks. The ticker has its own timeline so a delayed video seek
+    // or B-roll draw cannot repeat its scroll position in the rendered output.
+    customExportTime: undefined,
+    exportTickerTime: undefined,
     get currentTime() {
+        if (this.customExportTime !== undefined) {
+            return this.customExportTime;
+        }
         const activeClip = this.clips.find(c => c.id === this.activeClipId);
         if (activeClip && activeClip.type === 'image') {
             return this.imagePlayheadTime || 0;
@@ -2142,9 +2149,16 @@ document.addEventListener('DOMContentLoaded', () => {
                     item._sfxExitPlayed = false;
                 }
 
-                // While paused in Step 3 we always show the overlay so it can be positioned/sized.
-                // Once playing (in any step), respect the real start/end timing so preview matches export.
-                const inRange = (state.currentStep === 3 && !state.isPlaying)
+                // While paused in Step 3 we always show the overlay being EDITED (the
+                // currently selected one) so it can be positioned/sized regardless of
+                // where the playhead sits. Other, non-selected overlays still respect
+                // their real start/end timing — otherwise every B-roll item you've ever
+                // added stacks up on screen at once while you're editing a new one,
+                // which is both visually confusing and breaks click-to-select (an old,
+                // already-exported item's box can sit on top of the one you're trying
+                // to place). Once playing (in any step), everything respects real timing.
+                const isBeingEdited = state.currentStep === 3 && !state.isPlaying && item.id === state.selectedBrollId;
+                const inRange = isBeingEdited
                     ? true
                     : (currentTime >= item.startSec && currentTime <= item.endSec);
                 if (!inRange) return;
@@ -2931,7 +2945,11 @@ document.addEventListener('DOMContentLoaded', () => {
                 const gap = Math.max(60, canvasW * 0.15);
                 const cycleW = textW + gap;
                 const speed = Math.max(10, state.tickerSpeed || 90);
-                const elapsed = state.currentTime || 0;
+                // During export, use the deterministic frame timeline rather than
+                // video.currentTime. Seeking can briefly report the previous frame
+                // while a B-roll overlay is being drawn, which would repeat the
+                // ticker position even though output frames continue advancing.
+                const elapsed = state.exportTickerTime ?? state.currentTime ?? 0;
                 const offset = (elapsed * speed) % cycleW;
                 let x = canvasW - offset;
                 while (x + textW > labelW) {
@@ -3613,9 +3631,18 @@ document.addEventListener('DOMContentLoaded', () => {
     function findBrollPipAt(coords) {
         const canvasW = state.canvas.width;
         const canvasH = state.canvas.height;
+        const currentTime = state.currentTime || 0;
         for (let i = state.brollOverlays.length - 1; i >= 0; i--) {
             const item = state.brollOverlays[i];
             if (item.type !== 'text' && !item.imageImg) continue;
+
+            // Only let the user click-select an overlay that's actually visible on
+            // screen right now — same rule the render loop uses. Without this, an
+            // older overlay whose time window has passed could still "catch" clicks
+            // meant for a different item positioned in the same spot.
+            const isBeingEdited = state.currentStep === 3 && !state.isPlaying && item.id === state.selectedBrollId;
+            const visible = isBeingEdited || (currentTime >= item.startSec && currentTime <= item.endSec);
+            if (!visible) continue;
 
             let px, py, pipW, pipH;
 
@@ -4808,6 +4835,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const brollImageInputSection = document.getElementById('broll-image-input-section');
     const brollTextInputSection = document.getElementById('broll-text-input-section');
     const brollTextInput = document.getElementById('broll-text-input');
+    const brollBulletSelect = document.getElementById('broll-bullet-select');
     const brollTextFontsizeSlider = document.getElementById('broll-text-fontsize');
     const brollTextFontsizeVal = document.getElementById('broll-text-fontsize-val');
     const brollTextColorInput = document.getElementById('broll-text-color');
@@ -5019,8 +5047,15 @@ document.addEventListener('DOMContentLoaded', () => {
 
     if (addBrollTextBtn) {
         addBrollTextBtn.addEventListener('click', () => {
-            const text = brollTextInput.value.trim();
-            if (!text) return;
+            const rawText = brollTextInput.value.trim();
+            if (!rawText) return;
+
+            // Prepend the chosen bullet character (e.g. •, ✔, ➤) so this reads as
+            // one line in a bulleted list. Handy for the "line by line, stacked
+            // list" effect: add several Text B-rolls, each with the same bullet,
+            // positioned on separate lines with overlapping Show From/Until times.
+            const bulletChar = brollBulletSelect && brollBulletSelect.value !== 'none' ? brollBulletSelect.value : '';
+            const text = bulletChar ? `${bulletChar} ${rawText}` : rawText;
 
             const newItem = {
                 id: brollIdCounter++,

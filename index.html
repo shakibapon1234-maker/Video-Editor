@@ -880,6 +880,20 @@
                                         <input type="text" id="broll-text-input" class="form-input" placeholder="যেমনঃ ঢাকা টু কক্সবাজার" maxlength="120">
                                     </div>
                                     <div class="control-group mt-3">
+                                        <label>Bullet Style (বুলেট)</label>
+                                        <select id="broll-bullet-select" class="form-select">
+                                            <option value="none" selected>কোনো বুলেট নেই (None)</option>
+                                            <option value="•">• ডট (Dot)</option>
+                                            <option value="✔">✔ চেকমার্ক (Check)</option>
+                                            <option value="➤">➤ তীর (Arrow)</option>
+                                            <option value="★">★ তারা (Star)</option>
+                                            <option value="▶">▶ প্লে (Play)</option>
+                                            <option value="➕">➕ প্লাস (Plus)</option>
+                                            <option value="🔹">🔹 ডায়মন্ড (Diamond)</option>
+                                        </select>
+                                        <p class="help-text mt-1">লিস্ট আকারে একাধিক লাইন (একটার নিচে আরেকটা) দেখাতে চাইলে প্রতিটা লাইনের জন্য আলাদা Text B-roll যোগ করুন এবং একই বুলেট বেছে নিন।</p>
+                                    </div>
+                                    <div class="control-group mt-3">
                                         <label>Font Size</label>
                                         <div class="slider-val-container">
                                             <input type="range" id="broll-text-fontsize" min="14" max="120" value="48">
