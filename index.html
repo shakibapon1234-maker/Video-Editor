@@ -779,6 +779,51 @@
                         </div>
 
                         <!-- Text Overlay (Phase 2C) -->
+                        <!-- Video Highlight / Callout -->
+                        <div class="card mt-4">
+                            <div class="card-header">
+                                <i class="fa-solid fa-highlighter card-icon"></i>
+                                <h3>Video Highlight (ভিডিও হাইলাইট)</h3>
+                            </div>
+                            <div class="card-body">
+                                <p class="help-text">রানিং ভিডিওর যেকোনো অংশে হাইলাইট বসান। Shape বেছে নিয়ে নিচের বাটন অন করুন, তারপর প্রিভিউতে ক্লিক-ড্র্যাগ করে এরিয়া সিলেক্ট করুন।</p>
+                                <label class="toggle-row mt-3">
+                                    <div><strong>Draw highlight on preview</strong><p>Enable drawing on the running video</p></div>
+                                    <input type="checkbox" id="highlight-tool-toggle"><span class="toggle-slider"></span>
+                                </label>
+                                <div id="highlight-actions-container" style="display:none;">
+                                    <div class="control-group mt-3">
+                                        <label>Shape</label>
+                                        <select id="highlight-shape-select" class="form-input">
+                                            <option value="rect">Rectangle / Square</option>
+                                            <option value="circle">Circle / Oval</option>
+                                            <option value="hexagon">Hexagon</option>
+                                            <option value="underline">Underline</option>
+                                        </select>
+                                    </div>
+                                    <div class="control-group color-select-group mt-2">
+                                        <label>Highlight Color</label>
+                                        <div class="color-picker-wrapper"><input type="color" id="highlight-color" value="#00e5ff"><span class="color-value-text" id="highlight-color-val">#00E5FF</span></div>
+                                    </div>
+                                    <div class="control-group mt-2">
+                                        <label>Line Thickness</label>
+                                        <div class="slider-val-container"><input type="range" id="highlight-line-width" min="2" max="20" value="6"><span id="highlight-line-width-val">6px</span></div>
+                                    </div>
+                                    <div class="control-group mt-2">
+                                        <label>Fill Opacity</label>
+                                        <div class="slider-val-container"><input type="range" id="highlight-fill-opacity" min="0" max="70" value="16"><span id="highlight-fill-opacity-val">16%</span></div>
+                                    </div>
+                                    <div id="highlight-list" class="text-overlay-list mt-3"></div>
+                                    <div id="highlight-timing-container" class="text-overlay-timing mt-3" style="display:none;">
+                                        <p class="help-text">এই হাইলাইটটি কোন সময়টুকু দেখা যাবে তা ঠিক করুন।</p>
+                                        <div class="control-group"><label>Show From (সেকেন্ড)</label><input type="number" id="highlight-start" class="form-input" min="0" step="0.1"></div>
+                                        <div class="control-group mt-2"><label>Show Until (সেকেন্ড)</label><input type="number" id="highlight-end" class="form-input" min="0" step="0.1"></div>
+                                        <button id="delete-highlight-btn" class="btn-text-danger mt-2" type="button"><i class="fa-solid fa-trash-can"></i> Remove This Highlight</button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
                         <div class="card mt-4">
                             <div class="card-header">
                                 <i class="fa-solid fa-font card-icon"></i>
@@ -941,6 +986,29 @@
                                     <div class="control-group mt-2">
                                         <label>Show Until (সেকেন্ড)</label>
                                         <input type="number" id="broll-end" class="form-input" min="0" step="0.1" value="3">
+                                    </div>
+
+                                    <!-- Edit Text B-roll Section (Phase 5D) -->
+                                    <div id="broll-edit-text-section" style="display: none; border-top: 1px solid rgba(255,255,255,0.1); padding-top: 15px; margin-top: 15px;">
+                                        <h4 style="font-size: 13px; color: var(--primary); margin-bottom: 10px;"><i class="fa-solid fa-font"></i> Text Settings (টেক্সট সেটিংস)</h4>
+                                        <div class="control-group">
+                                            <label>Edit Text Content (টেক্সট পরিবর্তন করুন)</label>
+                                            <input type="text" id="broll-edit-text-input" class="form-input" placeholder="যেমনঃ ঢাকা টু কক্সবাজার">
+                                        </div>
+                                        <div class="control-group mt-2">
+                                            <label>Font Size (টেক্সট সাইজ)</label>
+                                            <div class="slider-val-container">
+                                                <input type="range" id="broll-edit-text-fontsize" min="14" max="120" value="48">
+                                                <span id="broll-edit-text-fontsize-val">48px</span>
+                                            </div>
+                                        </div>
+                                        <div class="control-group mt-2">
+                                            <label>Text Color (টেক্সট কালার)</label>
+                                            <div class="color-picker-wrapper">
+                                                <input type="color" id="broll-edit-text-color" value="#ffffff">
+                                                <span class="color-value-text" id="broll-edit-text-color-val">#ffffff</span>
+                                            </div>
+                                        </div>
                                     </div>
 
 

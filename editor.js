@@ -154,6 +154,16 @@ window.VideoEditor = {
     blurDrawStartX: 0,
     blurDrawStartY: 0,
 
+    // Video highlights / callouts — normalized to the rendered video rectangle
+    highlights: [],
+    selectedHighlightId: null,
+    isAddingHighlight: false,
+    isDrawingNewHighlight: false,
+    highlightDrawDrawX: 0,
+    highlightDrawDrawY: 0,
+    highlightDrawDrawW: 0,
+    highlightDrawDrawH: 0,
+
     // Auto Subtitle (Phase 5A)
     subtitles: [],
     isSubtitleRecognitionActive: false,
@@ -1878,6 +1888,14 @@ document.addEventListener('DOMContentLoaded', () => {
         return lut;
     }
 
+    function hexToRgba(hex, alpha) {
+        const safe = String(hex || '#00e5ff').replace('#', '');
+        const expanded = safe.length === 3 ? safe.split('').map(c => c + c).join('') : safe;
+        const value = parseInt(expanded, 16);
+        if (Number.isNaN(value)) return `rgba(0, 229, 255, ${alpha})`;
+        return `rgba(${(value >> 16) & 255}, ${(value >> 8) & 255}, ${value & 255}, ${alpha})`;
+    }
+
     function drawFrame() {
         if (!state.duration) return;
         
@@ -2111,6 +2129,67 @@ document.addEventListener('DOMContentLoaded', () => {
                     }
                     state.ctx.restore();
                 }
+            });
+        }
+
+        // --- Step A2.5: Video Highlights / Callouts ---
+        // Stored independently from B-roll so a highlight can point to any part of
+        // the underlying running video without covering it with an image or text.
+        if (state.highlights && state.highlights.length > 0) {
+            const currentTime = state.currentTime || 0;
+            state.highlights.forEach((item) => {
+                if (currentTime < item.startSec || currentTime > item.endSec) return;
+                const x = drawX + item.x * drawW;
+                const y = drawY + item.y * drawH;
+                const w = item.w * drawW;
+                const h = item.h * drawH;
+                if (w <= 0 || h <= 0) return;
+
+                const color = item.color || '#00e5ff';
+                const alpha = Math.max(0, Math.min(0.7, (item.fillOpacity ?? 16) / 100));
+                const width = Math.max(1, item.lineWidth || 6);
+                state.ctx.save();
+                state.ctx.strokeStyle = color;
+                state.ctx.lineWidth = width;
+                state.ctx.lineJoin = 'round';
+                state.ctx.shadowColor = color;
+                state.ctx.shadowBlur = width * 1.5;
+
+                if (item.shape === 'underline') {
+                    state.ctx.beginPath();
+                    state.ctx.moveTo(x, y + h);
+                    state.ctx.lineTo(x + w, y + h);
+                    state.ctx.stroke();
+                } else {
+                    state.ctx.fillStyle = hexToRgba(color, alpha);
+                    state.ctx.beginPath();
+                    if (item.shape === 'circle') {
+                        state.ctx.ellipse(x + w / 2, y + h / 2, w / 2, h / 2, 0, 0, Math.PI * 2);
+                    } else if (item.shape === 'hexagon') {
+                        const inset = Math.min(w * 0.25, h * 0.35);
+                        state.ctx.moveTo(x + inset, y);
+                        state.ctx.lineTo(x + w - inset, y);
+                        state.ctx.lineTo(x + w, y + h / 2);
+                        state.ctx.lineTo(x + w - inset, y + h);
+                        state.ctx.lineTo(x + inset, y + h);
+                        state.ctx.lineTo(x, y + h / 2);
+                        state.ctx.closePath();
+                    } else {
+                        state.ctx.rect(x, y, w, h);
+                    }
+                    state.ctx.fill();
+                    state.ctx.stroke();
+                }
+
+                // Editing guides are preview-only and never appear in normal playback/export.
+                if (state.currentStep === 3 && state.isAddingHighlight && item.id === state.selectedHighlightId) {
+                    state.ctx.shadowBlur = 0;
+                    state.ctx.setLineDash([6, 4]);
+                    state.ctx.strokeStyle = '#ffffff';
+                    state.ctx.lineWidth = 1.5;
+                    state.ctx.strokeRect(x - 4, y - 4, w + 8, h + 8);
+                }
+                state.ctx.restore();
             });
         }
 
@@ -3292,6 +3371,24 @@ document.addEventListener('DOMContentLoaded', () => {
         };
     }
     
+    function getRenderedVideoBounds() {
+        const canvasW = state.canvas.width, canvasH = state.canvas.height;
+        const activeClip = state.clips.find(c => c.id === state.activeClipId);
+        const isImage = activeClip && activeClip.type === 'image';
+        const sourceW = isImage ? (activeClip.imageImg?.naturalWidth || canvasW) : state.video.videoWidth;
+        const sourceH = isImage ? (activeClip.imageImg?.naturalHeight || canvasH) : state.video.videoHeight;
+        const videoAspect = sourceW / sourceH;
+        const canvasAspect = canvasW / canvasH;
+        const currentAspect = state.isAdjustingCrop ? videoAspect : (((state.cropW || 1) * sourceW) / ((state.cropH || 1) * sourceH));
+        let w = canvasW, h = canvasH, x = 0, y = 0;
+        if (state.layoutMode === 'fill') {
+            if (currentAspect > canvasAspect) { w = canvasH * currentAspect; x = (canvasW - w) / 2; }
+            else { h = canvasW / currentAspect; y = (canvasH - h) / 2; }
+        } else if (currentAspect > canvasAspect) { h = canvasW / currentAspect; y = (canvasH - h) / 2; }
+        else if (currentAspect < canvasAspect) { w = canvasH * currentAspect; x = (canvasW - w) / 2; }
+        return { x, y, w, h };
+    }
+
     function handlePointerDown(e) {
         if (state.currentStep !== 2 && state.currentStep !== 3) return;
 
@@ -3360,6 +3457,28 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
                 e.preventDefault();
             }
+            return;
+        }
+
+        // Video Highlight tool — drag across the live preview to make a callout.
+        if (state.isAddingHighlight) {
+            const coords = getCanvasCoords(e);
+            const bounds = getRenderedVideoBounds();
+            if (coords.x < bounds.x || coords.x > bounds.x + bounds.w || coords.y < bounds.y || coords.y > bounds.y + bounds.h) return;
+            const shape = document.getElementById('highlight-shape-select')?.value || 'rect';
+            const color = document.getElementById('highlight-color')?.value || '#00e5ff';
+            const lineWidth = parseInt(document.getElementById('highlight-line-width')?.value || '6');
+            const fillOpacity = parseInt(document.getElementById('highlight-fill-opacity')?.value || '16');
+            const now = Math.max(0, state.currentTime || 0);
+            const item = { id: Date.now(), shape, color, lineWidth, fillOpacity, x: (coords.x - bounds.x) / bounds.w, y: (coords.y - bounds.y) / bounds.h, w: 0, h: 0, startSec: now, endSec: Math.max(now + 1, state.endTime || state.duration || 5) };
+            state.highlights.push(item);
+            state.selectedHighlightId = item.id;
+            state.isDrawingNewHighlight = true;
+            state.highlightDrawDrawX = bounds.x; state.highlightDrawDrawY = bounds.y;
+            state.highlightDrawDrawW = bounds.w; state.highlightDrawDrawH = bounds.h;
+            if (window.onHighlightSelected) window.onHighlightSelected(item.id);
+            drawFrame();
+            e.preventDefault();
             return;
         }
 
@@ -4020,6 +4139,22 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
 
+        if (state.isAddingHighlight && state.isDrawingNewHighlight) {
+            const coords = getCanvasCoords(e);
+            const item = state.highlights.find(h => h.id === state.selectedHighlightId);
+            if (!item) return;
+            const x0 = state.highlightDrawDrawX + item.x * state.highlightDrawDrawW;
+            const y0 = state.highlightDrawDrawY + item.y * state.highlightDrawDrawH;
+            const x1 = Math.max(state.highlightDrawDrawX, Math.min(state.highlightDrawDrawX + state.highlightDrawDrawW, coords.x));
+            const y1 = Math.max(state.highlightDrawDrawY, Math.min(state.highlightDrawDrawY + state.highlightDrawDrawH, coords.y));
+            item.x = (Math.min(x0, x1) - state.highlightDrawDrawX) / state.highlightDrawDrawW;
+            item.y = (Math.min(y0, y1) - state.highlightDrawDrawY) / state.highlightDrawDrawH;
+            item.w = Math.abs(x1 - x0) / state.highlightDrawDrawW;
+            item.h = Math.abs(y1 - y0) / state.highlightDrawDrawH;
+            drawFrame();
+            return;
+        }
+
         // Blur/Mosaic region tool (Phase 4B)
         if (state.isAddingBlur && (state.isDrawingNewBlur || state.isDraggingBlur || state.isResizingBlur)) {
             const coords = getCanvasCoords(e);
@@ -4307,6 +4442,18 @@ document.addEventListener('DOMContentLoaded', () => {
             syncCropToActiveClip();
             updateCropDimensionsDisplay();
             updateCanvasDimensions();
+            drawFrame();
+            return;
+        }
+
+        if (state.isDrawingNewHighlight) {
+            const item = state.highlights.find(h => h.id === state.selectedHighlightId);
+            state.isDrawingNewHighlight = false;
+            if (item && (item.w < 0.01 || item.h < 0.01)) {
+                state.highlights = state.highlights.filter(h => h.id !== item.id);
+                state.selectedHighlightId = null;
+            }
+            if (window.onHighlightSelected) window.onHighlightSelected(state.selectedHighlightId);
             drawFrame();
             return;
         }
@@ -4668,6 +4815,67 @@ document.addEventListener('DOMContentLoaded', () => {
         cropDimensionsVal.innerText = `${w}px x ${h}px (${Math.round(state.cropW * 100)}% x ${Math.round(state.cropH * 100)}%)`;
     }
 
+    // --- Video Highlight / Callout Bindings ---
+    const highlightToolToggle = document.getElementById('highlight-tool-toggle');
+    const highlightActionsContainer = document.getElementById('highlight-actions-container');
+    const highlightShapeSelect = document.getElementById('highlight-shape-select');
+    const highlightColorInput = document.getElementById('highlight-color');
+    const highlightColorVal = document.getElementById('highlight-color-val');
+    const highlightLineWidth = document.getElementById('highlight-line-width');
+    const highlightLineWidthVal = document.getElementById('highlight-line-width-val');
+    const highlightFillOpacity = document.getElementById('highlight-fill-opacity');
+    const highlightFillOpacityVal = document.getElementById('highlight-fill-opacity-val');
+    const highlightListEl = document.getElementById('highlight-list');
+    const highlightTimingContainer = document.getElementById('highlight-timing-container');
+    const highlightStartInput = document.getElementById('highlight-start');
+    const highlightEndInput = document.getElementById('highlight-end');
+    const deleteHighlightBtn = document.getElementById('delete-highlight-btn');
+
+    function selectedHighlight() { return state.highlights.find(h => h.id === state.selectedHighlightId); }
+    function syncSelectedHighlightStyle() {
+        const item = selectedHighlight(); if (!item) return;
+        item.shape = highlightShapeSelect.value; item.color = highlightColorInput.value;
+        item.lineWidth = parseInt(highlightLineWidth.value); item.fillOpacity = parseInt(highlightFillOpacity.value);
+        drawFrame();
+    }
+    function renderHighlightList() {
+        if (!highlightListEl) return;
+        highlightListEl.innerHTML = '';
+        state.highlights.forEach((item, index) => {
+            const row = document.createElement('div');
+            row.className = 'text-overlay-list-item' + (item.id === state.selectedHighlightId ? ' active' : '');
+            row.style.cssText = `display:flex;align-items:center;justify-content:space-between;padding:8px 12px;border-radius:6px;margin-bottom:6px;cursor:pointer;background:${item.id === state.selectedHighlightId ? 'rgba(0,229,255,.12)' : 'rgba(255,255,255,.04)'};border:1px solid ${item.id === state.selectedHighlightId ? '#00e5ff' : 'transparent'};`;
+            row.innerHTML = `<span style="font-size:13px"><i class="fa-solid fa-highlighter" style="color:${item.color}"></i> Highlight ${index + 1} · ${item.shape}</span><span style="font-size:11px;opacity:.6">${item.startSec.toFixed(1)}s–${item.endSec.toFixed(1)}s</span>`;
+            row.addEventListener('click', () => { state.selectedHighlightId = item.id; showHighlightControls(item.id); renderHighlightList(); drawFrame(); });
+            highlightListEl.appendChild(row);
+        });
+    }
+    function showHighlightControls(id) {
+        const item = state.highlights.find(h => h.id === id);
+        if (!item) { highlightTimingContainer.style.display = 'none'; return; }
+        highlightTimingContainer.style.display = 'block';
+        highlightShapeSelect.value = item.shape; highlightColorInput.value = item.color;
+        highlightColorVal.innerText = item.color.toUpperCase();
+        highlightLineWidth.value = item.lineWidth; highlightLineWidthVal.innerText = item.lineWidth + 'px';
+        highlightFillOpacity.value = item.fillOpacity; highlightFillOpacityVal.innerText = item.fillOpacity + '%';
+        highlightStartInput.value = item.startSec; highlightEndInput.value = item.endSec;
+    }
+    if (highlightToolToggle) highlightToolToggle.addEventListener('change', () => {
+        state.isAddingHighlight = highlightToolToggle.checked;
+        highlightActionsContainer.style.display = state.isAddingHighlight ? 'block' : 'none';
+        if (state.isAddingHighlight) renderHighlightList();
+        drawFrame();
+    });
+    [highlightShapeSelect, highlightColorInput, highlightLineWidth, highlightFillOpacity].forEach(el => el && el.addEventListener('input', () => {
+        highlightColorVal.innerText = highlightColorInput.value.toUpperCase();
+        highlightLineWidthVal.innerText = highlightLineWidth.value + 'px'; highlightFillOpacityVal.innerText = highlightFillOpacity.value + '%';
+        syncSelectedHighlightStyle();
+    }));
+    if (highlightStartInput) highlightStartInput.addEventListener('input', () => { const item = selectedHighlight(); if (item) { item.startSec = Math.max(0, parseFloat(highlightStartInput.value) || 0); item.endSec = Math.max(item.startSec + .1, item.endSec); highlightEndInput.value = item.endSec; renderHighlightList(); drawFrame(); } });
+    if (highlightEndInput) highlightEndInput.addEventListener('input', () => { const item = selectedHighlight(); if (item) { item.endSec = Math.max(item.startSec + .1, parseFloat(highlightEndInput.value) || item.startSec + 1); renderHighlightList(); drawFrame(); } });
+    if (deleteHighlightBtn) deleteHighlightBtn.addEventListener('click', () => { state.highlights = state.highlights.filter(h => h.id !== state.selectedHighlightId); state.selectedHighlightId = null; highlightTimingContainer.style.display = 'none'; renderHighlightList(); drawFrame(); });
+    window.onHighlightSelected = function(id) { state.selectedHighlightId = id; renderHighlightList(); showHighlightControls(id); };
+
     // --- Text Overlay Bindings (Phase 2C) ---
     const textOverlayInput = document.getElementById('text-overlay-input');
     const textOverlayFontsizeSlider = document.getElementById('text-overlay-fontsize');
@@ -4878,6 +5086,13 @@ document.addEventListener('DOMContentLoaded', () => {
     const brollEndInput = document.getElementById('broll-end');
     const deleteBrollBtn = document.getElementById('delete-broll-btn');
     const brollAnimStyleSelect = document.getElementById('broll-anim-style');
+
+    const brollEditTextSection = document.getElementById('broll-edit-text-section');
+    const brollEditTextInput = document.getElementById('broll-edit-text-input');
+    const brollEditTextFontsize = document.getElementById('broll-edit-text-fontsize');
+    const brollEditTextFontsizeVal = document.getElementById('broll-edit-text-fontsize-val');
+    const brollEditTextColor = document.getElementById('broll-edit-text-color');
+    const brollEditTextColorVal = document.getElementById('broll-edit-text-color-val');
     const brollDirectionRow = document.getElementById('broll-direction-row');
     const brollExitDirectionRow = document.getElementById('broll-exit-direction-row');
     const brollEntryDirSelect = document.getElementById('broll-entry-dir');
@@ -6077,6 +6292,7 @@ document.addEventListener('DOMContentLoaded', () => {
         // Render dynamic timelines and overlays
         if (typeof renderClipTimeline === 'function') renderClipTimeline();
         if (typeof renderBlurRegionList === 'function') renderBlurRegionList();
+        if (typeof renderHighlightList === 'function') renderHighlightList();
         if (typeof renderTextOverlayList === 'function') renderTextOverlayList();
         if (typeof renderBrollList === 'function') renderBrollList();
         if (typeof renderStickerList === 'function') renderStickerList();
@@ -6171,6 +6387,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     voiceoverRecorded: state.voiceoverRecorded
                 },
                 textOverlays: state.textOverlays,
+                highlights: state.highlights,
                 stickers: state.stickers,
                 blurRegions: state.blurRegions,
                 subtitles: state.subtitles
@@ -6486,12 +6703,15 @@ document.addEventListener('DOMContentLoaded', () => {
             // Assign settings to editor state object
             Object.assign(state, data.settings);
             state.textOverlays = data.textOverlays || [];
+            state.highlights = data.highlights || [];
             state.stickers = data.stickers || [];
             state.brollOverlays = data.brollOverlays || [];
             state.blurRegions = data.blurRegions || [];
             state.subtitles = data.subtitles || [];
             state.clips = data.clips || [];
             state.bgMusicTracks = data.bgMusicTracks || [];
+
+            sanitizeLoadedProjectIds();
 
             // Load video src
             if (state.clips.length > 0) {
@@ -6603,6 +6823,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     voiceoverRecorded: state.voiceoverRecorded
                 },
                 textOverlays: state.textOverlays,
+                highlights: state.highlights,
                 stickers: state.stickers,
                 brollOverlays: state.brollOverlays.map(b => {
                     const copy = {...b};
@@ -6665,6 +6886,62 @@ document.addEventListener('DOMContentLoaded', () => {
         } catch (e) {
             console.error("Auto-save storage failed:", e);
         }
+    }
+
+    function sanitizeLoadedProjectIds() {
+        // 1. Sanitize textOverlays
+        const textIds = new Set();
+        let maxTextId = 0;
+        state.textOverlays.forEach(item => {
+            if (item.id > maxTextId) maxTextId = item.id;
+        });
+        let nextTextId = maxTextId + 1;
+        state.textOverlays.forEach(item => {
+            if (textIds.has(item.id)) {
+                item.id = nextTextId++;
+            } else {
+                textIds.add(item.id);
+            }
+        });
+        textOverlayIdCounter = nextTextId;
+
+        // 2. Sanitize stickers
+        const stickerIds = new Set();
+        let maxStickerId = 0;
+        state.stickers.forEach(item => {
+            if (item.id > maxStickerId) maxStickerId = item.id;
+        });
+        let nextStickerId = maxStickerId + 1;
+        state.stickers.forEach(item => {
+            if (stickerIds.has(item.id)) {
+                item.id = nextStickerId++;
+            } else {
+                stickerIds.add(item.id);
+            }
+        });
+        stickerIdCounter = nextStickerId;
+
+        // 3. Sanitize brollOverlays
+        const brollIds = new Set();
+        let maxBrollId = 0;
+        state.brollOverlays.forEach(item => {
+            if (item.id > maxBrollId) maxBrollId = item.id;
+        });
+        let nextBrollId = maxBrollId + 1;
+        state.brollOverlays.forEach(item => {
+            if (brollIds.has(item.id)) {
+                const oldId = item.id;
+                const newId = nextBrollId++;
+                item.id = newId;
+                if (item.type === 'image' && item.file) {
+                    storeFileInDB(`broll_${newId}`, item.file);
+                }
+            } else {
+                brollIds.add(item.id);
+            }
+        });
+        brollIdCounter = nextBrollId;
+        saveProjectToBrowserStorage();
     }
 
     // --- Restore state on application startup ---
@@ -6738,12 +7015,15 @@ document.addEventListener('DOMContentLoaded', () => {
             // Load settings into current state object
             Object.assign(state, savedData.settings);
             state.textOverlays = savedData.textOverlays || [];
+            state.highlights = savedData.highlights || [];
             state.stickers = savedData.stickers || [];
             state.brollOverlays = savedData.brollOverlays || [];
             state.blurRegions = savedData.blurRegions || [];
             state.subtitles = savedData.subtitles || [];
             state.clips = savedData.clips || [];
             state.bgMusicTracks = savedData.bgMusicTracks || [];
+
+            sanitizeLoadedProjectIds();
 
             // Setup video element src
             if (state.clips.length > 0) {
