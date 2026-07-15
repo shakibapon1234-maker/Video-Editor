@@ -135,6 +135,10 @@
                             <button id="split-clip-btn" class="btn-play" title="Split clip at playhead (প্লেহেডে ক্লিপ বিভক্ত করুন)" style="background: rgba(239, 68, 68, 0.15); border: 1.5px solid #ef4444; color: #ef4444; border-radius: 50%; width: 38px; height: 38px; display: flex; align-items: center; justify-content: center; margin-left: 8px; flex-shrink: 0;" type="button">
                                 <i class="fa-solid fa-scissors"></i>
                             </button>
+                            <button id="freeze-frame-btn" class="btn-play" title="প্লেহেডের ফ্রেমে ভিডিও কিছুক্ষণের জন্য থামিয়ে রাখুন — অডিওর সাথে সিঙ্ক মেলাতে সাহায্য করে (Freeze Frame)" style="background: rgba(56, 189, 248, 0.15); border: 1.5px solid #38bdf8; color: #38bdf8; border-radius: 50%; width: 38px; height: 38px; display: flex; align-items: center; justify-content: center; margin-left: 6px; flex-shrink: 0;" type="button">
+                                <i class="fa-solid fa-pause"></i>
+                            </button>
+                            <input type="number" id="freeze-frame-duration" title="ফ্রিজ ফ্রেমের দৈর্ঘ্য (সেকেন্ড)" value="1.5" min="0.2" max="5" step="0.1" style="width: 52px; height: 38px; margin-left: 4px; background: rgba(56,189,248,0.08); border: 1px solid rgba(56,189,248,0.4); color: #38bdf8; border-radius: 6px; text-align: center; font-size: 12px; flex-shrink: 0;">
                             <div class="timeline-slider-container">
                                 <!-- Dual range slider for trimming -->
                                 <div class="slider-track-bg"></div>
@@ -939,6 +943,7 @@
                                             <option value="▶">▶ প্লে (Play)</option>
                                             <option value="➕">➕ প্লাস (Plus)</option>
                                             <option value="🔹">🔹 ডায়মন্ড (Diamond)</option>
+                                            <option value="❤️">❤️ হার্ট (Heart)</option>
                                         </select>
                                         <p class="help-text mt-1">লিস্ট আকারে একাধিক লাইন (একটার নিচে আরেকটা) দেখাতে চাইলে প্রতিটা লাইনের জন্য আলাদা Text B-roll যোগ করুন এবং একই বুলেট বেছে নিন।</p>
                                     </div>
@@ -954,6 +959,16 @@
                                         <div class="color-picker-wrapper">
                                             <input type="color" id="broll-text-color" value="#ffffff">
                                             <span class="color-value-text" id="broll-text-color-val">#ffffff</span>
+                                        </div>
+                                    </div>
+                                    <div class="control-group mt-3">
+                                        <label class="checkbox-label" style="display:flex; align-items:center; gap:8px;">
+                                            <input type="checkbox" id="broll-text-bg-enabled">
+                                            ব্ল্যাঙ্ক ব্যাকগ্রাউন্ড দিন (পুরো স্ক্রিন একরঙা হয়ে যাবে — পয়েন্ট-টু-পয়েন্ট বলার জন্য)
+                                        </label>
+                                        <div id="broll-text-bg-color-row" class="color-picker-wrapper mt-2" style="display:none;">
+                                            <input type="color" id="broll-text-bg-color" value="#0f172a">
+                                            <span class="color-value-text" id="broll-text-bg-color-val">#0f172a</span>
                                         </div>
                                     </div>
                                     <button id="add-broll-text-btn" class="btn btn-primary mt-3">
@@ -1011,6 +1026,16 @@
                                             <div class="color-picker-wrapper">
                                                 <input type="color" id="broll-edit-text-color" value="#ffffff">
                                                 <span class="color-value-text" id="broll-edit-text-color-val">#ffffff</span>
+                                            </div>
+                                        </div>
+                                        <div class="control-group mt-2">
+                                            <label class="checkbox-label" style="display:flex; align-items:center; gap:8px;">
+                                                <input type="checkbox" id="broll-edit-text-bg-enabled">
+                                                ব্ল্যাঙ্ক ব্যাকগ্রাউন্ড (Blank Background)
+                                            </label>
+                                            <div id="broll-edit-text-bg-color-row" class="color-picker-wrapper mt-2" style="display:none;">
+                                                <input type="color" id="broll-edit-text-bg-color" value="#0f172a">
+                                                <span class="color-value-text" id="broll-edit-text-bg-color-val">#0f172a</span>
                                             </div>
                                         </div>
                                     </div>
@@ -1129,6 +1154,61 @@
                                     </div>
                                     <button id="delete-sticker-btn" class="btn-text-danger mt-2">
                                         <i class="fa-solid fa-trash-can"></i> Remove This Sticker
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Symbol / Shape Overlay (arrow, cross, tick, question mark, etc.) -->
+                        <div class="card mt-4">
+                            <div class="card-header">
+                                <i class="fa-solid fa-shapes card-icon"></i>
+                                <h3>Symbol / চিহ্ন (তীর, ক্রস, টিক ইত্যাদি)</h3>
+                            </div>
+                            <div class="card-body">
+                                <p class="help-text">নিচে থেকে একটি সিম্বল ক্লিক করলে সেটি প্রিভিউতে যোগ হবে। এরপর প্রিভিউ স্ক্রিনে ড্র্যাগ করে অবস্থান, কোণা ধরে সাইজ, এবং উপরের গোল হ্যান্ডেল ধরে রোটেট করতে পারবেন। প্রতিটি সিম্বলের নিজস্ব কালার ও Start/End Time থাকে — ঠিক B-roll এর মতোই, সবসময় স্ক্রিনে থাকবে না।</p>
+
+                                <div class="symbol-grid" id="symbol-grid">
+                                    <button type="button" class="symbol-btn" data-symbol="arrow" title="Arrow">→<span class="symbol-btn-label">তীর</span></button>
+                                    <button type="button" class="symbol-btn" data-symbol="cross" title="Cross">✕<span class="symbol-btn-label">ক্রস</span></button>
+                                    <button type="button" class="symbol-btn" data-symbol="tick" title="Tick">✓<span class="symbol-btn-label">টিক</span></button>
+                                    <button type="button" class="symbol-btn" data-symbol="question" title="Question Mark">?<span class="symbol-btn-label">প্রশ্ন</span></button>
+                                    <button type="button" class="symbol-btn" data-symbol="exclaim" title="Exclamation">!<span class="symbol-btn-label">গুরুত্ব</span></button>
+                                    <button type="button" class="symbol-btn" data-symbol="star" title="Star">★<span class="symbol-btn-label">তারা</span></button>
+                                    <button type="button" class="symbol-btn" data-symbol="circle" title="Circle">○<span class="symbol-btn-label">বৃত্ত</span></button>
+                                    <button type="button" class="symbol-btn" data-symbol="triangle" title="Triangle">△<span class="symbol-btn-label">ত্রিভুজ</span></button>
+                                </div>
+
+                                <div class="sticker-list mt-4" id="symbol-list">
+                                    <!-- Dynamically populated list of added symbols -->
+                                </div>
+
+                                <div class="sticker-controls mt-3" id="symbol-controls-container" style="display: none;">
+                                    <div class="control-group">
+                                        <label>Color (রং)</label>
+                                        <div class="color-picker-wrapper">
+                                            <input type="color" id="symbol-color" value="#ff3b30">
+                                            <span class="color-value-text" id="symbol-color-val">#ff3b30</span>
+                                        </div>
+                                    </div>
+                                    <div class="control-group mt-3">
+                                        <label>Symbol Size (% of canvas width)</label>
+                                        <div class="slider-val-container">
+                                            <input type="range" id="symbol-size-slider" min="4" max="60" value="15">
+                                            <span id="symbol-size-val">15%</span>
+                                        </div>
+                                    </div>
+                                    <p class="help-text mt-2">রোটেট করতে প্রিভিউতে সিলেক্ট করা সিম্বলের উপরে থাকা গোল হ্যান্ডেলটি ড্র্যাগ করুন।</p>
+                                    <div class="control-group mt-3">
+                                        <label>Show From (সেকেন্ড)</label>
+                                        <input type="number" id="symbol-start" class="form-input" min="0" step="0.1" value="0">
+                                    </div>
+                                    <div class="control-group mt-2">
+                                        <label>Show Until (সেকেন্ড)</label>
+                                        <input type="number" id="symbol-end" class="form-input" min="0" step="0.1" value="3">
+                                    </div>
+                                    <button id="delete-symbol-btn" class="btn-text-danger mt-2">
+                                        <i class="fa-solid fa-trash-can"></i> Remove This Symbol
                                     </button>
                                 </div>
                             </div>

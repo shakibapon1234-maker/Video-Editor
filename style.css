@@ -1630,6 +1630,42 @@ input:checked + .slider:before {
     transform: scale(0.9);
 }
 
+/* Symbol / Shape Picker Grid (arrow, cross, tick, question mark, etc.) */
+.symbol-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 6px;
+}
+.symbol-grid .symbol-btn {
+    aspect-ratio: 1 / 1;
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--border-color);
+    background: rgba(255, 255, 255, 0.04);
+    font-size: 22px;
+    font-weight: 700;
+    color: #e5e7eb;
+    cursor: pointer;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 2px;
+    transition: background 0.15s ease, border-color 0.15s ease, transform 0.1s ease;
+}
+.symbol-grid .symbol-btn span.symbol-btn-label {
+    font-size: 9px;
+    font-weight: 500;
+    opacity: 0.65;
+    text-transform: none;
+}
+.symbol-grid .symbol-btn:hover {
+    background: rgba(79, 70, 229, 0.15);
+    border-color: var(--primary);
+}
+.symbol-grid .symbol-btn:active {
+    transform: scale(0.9);
+}
+
 /* Segmented Toggle (e.g. B-roll Content Type: Image / Text) */
 .segmented-toggle {
     display: flex;

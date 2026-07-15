@@ -123,6 +123,19 @@ window.VideoEditor = {
     stickerResizeStartX: 0,
     stickerResizeStartSize: 12,
 
+    // Symbol / Shape Overlays (arrow, cross, tick, question mark, etc.)
+    symbolOverlays: [],
+    selectedSymbolId: null,
+    isDraggingSymbol: false,
+    isResizingSymbol: false,
+    isRotatingSymbol: false,
+    dragSymbolOffsetX: 0,
+    dragSymbolOffsetY: 0,
+    symbolResizeStartX: 0,
+    symbolResizeStartSize: 12,
+    symbolRotateStartAngle: 0,
+    symbolRotateStartRotation: 0,
+
     // B-roll / Topic Image Overlays (Phase 5D)
     brollOverlays: [],
     selectedBrollId: null,
@@ -258,6 +271,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const logoDropzone = document.getElementById('logo-dropzone');
     const playPauseBtn = document.getElementById('play-pause-btn');
     const splitClipBtn = document.getElementById('split-clip-btn');
+    const freezeFrameBtn = document.getElementById('freeze-frame-btn');
+    const freezeFrameDurationInput = document.getElementById('freeze-frame-duration');
     const cutOutTrimBtn = document.getElementById('cut-out-trim-btn');
     const trimStart = document.getElementById('trim-start');
     const trimEnd = document.getElementById('trim-end');
@@ -1094,6 +1109,92 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
+    // Freeze Frame insert (v2.7): grabs the currently visible frame at the
+    // playhead and holds it as a still image for a chosen duration, splitting
+    // the active clip around it. The video pauses on that frame while the
+    // audio track keeps playing underneath — a simple, reliable way to fix a
+    // video that's running a second or two ahead of its audio without needing
+    // full time-stretching/speed-ramping support.
+    if (freezeFrameBtn) {
+        freezeFrameBtn.addEventListener('click', () => {
+            const activeClip = state.clips.find(c => c.id === state.activeClipId);
+            if (!activeClip) return;
+
+            const currentTime = state.currentTime || 0;
+            if (currentTime <= activeClip.start + 0.15 || currentTime >= activeClip.end - 0.15) {
+                alert("এই পজিশনে ফ্রিজ ফ্রেম যোগ করা সম্ভব নয় (ক্লিপের একেবারে শুরুতে বা শেষে যোগ করা যায় না)। প্লেহেড একটু সরিয়ে আবার চেষ্টা করুন।");
+                return;
+            }
+
+            let freezeDur = parseFloat(freezeFrameDurationInput ? freezeFrameDurationInput.value : 1.5);
+            if (!freezeDur || isNaN(freezeDur)) freezeDur = 1.5;
+            freezeDur = Math.max(0.2, Math.min(5, freezeDur));
+
+            if (state.isPlaying) {
+                pauseVideo();
+            }
+
+            // Grab the frame exactly as it's currently drawn on the canvas (already
+            // includes crop/broll/overlays), so the freeze frame matches what the
+            // viewer was just seeing.
+            state.canvas.toBlob((blob) => {
+                if (!blob) {
+                    alert("ফ্রেম ক্যাপচার করা যায়নি, আবার চেষ্টা করুন।");
+                    return;
+                }
+                const freezeFile = new File([blob], `freeze_frame_${Date.now()}.jpg`, { type: 'image/jpeg' });
+                const freezeUrl = URL.createObjectURL(blob);
+                const freezeImg = new Image();
+                freezeImg.onload = () => {
+                    const clipIndex = state.clips.indexOf(activeClip);
+                    const splitPoint = currentTime;
+
+                    const secondHalf = {
+                        id: Date.now() + 1,
+                        file: activeClip.file,
+                        url: activeClip.url,
+                        name: activeClip.name,
+                        duration: activeClip.duration,
+                        start: splitPoint,
+                        end: activeClip.end,
+                        cropX: activeClip.cropX,
+                        cropY: activeClip.cropY,
+                        cropW: activeClip.cropW,
+                        cropH: activeClip.cropH
+                    };
+
+                    const freezeClip = {
+                        id: Date.now(),
+                        file: freezeFile,
+                        url: freezeUrl,
+                        name: 'Freeze Frame',
+                        duration: freezeDur,
+                        start: 0,
+                        end: freezeDur,
+                        cropX: 0,
+                        cropY: 0,
+                        cropW: 1,
+                        cropH: 1,
+                        type: 'image',
+                        imageImg: freezeImg
+                    };
+
+                    // Shrink the original clip to end at the split point, then insert
+                    // the freeze frame and the remaining second half right after it.
+                    activeClip.end = splitPoint;
+                    state.clips.splice(clipIndex + 1, 0, freezeClip, secondHalf);
+
+                    renderClipTimeline();
+                    state.currentTime = splitPoint;
+                    switchActiveClip(activeClip.id);
+
+                    console.log(`Inserted ${freezeDur}s freeze frame at:`, splitPoint);
+                };
+                freezeImg.src = freezeUrl;
+            }, 'image/jpeg', 0.92);
+        });
+    }
+
     if (cutOutTrimBtn) {
         cutOutTrimBtn.addEventListener('click', () => {
             const activeClip = state.clips.find(c => c.id === state.activeClipId);
@@ -1429,7 +1530,7 @@ document.addEventListener('DOMContentLoaded', () => {
         state.cropH = (clip.cropH !== undefined) ? clip.cropH : 1;
 
         if (clip.type === 'image') {
-            state.video.src = '';
+
             setTimeout(() => {
                 state.duration = clip.duration;
                 state.startTime = clip.start;
@@ -2507,11 +2608,11 @@ document.addEventListener('DOMContentLoaded', () => {
                             scaleAmt = 0.75 + 0.25 * eased;
                             alpha = Math.max(0.15, eased);
                         }
-                    } else if (style === 'zoom-pop' || style === 'confetti-pop') {
+                    } else if (style === 'zoom-pop' || style === 'confetti-pop' || style === 'heart-burst') {
                         // Quick pop-in scale from 70% with a bouncy overshoot — distinct
                         // from the slow continuous Ken Burns 'zoom' below. 'confetti-pop'
-                        // reuses this exact box pop and additionally bursts colorful
-                        // particles outward (drawn in the annotation section below).
+                        // and 'heart-burst' reuse this exact box pop and additionally burst
+                        // colorful particles / hearts outward (drawn in the annotation section below).
                         if (tIn < animDur) {
                             const eased = easeOutBackOvershoot(Math.max(0, tIn / animDur));
                             scaleAmt = 0.7 + 0.3 * eased;
@@ -2579,6 +2680,19 @@ document.addEventListener('DOMContentLoaded', () => {
 
                 state.ctx.save();
                 state.ctx.globalAlpha = alpha;
+
+                // "Blank page" background (v2.7): when enabled on a fullscreen Text
+                // B-roll, paint a full-canvas solid fill BEFORE the text/box itself so
+                // the underlying video is completely hidden — good for point-by-point
+                // explanations where the person wants a clean slide instead of text
+                // floating over their footage. Fades in/out with the same alpha as the
+                // text so it never pops on/off abruptly. PiP text ignores this (a small
+                // corner box painting the whole screen would look broken).
+                if (item.type === 'text' && item.mode === 'fullscreen' && item.bgEnabled) {
+                    state.ctx.fillStyle = item.bgColor || '#0f172a';
+                    state.ctx.fillRect(0, 0, canvasW, canvasH);
+                }
+
                 if (blurPx > 0.1) state.ctx.filter = `blur(${blurPx.toFixed(1)}px)`;
 
                 const cx = drawBoxX + boxW / 2;
@@ -2793,7 +2907,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 // content after it's painted, growing in sync with the entry (and
                 // shrinking back out on exit) so they feel "drawn on" rather than
                 // just appearing instantly.
-                if (brollAnimActive && (style === 'circle-highlight' || style === 'underline-draw' || style === 'checkmark-pop' || style === 'thinking-character' || style === 'arrow-point' || style === 'magnifier-zoom' || style === 'question-bounce' || style === 'confetti-pop')) {
+                if (brollAnimActive && (style === 'circle-highlight' || style === 'underline-draw' || style === 'checkmark-pop' || style === 'thinking-character' || style === 'arrow-point' || style === 'magnifier-zoom' || style === 'question-bounce' || style === 'confetti-pop' || style === 'heart-burst')) {
                     let annoP = 1;
                     if (tIn < animDur) annoP = brollEaseOut(tIn / animDur);
                     else if (tOut < animDur) annoP = brollEaseOut(tOut / animDur);
@@ -2956,6 +3070,35 @@ document.addEventListener('DOMContentLoaded', () => {
                                         state.ctx.fillStyle = palette[i % palette.length];
                                         state.ctx.fillRect(-psize / 2, -psize / 3, psize, psize * 0.66);
                                         state.ctx.restore();
+                                    }
+                                    state.ctx.restore();
+                                }
+                            }
+                        } else if (style === 'heart-burst') {
+                            // Same one-shot entry burst as confetti-pop, but floating ❤️ hearts
+                            // drifting upward instead of falling confetti squares — for
+                            // "ভালোবাসা" / affection beats in the script.
+                            if (tIn < animDur) {
+                                const burstP = Math.max(0, Math.min(1, tIn / animDur));
+                                const particleAlpha = 1 - Math.pow(burstP, 2.2);
+                                if (particleAlpha > 0.02) {
+                                    const pcx = drawBoxX + boxW / 2, pcy = drawBoxY + boxH / 2;
+                                    const maxDist = Math.max(boxW, boxH) * 0.7;
+                                    const N = 10;
+                                    state.ctx.save();
+                                    state.ctx.globalAlpha = particleAlpha;
+                                    state.ctx.textAlign = 'center';
+                                    state.ctx.textBaseline = 'middle';
+                                    for (let i = 0; i < N; i++) {
+                                        // Deterministic pseudo-random spread (not Math.random) so
+                                        // exported frames stay identical across repeated renders.
+                                        const seedAngle = -Math.PI / 2 + ((i / N) - 0.5) * Math.PI * 1.3 + (i % 3) * 0.12;
+                                        const seedDist = (0.4 + ((i * 41) % 60) / 100) * maxDist * burstP;
+                                        const px = pcx + Math.cos(seedAngle) * seedDist * 0.6;
+                                        const py = pcy + Math.sin(seedAngle) * seedDist - (burstP * 20);
+                                        const hsize = Math.max(10, Math.min(boxW, boxH) * (0.12 + (i % 3) * 0.03));
+                                        state.ctx.font = `${Math.round(hsize)}px sans-serif`;
+                                        state.ctx.fillText('❤️', px, py);
                                     }
                                     state.ctx.restore();
                                 }
@@ -3279,6 +3422,68 @@ document.addEventListener('DOMContentLoaded', () => {
                     state.ctx.fillRect(sx + boxW / 2 - 6, sy + boxH / 2 - 6, 12, 12);
                     state.ctx.strokeStyle = '#4f46e5';
                     state.ctx.strokeRect(sx + boxW / 2 - 6, sy + boxH / 2 - 6, 12, 12);
+                    state.ctx.restore();
+                }
+            });
+        }
+
+        // --- Step F2b: Draw Symbol/Shape Overlays (arrow, cross, tick, question mark, etc.) ---
+        // Modeled on the Sticker overlay (drag + corner resize) plus the B-roll
+        // rotate handle (drag the circle above the shape to spin it). Each symbol
+        // has its own start/end time window, like Text Overlays and B-roll.
+        if (state.symbolOverlays && state.symbolOverlays.length > 0) {
+            const symCurrentTime = state.currentTime;
+            state.symbolOverlays.forEach((item) => {
+                const isVisible = (state.currentStep === 3 && !state.isPlaying)
+                    ? true
+                    : (symCurrentTime >= item.startSec && symCurrentTime <= item.endSec);
+                if (!isVisible) return;
+
+                const box = getSymbolBox(item, canvasW, canvasH);
+                const rotation = item.rotation || 0;
+
+                state.ctx.save();
+                state.ctx.translate(box.cx, box.cy);
+                state.ctx.rotate(rotation * Math.PI / 180);
+                drawSymbolShape(state.ctx, item.symbolType, box.s, item.color || '#ffffff');
+                state.ctx.restore();
+
+                // Selection outline + resize/rotate handles in Step 3 for the active symbol
+                if (state.currentStep === 3 && item.id === state.selectedSymbolId) {
+                    state.ctx.save();
+                    state.ctx.translate(box.cx, box.cy);
+                    state.ctx.rotate(rotation * Math.PI / 180);
+
+                    const half = box.s / 2;
+                    state.ctx.strokeStyle = 'rgba(79, 70, 229, 0.9)';
+                    state.ctx.lineWidth = 2;
+                    state.ctx.setLineDash([6, 4]);
+                    state.ctx.strokeRect(-half - 6, -half - 6, box.s + 12, box.s + 12);
+                    state.ctx.setLineDash([]);
+
+                    // Resize handle (bottom-right corner)
+                    state.ctx.fillStyle = '#ffffff';
+                    state.ctx.fillRect(half + 6 - 6, half + 6 - 6, 12, 12);
+                    state.ctx.strokeStyle = '#4f46e5';
+                    state.ctx.strokeRect(half + 6 - 6, half + 6 - 6, 12, 12);
+
+                    // Rotate handle (small circle above the shape, connected by a line)
+                    const handleDist = Math.max(28, Math.min(canvasW, canvasH) * 0.05);
+                    state.ctx.beginPath();
+                    state.ctx.moveTo(0, -half - 6);
+                    state.ctx.lineTo(0, -half - 6 - handleDist);
+                    state.ctx.strokeStyle = 'rgba(79, 70, 229, 0.9)';
+                    state.ctx.lineWidth = 1.5;
+                    state.ctx.stroke();
+
+                    state.ctx.beginPath();
+                    state.ctx.arc(0, -half - 6 - handleDist, 8, 0, Math.PI * 2);
+                    state.ctx.fillStyle = '#ffffff';
+                    state.ctx.fill();
+                    state.ctx.strokeStyle = '#4f46e5';
+                    state.ctx.lineWidth = 2;
+                    state.ctx.stroke();
+
                     state.ctx.restore();
                 }
             });
@@ -3843,6 +4048,50 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         }
 
+        // Symbol/Shape rotate handle check (must come BEFORE resize/drag checks)
+        if (state.currentStep === 3 && state.selectedSymbolId !== null) {
+            if (findSymbolRotateHandle(coords)) {
+                const item = state.symbolOverlays.find(s => s.id === state.selectedSymbolId);
+                if (item) {
+                    const box = getSymbolBox(item, canvasW, canvasH);
+                    state.isRotatingSymbol = true;
+                    state.symbolRotateStartAngle = Math.atan2(coords.y - box.cy, coords.x - box.cx) * 180 / Math.PI;
+                    state.symbolRotateStartRotation = item.rotation || 0;
+                    e.preventDefault();
+                    return;
+                }
+            }
+        }
+
+        // Symbol/Shape resize handle check (must come BEFORE drag check)
+        if (state.currentStep === 3 && state.selectedSymbolId !== null) {
+            if (findSymbolResizeHandle(coords)) {
+                const item = state.symbolOverlays.find(s => s.id === state.selectedSymbolId);
+                if (item) {
+                    state.isResizingSymbol = true;
+                    state.symbolResizeStartX = coords.x;
+                    state.symbolResizeStartSize = item.size;
+                    e.preventDefault();
+                    return;
+                }
+            }
+        }
+
+        // Symbol/Shape drag/select — symbols render on top of everything else,
+        // so they're checked before stickers/text overlays.
+        if (state.symbolOverlays && state.symbolOverlays.length > 0) {
+            const symbolHit = findSymbolAt(coords);
+            if (symbolHit) {
+                state.selectedSymbolId = symbolHit.id;
+                state.isDraggingSymbol = true;
+                state.dragSymbolOffsetX = coords.x - (symbolHit.x * canvasW);
+                state.dragSymbolOffsetY = coords.y - (symbolHit.y * canvasH);
+                if (window.onSymbolSelected) window.onSymbolSelected(symbolHit.id);
+                e.preventDefault();
+                return;
+            }
+        }
+
         // Sticker/Emoji resize handle check (Phase 4A) — must come before drag check
         if (state.currentStep === 3 && state.selectedStickerId !== null) {
             if (findStickerResizeHandle(coords)) {
@@ -4082,6 +4331,186 @@ document.addEventListener('DOMContentLoaded', () => {
             if (Math.hypot(testX - h.x, testY - h.y) < hr) return h.id;
         }
         return null;
+    }
+
+    // --- Symbol / Shape Overlay geometry + hit-testing ---
+    // A symbol lives in a square box of side `s` (percent of canvas width, same
+    // convention as stickers), centered at (item.x, item.y), and can be rotated.
+
+    function getSymbolBox(item, canvasW, canvasH) {
+        const s = canvasW * (item.size / 100);
+        return {
+            cx: item.x * canvasW,
+            cy: item.y * canvasH,
+            s
+        };
+    }
+
+    function findSymbolAt(coords) {
+        const canvasW = state.canvas.width;
+        const canvasH = state.canvas.height;
+        for (let i = state.symbolOverlays.length - 1; i >= 0; i--) {
+            const item = state.symbolOverlays[i];
+            const box = getSymbolBox(item, canvasW, canvasH);
+            let testX = coords.x, testY = coords.y;
+            if (item.rotation) {
+                const local = rotatePointAround(coords.x, coords.y, box.cx, box.cy, -(item.rotation * Math.PI / 180));
+                testX = local.x; testY = local.y;
+            }
+            const half = box.s / 2;
+            if (testX >= box.cx - half && testX <= box.cx + half &&
+                testY >= box.cy - half && testY <= box.cy + half) {
+                return item;
+            }
+        }
+        return null;
+    }
+
+    function findSymbolResizeHandle(coords) {
+        if (state.selectedSymbolId === null) return false;
+        const item = state.symbolOverlays.find(s => s.id === state.selectedSymbolId);
+        if (!item) return false;
+
+        const canvasW = state.canvas.width;
+        const canvasH = state.canvas.height;
+        const box = getSymbolBox(item, canvasW, canvasH);
+        const half = box.s / 2;
+
+        let testX = coords.x, testY = coords.y;
+        if (item.rotation) {
+            const local = rotatePointAround(coords.x, coords.y, box.cx, box.cy, -(item.rotation * Math.PI / 180));
+            testX = local.x; testY = local.y;
+        }
+
+        const rect = state.canvas.getBoundingClientRect();
+        const w_rect = rect.width;
+        const h_rect = rect.height;
+        if (w_rect === 0 || h_rect === 0) return false;
+        const r_canvas = canvasW / canvasH;
+        const r_rect = w_rect / h_rect;
+        const w_render = (r_canvas > r_rect) ? w_rect : h_rect * r_canvas;
+        const pad = 20 * (canvasW / w_render);
+
+        const handleX = box.cx + half + 6;
+        const handleY = box.cy + half + 6;
+        return Math.abs(testX - handleX) <= pad && Math.abs(testY - handleY) <= pad;
+    }
+
+    // Returns true if 'coords' is on the rotate handle (small circle above the
+    // currently selected symbol). Mirrors findBrollRotateHandle.
+    function findSymbolRotateHandle(coords) {
+        const item = state.symbolOverlays.find(s => s.id === state.selectedSymbolId);
+        if (!item) return false;
+        const canvasW = state.canvas.width;
+        const canvasH = state.canvas.height;
+        const box = getSymbolBox(item, canvasW, canvasH);
+        const half = box.s / 2;
+        const handleDist = Math.max(28, Math.min(canvasW, canvasH) * 0.05);
+        const angleRad = (item.rotation || 0) * Math.PI / 180;
+        const world = rotatePointAround(box.cx, box.cy - half - 6 - handleDist, box.cx, box.cy, angleRad);
+        const rect = state.canvas.getBoundingClientRect();
+        const physScale = canvasW / rect.width;
+        const hr = 16 * physScale;
+        return Math.hypot(coords.x - world.x, coords.y - world.y) < hr;
+    }
+
+    // Draws a star polygon path (not stroked/filled itself — caller fills/strokes).
+    function drawStarPath(ctx, cx, cy, outerR, innerR, points) {
+        ctx.beginPath();
+        for (let i = 0; i < points * 2; i++) {
+            const r = (i % 2 === 0) ? outerR : innerR;
+            const a = (Math.PI / points) * i - Math.PI / 2;
+            const x = cx + r * Math.cos(a);
+            const y = cy + r * Math.sin(a);
+            if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+        }
+        ctx.closePath();
+    }
+
+    // Draws one symbol/shape type centered at the current canvas origin (caller
+    // is expected to have already translated+rotated the context), inside a
+    // square bounding box of side `s`, in the given color.
+    function drawSymbolShape(ctx, type, s, color) {
+        const half = s / 2;
+        ctx.save();
+        ctx.strokeStyle = color;
+        ctx.fillStyle = color;
+        ctx.lineWidth = Math.max(2, s * 0.11);
+        ctx.lineCap = 'round';
+        ctx.lineJoin = 'round';
+
+        switch (type) {
+            case 'arrow': {
+                ctx.beginPath();
+                ctx.moveTo(-half * 0.85, 0);
+                ctx.lineTo(half * 0.45, 0);
+                ctx.stroke();
+                ctx.beginPath();
+                ctx.moveTo(half * 0.85, 0);
+                ctx.lineTo(half * 0.25, -half * 0.4);
+                ctx.lineTo(half * 0.25, half * 0.4);
+                ctx.closePath();
+                ctx.fill();
+                break;
+            }
+            case 'cross': {
+                ctx.beginPath();
+                ctx.moveTo(-half * 0.65, -half * 0.65);
+                ctx.lineTo(half * 0.65, half * 0.65);
+                ctx.moveTo(half * 0.65, -half * 0.65);
+                ctx.lineTo(-half * 0.65, half * 0.65);
+                ctx.stroke();
+                break;
+            }
+            case 'tick': {
+                ctx.beginPath();
+                ctx.moveTo(-half * 0.65, half * 0.05);
+                ctx.lineTo(-half * 0.1, half * 0.6);
+                ctx.lineTo(half * 0.75, -half * 0.55);
+                ctx.stroke();
+                break;
+            }
+            case 'question': {
+                ctx.font = `bold ${Math.round(s)}px "Plus Jakarta Sans", "Hind Siliguri", sans-serif`;
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                ctx.fillText('?', 0, s * 0.03);
+                break;
+            }
+            case 'exclaim': {
+                ctx.font = `bold ${Math.round(s)}px "Plus Jakarta Sans", "Hind Siliguri", sans-serif`;
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                ctx.fillText('!', 0, s * 0.03);
+                break;
+            }
+            case 'star': {
+                drawStarPath(ctx, 0, 0, half * 0.9, half * 0.4, 5);
+                ctx.fill();
+                break;
+            }
+            case 'circle': {
+                ctx.beginPath();
+                ctx.arc(0, 0, half * 0.72, 0, Math.PI * 2);
+                ctx.stroke();
+                break;
+            }
+            case 'triangle': {
+                ctx.beginPath();
+                ctx.moveTo(0, -half * 0.78);
+                ctx.lineTo(half * 0.72, half * 0.58);
+                ctx.lineTo(-half * 0.72, half * 0.58);
+                ctx.closePath();
+                ctx.stroke();
+                break;
+            }
+            default: {
+                ctx.beginPath();
+                ctx.arc(0, 0, half * 0.72, 0, Math.PI * 2);
+                ctx.stroke();
+            }
+        }
+        ctx.restore();
     }
 
     function getStickerBox(item, canvasW, canvasH) {
@@ -4500,6 +4929,69 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
 
+        // Symbol/Shape rotate drag: pointer angle around box center sets item.rotation.
+        // Snaps to 15° increments when close (hold Shift to rotate freely).
+        if (state.isRotatingSymbol && state.selectedSymbolId !== null) {
+            const coords = getCanvasCoords(e);
+            const canvasW = state.canvas.width;
+            const canvasH = state.canvas.height;
+            const item = state.symbolOverlays.find(s => s.id === state.selectedSymbolId);
+            if (item) {
+                const box = getSymbolBox(item, canvasW, canvasH);
+                const currentAngle = Math.atan2(coords.y - box.cy, coords.x - box.cx) * 180 / Math.PI;
+                const delta = currentAngle - state.symbolRotateStartAngle;
+                let newRotation = state.symbolRotateStartRotation + delta;
+                if (!e.shiftKey) {
+                    const snapped = Math.round(newRotation / 15) * 15;
+                    if (Math.abs(newRotation - snapped) < 4) newRotation = snapped;
+                }
+                item.rotation = ((newRotation % 360) + 360) % 360;
+                drawFrame();
+            }
+            e.preventDefault();
+            return;
+        }
+
+        // Symbol/Shape resize (drag the corner handle to scale uniformly)
+        if (state.isResizingSymbol && state.selectedSymbolId !== null) {
+            const coords = getCanvasCoords(e);
+            const canvasW = state.canvas.width;
+            const item = state.symbolOverlays.find(s => s.id === state.selectedSymbolId);
+            if (item) {
+                const deltaX = coords.x - state.symbolResizeStartX;
+                const scaleFactor = (deltaX / canvasW) * 100;
+                let newSize = state.symbolResizeStartSize + scaleFactor;
+                newSize = Math.max(4, Math.min(60, newSize));
+                item.size = newSize;
+
+                if (symbolSizeSlider) symbolSizeSlider.value = Math.round(newSize);
+                if (symbolSizeVal) symbolSizeVal.innerText = Math.round(newSize) + '%';
+
+                drawFrame();
+            }
+            e.preventDefault();
+            return;
+        }
+
+        // Symbol/Shape drag (move anywhere on the canvas)
+        if (state.isDraggingSymbol && state.selectedSymbolId !== null) {
+            const coords = getCanvasCoords(e);
+            const canvasW = state.canvas.width;
+            const canvasH = state.canvas.height;
+            const item = state.symbolOverlays.find(s => s.id === state.selectedSymbolId);
+            if (item) {
+                let newX = (coords.x - state.dragSymbolOffsetX) / canvasW;
+                let newY = (coords.y - state.dragSymbolOffsetY) / canvasH;
+                newX = Math.max(0, Math.min(1, newX));
+                newY = Math.max(0, Math.min(1, newY));
+                item.x = newX;
+                item.y = newY;
+                drawFrame();
+            }
+            e.preventDefault();
+            return;
+        }
+
         // Sticker/Emoji resize (Phase 4A)
         if (state.isResizingSticker && state.selectedStickerId !== null) {
             const coords = getCanvasCoords(e);
@@ -4573,6 +5065,10 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         }
         if (state.brollOverlays && state.brollOverlays.length > 0 && findBrollPipAt(idleCoords)) {
+            state.canvas.style.cursor = 'move';
+            return;
+        }
+        if (state.symbolOverlays && state.symbolOverlays.length > 0 && findSymbolAt(idleCoords)) {
             state.canvas.style.cursor = 'move';
             return;
         }
@@ -4665,6 +5161,9 @@ document.addEventListener('DOMContentLoaded', () => {
         state.isRotatingBroll = false;
         state.isDraggingSticker = false;
         state.isResizingSticker = false;
+        state.isDraggingSymbol = false;
+        state.isResizingSymbol = false;
+        state.isRotatingSymbol = false;
     }
 
     // --- Video Crop Tool Bindings ---
@@ -5236,6 +5735,45 @@ document.addEventListener('DOMContentLoaded', () => {
     const brollTextColorInput = document.getElementById('broll-text-color');
     const brollTextColorVal = document.getElementById('broll-text-color-val');
     const addBrollTextBtn = document.getElementById('add-broll-text-btn');
+    const brollTextBgEnabled = document.getElementById('broll-text-bg-enabled');
+    const brollTextBgColor = document.getElementById('broll-text-bg-color');
+    const brollTextBgColorVal = document.getElementById('broll-text-bg-color-val');
+    const brollTextBgColorRow = document.getElementById('broll-text-bg-color-row');
+    if (brollTextBgEnabled && brollTextBgColorRow) {
+        brollTextBgEnabled.addEventListener('change', () => {
+            brollTextBgColorRow.style.display = brollTextBgEnabled.checked ? 'flex' : 'none';
+        });
+    }
+    if (brollTextBgColor && brollTextBgColorVal) {
+        brollTextBgColor.addEventListener('input', (e) => {
+            brollTextBgColorVal.innerText = e.target.value;
+        });
+    }
+
+    const brollEditTextBgEnabled = document.getElementById('broll-edit-text-bg-enabled');
+    const brollEditTextBgColor = document.getElementById('broll-edit-text-bg-color');
+    const brollEditTextBgColorVal = document.getElementById('broll-edit-text-bg-color-val');
+    const brollEditTextBgColorRow = document.getElementById('broll-edit-text-bg-color-row');
+    if (brollEditTextBgEnabled && brollEditTextBgColorRow) {
+        brollEditTextBgEnabled.addEventListener('change', () => {
+            brollEditTextBgColorRow.style.display = brollEditTextBgEnabled.checked ? 'flex' : 'none';
+            const item = state.brollOverlays.find(b => b.id === state.selectedBrollId);
+            if (item && item.type === 'text') {
+                item.bgEnabled = brollEditTextBgEnabled.checked;
+                drawFrame();
+            }
+        });
+    }
+    if (brollEditTextBgColor && brollEditTextBgColorVal) {
+        brollEditTextBgColor.addEventListener('input', (e) => {
+            brollEditTextBgColorVal.innerText = e.target.value;
+            const item = state.brollOverlays.find(b => b.id === state.selectedBrollId);
+            if (item && item.type === 'text') {
+                item.bgColor = e.target.value;
+                drawFrame();
+            }
+        });
+    }
 
 
     let brollAddType = 'image';
@@ -5280,6 +5818,36 @@ document.addEventListener('DOMContentLoaded', () => {
     const brollEditTextFontsizeVal = document.getElementById('broll-edit-text-fontsize-val');
     const brollEditTextColor = document.getElementById('broll-edit-text-color');
     const brollEditTextColorVal = document.getElementById('broll-edit-text-color-val');
+    if (brollEditTextInput) {
+        brollEditTextInput.addEventListener('input', (e) => {
+            const item = state.brollOverlays.find(b => b.id === state.selectedBrollId);
+            if (item && item.type === 'text') {
+                item.text = e.target.value;
+                renderBrollList();
+                drawFrame();
+            }
+        });
+    }
+    if (brollEditTextFontsize) {
+        brollEditTextFontsize.addEventListener('input', (e) => {
+            const item = state.brollOverlays.find(b => b.id === state.selectedBrollId);
+            if (brollEditTextFontsizeVal) brollEditTextFontsizeVal.innerText = e.target.value + 'px';
+            if (item && item.type === 'text') {
+                item.fontSize = parseInt(e.target.value);
+                drawFrame();
+            }
+        });
+    }
+    if (brollEditTextColor) {
+        brollEditTextColor.addEventListener('input', (e) => {
+            const item = state.brollOverlays.find(b => b.id === state.selectedBrollId);
+            if (brollEditTextColorVal) brollEditTextColorVal.innerText = e.target.value;
+            if (item && item.type === 'text') {
+                item.color = e.target.value;
+                drawFrame();
+            }
+        });
+    }
     const brollDirectionRow = document.getElementById('broll-direction-row');
     const brollExitDirectionRow = document.getElementById('broll-exit-direction-row');
     const brollEntryDirSelect = document.getElementById('broll-entry-dir');
@@ -5338,6 +5906,7 @@ document.addEventListener('DOMContentLoaded', () => {
         { value: 'comparison-slide', label: 'Comparison Slide (Before/After স্লাইডার)' },
         { value: 'question-bounce', label: 'Question Mark Bounce (❓ লাফিয়ে আসবে)' },
         { value: 'confetti-pop', label: 'Confetti Pop (রঙিন কনফেত্তি ছড়িয়ে পড়বে)' },
+        { value: 'heart-burst', label: 'Heart Burst (❤️ হার্ট ছড়িয়ে পড়বে)' },
         
         // Wings Fly Custom Presets (Style + Direction + Sound Combinations)
         { value: 'preset-wings-intro', label: 'Wings Intro Banner (বাম দিক থেকে স্লাইড ও সুইশ শব্দ)' },
@@ -5465,6 +6034,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 text: text,
                 fontSize: brollTextFontsizeSlider ? parseInt(brollTextFontsizeSlider.value) : 48,
                 color: brollTextColorInput ? brollTextColorInput.value : '#ffffff',
+                bgEnabled: brollTextBgEnabled ? brollTextBgEnabled.checked : false,
+                bgColor: brollTextBgColor ? brollTextBgColor.value : '#0f172a',
                 mode: brollModeSelect ? brollModeSelect.value : 'fullscreen',
                 size: brollSizeSlider ? parseInt(brollSizeSlider.value) : 35,
                 x: 0.5,
@@ -5634,6 +6205,30 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         if (brollModeSelect) brollModeSelect.value = item.mode;
         if (brollSizeContainer) brollSizeContainer.style.display = 'block'; // always visible
+
+        // Sync the Text Settings edit panel (content/size/color/blank-background)
+        if (brollEditTextSection) {
+            if (item.type === 'text') {
+                brollEditTextSection.style.display = 'block';
+                if (brollEditTextInput) brollEditTextInput.value = item.text || '';
+                if (brollEditTextFontsize) {
+                    brollEditTextFontsize.value = item.fontSize || 48;
+                    if (brollEditTextFontsizeVal) brollEditTextFontsizeVal.innerText = (item.fontSize || 48) + 'px';
+                }
+                if (brollEditTextColor) {
+                    brollEditTextColor.value = item.color || '#ffffff';
+                    if (brollEditTextColorVal) brollEditTextColorVal.innerText = item.color || '#ffffff';
+                }
+                if (brollEditTextBgEnabled) brollEditTextBgEnabled.checked = !!item.bgEnabled;
+                if (brollEditTextBgColorRow) brollEditTextBgColorRow.style.display = item.bgEnabled ? 'flex' : 'none';
+                if (brollEditTextBgColor) {
+                    brollEditTextBgColor.value = item.bgColor || '#0f172a';
+                    if (brollEditTextBgColorVal) brollEditTextBgColorVal.innerText = item.bgColor || '#0f172a';
+                }
+            } else {
+                brollEditTextSection.style.display = 'none';
+            }
+        }
         if (brollSizeSlider) {
             brollSizeSlider.max = item.mode === 'pip' ? 60 : 100;
             brollSizeSlider.value = item.size !== undefined ? item.size : (item.mode === 'pip' ? 35 : 100);
@@ -6000,6 +6595,196 @@ document.addEventListener('DOMContentLoaded', () => {
     window.onStickerSelected = function(id) {
         renderStickerList();
         showStickerControlsFor(id);
+    };
+
+    // --- Symbol / Shape Overlay Bindings (arrow, cross, tick, question mark, etc.) ---
+    const symbolGrid = document.getElementById('symbol-grid');
+    const symbolListEl = document.getElementById('symbol-list');
+    const symbolControlsContainer = document.getElementById('symbol-controls-container');
+    const symbolSizeSlider = document.getElementById('symbol-size-slider');
+    const symbolSizeVal = document.getElementById('symbol-size-val');
+    const symbolColorInput = document.getElementById('symbol-color');
+    const symbolColorVal = document.getElementById('symbol-color-val');
+    const symbolStartInput = document.getElementById('symbol-start');
+    const symbolEndInput = document.getElementById('symbol-end');
+    const deleteSymbolBtn = document.getElementById('delete-symbol-btn');
+
+    // Small glyph shown per symbol type in the palette + the added-items list.
+    const SYMBOL_LABELS = {
+        arrow: '→',
+        cross: '✕',
+        tick: '✓',
+        question: '?',
+        exclaim: '!',
+        star: '★',
+        circle: '○',
+        triangle: '△'
+    };
+    const SYMBOL_NAMES_BN = {
+        arrow: 'তীর চিহ্ন',
+        cross: 'ক্রস চিহ্ন',
+        tick: 'টিক চিহ্ন',
+        question: 'কুয়েশ্চন মার্ক',
+        exclaim: 'এক্সক্লামেশন',
+        star: 'তারা',
+        circle: 'বৃত্ত',
+        triangle: 'ত্রিভুজ'
+    };
+
+    let symbolIdCounter = 1;
+
+    function addSymbol(type) {
+        const start = Math.max(0, state.currentTime || 0);
+        const end = Math.min(state.duration || (start + 3), start + 3);
+        const newItem = {
+            id: symbolIdCounter++,
+            symbolType: type,
+            x: 0.5,
+            y: 0.5,
+            size: 15, // percent of canvas width
+            rotation: 0,
+            color: '#ff3b30',
+            startSec: start,
+            endSec: end > start ? end : start + 3
+        };
+        state.symbolOverlays.push(newItem);
+        state.selectedSymbolId = newItem.id;
+
+        renderSymbolList();
+        showSymbolControlsFor(newItem.id);
+        drawFrame();
+    }
+
+    if (symbolGrid) {
+        symbolGrid.querySelectorAll('.symbol-btn').forEach((btn) => {
+            btn.addEventListener('click', () => {
+                const type = btn.getAttribute('data-symbol');
+                if (type) addSymbol(type);
+            });
+        });
+    }
+
+    function renderSymbolList() {
+        if (!symbolListEl) return;
+        symbolListEl.innerHTML = '';
+        state.symbolOverlays.forEach((item) => {
+            const row = document.createElement('div');
+            row.className = 'sticker-list-item' + (item.id === state.selectedSymbolId ? ' active' : '');
+            row.style.display = 'flex';
+            row.style.alignItems = 'center';
+            row.style.justifyContent = 'space-between';
+            row.style.padding = '8px 12px';
+            row.style.borderRadius = '6px';
+            row.style.marginBottom = '6px';
+            row.style.cursor = 'pointer';
+            row.style.background = item.id === state.selectedSymbolId ? 'rgba(79, 70, 229, 0.12)' : 'rgba(255,255,255,0.04)';
+            row.style.border = item.id === state.selectedSymbolId ? '1px solid var(--primary)' : '1px solid transparent';
+
+            const label = document.createElement('span');
+            label.innerText = (SYMBOL_LABELS[item.symbolType] || '●') + '  ' + (SYMBOL_NAMES_BN[item.symbolType] || item.symbolType);
+            label.style.fontSize = '13px';
+            label.style.color = item.color;
+
+            const timeLabel = document.createElement('span');
+            timeLabel.innerText = `${item.startSec.toFixed(1)}s–${item.endSec.toFixed(1)}s`;
+            timeLabel.style.fontSize = '11px';
+            timeLabel.style.opacity = '0.6';
+
+            row.appendChild(label);
+            row.appendChild(timeLabel);
+
+            row.addEventListener('click', () => {
+                state.selectedSymbolId = item.id;
+                renderSymbolList();
+                showSymbolControlsFor(item.id);
+                drawFrame();
+            });
+
+            symbolListEl.appendChild(row);
+        });
+    }
+
+    function showSymbolControlsFor(id) {
+        const item = state.symbolOverlays.find(s => s.id === id);
+        if (!item) {
+            if (symbolControlsContainer) symbolControlsContainer.style.display = 'none';
+            return;
+        }
+        if (symbolControlsContainer) symbolControlsContainer.style.display = 'block';
+        if (symbolSizeSlider) symbolSizeSlider.value = Math.round(item.size);
+        if (symbolSizeVal) symbolSizeVal.innerText = Math.round(item.size) + '%';
+        if (symbolColorInput) symbolColorInput.value = item.color;
+        if (symbolColorVal) symbolColorVal.innerText = item.color;
+        if (symbolStartInput) symbolStartInput.value = item.startSec.toFixed(1);
+        if (symbolEndInput) symbolEndInput.value = item.endSec.toFixed(1);
+    }
+
+    if (symbolSizeSlider) {
+        symbolSizeSlider.addEventListener('input', (e) => {
+            const item = state.symbolOverlays.find(s => s.id === state.selectedSymbolId);
+            if (item) {
+                item.size = parseFloat(e.target.value);
+                if (symbolSizeVal) symbolSizeVal.innerText = Math.round(item.size) + '%';
+                drawFrame();
+            }
+        });
+    }
+
+    if (symbolColorInput) {
+        symbolColorInput.addEventListener('input', (e) => {
+            const item = state.symbolOverlays.find(s => s.id === state.selectedSymbolId);
+            if (item) {
+                item.color = e.target.value;
+                if (symbolColorVal) symbolColorVal.innerText = item.color;
+                renderSymbolList();
+                drawFrame();
+            }
+        });
+    }
+
+    if (symbolStartInput) {
+        symbolStartInput.addEventListener('change', (e) => {
+            const item = state.symbolOverlays.find(s => s.id === state.selectedSymbolId);
+            if (item) {
+                let v = Math.max(0, parseFloat(e.target.value) || 0);
+                if (v >= item.endSec) v = Math.max(0, item.endSec - 0.1);
+                item.startSec = v;
+                e.target.value = v.toFixed(1);
+                renderSymbolList();
+                drawFrame();
+            }
+        });
+    }
+
+    if (symbolEndInput) {
+        symbolEndInput.addEventListener('change', (e) => {
+            const item = state.symbolOverlays.find(s => s.id === state.selectedSymbolId);
+            if (item) {
+                let v = parseFloat(e.target.value) || (item.startSec + 1);
+                if (state.duration) v = Math.min(v, state.duration);
+                if (v <= item.startSec) v = item.startSec + 0.1;
+                item.endSec = v;
+                e.target.value = v.toFixed(1);
+                renderSymbolList();
+                drawFrame();
+            }
+        });
+    }
+
+    if (deleteSymbolBtn) {
+        deleteSymbolBtn.addEventListener('click', () => {
+            state.symbolOverlays = state.symbolOverlays.filter(s => s.id !== state.selectedSymbolId);
+            state.selectedSymbolId = null;
+            renderSymbolList();
+            showSymbolControlsFor(null);
+            drawFrame();
+        });
+    }
+
+    // Allows canvas-click selection (from handlePointerDown) to sync the side-panel list & controls
+    window.onSymbolSelected = function(id) {
+        renderSymbolList();
+        showSymbolControlsFor(id);
     };
 
     // --- Thumbnail Generator (Phase 5B) ---
@@ -6483,6 +7268,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (typeof renderTextOverlayList === 'function') renderTextOverlayList();
         if (typeof renderBrollList === 'function') renderBrollList();
         if (typeof renderStickerList === 'function') renderStickerList();
+        if (typeof renderSymbolList === 'function') renderSymbolList();
         
         // Sync Audio engine UI
         if (window.syncAudioUIFromStateGlobal) {
@@ -6576,6 +7362,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 textOverlays: state.textOverlays,
                 highlights: state.highlights,
                 stickers: state.stickers,
+                symbolOverlays: state.symbolOverlays,
                 blurRegions: state.blurRegions,
                 subtitles: state.subtitles
             };
@@ -6892,6 +7679,7 @@ document.addEventListener('DOMContentLoaded', () => {
             state.textOverlays = data.textOverlays || [];
             state.highlights = data.highlights || [];
             state.stickers = data.stickers || [];
+            state.symbolOverlays = data.symbolOverlays || [];
             state.brollOverlays = data.brollOverlays || [];
             state.blurRegions = data.blurRegions || [];
             state.subtitles = data.subtitles || [];
@@ -7012,6 +7800,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 textOverlays: state.textOverlays,
                 highlights: state.highlights,
                 stickers: state.stickers,
+                symbolOverlays: state.symbolOverlays,
                 brollOverlays: state.brollOverlays.map(b => {
                     const copy = {...b};
                     delete copy.imageImg;
@@ -7107,6 +7896,23 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         });
         stickerIdCounter = nextStickerId;
+
+        // 2b. Sanitize symbolOverlays
+        if (!state.symbolOverlays) state.symbolOverlays = [];
+        const symbolIds = new Set();
+        let maxSymbolId = 0;
+        state.symbolOverlays.forEach(item => {
+            if (item.id > maxSymbolId) maxSymbolId = item.id;
+        });
+        let nextSymbolId = maxSymbolId + 1;
+        state.symbolOverlays.forEach(item => {
+            if (symbolIds.has(item.id)) {
+                item.id = nextSymbolId++;
+            } else {
+                symbolIds.add(item.id);
+            }
+        });
+        symbolIdCounter = nextSymbolId;
 
         // 3. Sanitize brollOverlays
         const brollIds = new Set();
@@ -7204,6 +8010,7 @@ document.addEventListener('DOMContentLoaded', () => {
             state.textOverlays = savedData.textOverlays || [];
             state.highlights = savedData.highlights || [];
             state.stickers = savedData.stickers || [];
+            state.symbolOverlays = savedData.symbolOverlays || [];
             state.brollOverlays = savedData.brollOverlays || [];
             state.blurRegions = savedData.blurRegions || [];
             state.subtitles = savedData.subtitles || [];
