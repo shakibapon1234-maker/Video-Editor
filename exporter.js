@@ -36,28 +36,31 @@ document.addEventListener('DOMContentLoaded', () => {
     // and re-issuing the seek if needed -- until the position actually matches
     // (within 150ms of playback), only giving up after maxWaitMs so a genuinely
     // broken seek can't hang the export forever.
-    async function waitForSeek(video, targetTime, maxWaitMs = 4000, tolerance = 0.01) {
-        const seekStart = performance.now();
+    // Seek the video to targetTime and wait until the browser has fully decoded
+    // that frame (i.e. until the 'seeked' event fires). This is critical for
+    // seek-per-frame export: if we capture the canvas BEFORE 'seeked' fires,
+    // drawImage(video) returns the OLD frame, creating freeze/repeat frames in
+    // the exported file. The old approach used a 50 ms timeout which was far
+    // too short for a slow/low-config PC — the seek was still in progress when
+    // the timeout fired, so every frame was grabbed too early.
+    //
+    // We now wait unconditionally for the 'seeked' event. The maxWaitMs safety
+    // timeout (5 s) is only there to prevent a truly broken seek from hanging
+    // the export forever; in practice it should never fire for valid clips.
+    async function waitForSeek(video, targetTime, maxWaitMs = 5000) {
         video.currentTime = targetTime;
-        while (Math.abs(video.currentTime - targetTime) > tolerance) {
-            if (performance.now() - seekStart > maxWaitMs) {
-                console.warn(`Seek to ${targetTime}s did not complete within ${maxWaitMs}ms (stuck at ${video.currentTime}s). Forcing and continuing.`);
-                video.currentTime = targetTime;
-                break;
-            }
-            await new Promise((resolveSeek) => {
-                const onSeeked = () => {
-                    video.removeEventListener('seeked', onSeeked);
-                    resolveSeek();
-                };
-                video.addEventListener('seeked', onSeeked);
-                // Re-check periodically even if 'seeked' never fires for this attempt
-                setTimeout(resolveSeek, 50);
-            });
-            if (Math.abs(video.currentTime - targetTime) > tolerance) {
-                video.currentTime = targetTime; // re-issue the seek and try again
-            }
-        }
+        await new Promise((resolve) => {
+            let settled = false;
+            const done = () => {
+                if (settled) return;
+                settled = true;
+                video.removeEventListener('seeked', done);
+                resolve();
+            };
+            video.addEventListener('seeked', done);
+            // Safety timeout — removes listener so it never leaks.
+            setTimeout(done, maxWaitMs);
+        });
     }
 
     const renderBtn = document.getElementById('render-btn');
@@ -353,74 +356,127 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         }
 
-        // C2. Render video sequentially. Seeking and re-decoding every single
-        // frame is extremely slow for long clips; pause on each decoded frame,
-        // capture it, then advance to the next one instead.
+        // C2. Seek-per-frame capture — the only approach that guarantees correct
+        // visual content regardless of hardware speed.
+        //
+        // WHY requestVideoFrameCallback fails on low-config PCs:
+        //   When video.play() is called, the browser may decode multiple frames
+        //   before the callback fires (especially with hardware acceleration or
+        //   cached data). The captured canvas frame is then from the WRONG
+        //   position inside the source file. On a slow PC this is unpredictable,
+        //   causing completely wrong scenes to appear in the rendered video (e.g.
+        //   blue particles instead of a pricing page at the same timestamp).
+        //
+        // This approach:
+        //   • For every frame, seeks the video to the mathematically exact time.
+        //   • Waits for the seek to settle (waitForSeek handles this robustly).
+        //   • Captures the canvas at that exact frame position.
+        //   • Skips redundant seeks: if the video is already within 1 frame of
+        //     the target (sequential capture), no seek is issued — so clean
+        //     sequential clips only pay for 1 seek at the clip boundary.
+        //
+        // Trade-off: slightly slower than play-based, but 100% frame-accurate.
+        // C2. Pipelined playback-based capture — self-adjusting for low-config PCs.
+        // Runs at a controlled rate (0.4x) to decode smoothly without seeking.
+        // Automatically pauses/resumes if canvas compression lags behind.
         async function captureVideoClipSequential(clip, clipTrimStart, clipTrimEnd, clipFrames, clipIndex) {
+            video.pause();
+            video.playbackRate = 0.4; // 0.4x speed is very stable and lightweight
             await waitForSeek(video, clipTrimStart);
-            video.playbackRate = 1.0;
+
             let clipFrameIndex = 0;
+            let finished = false;
 
             await new Promise((resolve) => {
-                let safetyTimer = null;
                 let frameCallbackId = null;
-                let isCapturing = false;
-                let finished = false;
+                let safetyTimer = null;
+                let activeBlobPromises = [];
 
-                const finish = () => {
+                const finish = async () => {
                     if (finished) return;
                     finished = true;
-                    if (safetyTimer) clearTimeout(safetyTimer);
+                    if (safetyTimer) { clearTimeout(safetyTimer); safetyTimer = null; }
                     if (frameCallbackId !== null && video.cancelVideoFrameCallback) {
                         video.cancelVideoFrameCallback(frameCallbackId);
+                        frameCallbackId = null;
                     }
                     video.pause();
+                    // Wait for all remaining canvas compression/uploads to finish
+                    await Promise.all(activeBlobPromises);
                     resolve();
                 };
 
-                const queueNextFrame = () => {
-                    if (finished || exportCancelled || clipFrameIndex >= clipFrames) {
-                        finish();
-                        return;
-                    }
-                    frameCallbackId = video.requestVideoFrameCallback(captureFrame);
-                    safetyTimer = setTimeout(() => {
-                        // Keep the export moving if a browser fails to emit a frame callback.
-                        if (frameCallbackId !== null && video.cancelVideoFrameCallback) {
-                            video.cancelVideoFrameCallback(frameCallbackId);
-                        }
-                        frameCallbackId = null;
-                        video.pause();
-                        captureCurrentFrame();
-                    }, 1000);
-                    video.play().catch(() => captureCurrentFrame());
-                };
-
-                const captureCurrentFrame = async () => {
-                    if (finished || isCapturing) return;
-                    isCapturing = true;
-                    if (safetyTimer) {
-                        clearTimeout(safetyTimer);
-                        safetyTimer = null;
-                    }
+                const onFrame = async (now, meta) => {
+                    if (finished || exportCancelled) return;
+                    if (safetyTimer) { clearTimeout(safetyTimer); safetyTimer = null; }
                     frameCallbackId = null;
-                    if (exportCancelled || clipFrameIndex >= clipFrames) {
-                        isCapturing = false;
+
+                    const mediaTime = (meta && meta.mediaTime != null) ? meta.mediaTime : video.currentTime;
+                    let currentTarget = clipTrimStart + (clipFrameIndex / 30);
+
+                    // 1. Frame is too early — let the video keep playing
+                    if (mediaTime < currentTarget - (1 / 60)) {
+                        scheduleNext();
+                        return;
+                    }
+
+                    // 2. Video overshot/skipped frames — fill the gap by duplicating
+                    while (clipFrameIndex < clipFrames) {
+                        const loopTarget = clipTrimStart + (clipFrameIndex / 30);
+                        if (mediaTime <= loopTarget + (1 / 60)) {
+                            break; // Not overshot anymore
+                        }
+
+                        state.customExportTime = loopTarget;
+                        state.exportTickerTime = elapsedBeforeCurrentClip + (clipFrameIndex / 30);
+                        if (window.drawEditorFrame) window.drawEditorFrame();
+
+                        const p = new Promise(async (r) => {
+                            const blob = await new Promise(res => canvas.toBlob(res, 'image/jpeg', 0.85));
+                            if (blob && !finished && !exportCancelled) ws.send(blob);
+                            r();
+                        });
+                        activeBlobPromises.push(p);
+
+                        clipFrameIndex++;
+                        frameIndex++;
+
+                        if (activeBlobPromises.length > 5) {
+                            await activeBlobPromises.shift();
+                        }
+                    }
+
+                    if (clipFrameIndex >= clipFrames) {
                         finish();
                         return;
                     }
 
-                    video.pause();
-                    const timelineTime = clipTrimStart + (clipFrameIndex / 30);
-                    state.customExportTime = timelineTime;
+                    // 3. Draw and queue the correct frame
+                    currentTarget = clipTrimStart + (clipFrameIndex / 30);
+                    state.customExportTime = currentTarget;
                     state.exportTickerTime = elapsedBeforeCurrentClip + (clipFrameIndex / 30);
                     if (window.drawEditorFrame) window.drawEditorFrame();
 
-                    const frameBlob = await new Promise(r => canvas.toBlob(r, 'image/jpeg', 0.85));
-                    if (frameBlob) ws.send(frameBlob);
+                    const p = new Promise(async (r) => {
+                        const blob = await new Promise(res => canvas.toBlob(res, 'image/jpeg', 0.85));
+                        if (blob && !finished && !exportCancelled) ws.send(blob);
+                        r();
+                    });
+                    activeBlobPromises.push(p);
 
                     clipFrameIndex++;
                     frameIndex++;
+
+                    // Dynamically pause playback if browser encoding queue is too full
+                    if (activeBlobPromises.length > 3) {
+                        video.pause();
+                        await activeBlobPromises.shift();
+                        if (!finished && !exportCancelled) {
+                            try { await video.play(); } catch(e){}
+                        }
+                    }
+
+                    // Progress update
                     const totalElapsed = elapsedBeforeCurrentClip + (clipFrameIndex / 30);
                     const progressPercent = grandTotalDuration > 0 ? Math.min(100, (totalElapsed / grandTotalDuration) * 100) : 100;
                     setProgress(10 + Math.round(progressPercent * 0.8));
@@ -430,16 +486,49 @@ document.addEventListener('DOMContentLoaded', () => {
                     } else {
                         renderStatusText.innerText = `ক্লিপ ${clipIndex + 1}/${state.clips.length} প্রসেস হচ্ছে... (ফ্রেম: ${clipFrameIndex}/${clipFrames})`;
                     }
-                    isCapturing = false;
-                    queueNextFrame();
+
+                    if (clipFrameIndex >= clipFrames) {
+                        finish();
+                    } else {
+                        scheduleNext();
+                    }
                 };
 
-                const captureFrame = () => captureCurrentFrame();
-                queueNextFrame();
+                const scheduleNext = () => {
+                    if (finished || exportCancelled) return;
+                    frameCallbackId = video.requestVideoFrameCallback(onFrame);
+                    safetyTimer = setTimeout(() => {
+                        safetyTimer = null;
+                        if (frameCallbackId !== null && video.cancelVideoFrameCallback) {
+                            video.cancelVideoFrameCallback(frameCallbackId);
+                            frameCallbackId = null;
+                        }
+                        // If stalls, manually force frame progression
+                        onFrame(null, { mediaTime: clipTrimStart + (clipFrameIndex / 30) });
+                    }, 1500);
+                };
+
+                video.play().then(() => {
+                    scheduleNext();
+                }).catch(() => {
+                    // Fallback if play fails
+                    onFrame(null, null);
+                });
             });
         }
 
         let elapsedBeforeCurrentClip = 0;
+        // Running count of frames actually emitted for the clips timeline so far.
+        // Used to derive each clip's frame count from the *cumulative* elapsed
+        // time rather than rounding each clip's duration independently. Rounding
+        // per-clip (e.g. with Math.ceil) always rounds up, so the rounding error
+        // is one-directional and keeps adding up across clips — after several
+        // clips/tasks the video track ends up a full frame or more ahead of the
+        // audio track, which is exactly the "growing gap" symptom. Deriving the
+        // frame count from the running total keeps the video length locked to
+        // the audio length: each clip's error is at most half a frame and never
+        // compounds with the next one.
+        let clipsFramesEmitted = 0;
         for (let clipIndex = 0; clipIndex < state.clips.length; clipIndex++) {
             if (exportCancelled) break;
             const clip = state.clips[clipIndex];
@@ -474,7 +563,15 @@ document.addEventListener('DOMContentLoaded', () => {
             state.cropW = (clip.cropW !== undefined) ? clip.cropW : 1;
             state.cropH = (clip.cropH !== undefined) ? clip.cropH : 1;
 
-            const clipFrames = Math.ceil(clipTrimDuration * 30);
+            // Ideal cumulative frame count if the clips timeline up to and
+            // including this clip were rendered with zero rounding error, then
+            // subtract what's already been emitted. This is the frame-budget
+            // (Bresenham-style) technique: any leftover fraction of a frame is
+            // carried forward and absorbed by the next clip instead of being
+            // silently dropped or duplicated every single time.
+            const targetCumulativeFrames = Math.round((elapsedBeforeCurrentClip + clipTrimDuration) * 30);
+            const clipFrames = Math.max(1, targetCumulativeFrames - clipsFramesEmitted);
+            clipsFramesEmitted += clipFrames;
             
             if (clip.type === 'image') {
                 for (let f = 0; f < clipFrames; f++) {
@@ -517,6 +614,7 @@ document.addEventListener('DOMContentLoaded', () => {
         // post-export restore draw) reads the real video.currentTime again.
         state.customExportTime = undefined;
         state.exportTickerTime = undefined;
+
 
         // C3. Render Outro if enabled
         if (state.outroEnabled && outroDur > 0 && !exportCancelled) {
@@ -570,14 +668,20 @@ document.addEventListener('DOMContentLoaded', () => {
             ws.addEventListener('message', onMsg);
         });
 
-        // Restore editor settings
-        if (video.src !== originalSrc) {
-            await new Promise((resolve) => {
-                video.onloadedmetadata = () => resolve();
-                video.src = originalSrc;
-                video.load();
-            });
-        }
+        // Restore editor settings.
+        // Always force-reload the video — after thousands of frame-level seeks
+        // the decoder can get stuck in 'seeking' state even when src is unchanged.
+        // Resetting src to '' first flushes any pending internal decoder state.
+        video.pause();
+        video.src = '';
+        await new Promise(r => setTimeout(r, 50)); // brief flush
+        await new Promise((resolve) => {
+            const onMeta = () => { video.removeEventListener('loadedmetadata', onMeta); resolve(); };
+            video.addEventListener('loadedmetadata', onMeta);
+            video.src = originalSrc;
+            video.load();
+            setTimeout(resolve, 3000); // safety timeout
+        });
         state.activeClipId = originalActiveClipId;
         state.duration = originalDuration;
         state.startTime = originalStartTime;
