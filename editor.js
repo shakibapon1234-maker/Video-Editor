@@ -163,6 +163,10 @@ window.VideoEditor = {
     highlightDrawDrawY: 0,
     highlightDrawDrawW: 0,
     highlightDrawDrawH: 0,
+    highlightStraightAnchor: null,
+    highlightStraightPointIndex: null,
+    highlightFreehandSegmentStart: null,
+    highlightPreviewPoint: null,
 
     // Auto Subtitle (Phase 5A)
     subtitles: [],
@@ -2143,41 +2147,153 @@ document.addEventListener('DOMContentLoaded', () => {
                 const y = drawY + item.y * drawH;
                 const w = item.w * drawW;
                 const h = item.h * drawH;
-                if (w <= 0 || h <= 0) return;
+                const isFreehand = item.shape === 'freehand';
+                const previewPoint = isFreehand && state.isDrawingNewHighlight && item.id === state.selectedHighlightId
+                    ? state.highlightPreviewPoint : null;
+                const pathPoints = previewPoint ? [...item.points, previewPoint] : item.points;
+                if (isFreehand && (!pathPoints || pathPoints.length < 2)) return;
+                if (!isFreehand && (w <= 0 || h <= 0)) return;
 
                 const color = item.color || '#00e5ff';
-                const alpha = Math.max(0, Math.min(0.7, (item.fillOpacity ?? 16) / 100));
+                const alpha = Math.max(0, Math.min(0.85, (item.fillOpacity ?? 16) / 100));
                 const width = Math.max(1, item.lineWidth || 6);
+                // The neon "glow" is a stroke-only effect. Applying it to the fill as
+                // well (as before) made the fill look like a blurry, washed-out haze
+                // that didn't track the Fill Opacity slider at all — a 0% fill would
+                // still show a soft colored smear because the *shadow* had its own,
+                // separate full-strength opacity. Keeping the glow modest and firmly
+                // scoped to stroke() calls only fixes both the "haze" and the
+                // slider-doesn't-do-anything complaints in one go.
+                const glowBlur = Math.min(width * 0.6, 6);
                 state.ctx.save();
                 state.ctx.strokeStyle = color;
                 state.ctx.lineWidth = width;
                 state.ctx.lineJoin = 'round';
-                state.ctx.shadowColor = color;
-                state.ctx.shadowBlur = width * 1.5;
+                state.ctx.lineCap = 'round';
 
-                if (item.shape === 'underline') {
+                // While the shape is still being sized by dragging on the preview,
+                // show it as-is (no trace animation — its geometry isn't final yet).
+                // During normal playback/export, animate it: the outline starts at
+                // one point, travels all the way around the shape, and finishes
+                // back at that same point, instead of just popping in.
+                const isBeingSizedNow = state.isDrawingNewHighlight && item.id === state.selectedHighlightId;
+                const drawDuration = Math.max(0.15, Math.min((item.endSec - item.startSec) - 0.05, item.drawDuration || 0.6));
+                const elapsed = Math.max(0, currentTime - item.startSec);
+                const traceProgress = isBeingSizedNow ? 1 : Math.min(1, elapsed / drawDuration);
+
+                // Walks an ordered list of points (a "trace path") and adds line
+                // segments to the current canvas path up to `progress` (0–1) of its
+                // total length, so the stroke appears to be travelling along it.
+                const traceOutline = (points, progress) => {
+                    if (!points || points.length < 2) return;
+                    state.ctx.moveTo(points[0].x, points[0].y);
+                    if (progress >= 1) {
+                        for (let i = 1; i < points.length; i++) state.ctx.lineTo(points[i].x, points[i].y);
+                        return;
+                    }
+                    let total = 0;
+                    const segLens = [];
+                    for (let i = 1; i < points.length; i++) {
+                        const len = Math.hypot(points[i].x - points[i - 1].x, points[i].y - points[i - 1].y);
+                        segLens.push(len);
+                        total += len;
+                    }
+                    const target = total * Math.max(0, progress);
+                    let covered = 0;
+                    for (let i = 0; i < segLens.length; i++) {
+                        const segLen = segLens[i];
+                        if (covered + segLen <= target) {
+                            state.ctx.lineTo(points[i + 1].x, points[i + 1].y);
+                            covered += segLen;
+                        } else {
+                            const ratio = segLen > 0 ? (target - covered) / segLen : 0;
+                            state.ctx.lineTo(
+                                points[i].x + (points[i + 1].x - points[i].x) * ratio,
+                                points[i].y + (points[i + 1].y - points[i].y) * ratio
+                            );
+                            break;
+                        }
+                    }
+                };
+
+                if (isFreehand) {
+                    if (isBeingSizedNow) {
+                        state.ctx.beginPath();
+                        state.ctx.moveTo(drawX + pathPoints[0].x * drawW, drawY + pathPoints[0].y * drawH);
+                        pathPoints.slice(1).forEach(point => state.ctx.lineTo(drawX + point.x * drawW, drawY + point.y * drawH));
+                        // Keep a multi-side freehand path open while the editor is still
+                        // adding sides. Closing it early creates an unwanted diagonal.
+                        if (item.isClosed) {
+                            state.ctx.closePath();
+                            state.ctx.shadowBlur = 0;
+                            state.ctx.fillStyle = hexToRgba(color, alpha);
+                            state.ctx.fill();
+                        }
+                        state.ctx.shadowColor = color;
+                        state.ctx.shadowBlur = glowBlur;
+                        state.ctx.stroke();
+                    } else {
+                        const px = pathPoints.map(p => ({ x: drawX + p.x * drawW, y: drawY + p.y * drawH }));
+                        const loopPoints = item.isClosed ? [...px, px[0]] : px;
+                        state.ctx.beginPath();
+                        traceOutline(loopPoints, traceProgress);
+                        if (item.isClosed && traceProgress >= 1) {
+                            state.ctx.closePath();
+                            state.ctx.shadowBlur = 0;
+                            state.ctx.fillStyle = hexToRgba(color, alpha * traceProgress);
+                            state.ctx.fill();
+                        }
+                        state.ctx.shadowColor = color;
+                        state.ctx.shadowBlur = glowBlur;
+                        state.ctx.stroke();
+                    }
+                } else if (item.shape === 'underline') {
+                    // A line has no enclosed area to loop back around, so it simply
+                    // draws left-to-right over the same duration.
                     state.ctx.beginPath();
-                    state.ctx.moveTo(x, y + h);
-                    state.ctx.lineTo(x + w, y + h);
+                    traceOutline([{ x, y: y + h }, { x: x + w, y: y + h }], traceProgress);
+                    state.ctx.shadowColor = color;
+                    state.ctx.shadowBlur = glowBlur;
                     state.ctx.stroke();
                 } else {
-                    state.ctx.fillStyle = hexToRgba(color, alpha);
-                    state.ctx.beginPath();
+                    let outline;
                     if (item.shape === 'circle') {
-                        state.ctx.ellipse(x + w / 2, y + h / 2, w / 2, h / 2, 0, 0, Math.PI * 2);
+                        const cx = x + w / 2, cy = y + h / 2, rx = w / 2, ry = h / 2;
+                        const segments = 48;
+                        outline = [];
+                        // Start at the top of the ellipse and travel clockwise all the
+                        // way around back to that exact same starting point.
+                        for (let i = 0; i <= segments; i++) {
+                            const theta = -Math.PI / 2 + (i / segments) * Math.PI * 2;
+                            outline.push({ x: cx + rx * Math.cos(theta), y: cy + ry * Math.sin(theta) });
+                        }
                     } else if (item.shape === 'hexagon') {
                         const inset = Math.min(w * 0.25, h * 0.35);
-                        state.ctx.moveTo(x + inset, y);
-                        state.ctx.lineTo(x + w - inset, y);
-                        state.ctx.lineTo(x + w, y + h / 2);
-                        state.ctx.lineTo(x + w - inset, y + h);
-                        state.ctx.lineTo(x + inset, y + h);
-                        state.ctx.lineTo(x, y + h / 2);
-                        state.ctx.closePath();
+                        const verts = [
+                            { x: x + inset, y },
+                            { x: x + w - inset, y },
+                            { x: x + w, y: y + h / 2 },
+                            { x: x + w - inset, y: y + h },
+                            { x: x + inset, y: y + h },
+                            { x, y: y + h / 2 }
+                        ];
+                        outline = [...verts, verts[0]];
                     } else {
-                        state.ctx.rect(x, y, w, h);
+                        outline = [{ x, y }, { x: x + w, y }, { x: x + w, y: y + h }, { x, y: y + h }, { x, y }];
                     }
+                    state.ctx.beginPath();
+                    traceOutline(outline, traceProgress);
+                    if (traceProgress >= 1) state.ctx.closePath();
+                    // The fill grows in alongside the outline so the highlight reads
+                    // like a marker sweeping around and shading the area as it goes,
+                    // rather than the fill just appearing once the trace finishes.
+                    // Filled with no shadow so it stays crisp and matches the Fill
+                    // Opacity slider exactly — only the outline stroke gets the glow.
+                    state.ctx.shadowBlur = 0;
+                    state.ctx.fillStyle = hexToRgba(color, alpha * traceProgress);
                     state.ctx.fill();
+                    state.ctx.shadowColor = color;
+                    state.ctx.shadowBlur = glowBlur;
                     state.ctx.stroke();
                 }
 
@@ -3469,8 +3585,34 @@ document.addEventListener('DOMContentLoaded', () => {
             const color = document.getElementById('highlight-color')?.value || '#00e5ff';
             const lineWidth = parseInt(document.getElementById('highlight-line-width')?.value || '6');
             const fillOpacity = parseInt(document.getElementById('highlight-fill-opacity')?.value || '16');
+            const drawDuration = parseFloat(document.getElementById('highlight-draw-speed')?.value || '0.6');
             const now = Math.max(0, state.currentTime || 0);
-            const item = { id: Date.now(), shape, color, lineWidth, fillOpacity, x: (coords.x - bounds.x) / bounds.w, y: (coords.y - bounds.y) / bounds.h, w: 0, h: 0, startSec: now, endSec: Math.max(now + 1, state.endTime || state.duration || 5) };
+            const startPoint = { x: (coords.x - bounds.x) / bounds.w, y: (coords.y - bounds.y) / bounds.h };
+            const selected = state.highlights.find(h => h.id === state.selectedHighlightId);
+            if (shape === 'freehand') {
+                // Every drag is exactly one side. Start the next drag at the last
+                // endpoint to extend an open custom shape, or elsewhere to begin a new one.
+                let item = null;
+                if (selected?.shape === 'freehand' && !selected.isClosed && selected.points?.length >= 2) {
+                    const endpoint = selected.points[selected.points.length - 1];
+                    if (Math.hypot(startPoint.x - endpoint.x, startPoint.y - endpoint.y) < 0.035) item = selected;
+                }
+                if (!item) {
+                    item = { id: Date.now(), shape, color, lineWidth, fillOpacity, drawDuration, x: startPoint.x, y: startPoint.y, w: 0, h: 0, points: [startPoint], isClosed: false, startSec: now, endSec: Math.max(now + 1, state.endTime || state.duration || 5) };
+                    state.highlights.push(item);
+                    state.selectedHighlightId = item.id;
+                }
+                state.isDrawingNewHighlight = true;
+                state.highlightFreehandSegmentStart = item.points[item.points.length - 1];
+                state.highlightPreviewPoint = null;
+                state.highlightDrawDrawX = bounds.x; state.highlightDrawDrawY = bounds.y;
+                state.highlightDrawDrawW = bounds.w; state.highlightDrawDrawH = bounds.h;
+                if (window.onHighlightSelected) window.onHighlightSelected(item.id);
+                drawFrame();
+                e.preventDefault();
+                return;
+            }
+            const item = { id: Date.now(), shape, color, lineWidth, fillOpacity, drawDuration, x: startPoint.x, y: startPoint.y, w: 0, h: 0, points: shape === 'freehand' ? [startPoint] : undefined, isClosed: false, startSec: now, endSec: Math.max(now + 1, state.endTime || state.duration || 5) };
             state.highlights.push(item);
             state.selectedHighlightId = item.id;
             state.isDrawingNewHighlight = true;
@@ -4143,6 +4285,24 @@ document.addEventListener('DOMContentLoaded', () => {
             const coords = getCanvasCoords(e);
             const item = state.highlights.find(h => h.id === state.selectedHighlightId);
             if (!item) return;
+            if (item.shape === 'freehand') {
+                let point = {
+                    x: Math.max(0, Math.min(1, (coords.x - state.highlightDrawDrawX) / state.highlightDrawDrawW)),
+                    y: Math.max(0, Math.min(1, (coords.y - state.highlightDrawDrawY) / state.highlightDrawDrawH))
+                };
+                const anchor = state.highlightFreehandSegmentStart || item.points[item.points.length - 1];
+                if (e.shiftKey) {
+                    // Shift locks this complete side to horizontal or vertical.
+                    const dx = point.x - anchor.x;
+                    const dy = point.y - anchor.y;
+                    point = Math.abs(dx) >= Math.abs(dy)
+                        ? { x: point.x, y: anchor.y }
+                        : { x: anchor.x, y: point.y };
+                }
+                state.highlightPreviewPoint = point;
+                drawFrame();
+                return;
+            }
             const x0 = state.highlightDrawDrawX + item.x * state.highlightDrawDrawW;
             const y0 = state.highlightDrawDrawY + item.y * state.highlightDrawDrawH;
             const x1 = Math.max(state.highlightDrawDrawX, Math.min(state.highlightDrawDrawX + state.highlightDrawDrawW, coords.x));
@@ -4448,8 +4608,30 @@ document.addEventListener('DOMContentLoaded', () => {
 
         if (state.isDrawingNewHighlight) {
             const item = state.highlights.find(h => h.id === state.selectedHighlightId);
+            if (item?.shape === 'freehand' && state.highlightPreviewPoint) {
+                const anchor = state.highlightFreehandSegmentStart || item.points[item.points.length - 1];
+                const endpoint = state.highlightPreviewPoint;
+                if (Math.hypot(endpoint.x - anchor.x, endpoint.y - anchor.y) > 0.003) item.points.push(endpoint);
+            }
             state.isDrawingNewHighlight = false;
-            if (item && (item.w < 0.01 || item.h < 0.01)) {
+            state.highlightStraightAnchor = null;
+            state.highlightStraightPointIndex = null;
+            state.highlightFreehandSegmentStart = null;
+            state.highlightPreviewPoint = null;
+            if (item?.shape === 'freehand' && item.points.length >= 3) {
+                const first = item.points[0];
+                const last = item.points[item.points.length - 1];
+                // Only close when the cursor returns almost exactly to the first
+                // point. A generous tolerance prematurely closed a third side.
+                if (Math.hypot(last.x - first.x, last.y - first.y) < 0.012) {
+                    // Snap the last point exactly to the start, so the final side is clean.
+                    item.points[item.points.length - 1] = { ...first };
+                    item.isClosed = true;
+                }
+            }
+            // Keep a two-point freehand line too; it can be given a time range and
+            // extended into a box/polygon with another drag from its endpoint.
+            if (item && ((item.shape === 'freehand' && item.points.length < 2) || (item.shape !== 'freehand' && (item.w < 0.01 || item.h < 0.01)))) {
                 state.highlights = state.highlights.filter(h => h.id !== item.id);
                 state.selectedHighlightId = null;
             }
@@ -4825,6 +5007,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const highlightLineWidthVal = document.getElementById('highlight-line-width-val');
     const highlightFillOpacity = document.getElementById('highlight-fill-opacity');
     const highlightFillOpacityVal = document.getElementById('highlight-fill-opacity-val');
+    const highlightDrawSpeed = document.getElementById('highlight-draw-speed');
+    const highlightDrawSpeedVal = document.getElementById('highlight-draw-speed-val');
     const highlightListEl = document.getElementById('highlight-list');
     const highlightTimingContainer = document.getElementById('highlight-timing-container');
     const highlightStartInput = document.getElementById('highlight-start');
@@ -4836,6 +5020,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const item = selectedHighlight(); if (!item) return;
         item.shape = highlightShapeSelect.value; item.color = highlightColorInput.value;
         item.lineWidth = parseInt(highlightLineWidth.value); item.fillOpacity = parseInt(highlightFillOpacity.value);
+        item.drawDuration = parseFloat(highlightDrawSpeed.value);
         drawFrame();
     }
     function renderHighlightList() {
@@ -4858,6 +5043,7 @@ document.addEventListener('DOMContentLoaded', () => {
         highlightColorVal.innerText = item.color.toUpperCase();
         highlightLineWidth.value = item.lineWidth; highlightLineWidthVal.innerText = item.lineWidth + 'px';
         highlightFillOpacity.value = item.fillOpacity; highlightFillOpacityVal.innerText = item.fillOpacity + '%';
+        highlightDrawSpeed.value = item.drawDuration ?? 0.6; highlightDrawSpeedVal.innerText = (item.drawDuration ?? 0.6).toFixed(1) + 's';
         highlightStartInput.value = item.startSec; highlightEndInput.value = item.endSec;
     }
     if (highlightToolToggle) highlightToolToggle.addEventListener('change', () => {
@@ -4866,9 +5052,10 @@ document.addEventListener('DOMContentLoaded', () => {
         if (state.isAddingHighlight) renderHighlightList();
         drawFrame();
     });
-    [highlightShapeSelect, highlightColorInput, highlightLineWidth, highlightFillOpacity].forEach(el => el && el.addEventListener('input', () => {
+    [highlightShapeSelect, highlightColorInput, highlightLineWidth, highlightFillOpacity, highlightDrawSpeed].forEach(el => el && el.addEventListener('input', () => {
         highlightColorVal.innerText = highlightColorInput.value.toUpperCase();
         highlightLineWidthVal.innerText = highlightLineWidth.value + 'px'; highlightFillOpacityVal.innerText = highlightFillOpacity.value + '%';
+        if (highlightDrawSpeedVal) highlightDrawSpeedVal.innerText = parseFloat(highlightDrawSpeed.value).toFixed(1) + 's';
         syncSelectedHighlightStyle();
     }));
     if (highlightStartInput) highlightStartInput.addEventListener('input', () => { const item = selectedHighlight(); if (item) { item.startSec = Math.max(0, parseFloat(highlightStartInput.value) || 0); item.endSec = Math.max(item.startSec + .1, item.endSec); highlightEndInput.value = item.endSec; renderHighlightList(); drawFrame(); } });

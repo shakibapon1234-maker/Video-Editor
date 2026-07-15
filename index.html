@@ -786,7 +786,7 @@
                                 <h3>Video Highlight (ভিডিও হাইলাইট)</h3>
                             </div>
                             <div class="card-body">
-                                <p class="help-text">রানিং ভিডিওর যেকোনো অংশে হাইলাইট বসান। Shape বেছে নিয়ে নিচের বাটন অন করুন, তারপর প্রিভিউতে ক্লিক-ড্র্যাগ করে এরিয়া সিলেক্ট করুন।</p>
+                                <p class="help-text">রানিং ভিডিওর যেকোনো অংশে হাইলাইট বসান। Shape বেছে নিয়ে প্রিভিউতে একবার drag করলেই সম্পূর্ণ shape তৈরি হবে। Rectangle/Square, Circle/Oval, Hexagon অথবা Underline ব্যবহার করতে পারবেন।</p>
                                 <label class="toggle-row mt-3">
                                     <div><strong>Draw highlight on preview</strong><p>Enable drawing on the running video</p></div>
                                     <input type="checkbox" id="highlight-tool-toggle"><span class="toggle-slider"></span>
@@ -807,11 +807,15 @@
                                     </div>
                                     <div class="control-group mt-2">
                                         <label>Line Thickness</label>
-                                        <div class="slider-val-container"><input type="range" id="highlight-line-width" min="2" max="20" value="6"><span id="highlight-line-width-val">6px</span></div>
+                                        <div class="slider-val-container"><input type="range" id="highlight-line-width" min="2" max="40" value="6"><span id="highlight-line-width-val">6px</span></div>
                                     </div>
                                     <div class="control-group mt-2">
                                         <label>Fill Opacity</label>
-                                        <div class="slider-val-container"><input type="range" id="highlight-fill-opacity" min="0" max="70" value="16"><span id="highlight-fill-opacity-val">16%</span></div>
+                                        <div class="slider-val-container"><input type="range" id="highlight-fill-opacity" min="0" max="85" value="16"><span id="highlight-fill-opacity-val">16%</span></div>
+                                    </div>
+                                    <div class="control-group mt-2">
+                                        <label>Draw Speed (আঁকার গতি)</label>
+                                        <div class="slider-val-container"><input type="range" id="highlight-draw-speed" min="0.2" max="1.5" step="0.1" value="0.6"><span id="highlight-draw-speed-val">0.6s</span></div>
                                     </div>
                                     <div id="highlight-list" class="text-overlay-list mt-3"></div>
                                     <div id="highlight-timing-container" class="text-overlay-timing mt-3" style="display:none;">
