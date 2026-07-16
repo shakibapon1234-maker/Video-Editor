@@ -998,16 +998,29 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     };
 
-    // Mute/unmute ONLY the live speaker output, completely isolated from the
-    // export/recording tap. Previously this toggled videoGainNode directly —
-    // but videoGainNode sits upstream of the same path the exporter taps for
-    // recording, so muting the speaker during export was silencing the
-    // recorded video audio too (while separately-routed bg music/voiceover
-    // stayed audible). speakerMuteGain sits AFTER the export tap point, so
-    // muting it now only affects what comes out of the speakers.
+    let currentSpeakerVolume = 1.0;
+    let speakerMutedState = false;
+
     window.setSpeakerMuted = function(muted) {
-        if (!speakerMuteGain || !audioCtx) return false; // caller should fall back to video.volume
-        speakerMuteGain.gain.setValueAtTime(muted ? 0 : 1, audioCtx.currentTime);
+        speakerMutedState = muted;
+        if (!speakerMuteGain || !audioCtx) {
+            state.video.muted = muted;
+            return false;
+        }
+        speakerMuteGain.gain.setValueAtTime(muted ? 0 : currentSpeakerVolume, audioCtx.currentTime);
+        return true;
+    };
+    
+    window.setSpeakerVolume = function(vol) {
+        currentSpeakerVolume = vol;
+        if (!speakerMuteGain || !audioCtx) {
+            state.video.volume = vol;
+            return false;
+        }
+        if (!speakerMutedState) {
+            speakerMuteGain.gain.setValueAtTime(vol, audioCtx.currentTime);
+        }
+        state.video.volume = vol;
         return true;
     };
     

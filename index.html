@@ -132,9 +132,12 @@
                             <button id="play-pause-btn" class="btn-play">
                                 <i class="fa-solid fa-play"></i>
                             </button>
-                            <button id="preview-mute-btn" class="btn-play" title="প্রিভিউ সাউন্ড অফ/অন করুন — শুধু আপনার স্পিকারের জন্য, এক্সপোর্ট করা ভিডিওর অডিওতে কোনো প্রভাব পড়বে না (Mute preview only)" style="background: rgba(148, 163, 184, 0.15); border: 1.5px solid #94a3b8; color: #94a3b8; border-radius: 50%; width: 38px; height: 38px; display: flex; align-items: center; justify-content: center; margin-left: 8px; flex-shrink: 0;" type="button">
-                                <i class="fa-solid fa-volume-high"></i>
-                            </button>
+                            <div class="preview-volume-container" style="display: flex; align-items: center; gap: 6px; margin-left: 8px; flex-shrink: 0;">
+                                <button id="preview-mute-btn" class="btn-play" title="প্রিভিউ সাউন্ড অফ/অন করুন — শুধু আপনার স্পিকারের জন্য, এক্সপোর্ট করা ভিডিওর অডিওতে কোনো প্রভাব পড়বে না (Mute preview only)" style="background: rgba(148, 163, 184, 0.15); border: 1.5px solid #94a3b8; color: #94a3b8; border-radius: 50%; width: 38px; height: 38px; display: flex; align-items: center; justify-content: center; flex-shrink: 0;" type="button">
+                                    <i class="fa-solid fa-volume-high"></i>
+                                </button>
+                                <input type="range" id="preview-volume-slider" min="0" max="1" step="0.05" value="1" title="সাউন্ড ভলিউম কমান/বাাড়ান (Volume Control)" style="width: 55px; accent-color: var(--primary); cursor: pointer; height: 6px; border-radius: 3px; background: rgba(255,255,255,0.1); border: none; outline: none; margin: 0 4px 0 0;">
+                            </div>
                             <button id="split-clip-btn" class="btn-play" title="Split clip at playhead (প্লেহেডে ক্লিপ বিভক্ত করুন)" style="background: rgba(239, 68, 68, 0.15); border: 1.5px solid #ef4444; color: #ef4444; border-radius: 50%; width: 38px; height: 38px; display: flex; align-items: center; justify-content: center; margin-left: 8px; flex-shrink: 0;" type="button">
                                 <i class="fa-solid fa-scissors"></i>
                             </button>
@@ -1060,6 +1063,39 @@
                                                 <input type="color" id="broll-edit-text-bg-color" value="#0f172a">
                                                 <span class="color-value-text" id="broll-edit-text-bg-color-val">#0f172a</span>
                                             </div>
+                                        </div>
+                                    </div>
+                                    
+                                    <!-- Edit Image B-roll Section (Background Remover) -->
+                                    <div id="broll-edit-image-section" style="display: none; border-top: 1px solid rgba(255,255,255,0.1); padding-top: 15px; margin-top: 15px;">
+                                        <h4 style="font-size: 13px; color: var(--primary); margin-bottom: 10px;"><i class="fa-solid fa-wand-magic-sparkles"></i> Background Remover (ব্যাকগ্রাউন্ড মুছুন)</h4>
+                                        <p class="help-text">ছবির সলিড বা একরঙা ব্যাকগ্রাউন্ড সরাতে নিচের অপশনগুলো ব্যবহার করুন:</p>
+                                        
+                                        <div class="control-group mt-2">
+                                            <label>Select Target Color (যে রঙটি মুছবেন)</label>
+                                            <div style="display: flex; gap: 6px; align-items: center;" class="mt-1">
+                                                <button type="button" id="broll-auto-remove-btn" class="btn btn-sm btn-primary" style="flex: 1.2; font-size: 11px; padding: 4px; border: none; background: var(--primary);"><i class="fa-solid fa-wand-magic-sparkles"></i> Auto Remove</button>
+                                                <button type="button" id="broll-remove-white-btn" class="btn btn-sm btn-outline" style="flex: 1; font-size: 11px; padding: 4px;">Remove White</button>
+                                                <button type="button" id="broll-remove-black-btn" class="btn btn-sm btn-outline" style="flex: 1; font-size: 11px; padding: 4px;">Remove Black</button>
+                                            </div>
+                                            <div class="color-picker-wrapper mt-2" style="display: flex; align-items: center; gap: 6px;">
+                                                <input type="color" id="broll-remove-custom-color" value="#ffffff" style="flex-shrink: 0;">
+                                                <span class="color-value-text" id="broll-remove-custom-color-val" style="font-size: 11px; flex-grow: 1;">Custom Color</span>
+                                                <button type="button" id="broll-pick-canvas-btn" class="btn btn-sm btn-outline-warning" style="font-size: 11px; padding: 4px 8px; white-space: nowrap;"><i class="fa-solid fa-eye-dropper"></i> Pick from Screen</button>
+                                                <button type="button" id="broll-remove-custom-btn" class="btn btn-sm btn-primary" style="font-size: 11px; padding: 4px 8px; white-space: nowrap;">Erase Color</button>
+                                            </div>
+                                        </div>
+                                        
+                                        <div class="control-group mt-2">
+                                            <label>Tolerance (কালার ম্যাচিং রেঞ্জ)</label>
+                                            <div class="slider-val-container">
+                                                <input type="range" id="broll-remove-tolerance" min="5" max="150" value="30">
+                                                <span id="broll-remove-tolerance-val">30</span>
+                                            </div>
+                                        </div>
+                                        
+                                        <div class="control-group mt-2" id="broll-undo-remove-container" style="display: none;">
+                                            <button type="button" id="broll-restore-original-btn" class="btn btn-sm btn-outline-danger" style="width: 100%; font-size: 11px; padding: 4px;"><i class="fa-solid fa-rotate-left"></i> Restore Original Image</button>
                                         </div>
                                     </div>
 

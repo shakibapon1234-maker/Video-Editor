@@ -285,6 +285,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const logoDropzone = document.getElementById('logo-dropzone');
     const playPauseBtn = document.getElementById('play-pause-btn');
     const previewMuteBtn = document.getElementById('preview-mute-btn');
+    const previewVolumeSlider = document.getElementById('preview-volume-slider');
     const splitClipBtn = document.getElementById('split-clip-btn');
     const freezeFrameBtn = document.getElementById('freeze-frame-btn');
     const freezeFrameDurationInput = document.getElementById('freeze-frame-duration');
@@ -1102,6 +1103,22 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
+    if (previewVolumeSlider) {
+        previewVolumeSlider.addEventListener('input', (e) => {
+            const vol = parseFloat(e.target.value);
+            if (window.setSpeakerVolume) {
+                window.setSpeakerVolume(vol);
+            } else if (state.video) {
+                state.video.volume = vol;
+            }
+            
+            // Auto unmute when volume is increased
+            if (vol > 0.01 && previewSoundMuted) {
+                if (previewMuteBtn) previewMuteBtn.click();
+            }
+        });
+    }
+
     if (splitClipBtn) {
         splitClipBtn.addEventListener('click', () => {
             const activeClip = state.clips.find(c => c.id === state.activeClipId);
@@ -1749,17 +1766,41 @@ document.addEventListener('DOMContentLoaded', () => {
             if (state.isPlaying) pauseVideo();
         });
 
+        let isSeekingThrottled = false;
+        let pendingSeekTime = null;
+
         seekSlider.addEventListener('input', (e) => {
             const val = parseFloat(e.target.value) || 0;
-            state.currentTime = val; // triggers 'seeked' event → redraws canvas
             if (seekFill && state.duration) {
                 seekFill.style.width = Math.max(0, Math.min(100, (val / state.duration) * 100)) + '%';
             }
             if (seekCurrentTimeEl) seekCurrentTimeEl.innerText = formatTime(val);
+
+            const activeClip = state.clips.find(c => c.id === state.activeClipId);
+            if (activeClip && activeClip.type === 'image') {
+                state.currentTime = val;
+            } else {
+                state.imagePlayheadTime = val;
+                pendingSeekTime = val;
+                if (!isSeekingThrottled) {
+                    isSeekingThrottled = true;
+                    requestAnimationFrame(() => {
+                        if (pendingSeekTime !== null) {
+                            state.video.currentTime = pendingSeekTime;
+                            pendingSeekTime = null;
+                        }
+                        isSeekingThrottled = false;
+                    });
+                }
+            }
         });
 
         function finishSeekDrag() {
             state.isDraggingSeek = false;
+            if (pendingSeekTime !== null) {
+                state.video.currentTime = pendingSeekTime;
+                pendingSeekTime = null;
+            }
             updatePlayhead();
         }
         seekSlider.addEventListener('mouseup', finishSeekDrag);
@@ -2990,7 +3031,21 @@ document.addEventListener('DOMContentLoaded', () => {
                             // letterbox bar instead of showing whatever was drawn behind it.
                             if (item.mode === 'fullscreen' && item.fitMode === 'contain') {
                                 state.ctx.fillStyle = '#000000';
-                                state.ctx.fillRect(drawBoxX, drawBoxY, boxW, boxH);
+                                if (imgAspect > boxAspect) {
+                                    if (dY > drawBoxY) {
+                                        state.ctx.fillRect(drawBoxX, drawBoxY, boxW, dY - drawBoxY);
+                                    }
+                                    if ((drawBoxY + boxH) > (dY + dH)) {
+                                        state.ctx.fillRect(drawBoxX, dY + dH, boxW, (drawBoxY + boxH) - (dY + dH));
+                                    }
+                                } else {
+                                    if (dX > drawBoxX) {
+                                        state.ctx.fillRect(drawBoxX, drawBoxY, dX - drawBoxX, boxH);
+                                    }
+                                    if ((drawBoxX + boxW) > (dX + dW)) {
+                                        state.ctx.fillRect(dX + dW, drawBoxY, (drawBoxX + boxW) - (dX + dW), boxH);
+                                    }
+                                }
                             }
                             state.ctx.drawImage(item.imageImg, 0, 0, item.imageImg.naturalWidth, item.imageImg.naturalHeight, dX, dY, dW, dH);
                         } else {
@@ -3409,8 +3464,10 @@ document.addEventListener('DOMContentLoaded', () => {
             state.ctx.save();
             state.ctx.globalAlpha = state.logoOpacity;
             state.ctx.drawImage(state.logoImg, x, y, logoW, logoH);
+            state.ctx.restore();
             
             if (state.currentStep === 2) {
+                state.ctx.save();
                 state.ctx.strokeStyle = 'rgba(79, 70, 229, 0.8)';
                 state.ctx.lineWidth = 2;
                 state.ctx.strokeRect(x, y, logoW, logoH);
@@ -3418,8 +3475,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 state.ctx.fillRect(x + logoW - 6, y + logoH - 6, 12, 12);
                 state.ctx.strokeStyle = '#4f46e5';
                 state.ctx.strokeRect(x + logoW - 6, y + logoH - 6, 12, 12);
+                state.ctx.restore();
             }
-            state.ctx.restore();
         }
         
         // --- Step D: Draw Visual Progress Bar ---
@@ -3876,6 +3933,37 @@ document.addEventListener('DOMContentLoaded', () => {
     function handlePointerDown(e) {
         if (state.currentStep !== 2 && state.currentStep !== 3) return;
 
+        if (state.isColorPickingBroll) {
+            const coords = getCanvasCoords(e);
+            try {
+                // Sample pixel color from the exact click point on the canvas
+                const imgData = state.ctx.getImageData(coords.x, coords.y, 1, 1);
+                const r = imgData.data[0];
+                const g = imgData.data[1];
+                const b = imgData.data[2];
+                
+                // Convert sampled RGB to Hex string
+                const hex = "#" + ((1 << 24) + (r << 16) + (g << 8) + b).toString(16).slice(1);
+                const brollRemoveCustomColor = document.getElementById('broll-remove-custom-color');
+                if (brollRemoveCustomColor) brollRemoveCustomColor.value = hex;
+                
+                // Reset color picking state
+                state.isColorPickingBroll = false;
+                state.canvas.style.cursor = 'default';
+                
+                // Perform color erasure on the selected B-roll overlay
+                const item = state.brollOverlays.find(b => b.id === state.selectedBrollId);
+                if (item && item.type === 'image') {
+                    const tol = document.getElementById('broll-remove-tolerance') ? parseInt(document.getElementById('broll-remove-tolerance').value) : 30;
+                    eraseBrollImageColor(item, r, g, b, tol);
+                }
+            } catch(err) {
+                console.error("Screen color pick error:", err);
+            }
+            e.preventDefault();
+            return;
+        }
+
         if (state.isAdjustingCrop) {
             const coords = getCanvasCoords(e);
             
@@ -4144,14 +4232,10 @@ document.addEventListener('DOMContentLoaded', () => {
                     state.brollResizeStartY = coords.y;
                     state.brollResizeStartBoxX = item.x;
                     state.brollResizeStartBoxY = item.y;
-                    if (item.pipW !== undefined && item.pipH !== undefined) {
-                        state.brollResizeStartW = item.pipW;
-                        state.brollResizeStartH = item.pipH;
-                    } else {
-                        state.brollResizeStartW = item.size / 100;
-                        const imgAspect = item.imageImg ? (item.imageImg.naturalHeight / item.imageImg.naturalWidth) : 1;
-                        state.brollResizeStartH = (item.size / 100) * (canvasW / canvasH) * imgAspect;
-                    }
+                    state.brollResizeStartFontSize = item.fontSize || 48;
+                    const box = getBrollBoxRect(item, canvasW, canvasH);
+                    state.brollResizeStartW = box.w / canvasW;
+                    state.brollResizeStartH = box.h / canvasH;
                     e.preventDefault();
                     return;
                 }
@@ -4502,16 +4586,11 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!item || item.mode !== 'pip') return null;
         const canvasW = state.canvas.width;
         const canvasH = state.canvas.height;
-        let bW, bH;
-        if (item.pipW !== undefined && item.pipH !== undefined) {
-            bW = item.pipW * canvasW;
-            bH = item.pipH * canvasH;
-        } else {
-            bW = canvasW * (item.size / 100);
-            bH = item.imageImg ? bW * (item.imageImg.naturalHeight / item.imageImg.naturalWidth) : bW;
-        }
-        const bx = item.x * canvasW;
-        const by = item.y * canvasH;
+        const box = getBrollBoxRect(item, canvasW, canvasH);
+        const bW = box.w;
+        const bH = box.h;
+        const bx = box.x;
+        const by = box.y;
         // Rotated box: test in the box's own unrotated frame by rotating the
         // pointer coords backwards around the box center first.
         let testX = coords.x, testY = coords.y;
@@ -5326,13 +5405,48 @@ document.addEventListener('DOMContentLoaded', () => {
                 nX = Math.max(0, Math.min(1 - nW, nX));
                 nY = Math.max(0, Math.min(1 - nH, nY));
 
-                item.pipW = nW;
-                item.pipH = nH;
-                item.x = nX;
-                item.y = nY;
-                item.size = Math.round(nW * 100); // keep slider in sync
-                if (brollSizeSlider) brollSizeSlider.value = Math.min(60, item.size);
-                if (brollSizeVal) brollSizeVal.innerText = item.size + '%';
+                if (item.type === 'text') {
+                    let scaleFactor = 1;
+                    if (handle === 'left' || handle === 'right') {
+                        scaleFactor = nW / sw0;
+                    } else if (handle === 'top' || handle === 'bottom') {
+                        scaleFactor = nH / sh0;
+                    } else {
+                        scaleFactor = (nW / sw0 + nH / sh0) / 2;
+                    }
+                    const newFontSize = Math.max(14, Math.min(120, Math.round(state.brollResizeStartFontSize * scaleFactor)));
+                    item.fontSize = newFontSize;
+                    
+                    const box = getBrollBoxRect(item, canvasW, canvasH);
+                    const finalW = box.w / canvasW;
+                    const finalH = box.h / canvasH;
+                    
+                    let targetX = sx0;
+                    let targetY = sy0;
+                    if (handle.includes('left')) {
+                        targetX = sx0 + sw0 - finalW;
+                    }
+                    if (handle.includes('top')) {
+                        targetY = sy0 + sh0 - finalH;
+                    }
+                    item.x = Math.max(0, Math.min(1 - finalW, targetX));
+                    item.y = Math.max(0, Math.min(1 - finalH, targetY));
+                    
+                    const brollEditTextFontsize = document.getElementById('broll-edit-text-fontsize');
+                    const brollEditTextFontsizeVal = document.getElementById('broll-edit-text-fontsize-val');
+                    if (brollEditTextFontsize) {
+                        brollEditTextFontsize.value = newFontSize;
+                        if (brollEditTextFontsizeVal) brollEditTextFontsizeVal.innerText = newFontSize + 'px';
+                    }
+                } else {
+                    item.pipW = nW;
+                    item.pipH = nH;
+                    item.x = nX;
+                    item.y = nY;
+                    item.size = Math.round(nW * 100); // keep slider in sync
+                    if (brollSizeSlider) brollSizeSlider.value = Math.min(60, item.size);
+                    if (brollSizeVal) brollSizeVal.innerText = item.size + '%';
+                }
 
                 drawFrame();
             }
@@ -5537,6 +5651,11 @@ document.addEventListener('DOMContentLoaded', () => {
                 item.y = newY;
                 drawFrame();
             }
+            return;
+        }
+
+        if (state.isColorPickingBroll) {
+            state.canvas.style.cursor = 'crosshair';
             return;
         }
 
@@ -6502,7 +6621,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 type: 'image',
                 imageImg: img,
                 imageUrl: url,
+                originalImageUrl: url,
                 file: file,
+                originalFile: file,
                 name: file.name,
                 size: file.size,
                 mode: brollModeSelect ? brollModeSelect.value : 'fullscreen',
@@ -6543,6 +6664,55 @@ document.addEventListener('DOMContentLoaded', () => {
         
         img.src = url;
         if (brollInput) brollInput.value = '';
+    }
+
+    function eraseBrollImageColor(item, targetR, targetG, targetB, tolerance) {
+        if (!item || !item.originalImageUrl) return;
+        
+        // Save target colors and tolerance on the B-roll object
+        item.bgRemoveColor = { r: targetR, g: targetG, b: targetB };
+        item.bgRemoveTolerance = tolerance;
+        
+        const img = new Image();
+        img.onload = () => {
+            const canvas = document.createElement('canvas');
+            canvas.width = img.naturalWidth;
+            canvas.height = img.naturalHeight;
+            const ctx = canvas.getContext('2d');
+            ctx.drawImage(img, 0, 0);
+            
+            try {
+                const imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+                const data = imgData.data;
+                for (let i = 0; i < data.length; i += 4) {
+                    const r = data[i];
+                    const g = data[i+1];
+                    const b = data[i+2];
+                    const rDiff = r - targetR;
+                    const gDiff = g - targetG;
+                    const bDiff = b - targetB;
+                    const dist = Math.sqrt(rDiff * rDiff + gDiff * gDiff + bDiff * bDiff);
+                    if (dist <= tolerance) {
+                        data[i+3] = 0; // set alpha to transparent
+                    }
+                }
+                ctx.putImageData(imgData, 0, 0);
+                const newUrl = canvas.toDataURL('image/png');
+                
+                const newImg = new Image();
+                newImg.onload = () => {
+                    item.imageImg = newImg;
+                    item.imageUrl = newUrl;
+                    drawFrame();
+                    const brollUndoRemoveContainer = document.getElementById('broll-undo-remove-container');
+                    if (brollUndoRemoveContainer) brollUndoRemoveContainer.style.display = 'block';
+                };
+                newImg.src = newUrl;
+            } catch (err) {
+                console.error("Error removing background color:", err);
+            }
+        };
+        img.src = item.originalImageUrl;
     }
 
     function loadBrollVideo(file) {
@@ -6859,6 +7029,27 @@ document.addEventListener('DOMContentLoaded', () => {
                 brollEditTextSection.style.display = 'none';
             }
         }
+        
+        const brollEditImageSection = document.getElementById('broll-edit-image-section');
+        const brollUndoRemoveContainer = document.getElementById('broll-undo-remove-container');
+        const brollRemoveTolerance = document.getElementById('broll-remove-tolerance');
+        const brollRemoveToleranceVal = document.getElementById('broll-remove-tolerance-val');
+        
+        if (brollEditImageSection) {
+            if (item.type === 'image') {
+                brollEditImageSection.style.display = 'block';
+                if (brollUndoRemoveContainer) {
+                    brollUndoRemoveContainer.style.display = item.bgRemoveColor ? 'block' : 'none';
+                }
+                if (brollRemoveTolerance) {
+                    const tol = item.bgRemoveTolerance !== undefined ? item.bgRemoveTolerance : 30;
+                    brollRemoveTolerance.value = tol;
+                    if (brollRemoveToleranceVal) brollRemoveToleranceVal.innerText = tol;
+                }
+            } else {
+                brollEditImageSection.style.display = 'none';
+            }
+        }
         if (brollSizeSlider) {
             brollSizeSlider.max = item.mode === 'pip' ? 60 : 100;
             brollSizeSlider.value = item.size !== undefined ? item.size : (item.mode === 'pip' ? 35 : 100);
@@ -7161,6 +7352,124 @@ document.addEventListener('DOMContentLoaded', () => {
             renderBrollList();
             if (brollTimingContainer) brollTimingContainer.style.display = 'none';
             drawFrame();
+        });
+    }
+
+    // --- B-roll Image Background Remover Bindings ---
+    const brollAutoRemoveBtn = document.getElementById('broll-auto-remove-btn');
+    const brollPickCanvasBtn = document.getElementById('broll-pick-canvas-btn');
+    const brollRemoveWhiteBtn = document.getElementById('broll-remove-white-btn');
+    const brollRemoveBlackBtn = document.getElementById('broll-remove-black-btn');
+    const brollRemoveCustomBtn = document.getElementById('broll-remove-custom-btn');
+    const brollRemoveCustomColor = document.getElementById('broll-remove-custom-color');
+    const brollRemoveTolerance = document.getElementById('broll-remove-tolerance');
+    const brollRemoveToleranceVal = document.getElementById('broll-remove-tolerance-val');
+    const brollRestoreOriginalBtn = document.getElementById('broll-restore-original-btn');
+    const brollUndoRemoveContainer = document.getElementById('broll-undo-remove-container');
+
+    if (brollAutoRemoveBtn) {
+        brollAutoRemoveBtn.addEventListener('click', () => {
+            const item = state.brollOverlays.find(b => b.id === state.selectedBrollId);
+            if (item && item.type === 'image' && item.originalImageUrl) {
+                const img = new Image();
+                img.onload = () => {
+                    const canvas = document.createElement('canvas');
+                    canvas.width = img.naturalWidth;
+                    canvas.height = img.naturalHeight;
+                    const ctx = canvas.getContext('2d');
+                    ctx.drawImage(img, 0, 0);
+                    try {
+                        const imgData = ctx.getImageData(0, 0, 1, 1);
+                        const r = imgData.data[0];
+                        const g = imgData.data[1];
+                        const b = imgData.data[2];
+                        const tol = brollRemoveTolerance ? parseInt(brollRemoveTolerance.value) : 30;
+                        item.bgRemoveColor = { r, g, b };
+                        if (brollRemoveCustomColor) {
+                            const hex = "#" + ((1 << 24) + (r << 16) + (g << 8) + b).toString(16).slice(1);
+                            brollRemoveCustomColor.value = hex;
+                        }
+                        eraseBrollImageColor(item, r, g, b, tol);
+                    } catch (err) {
+                        console.error("Auto background removal error:", err);
+                    }
+                };
+                img.src = item.originalImageUrl;
+            }
+        });
+    }
+
+    if (brollPickCanvasBtn) {
+        brollPickCanvasBtn.addEventListener('click', () => {
+            state.isColorPickingBroll = !state.isColorPickingBroll;
+            if (state.isColorPickingBroll) {
+                state.canvas.style.cursor = 'crosshair';
+                alert("ক্যানভাসে দেখানো বি-রোল ইমেজের উপর ক্লিক করে ব্যাকগ্রাউন্ডের সঠিক রঙটি সিলেক্ট করুন। (Click on the B-roll image on the canvas to pick its background color.)");
+            } else {
+                state.canvas.style.cursor = 'default';
+            }
+        });
+    }
+
+    if (brollRemoveTolerance) {
+        brollRemoveTolerance.addEventListener('input', (e) => {
+            if (brollRemoveToleranceVal) brollRemoveToleranceVal.innerText = e.target.value;
+            const item = state.brollOverlays.find(b => b.id === state.selectedBrollId);
+            if (item && item.type === 'image' && item.bgRemoveColor) {
+                eraseBrollImageColor(item, item.bgRemoveColor.r, item.bgRemoveColor.g, item.bgRemoveColor.b, parseInt(e.target.value));
+            }
+        });
+    }
+
+    if (brollRemoveWhiteBtn) {
+        brollRemoveWhiteBtn.addEventListener('click', () => {
+            const item = state.brollOverlays.find(b => b.id === state.selectedBrollId);
+            if (item && item.type === 'image') {
+                const tol = brollRemoveTolerance ? parseInt(brollRemoveTolerance.value) : 30;
+                eraseBrollImageColor(item, 255, 255, 255, tol);
+            }
+        });
+    }
+
+    if (brollRemoveBlackBtn) {
+        brollRemoveBlackBtn.addEventListener('click', () => {
+            const item = state.brollOverlays.find(b => b.id === state.selectedBrollId);
+            if (item && item.type === 'image') {
+                const tol = brollRemoveTolerance ? parseInt(brollRemoveTolerance.value) : 30;
+                eraseBrollImageColor(item, 0, 0, 0, tol);
+            }
+        });
+    }
+
+    if (brollRemoveCustomBtn) {
+        brollRemoveCustomBtn.addEventListener('click', () => {
+            const item = state.brollOverlays.find(b => b.id === state.selectedBrollId);
+            if (item && item.type === 'image' && brollRemoveCustomColor) {
+                const hex = brollRemoveCustomColor.value;
+                const r = parseInt(hex.slice(1, 3), 16);
+                const g = parseInt(hex.slice(3, 5), 16);
+                const b = parseInt(hex.slice(5, 7), 16);
+                const tol = brollRemoveTolerance ? parseInt(brollRemoveTolerance.value) : 30;
+                eraseBrollImageColor(item, r, g, b, tol);
+            }
+        });
+    }
+
+    if (brollRestoreOriginalBtn) {
+        brollRestoreOriginalBtn.addEventListener('click', () => {
+            const item = state.brollOverlays.find(b => b.id === state.selectedBrollId);
+            if (item && item.type === 'image' && item.originalImageUrl) {
+                item.imageUrl = item.originalImageUrl;
+                item.bgRemoveColor = null;
+                item.bgRemoveTolerance = undefined;
+                const origImg = new Image();
+                origImg.onload = () => {
+                    item.imageImg = origImg;
+                    drawFrame();
+                    if (brollUndoRemoveContainer) brollUndoRemoveContainer.style.display = 'none';
+                };
+                origImg.src = item.originalImageUrl;
+            }
         });
     }
 
@@ -8302,8 +8611,12 @@ document.addEventListener('DOMContentLoaded', () => {
                 delete brollCopy.imageImg;
                 delete brollCopy.file;
 
-                if (broll.type === 'image' && broll.file) {
-                    brollCopy.imageBase64 = await blobToBase64(broll.file);
+                if (broll.type === 'image') {
+                    if (broll.imageUrl && broll.imageUrl.startsWith('data:image/')) {
+                        brollCopy.imageBase64 = broll.imageUrl;
+                    } else if (broll.file) {
+                        brollCopy.imageBase64 = await blobToBase64(broll.file);
+                    }
                 }
                 data.brollOverlays.push(brollCopy);
             }
