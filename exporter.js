@@ -63,6 +63,31 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
+    // Seeks every active "Video B-roll" overlay (background/PiP video-over-video)
+    // to the exact frame it should show at `targetTime` on the master timeline,
+    // BEFORE the canvas gets captured for this frame. Live preview just lets
+    // these overlay videos free-run via play()/pause() (see editor.js), which is
+    // fine for the eye but not frame-accurate enough for export — a captured
+    // frame must reflect a fully-settled, exact position every single time, the
+    // same way the main clip video is handled via waitForSeek above.
+    async function syncBrollVideoOverlays(targetTime) {
+        const overlays = state.brollOverlays;
+        if (!overlays || overlays.length === 0) return;
+        for (const item of overlays) {
+            if (item.type !== 'video' || !item.videoEl) continue;
+            const active = targetTime >= item.startSec && targetTime <= item.endSec;
+            if (!active) continue;
+            const dur = item.videoEl.duration || 0;
+            if (!dur) continue;
+            let rel = Math.max(0, targetTime - item.startSec);
+            rel = item.loopVideo ? (rel % dur) : Math.min(rel, dur - 0.03);
+            // Skip the (relatively slow) seek+wait round-trip when we're already
+            // close enough — e.g. sequential frames within the same loop cycle.
+            if (Math.abs(item.videoEl.currentTime - rel) <= (1 / 90)) continue;
+            await waitForSeek(item.videoEl, rel, 1200);
+        }
+    }
+
     const renderBtn = document.getElementById('render-btn');
     const renderProgressBox = document.getElementById('render-progress-box');
     const renderProgressFill = document.getElementById('render-progress-fill');
@@ -432,6 +457,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
                             state.customExportTime = loopTarget;
                             state.exportTickerTime = elapsedBeforeCurrentClip + (clipFrameIndex / 30);
+                            await syncBrollVideoOverlays(loopTarget);
                             if (window.drawEditorFrame) window.drawEditorFrame();
 
                             const p = new Promise(async (r) => {
@@ -458,6 +484,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         currentTarget = clipTrimStart + (clipFrameIndex / 30);
                         state.customExportTime = currentTarget;
                         state.exportTickerTime = elapsedBeforeCurrentClip + (clipFrameIndex / 30);
+                        await syncBrollVideoOverlays(currentTarget);
                         if (window.drawEditorFrame) window.drawEditorFrame();
 
                         const p = new Promise(async (r) => {
@@ -587,6 +614,8 @@ document.addEventListener('DOMContentLoaded', () => {
                     // ticker/B-roll clock is exact and independent of any lag.
                     state.customExportTime = targetTime;
                     state.exportTickerTime = elapsedBeforeCurrentClip + elapsedSecInClip;
+
+                    await syncBrollVideoOverlays(targetTime);
 
                     if (window.drawEditorFrame) {
                         window.drawEditorFrame();

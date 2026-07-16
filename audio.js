@@ -1499,19 +1499,22 @@ document.addEventListener('DOMContentLoaded', () => {
     // AND the export recording tap (getMixedAudioDestinationStream) read from —
     // so the sound is audible in preview AND correctly baked into the exported
     // video's audio track, without any extra export-time wiring.
-    window.playBrollSfx = function(type) {
-        if (!type || type === 'none') return;
-        if (!audioCtx || !makeupGainNode) return; // audio not initialized yet (no video loaded)
-        if (audioCtx.state === 'suspended') audioCtx.resume();
+    // Shared B-roll SFX synthesizer. Works with either the live AudioContext
+    // (real-time preview) or an OfflineAudioContext (export render) — the only
+    // difference is which ctx/destination node/timestamp gets passed in. This
+    // keeps the preview and the exported file sounding identical instead of
+    // maintaining two copies of the same synthesis code.
+    function synthBrollSfx(ctx, destNode, type, when) {
+        if (!type || type === 'none' || type === 'custom') return;
 
-        const now = audioCtx.currentTime;
-        const sfxGain = audioCtx.createGain();
+        const now = when;
+        const sfxGain = ctx.createGain();
         sfxGain.gain.setValueAtTime(0.0001, now);
-        sfxGain.connect(makeupGainNode);
+        sfxGain.connect(destNode);
 
         function makeNoiseBuffer(durSec) {
-            const bufferSize = Math.max(1, Math.floor(audioCtx.sampleRate * durSec));
-            const buffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate);
+            const bufferSize = Math.max(1, Math.floor(ctx.sampleRate * durSec));
+            const buffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
             const data = buffer.getChannelData(0);
             for (let i = 0; i < bufferSize; i++) data[i] = Math.random() * 2 - 1;
             return buffer;
@@ -1519,9 +1522,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
         if (type === 'whoosh') {
             const dur = 0.32;
-            const noise = audioCtx.createBufferSource();
+            const noise = ctx.createBufferSource();
             noise.buffer = makeNoiseBuffer(dur);
-            const bandpass = audioCtx.createBiquadFilter();
+            const bandpass = ctx.createBiquadFilter();
             bandpass.type = 'bandpass';
             bandpass.Q.setValueAtTime(1.1, now);
             bandpass.frequency.setValueAtTime(350, now);
@@ -1535,7 +1538,7 @@ document.addEventListener('DOMContentLoaded', () => {
             noise.stop(now + dur);
         } else if (type === 'pop') {
             const dur = 0.16;
-            const osc = audioCtx.createOscillator();
+            const osc = ctx.createOscillator();
             osc.type = 'sine';
             osc.frequency.setValueAtTime(760, now);
             osc.frequency.exponentialRampToValueAtTime(180, now + dur);
@@ -1546,9 +1549,9 @@ document.addEventListener('DOMContentLoaded', () => {
             osc.stop(now + dur);
         } else if (type === 'click') {
             const dur = 0.06;
-            const noise = audioCtx.createBufferSource();
+            const noise = ctx.createBufferSource();
             noise.buffer = makeNoiseBuffer(dur);
-            const hp = audioCtx.createBiquadFilter();
+            const hp = ctx.createBiquadFilter();
             hp.type = 'highpass';
             hp.frequency.setValueAtTime(1600, now);
             noise.connect(hp);
@@ -1560,13 +1563,13 @@ document.addEventListener('DOMContentLoaded', () => {
         } else if (type === 'thud') {
             // Soft low-pitched impact — pairs well with Bounce In/Drop entrances.
             const dur = 0.22;
-            const osc = audioCtx.createOscillator();
+            const osc = ctx.createOscillator();
             osc.type = 'sine';
             osc.frequency.setValueAtTime(150, now);
             osc.frequency.exponentialRampToValueAtTime(45, now + dur);
-            const noise = audioCtx.createBufferSource();
+            const noise = ctx.createBufferSource();
             noise.buffer = makeNoiseBuffer(0.04);
-            const lp = audioCtx.createBiquadFilter();
+            const lp = ctx.createBiquadFilter();
             lp.type = 'lowpass';
             lp.frequency.setValueAtTime(500, now);
             noise.connect(lp);
@@ -1582,10 +1585,10 @@ document.addEventListener('DOMContentLoaded', () => {
             // Bright two-note sparkle — pairs well with Blur Focus / Spin entrances.
             const dur = 0.5;
             [880, 1320].forEach((freq, i) => {
-                const osc = audioCtx.createOscillator();
+                const osc = ctx.createOscillator();
                 osc.type = 'sine';
                 osc.frequency.setValueAtTime(freq, now + i * 0.06);
-                const noteGain = audioCtx.createGain();
+                const noteGain = ctx.createGain();
                 noteGain.gain.setValueAtTime(0.0001, now + i * 0.06);
                 noteGain.gain.linearRampToValueAtTime(0.28, now + i * 0.06 + 0.02);
                 noteGain.gain.exponentialRampToValueAtTime(0.0001, now + i * 0.06 + dur);
@@ -1599,9 +1602,9 @@ document.addEventListener('DOMContentLoaded', () => {
             // Fast filtered-noise sweep, brighter/quicker than "whoosh" -- good
             // for text/B-roll that slides in from the side rather than pops in.
             const dur = 0.22;
-            const noise = audioCtx.createBufferSource();
+            const noise = ctx.createBufferSource();
             noise.buffer = makeNoiseBuffer(dur);
-            const bandpass = audioCtx.createBiquadFilter();
+            const bandpass = ctx.createBiquadFilter();
             bandpass.type = 'bandpass';
             bandpass.Q.setValueAtTime(0.9, now);
             bandpass.frequency.setValueAtTime(1200, now);
@@ -1616,9 +1619,9 @@ document.addEventListener('DOMContentLoaded', () => {
             // Two-part shutter click: a sharp high click followed a beat later
             // by a softer low "mirror slap" thud, like a DSLR shutter.
             const clickDur = 0.045;
-            const clickNoise = audioCtx.createBufferSource();
+            const clickNoise = ctx.createBufferSource();
             clickNoise.buffer = makeNoiseBuffer(clickDur);
-            const clickHp = audioCtx.createBiquadFilter();
+            const clickHp = ctx.createBiquadFilter();
             clickHp.type = 'highpass';
             clickHp.frequency.setValueAtTime(3000, now);
             clickNoise.connect(clickHp);
@@ -1626,18 +1629,18 @@ document.addEventListener('DOMContentLoaded', () => {
 
             const slapDelay = 0.045;
             const slapDur = 0.05;
-            const slapNoise = audioCtx.createBufferSource();
+            const slapNoise = ctx.createBufferSource();
             slapNoise.buffer = makeNoiseBuffer(slapDur);
-            const slapLp = audioCtx.createBiquadFilter();
+            const slapLp = ctx.createBiquadFilter();
             slapLp.type = 'lowpass';
             slapLp.frequency.setValueAtTime(900, now);
-            const slapGain = audioCtx.createGain();
+            const slapGain = ctx.createGain();
             slapGain.gain.setValueAtTime(0.0001, now + slapDelay);
             slapGain.gain.linearRampToValueAtTime(0.4, now + slapDelay + 0.006);
             slapGain.gain.exponentialRampToValueAtTime(0.0001, now + slapDelay + slapDur);
             slapNoise.connect(slapLp);
             slapLp.connect(slapGain);
-            slapGain.connect(makeupGainNode);
+            slapGain.connect(destNode);
 
             sfxGain.gain.linearRampToValueAtTime(0.5, now + 0.004);
             sfxGain.gain.exponentialRampToValueAtTime(0.0001, now + clickDur);
@@ -1649,11 +1652,11 @@ document.addEventListener('DOMContentLoaded', () => {
             // Rising pitch riser -- good as an "entrance" cue that builds
             // anticipation right before a B-roll/stat appears on screen.
             const dur = 0.55;
-            const osc = audioCtx.createOscillator();
+            const osc = ctx.createOscillator();
             osc.type = 'sawtooth';
             osc.frequency.setValueAtTime(140, now);
             osc.frequency.exponentialRampToValueAtTime(1100, now + dur);
-            const lp = audioCtx.createBiquadFilter();
+            const lp = ctx.createBiquadFilter();
             lp.type = 'lowpass';
             lp.frequency.setValueAtTime(600, now);
             lp.frequency.exponentialRampToValueAtTime(6000, now + dur);
@@ -1668,7 +1671,7 @@ document.addEventListener('DOMContentLoaded', () => {
             // Deep falling sub-bass hit -- pairs well with a bold/impactful
             // B-roll exit or a "reveal" moment.
             const dur = 0.5;
-            const osc = audioCtx.createOscillator();
+            const osc = ctx.createOscillator();
             osc.type = 'sine';
             osc.frequency.setValueAtTime(180, now);
             osc.frequency.exponentialRampToValueAtTime(35, now + dur * 0.8);
@@ -1683,10 +1686,10 @@ document.addEventListener('DOMContentLoaded', () => {
             // minimal/neutral than the sparkly "chime" preset.
             const dur = 0.3;
             [1046, 1568].forEach((freq, i) => {
-                const osc = audioCtx.createOscillator();
+                const osc = ctx.createOscillator();
                 osc.type = 'sine';
                 osc.frequency.setValueAtTime(freq, now + i * 0.09);
-                const noteGain = audioCtx.createGain();
+                const noteGain = ctx.createGain();
                 noteGain.gain.setValueAtTime(0.0001, now + i * 0.09);
                 noteGain.gain.linearRampToValueAtTime(0.32, now + i * 0.09 + 0.015);
                 noteGain.gain.exponentialRampToValueAtTime(0.0001, now + i * 0.09 + dur);
@@ -1696,10 +1699,118 @@ document.addEventListener('DOMContentLoaded', () => {
                 osc.stop(now + i * 0.09 + dur);
             });
             sfxGain.gain.setValueAtTime(1, now);
+        } else if (type === 'yes_ding') {
+            // "Yes!" mood — bright ascending major-third+fifth triad, cheerful
+            // and affirmative. A synthesized stand-in since we can't generate
+            // a real spoken "yes" voice clip.
+            const dur = 0.42;
+            [660, 830, 990].forEach((freq, i) => {
+                const osc = ctx.createOscillator();
+                osc.type = 'triangle';
+                osc.frequency.setValueAtTime(freq, now + i * 0.05);
+                const noteGain = ctx.createGain();
+                noteGain.gain.setValueAtTime(0.0001, now + i * 0.05);
+                noteGain.gain.linearRampToValueAtTime(0.3, now + i * 0.05 + 0.02);
+                noteGain.gain.exponentialRampToValueAtTime(0.0001, now + i * 0.05 + dur);
+                osc.connect(noteGain);
+                noteGain.connect(sfxGain);
+                osc.start(now + i * 0.05);
+                osc.stop(now + i * 0.05 + dur);
+            });
+            sfxGain.gain.setValueAtTime(1, now);
+        } else if (type === 'no_buzz') {
+            // "No!" mood — low, slightly dissonant descending buzzer, like a
+            // game-show "wrong answer" cue. Synthesized, not a spoken voice.
+            const dur = 0.38;
+            [220, 185].forEach((freq, i) => {
+                const osc = ctx.createOscillator();
+                osc.type = 'square';
+                osc.frequency.setValueAtTime(freq, now + i * 0.14);
+                const lp = ctx.createBiquadFilter();
+                lp.type = 'lowpass';
+                lp.frequency.setValueAtTime(900, now);
+                const noteGain = ctx.createGain();
+                noteGain.gain.setValueAtTime(0.0001, now + i * 0.14);
+                noteGain.gain.linearRampToValueAtTime(0.26, now + i * 0.14 + 0.015);
+                noteGain.gain.exponentialRampToValueAtTime(0.0001, now + i * 0.14 + dur);
+                osc.connect(lp);
+                lp.connect(noteGain);
+                noteGain.connect(sfxGain);
+                osc.start(now + i * 0.14);
+                osc.stop(now + i * 0.14 + dur);
+            });
+            sfxGain.gain.setValueAtTime(1, now);
+        } else if (type === 'wow_swoop') {
+            // "Wow!" mood — a wide, wobbly rising swoop (pitch + vibrato),
+            // like an exaggerated cartoon surprise whistle.
+            const dur = 0.6;
+            const osc = ctx.createOscillator();
+            osc.type = 'sine';
+            osc.frequency.setValueAtTime(300, now);
+            osc.frequency.exponentialRampToValueAtTime(1400, now + dur * 0.7);
+            osc.frequency.exponentialRampToValueAtTime(950, now + dur);
+            const vibrato = ctx.createOscillator();
+            vibrato.type = 'sine';
+            vibrato.frequency.setValueAtTime(9, now);
+            const vibratoGain = ctx.createGain();
+            vibratoGain.gain.setValueAtTime(40, now);
+            vibrato.connect(vibratoGain);
+            vibratoGain.connect(osc.frequency);
+            osc.connect(sfxGain);
+            sfxGain.gain.setValueAtTime(0.0001, now);
+            sfxGain.gain.linearRampToValueAtTime(0.4, now + dur * 0.2);
+            sfxGain.gain.exponentialRampToValueAtTime(0.0001, now + dur);
+            osc.start(now);
+            osc.stop(now + dur);
+            vibrato.start(now);
+            vibrato.stop(now + dur);
         }
 
         // Clean up nodes shortly after the sound finishes to avoid leaking them.
-        setTimeout(() => { try { sfxGain.disconnect(); } catch (e) {} }, 700);
+        // Only meaningful for the live real-time AudioContext — an
+        // OfflineAudioContext render is a synchronous batch job, and a
+        // wall-clock setTimeout could fire mid-render and sever a node before
+        // it's actually been rendered into the output, causing missing SFX.
+        if (ctx === audioCtx) {
+            setTimeout(() => { try { sfxGain.disconnect(); } catch (e) {} }, 700);
+        }
+    }
+
+    window.playBrollSfx = function(type) {
+        if (!type || type === 'none' || type === 'custom') return;
+        if (!audioCtx || !makeupGainNode) return; // audio not initialized yet (no video loaded)
+        if (audioCtx.state === 'suspended') audioCtx.resume();
+        synthBrollSfx(audioCtx, makeupGainNode, type, audioCtx.currentTime);
+    };
+
+    // Decodes a user-uploaded custom B-roll sound (e.g. a downloaded "yes" /
+    // "no" / "wow" voice clip) into an AudioBuffer we can play instantly for
+    // preview and re-use again during offline export.
+    window.decodeBrollCustomSound = async function(file) {
+        if (!file) return null;
+        try {
+            const decodeCtx = audioCtx || new (window.AudioContext || window.webkitAudioContext)();
+            const arrayBuffer = await file.arrayBuffer();
+            const buffer = await decodeCtx.decodeAudioData(arrayBuffer.slice(0));
+            return buffer;
+        } catch (err) {
+            console.error('Failed to decode custom B-roll sound:', err);
+            return null;
+        }
+    };
+
+    // Plays a decoded custom B-roll sound once, live, through the same output
+    // bus as the synthesized SFX presets.
+    window.playBrollCustomSound = function(buffer) {
+        if (!buffer || !audioCtx || !makeupGainNode) return;
+        if (audioCtx.state === 'suspended') audioCtx.resume();
+        const src = audioCtx.createBufferSource();
+        src.buffer = buffer;
+        const g = audioCtx.createGain();
+        g.gain.setValueAtTime(0.9, audioCtx.currentTime);
+        src.connect(g);
+        g.connect(makeupGainNode);
+        src.start(audioCtx.currentTime);
     };
 
     // --- 7. Auto Subtitle (Phase 5A) ---
@@ -2240,6 +2351,51 @@ document.addEventListener('DOMContentLoaded', () => {
                 source.start(0);
             } catch (err) {
                 console.error('Error decoding voiceover audio:', err);
+            }
+        }
+
+        // --- 2B. B-roll Sound Effects ---
+        // Mirrors the entry/exit trigger timing used during live preview
+        // (editor.js) so the exported file's audio matches what was heard
+        // while editing. Connects into the same post-compressor bus ("makeup")
+        // as the live preview's makeupGainNode, for a consistent volume level.
+        if (state.brollOverlays && state.brollOverlays.length > 0) {
+            for (const item of state.brollOverlays) {
+                if (!item.soundEffect || item.soundEffect === 'none') continue;
+                const startSec = Math.max(0, Math.min(totalDuration, item.startSec || 0));
+                if (item.soundEffect === 'custom') {
+                    // A real uploaded audio clip (e.g. a downloaded "yes"/"wow" voice
+                    // sound) plays ONCE at entry only — unlike the short synthesized
+                    // presets, replaying it again at exit would usually overlap and
+                    // sound muddy since these clips tend to be longer.
+                    let buffer = item.customSoundBuffer || null;
+                    if (!buffer && item.customSoundFile) {
+                        try {
+                            const decodeCtx = new (window.AudioContext || window.webkitAudioContext)();
+                            const arrayBuffer = await item.customSoundFile.arrayBuffer();
+                            buffer = await decodeCtx.decodeAudioData(arrayBuffer.slice(0));
+                            await decodeCtx.close();
+                        } catch (err) {
+                            console.error('Failed to decode custom B-roll sound for export:', err);
+                        }
+                    }
+                    if (buffer) {
+                        const src = offlineCtx.createBufferSource();
+                        src.buffer = buffer;
+                        const g = offlineCtx.createGain();
+                        g.gain.setValueAtTime(0.9, 0);
+                        src.connect(g);
+                        g.connect(makeup);
+                        src.start(startSec);
+                    }
+                } else {
+                    const animDur = item.animationSpeedSec || 0.4;
+                    synthBrollSfx(offlineCtx, makeup, item.soundEffect, startSec);
+                    const exitSec = Math.max(0, Math.min(totalDuration, (item.endSec || startSec) - animDur));
+                    if (exitSec - startSec > 0.05) {
+                        synthBrollSfx(offlineCtx, makeup, item.soundEffect, exitSec);
+                    }
+                }
             }
         }
 

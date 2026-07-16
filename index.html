@@ -917,6 +917,7 @@
                                     <label>Content Type</label>
                                     <div class="segmented-toggle" id="broll-type-toggle">
                                         <button type="button" class="segmented-btn active" data-type="image"><i class="fa-solid fa-image"></i> Image</button>
+                                        <button type="button" class="segmented-btn" data-type="video"><i class="fa-solid fa-video"></i> Video</button>
                                         <button type="button" class="segmented-btn" data-type="text"><i class="fa-solid fa-font"></i> Text</button>
                                     </div>
                                 </div>
@@ -928,6 +929,16 @@
                                         <button class="btn btn-sm btn-outline">Browse</button>
                                         <input type="file" id="broll-input" accept="image/*" style="display: none;">
                                     </div>
+                                </div>
+
+                                <div id="broll-video-input-section" style="display: none;">
+                                    <div class="file-selector-box mt-3" id="broll-video-dropzone">
+                                        <i class="fa-solid fa-file-video"></i>
+                                        <span>Add Background/PiP Video (দ্বিতীয় ভিডিও যোগ করুন)</span>
+                                        <button class="btn btn-sm btn-outline">Browse</button>
+                                        <input type="file" id="broll-video-input" accept="video/*" style="display: none;">
+                                    </div>
+                                    <p class="help-text mt-1">এই ভিডিওটা মূল ভিডিওর উপর ওভারলে হিসেবে চলবে — Display Mode থেকে Fullscreen (ব্যাকগ্রাউন্ড) বা Picture-in-Picture (কোণায় ছোট বক্স) বেছে নিন। বর্তমানে এই ওভারলে ভিডিওর নিজস্ব সাউন্ড এক্সপোর্টে যোগ হয় না (সবসময় নিঃশব্দ থাকে) — শুধু ছবিটাই দেখাবে।</p>
                                 </div>
 
                                 <div id="broll-text-input-section" style="display: none;">
@@ -993,6 +1004,15 @@
                                         <input type="range" id="broll-size-slider" min="10" max="100" value="100">
                                         <span id="broll-size-val">100%</span>
                                     </div>
+                                </div>
+
+                                <div class="control-group mt-3" id="broll-fit-container" style="display:none;">
+                                    <label>ফিট মোড — Fit Mode</label>
+                                    <select id="broll-fit-select" class="form-select">
+                                        <option value="cover">পুরো স্ক্রিন ভরাট (Cover) — কিছু অংশ কাটা যেতে পারে</option>
+                                        <option value="contain">সম্পূর্ণ দেখান (Contain) — উপরে/নিচে বা পাশে কালো ফাঁকা থাকতে পারে</option>
+                                    </select>
+                                    <p class="help-text mt-1">আপনার ছবি/ভিডিওর অনুপাত (aspect ratio) মূল ভিডিওর সাইজের সাথে না মিললে "Cover" মোডে কিছু অংশ ক্রপ (কাটা) হয়ে যায়। পুরোটা অক্ষত দেখতে চাইলে "Contain" বেছে নিন।</p>
                                 </div>
 
                                 <div class="broll-list mt-4" id="broll-list">
@@ -1101,8 +1121,17 @@
                                             <option value="rise">Rise / Build-up (উত্থান শব্দ)</option>
                                             <option value="bass_drop">Bass Drop (বেস ড্রপ শব্দ)</option>
                                             <option value="notification">Notification Ding (নোটিফিকেশন শব্দ)</option>
+                                            <option value="yes_ding">Yes! মুড (উজ্জ্বল, ইতিবাচক টোন)</option>
+                                            <option value="no_buzz">No! মুড (বাজার/ভুল উত্তরের টোন)</option>
+                                            <option value="wow_swoop">Wow! মুড (রাইজিং সারপ্রাইজ হুইসল)</option>
+                                            <option value="custom">নিজের সাউন্ড আপলোড করুন (Custom Upload)</option>
                                         </select>
-                                        <p class="help-text mt-1">প্রিভিউ প্লে করলে বা ভিডিও এক্সপোর্ট করলে, ঠিক যেই মুহূর্তে B-roll আসে ও চলে যায়, তখন এই শব্দটি বাজবে।</p>
+                                        <p class="help-text mt-1">প্রিভিউ প্লে করলে বা ভিডিও এক্সপোর্ট করলে, ঠিক যেই মুহূর্তে B-roll আসে ও চলে যায়, তখন এই শব্দটি বাজবে। "Yes/No/Wow" এখানে আসল ভয়েস না — কাছাকাছি মুডের সিন্থেসাইজড টোন। আসল ভয়েস ক্লিপের জন্য নিচের "Custom Upload" ব্যবহার করুন।</p>
+                                        <div class="control-group mt-2" id="broll-custom-sound-container" style="display:none;">
+                                            <label>কাস্টম সাউন্ড ফাইল (mp3/wav) — ফ্রি সাইট থেকে ডাউনলোড করা yes/no/wow ক্লিপ এখানে আপলোড করুন</label>
+                                            <input type="file" id="broll-custom-sound-input" accept="audio/*" class="form-input">
+                                            <p class="help-text mt-1" id="broll-custom-sound-filename">কোনো ফাইল আপলোড করা হয়নি।</p>
+                                        </div>
                                     </div>
 
                                     <button id="delete-broll-btn" class="btn-text-danger mt-2">

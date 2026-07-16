@@ -2503,7 +2503,15 @@ document.addEventListener('DOMContentLoaded', () => {
                 const inRange = isBeingEdited
                     ? true
                     : (currentTime >= item.startSec && currentTime <= item.endSec);
-                if (!inRange) return;
+                if (!inRange) {
+                    // Pause an overlay video the moment it's no longer on screen so it
+                    // doesn't keep decoding/playing in the background. Skipped during
+                    // export — the exporter takes full manual control of seeking there.
+                    if (item.type === 'video' && item.videoEl && state.customExportTime === undefined && !item.videoEl.paused) {
+                        item.videoEl.pause();
+                    }
+                    return;
+                }
 
                 const tIn = currentTime - item.startSec;
                 const tOut = item.endSec - currentTime;
@@ -2511,6 +2519,28 @@ document.addEventListener('DOMContentLoaded', () => {
                 const resolvedExitDir = (!item.exitDirection || item.exitDirection === 'same')
                     ? (item.entryDirection || 'bottom')
                     : item.exitDirection;
+
+                // Keep an overlay video's own playback in sync with the main timeline
+                // during LIVE preview. During export (customExportTime is set) this is
+                // skipped entirely — the exporter seeks each active video overlay to the
+                // exact frame itself, synchronously, before capturing the canvas, since
+                // free-running playback can't guarantee the right frame lands on the
+                // right captured tick.
+                if (item.type === 'video' && item.videoEl && state.customExportTime === undefined) {
+                    item.videoEl.loop = !!item.loopVideo;
+                    if (state.isPlaying) {
+                        if (item.videoEl.paused) item.videoEl.play().catch(() => {});
+                    } else {
+                        if (!item.videoEl.paused) item.videoEl.pause();
+                        const dur = item.videoEl.duration || 0;
+                        let rel = Math.max(0, tIn);
+                        if (dur > 0) rel = item.loopVideo ? (rel % dur) : Math.min(rel, dur - 0.03);
+                        if (dur > 0 && Math.abs(item.videoEl.currentTime - rel) > 0.08) {
+                            item.videoEl.currentTime = rel;
+                        }
+                    }
+                }
+
 
                 // Whether animations/sounds should actively play right now. They're only
                 // suppressed when the user is parked in Step 3 WITHOUT playback (so the
@@ -2524,13 +2554,22 @@ document.addEventListener('DOMContentLoaded', () => {
                 // in real time during actual playback/export, timed to line up with
                 // the visual animation (exit sound starts right as the exit anim begins).
                 if (state.isPlaying && item.soundEffect && item.soundEffect !== 'none') {
-                    if (!item._sfxEnterPlayed && currentTime >= item.startSec) {
-                        item._sfxEnterPlayed = true;
-                        if (window.playBrollSfx) window.playBrollSfx(item.soundEffect);
-                    }
-                    if (!item._sfxExitPlayed && tOut <= animDur && currentTime < item.endSec) {
-                        item._sfxExitPlayed = true;
-                        if (window.playBrollSfx) window.playBrollSfx(item.soundEffect);
+                    if (item.soundEffect === 'custom') {
+                        // A real uploaded clip plays once at entry only — replaying a
+                        // longer voice clip again on exit would usually overlap badly.
+                        if (!item._sfxEnterPlayed && currentTime >= item.startSec) {
+                            item._sfxEnterPlayed = true;
+                            if (item.customSoundBuffer && window.playBrollCustomSound) window.playBrollCustomSound(item.customSoundBuffer);
+                        }
+                    } else {
+                        if (!item._sfxEnterPlayed && currentTime >= item.startSec) {
+                            item._sfxEnterPlayed = true;
+                            if (window.playBrollSfx) window.playBrollSfx(item.soundEffect);
+                        }
+                        if (!item._sfxExitPlayed && tOut <= animDur && currentTime < item.endSec) {
+                            item._sfxExitPlayed = true;
+                            if (window.playBrollSfx) window.playBrollSfx(item.soundEffect);
+                        }
                     }
                 }
 
@@ -2832,9 +2871,12 @@ document.addEventListener('DOMContentLoaded', () => {
                     }
                 } else {
                     // Source rect: cover-crop to fill the box (PiP and fullscreen@100%).
-                    // Exception: fullscreen at < 100% size shows the FULL image (contain)
+                    // Exception 1: fullscreen at < 100% size shows the FULL image (contain)
                     // so the user can actually see the whole image in the smaller frame.
-                    const fsSmall = item.mode === 'fullscreen' && ((item.size !== undefined ? item.size : 100) < 99.9);
+                    // Exception 2: the user explicitly picked "Contain" fit mode for a
+                    // fullscreen image whose aspect ratio doesn't match the canvas, so
+                    // nothing gets cropped off — letterbox bars fill the rest instead.
+                    const fsSmall = item.mode === 'fullscreen' && (((item.size !== undefined ? item.size : 100) < 99.9) || item.fitMode === 'contain');
                     const imgAspect = item.imageImg.naturalWidth / item.imageImg.naturalHeight;
                     const boxAspect = boxW / boxH;
                     let sx, sy, sw, sh;
@@ -2941,6 +2983,14 @@ document.addEventListener('DOMContentLoaded', () => {
                             } else {
                                 dW = boxH * imgAspect;
                                 dX = drawBoxX + (boxW - dW) / 2;
+                            }
+                            // Paint the leftover space black first (only meaningful when
+                            // the box is the full fullscreen frame, i.e. item.fitMode ===
+                            // 'contain' at 100% size) so the gap reads as an intentional
+                            // letterbox bar instead of showing whatever was drawn behind it.
+                            if (item.mode === 'fullscreen' && item.fitMode === 'contain') {
+                                state.ctx.fillStyle = '#000000';
+                                state.ctx.fillRect(drawBoxX, drawBoxY, boxW, boxH);
                             }
                             state.ctx.drawImage(item.imageImg, 0, 0, item.imageImg.naturalWidth, item.imageImg.naturalHeight, dX, dY, dW, dH);
                         } else {
@@ -6170,6 +6220,9 @@ document.addEventListener('DOMContentLoaded', () => {
     // --- B-roll / Topic Image Overlay Bindings (Phase 5D) ---
     const brollTypeToggle = document.getElementById('broll-type-toggle');
     const brollImageInputSection = document.getElementById('broll-image-input-section');
+    const brollVideoInputSection = document.getElementById('broll-video-input-section');
+    const brollVideoDropzone = document.getElementById('broll-video-dropzone');
+    const brollVideoInput = document.getElementById('broll-video-input');
     const brollTextInputSection = document.getElementById('broll-text-input-section');
     const brollTextInput = document.getElementById('broll-text-input');
     const brollBulletSelect = document.getElementById('broll-bullet-select');
@@ -6227,6 +6280,7 @@ document.addEventListener('DOMContentLoaded', () => {
             brollAddType = btn.dataset.type;
             brollTypeToggle.querySelectorAll('.segmented-btn').forEach(b => b.classList.toggle('active', b === btn));
             if (brollImageInputSection) brollImageInputSection.style.display = brollAddType === 'image' ? 'block' : 'none';
+            if (brollVideoInputSection) brollVideoInputSection.style.display = brollAddType === 'video' ? 'block' : 'none';
             if (brollTextInputSection) brollTextInputSection.style.display = brollAddType === 'text' ? 'block' : 'none';
         });
     }
@@ -6298,6 +6352,11 @@ document.addEventListener('DOMContentLoaded', () => {
     const brollAnimSpeedSlider = document.getElementById('broll-anim-speed');
     const brollAnimSpeedVal = document.getElementById('broll-anim-speed-val');
     const brollSoundEffectSelect = document.getElementById('broll-sound-effect');
+    const brollFitContainer = document.getElementById('broll-fit-container');
+    const brollFitSelect = document.getElementById('broll-fit-select');
+    const brollCustomSoundContainer = document.getElementById('broll-custom-sound-container');
+    const brollCustomSoundInput = document.getElementById('broll-custom-sound-input');
+    const brollCustomSoundFilename = document.getElementById('broll-custom-sound-filename');
 
     // Continuous speed slider (1 = slowest, 100 = fastest) <-> animation duration in
     // seconds. Replaces the old 3-option Fast/Normal/Slow dropdown with a YouTube-volume
@@ -6403,6 +6462,29 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
+    if (brollVideoDropzone) {
+        brollVideoDropzone.addEventListener('click', () => brollVideoInput.click());
+
+        brollVideoInput.addEventListener('change', (e) => {
+            const file = e.target.files[0];
+            if (file) loadBrollVideo(file);
+        });
+
+        brollVideoDropzone.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            brollVideoDropzone.classList.add('drag-over');
+        });
+        brollVideoDropzone.addEventListener('dragleave', () => {
+            brollVideoDropzone.classList.remove('drag-over');
+        });
+        brollVideoDropzone.addEventListener('drop', (e) => {
+            e.preventDefault();
+            brollVideoDropzone.classList.remove('drag-over');
+            const file = e.dataTransfer.files[0];
+            if (file && file.type.startsWith('video/')) loadBrollVideo(file);
+        });
+    }
+
     function loadBrollImage(file) {
         console.log("Loading B-roll image file:", file.name, "type:", file.type, "size:", file.size);
         const img = new Image();
@@ -6439,7 +6521,11 @@ document.addEventListener('DOMContentLoaded', () => {
                 exitDirection: 'same',
                 animationStyle: brollModeSelect && brollModeSelect.value === 'pip' ? 'slide-pop' : 'zoom',
                 animationSpeedSec: 0.4, // continuous drag-slider speed (seconds); 0.4 ~= old 'Normal' preset
-                soundEffect: 'none'
+                soundEffect: 'none',
+                // 'cover' fills the whole frame and crops any excess (old default
+                // behaviour). 'contain' shows the entire image with letterbox bars
+                // when its aspect ratio doesn't match the canvas.
+                fitMode: 'cover'
             };
             state.brollOverlays.push(newItem);
             state.selectedBrollId = newItem.id;
@@ -6457,6 +6543,97 @@ document.addEventListener('DOMContentLoaded', () => {
         
         img.src = url;
         if (brollInput) brollInput.value = '';
+    }
+
+    function loadBrollVideo(file) {
+        console.log("Loading B-roll video file:", file.name, "type:", file.type, "size:", file.size);
+        const url = URL.createObjectURL(file);
+        // A hidden <video> element that we manually play/pause/seek in sync with
+        // the main timeline. Muted so autoplay isn't blocked by the browser; the
+        // clip's own audio is intentionally NOT included in the export (keeps
+        // audio mixing simple/predictable — add music/voiceover separately).
+        const vid = document.createElement('video');
+        vid.muted = true;
+        vid.playsInline = true;
+        vid.preload = 'auto';
+        vid.style.position = 'absolute';
+        vid.style.width = '1px';
+        vid.style.height = '1px';
+        vid.style.opacity = '0';
+        vid.style.pointerEvents = 'none';
+        document.body.appendChild(vid);
+
+        vid.onloadedmetadata = () => {
+            console.log("B-roll video loaded. Dimensions:", vid.videoWidth, "x", vid.videoHeight, "duration:", vid.duration);
+            if (vid.videoWidth === 0 || vid.videoHeight === 0) {
+                console.error("Loaded video has zero dimensions.");
+                alert("ত্রুটি: ভিডিওটির ডাইমেনশন শূন্য (0)। অনুগ্রহ করে অন্য ভিডিও ফাইল ব্যবহার করুন।");
+                vid.remove();
+                return;
+            }
+            // See comment on `imageImg` below: alias naturalWidth/naturalHeight so
+            // this <video> is a drop-in replacement everywhere an <img>'s natural
+            // dimensions are read.
+            Object.defineProperty(vid, 'naturalWidth', { get: () => vid.videoWidth });
+            Object.defineProperty(vid, 'naturalHeight', { get: () => vid.videoHeight });
+            const newItem = {
+                id: brollIdCounter++,
+                type: 'video',
+                videoEl: vid,
+                // Every existing draw / hit-test / animation code path for B-roll
+                // reads `item.imageImg` and its `.naturalWidth`/`.naturalHeight`. Rather
+                // than touching dozens of call sites, alias a video element to look
+                // like an image here — ctx.drawImage() accepts a <video> exactly like
+                // an <img>, so this lets a video overlay reuse 100% of the existing
+                // cover/contain, PiP sizing, animation, and click/resize hit-testing
+                // logic unchanged.
+                imageImg: vid,
+                videoUrl: url,
+                videoDuration: vid.duration || 0,
+                file: file,
+                name: file.name,
+                size: file.size,
+                mode: brollModeSelect ? brollModeSelect.value : 'fullscreen',
+                size: brollModeSelect && brollModeSelect.value === 'pip'
+                    ? (brollSizeSlider ? parseInt(brollSizeSlider.value) : 35)
+                    : 100,
+                x: 0.05,
+                y: 0.6,
+                rotation: 0,
+                startSec: Math.min(state.endTime || state.duration || 5, state.currentTime || 0),
+                // Default display window matches the overlay video's own length
+                // (capped at 8s so it doesn't swallow the whole timeline by default).
+                endSec: Math.min(state.endTime || state.duration || 5, (state.currentTime || 0) + Math.min(vid.duration || 3, 8)),
+                entryDirection: ['left', 'right', 'top', 'bottom'][Math.floor(Math.random() * 4)],
+                exitDirection: 'same',
+                animationStyle: brollModeSelect && brollModeSelect.value === 'pip' ? 'slide-pop' : 'zoom',
+                animationSpeedSec: 0.4,
+                soundEffect: 'none',
+                // Same cover/contain fit logic as image B-roll — useful when the
+                // overlay video's aspect ratio doesn't match the canvas.
+                fitMode: 'cover',
+                // If the display window is longer than the video's own duration,
+                // the video loops from the beginning instead of freezing/going black.
+                loopVideo: true
+            };
+            state.brollOverlays.push(newItem);
+            state.selectedBrollId = newItem.id;
+            renderBrollList();
+            showBrollTimingFor(newItem.id);
+            drawFrame();
+            console.log("Added Video B-roll overlay:", newItem);
+        };
+
+        vid.onerror = (err) => {
+            console.error("Failed to load B-roll video:", err);
+            alert("ত্রুটি: ভিডিওটি লোড করা যায়নি। অনুগ্রহ করে নিশ্চিত করুন যে এটি একটি সঠিক ভিডিও ফাইল (যেমন MP4 বা WEBM)।");
+            vid.remove();
+            if (brollVideoInput) brollVideoInput.value = '';
+        };
+
+        vid.src = url;
+        vid.load();
+        if (brollVideoInput) brollVideoInput.value = '';
     }
 
     if (addBrollTextBtn) {
@@ -6606,6 +6783,8 @@ document.addEventListener('DOMContentLoaded', () => {
             if (item.type === 'text') {
                 const preview = item.text.length > 18 ? item.text.slice(0, 18) + '…' : item.text;
                 label.innerText = `🔤 ${modeLabel}: "${preview}"`;
+            } else if (item.type === 'video') {
+                label.innerText = `🎬 ${modeLabel} Video B-roll`;
             } else {
                 label.innerText = `🖼 ${modeLabel} B-roll`;
             }
@@ -6649,6 +6828,14 @@ document.addEventListener('DOMContentLoaded', () => {
         if (brollModeSelect) brollModeSelect.value = item.mode;
         if (brollSizeContainer) brollSizeContainer.style.display = 'block'; // always visible
 
+        // Fit Mode only makes sense for a fullscreen IMAGE (Text B-roll has no
+        // aspect-ratio mismatch problem, and PiP images are always shown "contain"
+        // inside their own small box already).
+        if (brollFitContainer) {
+            brollFitContainer.style.display = (item.mode === 'fullscreen' && (item.type === 'image' || item.type === 'video')) ? 'block' : 'none';
+        }
+        if (brollFitSelect) brollFitSelect.value = item.fitMode || 'cover';
+
         // Sync the Text Settings edit panel (content/size/color/blank-background)
         if (brollEditTextSection) {
             if (item.type === 'text') {
@@ -6690,6 +6877,14 @@ document.addEventListener('DOMContentLoaded', () => {
             if (brollAnimSpeedVal) brollAnimSpeedVal.innerText = brollSpeedLabel(sec);
         }
         if (brollSoundEffectSelect) brollSoundEffectSelect.value = item.soundEffect || 'none';
+        if (brollCustomSoundContainer) {
+            brollCustomSoundContainer.style.display = (item.soundEffect === 'custom') ? 'block' : 'none';
+        }
+        if (brollCustomSoundFilename) {
+            brollCustomSoundFilename.innerText = item.customSoundName
+                ? `আপলোড করা হয়েছে: ${item.customSoundName}`
+                : 'কোনো ফাইল আপলোড করা হয়নি।';
+        }
         updateBrollDirectionRowsVisibility(item.animationStyle || defaultStyle);
 
         // Sync After Image Uploader visibility
@@ -6833,8 +7028,43 @@ document.addEventListener('DOMContentLoaded', () => {
             const item = state.brollOverlays.find(b => b.id === state.selectedBrollId);
             if (item) {
                 item.soundEffect = e.target.value;
+                if (brollCustomSoundContainer) {
+                    brollCustomSoundContainer.style.display = (item.soundEffect === 'custom') ? 'block' : 'none';
+                }
                 // Let the person hear a quick preview of the chosen sound immediately
-                if (item.soundEffect !== 'none' && window.playBrollSfx) window.playBrollSfx(item.soundEffect);
+                if (item.soundEffect === 'custom') {
+                    if (item.customSoundBuffer && window.playBrollCustomSound) window.playBrollCustomSound(item.customSoundBuffer);
+                } else if (item.soundEffect !== 'none' && window.playBrollSfx) {
+                    window.playBrollSfx(item.soundEffect);
+                }
+            }
+        });
+    }
+
+    if (brollCustomSoundInput) {
+        brollCustomSoundInput.addEventListener('change', async (e) => {
+            const item = state.brollOverlays.find(b => b.id === state.selectedBrollId);
+            const file = e.target.files && e.target.files[0];
+            if (!item || !file) return;
+            if (brollCustomSoundFilename) brollCustomSoundFilename.innerText = `লোড হচ্ছে: ${file.name}...`;
+            item.customSoundFile = file;
+            item.customSoundName = file.name;
+            item.customSoundBuffer = window.decodeBrollCustomSound ? await window.decodeBrollCustomSound(file) : null;
+            if (brollCustomSoundFilename) {
+                brollCustomSoundFilename.innerText = item.customSoundBuffer
+                    ? `আপলোড করা হয়েছে: ${item.customSoundName}`
+                    : `ত্রুটি: "${file.name}" ফাইলটি ডিকোড করা যায়নি। অন্য mp3/wav ফাইল ব্যবহার করুন।`;
+            }
+            if (item.customSoundBuffer && window.playBrollCustomSound) window.playBrollCustomSound(item.customSoundBuffer);
+        });
+    }
+
+    if (brollFitSelect) {
+        brollFitSelect.addEventListener('change', (e) => {
+            const item = state.brollOverlays.find(b => b.id === state.selectedBrollId);
+            if (item) {
+                item.fitMode = e.target.value;
+                drawFrame();
             }
         });
     }
@@ -6877,6 +7107,10 @@ document.addEventListener('DOMContentLoaded', () => {
             if (item) {
                 item.mode = e.target.value;
                 if (brollSizeContainer) brollSizeContainer.style.display = 'block'; // always visible
+                if (brollFitContainer) {
+                    brollFitContainer.style.display = (item.mode === 'fullscreen' && (item.type === 'image' || item.type === 'video')) ? 'block' : 'none';
+                }
+                if (brollFitSelect) brollFitSelect.value = item.fitMode || 'cover';
                 if (brollSizeSlider) {
                     brollSizeSlider.max = item.mode === 'pip' ? 60 : 100;
                     // When switching to fullscreen, reset to 100% so it covers fully by default
@@ -6914,6 +7148,14 @@ document.addEventListener('DOMContentLoaded', () => {
         deleteBrollBtn.addEventListener('click', () => {
             const removed = state.brollOverlays.find(b => b.id === state.selectedBrollId);
             if (removed && removed.imageUrl) URL.revokeObjectURL(removed.imageUrl);
+            if (removed && removed.type === 'video') {
+                if (removed.videoUrl) URL.revokeObjectURL(removed.videoUrl);
+                if (removed.videoEl) {
+                    removed.videoEl.pause();
+                    removed.videoEl.src = '';
+                    removed.videoEl.remove();
+                }
+            }
             state.brollOverlays = state.brollOverlays.filter(b => b.id !== state.selectedBrollId);
             state.selectedBrollId = null;
             renderBrollList();
