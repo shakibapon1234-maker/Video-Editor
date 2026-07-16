@@ -208,6 +208,19 @@ class VoiceChangerEffect {
         this.lowpass.type = 'lowpass';
         this.lowpass.frequency.setValueAtTime(15000, context.currentTime);
 
+        // "Desmear" filter: the Jungle pitch shifter is a granular/WSOLA
+        // shifter, which always leaves a faint metallic/warble artifact at
+        // grain-boundary frequencies -- the artifact gets worse the further
+        // the pitch is shifted. Gently rolling off the top end AFTER the
+        // shifter (not before) hides most of that grain noise without
+        // making the voice sound muffled, because human speech
+        // intelligibility lives mostly below ~6-7kHz. Each profile below
+        // tunes this based on how far it shifts pitch.
+        this.desmear = context.createBiquadFilter();
+        this.desmear.type = 'lowpass';
+        this.desmear.frequency.setValueAtTime(16000, context.currentTime); // effectively off by default
+        this.desmear.Q.setValueAtTime(0.7, context.currentTime);
+
         // Robotic Modulation Oscillator and Gain
         this.robotOsc = context.createOscillator();
         this.robotOsc.type = 'sawtooth';
@@ -240,13 +253,14 @@ class VoiceChangerEffect {
         this.echoGain.gain.setValueAtTime(0, context.currentTime);
         
         // Connect Graph:
-        // input -> highpass -> peaking -> peaking2 -> lowpass -> pitchShifter -> ringModNode -> output
+        // input -> highpass -> peaking -> peaking2 -> lowpass -> pitchShifter -> desmear -> ringModNode -> output
         this.input.connect(this.highpass);
         this.highpass.connect(this.peaking);
         this.peaking.connect(this.peaking2);
         this.peaking2.connect(this.lowpass);
         this.lowpass.connect(this.pitchShifter.input);
-        this.pitchShifter.output.connect(this.ringModNode);
+        this.pitchShifter.output.connect(this.desmear);
+        this.desmear.connect(this.ringModNode);
         this.ringModNode.connect(this.output);
         
         // Connect parallel echo path: peaking -> echoDelay -> echoGain -> output
@@ -265,6 +279,7 @@ class VoiceChangerEffect {
         this.pitchShifter.setPitchOffset(0);
         this.highpass.frequency.setValueAtTime(80, now);
         this.lowpass.frequency.setValueAtTime(15000, now);
+        this.desmear.frequency.setValueAtTime(16000, now);
         this.peaking.gain.setValueAtTime(0, now);
         this.peaking2.gain.setValueAtTime(0, now);
         this.robotGain.gain.setValueAtTime(0, now);
@@ -272,21 +287,44 @@ class VoiceChangerEffect {
         
         switch (profileName) {
             case 'female_sweet': // Sweet female voice
-                this.pitchShifter.setPitchOffset(0.40); // slightly less than before to reduce warble artifacts
+                this.pitchShifter.setPitchOffset(0.34); // dialed back further to cut warble
                 this.highpass.frequency.setValueAtTime(210, now); // strip more chest/male resonance
-                this.peaking.frequency.setValueAtTime(3000, now);
-                this.peaking.gain.setValueAtTime(5, now);
+                this.peaking.frequency.setValueAtTime(2900, now);
+                this.peaking.Q.setValueAtTime(0.9, now); // wider/gentler bump = less "phasey" ringing
+                this.peaking.gain.setValueAtTime(4, now);
                 this.peaking2.frequency.setValueAtTime(4200, now); // adds airy female "presence"
-                this.peaking2.gain.setValueAtTime(4, now);
+                this.peaking2.Q.setValueAtTime(0.9, now);
+                this.peaking2.gain.setValueAtTime(3.5, now);
+                this.desmear.frequency.setValueAtTime(8200, now); // tame grain artifact from the pitch shift
                 break;
                 
             case 'female_warm': // Warm female voice
-                this.pitchShifter.setPitchOffset(0.30);
+                this.pitchShifter.setPitchOffset(0.24); // gentler shift, relies more on EQ for the feminine read
                 this.highpass.frequency.setValueAtTime(180, now);
                 this.peaking.frequency.setValueAtTime(1400, now);
+                this.peaking.Q.setValueAtTime(0.9, now);
                 this.peaking.gain.setValueAtTime(3, now);
                 this.peaking2.frequency.setValueAtTime(3200, now); // keeps it from sounding muddy/male
-                this.peaking2.gain.setValueAtTime(3, now);
+                this.peaking2.Q.setValueAtTime(0.9, now);
+                this.peaking2.gain.setValueAtTime(2.5, now);
+                this.desmear.frequency.setValueAtTime(8800, now);
+                break;
+
+            case 'female_bright': // Confident / attractive female voice (new)
+                // Smallest pitch shift of the three female presets -- most of the
+                // "female" character here comes from formant EQ rather than raw
+                // pitch, which is what keeps it sounding natural instead of
+                // "chipmunk-y" or robotic at louder/shoutier parts of a voiceover.
+                this.pitchShifter.setPitchOffset(0.20);
+                this.highpass.frequency.setValueAtTime(190, now);
+                this.peaking.frequency.setValueAtTime(2200, now); // clarity/"smile" band
+                this.peaking.Q.setValueAtTime(0.85, now);
+                this.peaking.gain.setValueAtTime(4.5, now);
+                this.peaking2.frequency.setValueAtTime(3600, now); // upper formant lift for a brighter tone
+                this.peaking2.Q.setValueAtTime(0.85, now);
+                this.peaking2.gain.setValueAtTime(4, now);
+                this.lowpass.frequency.setValueAtTime(13000, now); // trims harsh sibilance before the shifter
+                this.desmear.frequency.setValueAtTime(9400, now); // least aggressive desmear since shift is smallest
                 break;
                 
             case 'male_deep': // Deep marketing male voice
@@ -1555,6 +1593,107 @@ document.addEventListener('DOMContentLoaded', () => {
                 noteGain.connect(sfxGain);
                 osc.start(now + i * 0.06);
                 osc.stop(now + i * 0.06 + dur);
+            });
+            sfxGain.gain.setValueAtTime(1, now);
+        } else if (type === 'swipe') {
+            // Fast filtered-noise sweep, brighter/quicker than "whoosh" -- good
+            // for text/B-roll that slides in from the side rather than pops in.
+            const dur = 0.22;
+            const noise = audioCtx.createBufferSource();
+            noise.buffer = makeNoiseBuffer(dur);
+            const bandpass = audioCtx.createBiquadFilter();
+            bandpass.type = 'bandpass';
+            bandpass.Q.setValueAtTime(0.9, now);
+            bandpass.frequency.setValueAtTime(1200, now);
+            bandpass.frequency.exponentialRampToValueAtTime(4500, now + dur * 0.7);
+            noise.connect(bandpass);
+            bandpass.connect(sfxGain);
+            sfxGain.gain.linearRampToValueAtTime(0.35, now + dur * 0.1);
+            sfxGain.gain.exponentialRampToValueAtTime(0.0001, now + dur);
+            noise.start(now);
+            noise.stop(now + dur);
+        } else if (type === 'camera') {
+            // Two-part shutter click: a sharp high click followed a beat later
+            // by a softer low "mirror slap" thud, like a DSLR shutter.
+            const clickDur = 0.045;
+            const clickNoise = audioCtx.createBufferSource();
+            clickNoise.buffer = makeNoiseBuffer(clickDur);
+            const clickHp = audioCtx.createBiquadFilter();
+            clickHp.type = 'highpass';
+            clickHp.frequency.setValueAtTime(3000, now);
+            clickNoise.connect(clickHp);
+            clickHp.connect(sfxGain);
+
+            const slapDelay = 0.045;
+            const slapDur = 0.05;
+            const slapNoise = audioCtx.createBufferSource();
+            slapNoise.buffer = makeNoiseBuffer(slapDur);
+            const slapLp = audioCtx.createBiquadFilter();
+            slapLp.type = 'lowpass';
+            slapLp.frequency.setValueAtTime(900, now);
+            const slapGain = audioCtx.createGain();
+            slapGain.gain.setValueAtTime(0.0001, now + slapDelay);
+            slapGain.gain.linearRampToValueAtTime(0.4, now + slapDelay + 0.006);
+            slapGain.gain.exponentialRampToValueAtTime(0.0001, now + slapDelay + slapDur);
+            slapNoise.connect(slapLp);
+            slapLp.connect(slapGain);
+            slapGain.connect(makeupGainNode);
+
+            sfxGain.gain.linearRampToValueAtTime(0.5, now + 0.004);
+            sfxGain.gain.exponentialRampToValueAtTime(0.0001, now + clickDur);
+            clickNoise.start(now);
+            clickNoise.stop(now + clickDur);
+            slapNoise.start(now + slapDelay);
+            slapNoise.stop(now + slapDelay + slapDur);
+        } else if (type === 'rise') {
+            // Rising pitch riser -- good as an "entrance" cue that builds
+            // anticipation right before a B-roll/stat appears on screen.
+            const dur = 0.55;
+            const osc = audioCtx.createOscillator();
+            osc.type = 'sawtooth';
+            osc.frequency.setValueAtTime(140, now);
+            osc.frequency.exponentialRampToValueAtTime(1100, now + dur);
+            const lp = audioCtx.createBiquadFilter();
+            lp.type = 'lowpass';
+            lp.frequency.setValueAtTime(600, now);
+            lp.frequency.exponentialRampToValueAtTime(6000, now + dur);
+            osc.connect(lp);
+            lp.connect(sfxGain);
+            sfxGain.gain.setValueAtTime(0.0001, now);
+            sfxGain.gain.exponentialRampToValueAtTime(0.32, now + dur * 0.85);
+            sfxGain.gain.exponentialRampToValueAtTime(0.0001, now + dur);
+            osc.start(now);
+            osc.stop(now + dur);
+        } else if (type === 'bass_drop') {
+            // Deep falling sub-bass hit -- pairs well with a bold/impactful
+            // B-roll exit or a "reveal" moment.
+            const dur = 0.5;
+            const osc = audioCtx.createOscillator();
+            osc.type = 'sine';
+            osc.frequency.setValueAtTime(180, now);
+            osc.frequency.exponentialRampToValueAtTime(35, now + dur * 0.8);
+            osc.connect(sfxGain);
+            sfxGain.gain.setValueAtTime(0.0001, now);
+            sfxGain.gain.linearRampToValueAtTime(0.6, now + 0.02);
+            sfxGain.gain.exponentialRampToValueAtTime(0.0001, now + dur);
+            osc.start(now);
+            osc.stop(now + dur);
+        } else if (type === 'notification') {
+            // Clean two-note "ding" like a phone notification -- more
+            // minimal/neutral than the sparkly "chime" preset.
+            const dur = 0.3;
+            [1046, 1568].forEach((freq, i) => {
+                const osc = audioCtx.createOscillator();
+                osc.type = 'sine';
+                osc.frequency.setValueAtTime(freq, now + i * 0.09);
+                const noteGain = audioCtx.createGain();
+                noteGain.gain.setValueAtTime(0.0001, now + i * 0.09);
+                noteGain.gain.linearRampToValueAtTime(0.32, now + i * 0.09 + 0.015);
+                noteGain.gain.exponentialRampToValueAtTime(0.0001, now + i * 0.09 + dur);
+                osc.connect(noteGain);
+                noteGain.connect(sfxGain);
+                osc.start(now + i * 0.09);
+                osc.stop(now + i * 0.09 + dur);
             });
             sfxGain.gain.setValueAtTime(1, now);
         }

@@ -284,6 +284,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const videoDropzone = document.getElementById('video-dropzone');
     const logoDropzone = document.getElementById('logo-dropzone');
     const playPauseBtn = document.getElementById('play-pause-btn');
+    const previewMuteBtn = document.getElementById('preview-mute-btn');
     const splitClipBtn = document.getElementById('split-clip-btn');
     const freezeFrameBtn = document.getElementById('freeze-frame-btn');
     const freezeFrameDurationInput = document.getElementById('freeze-frame-duration');
@@ -1069,6 +1070,37 @@ document.addEventListener('DOMContentLoaded', () => {
             playVideo();
         }
     });
+
+    // Preview-only mute toggle: lets the user test-play the video with sound
+    // off, without touching anything that affects the exported file's audio.
+    // window.setSpeakerMuted (defined in audio.js) mutes a gain node that sits
+    // AFTER the point the exporter taps for recording, so this can never
+    // silence the final export. Before the Web Audio graph exists (e.g. no
+    // video loaded yet / audio context not initialized), we fall back to
+    // muting the <video> element directly.
+    let previewSoundMuted = false;
+    if (previewMuteBtn) {
+        previewMuteBtn.addEventListener('click', () => {
+            previewSoundMuted = !previewSoundMuted;
+            const appliedViaGraph = window.setSpeakerMuted ? window.setSpeakerMuted(previewSoundMuted) : false;
+            if (!appliedViaGraph && state.video) {
+                state.video.muted = previewSoundMuted;
+            }
+            if (previewSoundMuted) {
+                previewMuteBtn.innerHTML = '<i class="fa-solid fa-volume-xmark"></i>';
+                previewMuteBtn.style.background = 'rgba(248, 113, 113, 0.15)';
+                previewMuteBtn.style.borderColor = '#f87171';
+                previewMuteBtn.style.color = '#f87171';
+                previewMuteBtn.title = 'প্রিভিউ সাউন্ড অন করুন (Unmute preview)';
+            } else {
+                previewMuteBtn.innerHTML = '<i class="fa-solid fa-volume-high"></i>';
+                previewMuteBtn.style.background = 'rgba(148, 163, 184, 0.15)';
+                previewMuteBtn.style.borderColor = '#94a3b8';
+                previewMuteBtn.style.color = '#94a3b8';
+                previewMuteBtn.title = 'প্রিভিউ সাউন্ড অফ করুন — শুধু আপনার স্পিকারের জন্য, এক্সপোর্ট করা ভিডিওর অডিওতে কোনো প্রভাব পড়বে না (Mute preview only)';
+            }
+        });
+    }
 
     if (splitClipBtn) {
         splitClipBtn.addEventListener('click', () => {

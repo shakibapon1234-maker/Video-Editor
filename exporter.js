@@ -253,7 +253,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         const introDur = state.introEnabled ? Math.max(0.3, parseFloat(state.introDuration) || 3) : 0;
         const outroDur = state.outroEnabled ? Math.max(0.3, parseFloat(state.outroDuration) || 3) : 0;
-        const grandTotalDuration = introDur + totalDuration + outroDur;
+        const grandTotalDuration = parseFloat((introDur + totalDuration + outroDur).toFixed(1));
         const grandTotalFrames = Math.ceil(grandTotalDuration * 30);
 
         let audioBlob = null;
@@ -391,6 +391,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 let frameCallbackId = null;
                 let safetyTimer = null;
                 let activeBlobPromises = [];
+                let inFrame = false;
 
                 const finish = async () => {
                     if (finished) return;
@@ -407,27 +408,55 @@ document.addEventListener('DOMContentLoaded', () => {
                 };
 
                 const onFrame = async (now, meta) => {
-                    if (finished || exportCancelled) return;
-                    if (safetyTimer) { clearTimeout(safetyTimer); safetyTimer = null; }
-                    frameCallbackId = null;
+                    if (inFrame || finished || exportCancelled) return;
+                    inFrame = true;
+                    try {
+                        if (safetyTimer) { clearTimeout(safetyTimer); safetyTimer = null; }
+                        frameCallbackId = null;
 
-                    const mediaTime = (meta && meta.mediaTime != null) ? meta.mediaTime : video.currentTime;
-                    let currentTarget = clipTrimStart + (clipFrameIndex / 30);
+                        const mediaTime = (meta && meta.mediaTime != null) ? meta.mediaTime : video.currentTime;
+                        let currentTarget = clipTrimStart + (clipFrameIndex / 30);
 
-                    // 1. Frame is too early — let the video keep playing
-                    if (mediaTime < currentTarget - (1 / 60)) {
-                        scheduleNext();
-                        return;
-                    }
-
-                    // 2. Video overshot/skipped frames — fill the gap by duplicating
-                    while (clipFrameIndex < clipFrames) {
-                        const loopTarget = clipTrimStart + (clipFrameIndex / 30);
-                        if (mediaTime <= loopTarget + (1 / 60)) {
-                            break; // Not overshot anymore
+                        // 1. Frame is too early — let the video keep playing
+                        if (mediaTime < currentTarget - (1 / 60)) {
+                            scheduleNext();
+                            return;
                         }
 
-                        state.customExportTime = loopTarget;
+                        // 2. Video overshot/skipped frames — fill the gap by duplicating
+                        while (clipFrameIndex < clipFrames) {
+                            const loopTarget = clipTrimStart + (clipFrameIndex / 30);
+                            if (mediaTime <= loopTarget + (1 / 60)) {
+                                break; // Not overshot anymore
+                            }
+
+                            state.customExportTime = loopTarget;
+                            state.exportTickerTime = elapsedBeforeCurrentClip + (clipFrameIndex / 30);
+                            if (window.drawEditorFrame) window.drawEditorFrame();
+
+                            const p = new Promise(async (r) => {
+                                const blob = await new Promise(res => canvas.toBlob(res, 'image/jpeg', 0.85));
+                                if (blob && !finished && !exportCancelled) ws.send(blob);
+                                r();
+                            });
+                            activeBlobPromises.push(p);
+
+                            clipFrameIndex++;
+                            frameIndex++;
+
+                            if (activeBlobPromises.length > 5) {
+                                await activeBlobPromises.shift();
+                            }
+                        }
+
+                        if (clipFrameIndex >= clipFrames) {
+                            finish();
+                            return;
+                        }
+
+                        // 3. Draw and queue the correct frame
+                        currentTarget = clipTrimStart + (clipFrameIndex / 30);
+                        state.customExportTime = currentTarget;
                         state.exportTickerTime = elapsedBeforeCurrentClip + (clipFrameIndex / 30);
                         if (window.drawEditorFrame) window.drawEditorFrame();
 
@@ -441,56 +470,29 @@ document.addEventListener('DOMContentLoaded', () => {
                         clipFrameIndex++;
                         frameIndex++;
 
-                        if (activeBlobPromises.length > 5) {
+                        // Dynamically throttle if browser encoding queue is too full
+                        if (activeBlobPromises.length > 3) {
                             await activeBlobPromises.shift();
                         }
-                    }
 
-                    if (clipFrameIndex >= clipFrames) {
-                        finish();
-                        return;
-                    }
+                        // Progress update
+                        const totalElapsed = elapsedBeforeCurrentClip + (clipFrameIndex / 30);
+                        const progressPercent = grandTotalDuration > 0 ? Math.min(100, (totalElapsed / grandTotalDuration) * 100) : 100;
+                        setProgress(10 + Math.round(progressPercent * 0.8));
 
-                    // 3. Draw and queue the correct frame
-                    currentTarget = clipTrimStart + (clipFrameIndex / 30);
-                    state.customExportTime = currentTarget;
-                    state.exportTickerTime = elapsedBeforeCurrentClip + (clipFrameIndex / 30);
-                    if (window.drawEditorFrame) window.drawEditorFrame();
-
-                    const p = new Promise(async (r) => {
-                        const blob = await new Promise(res => canvas.toBlob(res, 'image/jpeg', 0.85));
-                        if (blob && !finished && !exportCancelled) ws.send(blob);
-                        r();
-                    });
-                    activeBlobPromises.push(p);
-
-                    clipFrameIndex++;
-                    frameIndex++;
-
-                    // Dynamically pause playback if browser encoding queue is too full
-                    if (activeBlobPromises.length > 3) {
-                        video.pause();
-                        await activeBlobPromises.shift();
-                        if (!finished && !exportCancelled) {
-                            try { await video.play(); } catch(e){}
+                        if (isBatch) {
+                            renderStatusText.innerText = `[Batch ${batchIndex}/${batchCount}] rendering ${batchFilename}... ${Math.round((frameIndex / grandTotalFrames) * 100)}%`;
+                        } else {
+                            renderStatusText.innerText = `ক্লিপ ${clipIndex + 1}/${state.clips.length} প্রসেস হচ্ছে... (ফ্রেম: ${clipFrameIndex}/${clipFrames})`;
                         }
-                    }
 
-                    // Progress update
-                    const totalElapsed = elapsedBeforeCurrentClip + (clipFrameIndex / 30);
-                    const progressPercent = grandTotalDuration > 0 ? Math.min(100, (totalElapsed / grandTotalDuration) * 100) : 100;
-                    setProgress(10 + Math.round(progressPercent * 0.8));
-
-                    if (isBatch) {
-                        renderStatusText.innerText = `[Batch ${batchIndex}/${batchCount}] rendering ${batchFilename}... ${Math.round((frameIndex / grandTotalFrames) * 100)}%`;
-                    } else {
-                        renderStatusText.innerText = `ক্লিপ ${clipIndex + 1}/${state.clips.length} প্রসেস হচ্ছে... (ফ্রেম: ${clipFrameIndex}/${clipFrames})`;
-                    }
-
-                    if (clipFrameIndex >= clipFrames) {
-                        finish();
-                    } else {
-                        scheduleNext();
+                        if (clipFrameIndex >= clipFrames) {
+                            finish();
+                        } else {
+                            scheduleNext();
+                        }
+                    } finally {
+                        inFrame = false;
                     }
                 };
 
@@ -1233,6 +1235,315 @@ document.addEventListener('DOMContentLoaded', () => {
             }
             v2aConvertBtn.disabled = false;
             if (v2aFormatSelect) v2aFormatSelect.disabled = false;
+        }
+    }
+
+    // --- Audio Crop / Trim Tool (Phase 8B) ---
+    // Independent of the main editor project: upload ANY audio file, preview
+    // it with a native <audio> player, pick a Start/End range with a
+    // dual-handle slider (same visual language as the main Trim & Layout
+    // slider), then download just that range as WAV or MP3. Reuses the
+    // WAV/MP3 encoding helpers defined above for the Video → Audio tool
+    // (v2aAudioBufferToWavBlob, v2aEncodeMp3, ensureLamejsLoaded).
+    const acropDropzone = document.getElementById('acrop-dropzone');
+    const acropFileInput = document.getElementById('acrop-file-input');
+    const acropDropzoneLabel = document.getElementById('acrop-dropzone-label');
+    const acropEditorBox = document.getElementById('acrop-editor-box');
+    const acropPreviewPlayer = document.getElementById('acrop-preview-player');
+    const acropStartSlider = document.getElementById('acrop-start');
+    const acropEndSlider = document.getElementById('acrop-end');
+    const acropFill = document.getElementById('acrop-fill');
+    const acropStartVal = document.getElementById('acrop-start-val');
+    const acropEndVal = document.getElementById('acrop-end-val');
+    const acropFormatSelect = document.getElementById('acrop-format-select');
+    const acropMp3Option = document.getElementById('acrop-mp3-option');
+    const acropCropBtn = document.getElementById('acrop-crop-btn');
+    const acropProgressBox = document.getElementById('acrop-progress-box');
+    const acropStatusText = document.getElementById('acrop-status-text');
+    const acropPercentage = document.getElementById('acrop-percentage');
+    const acropProgressFill = document.getElementById('acrop-progress-fill');
+    const acropSuccessBox = document.getElementById('acrop-success-box');
+    const acropSuccessDesc = document.getElementById('acrop-success-desc');
+    const acropDownloadLink = document.getElementById('acrop-download-link');
+
+    let acropSelectedFile = null;
+    let acropObjectURL = null;
+    let acropLastDownloadURL = null;
+    let acropDuration = 0;
+
+    function acropFormatTime(seconds) {
+        if (!isFinite(seconds) || seconds < 0) seconds = 0;
+        const mins = Math.floor(seconds / 60);
+        const secs = (seconds % 60).toFixed(1);
+        return `${String(mins).padStart(2, '0')}:${secs.padStart(4, '0')}`;
+    }
+
+    function acropParseTimeInput(str) {
+        if (!str) return null;
+        str = str.trim();
+        if (str.includes(':')) {
+            const parts = str.split(':');
+            const mins = parseFloat(parts[0]) || 0;
+            const secs = parseFloat(parts[1]) || 0;
+            return mins * 60 + secs;
+        }
+        const val = parseFloat(str);
+        return isNaN(val) ? null : val;
+    }
+
+    if (acropDropzone && acropFileInput) {
+        acropDropzone.addEventListener('click', () => acropFileInput.click());
+
+        acropFileInput.addEventListener('change', (e) => {
+            if (e.target.files && e.target.files[0]) handleAcropFile(e.target.files[0]);
+            acropFileInput.value = '';
+        });
+
+        acropDropzone.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            acropDropzone.classList.add('drag-over');
+        });
+        acropDropzone.addEventListener('dragleave', () => {
+            acropDropzone.classList.remove('drag-over');
+        });
+        acropDropzone.addEventListener('drop', (e) => {
+            e.preventDefault();
+            acropDropzone.classList.remove('drag-over');
+            if (e.dataTransfer.files && e.dataTransfer.files[0]) handleAcropFile(e.dataTransfer.files[0]);
+        });
+    }
+
+    function handleAcropFile(file) {
+        if (!file.type.startsWith('audio/')) {
+            alert('দয়া করে একটি অডিও ফাইল নির্বাচন করুন। (Please select an audio file.)');
+            return;
+        }
+        acropSelectedFile = file;
+        if (acropDropzoneLabel) acropDropzoneLabel.innerText = file.name;
+        if (acropObjectURL) URL.revokeObjectURL(acropObjectURL);
+        acropObjectURL = URL.createObjectURL(file);
+        acropPreviewPlayer.src = acropObjectURL;
+
+        acropEditorBox.style.display = 'none';
+        acropProgressBox.style.display = 'none';
+        acropSuccessBox.style.display = 'none';
+        if (acropLastDownloadURL) {
+            URL.revokeObjectURL(acropLastDownloadURL);
+            acropLastDownloadURL = null;
+        }
+
+        acropPreviewPlayer.onloadedmetadata = () => {
+            acropDuration = acropPreviewPlayer.duration;
+            if (!isFinite(acropDuration) || acropDuration <= 0) {
+                // Some containers (e.g. certain WebM/OGG files) report Infinity
+                // duration until the browser has seeked at least once.
+                acropPreviewPlayer.currentTime = 1e9;
+                acropPreviewPlayer.ontimeupdate = () => {
+                    acropPreviewPlayer.ontimeupdate = null;
+                    acropDuration = acropPreviewPlayer.duration;
+                    acropPreviewPlayer.currentTime = 0;
+                    acropSetupSliders();
+                };
+                return;
+            }
+            acropSetupSliders();
+        };
+    }
+
+    function acropSetupSliders() {
+        acropStartSlider.min = 0;
+        acropStartSlider.max = acropDuration;
+        acropStartSlider.step = 0.01;
+        acropStartSlider.value = 0;
+
+        acropEndSlider.min = 0;
+        acropEndSlider.max = acropDuration;
+        acropEndSlider.step = 0.01;
+        acropEndSlider.value = acropDuration;
+
+        acropStartVal.value = acropFormatTime(0);
+        acropEndVal.value = acropFormatTime(acropDuration);
+        acropUpdateFill();
+        acropEditorBox.style.display = 'block';
+    }
+
+    function acropUpdateFill() {
+        const total = acropDuration || 1;
+        const startPercent = (parseFloat(acropStartSlider.value) / total) * 100;
+        const endPercent = (parseFloat(acropEndSlider.value) / total) * 100;
+        if (acropFill) {
+            acropFill.style.left = startPercent + '%';
+            acropFill.style.width = Math.max(0, endPercent - startPercent) + '%';
+        }
+    }
+
+    if (acropStartSlider) {
+        acropStartSlider.addEventListener('input', () => {
+            let startV = parseFloat(acropStartSlider.value);
+            const endV = parseFloat(acropEndSlider.value);
+            if (startV >= endV) {
+                startV = Math.max(0, endV - 0.05);
+                acropStartSlider.value = startV;
+            }
+            acropStartVal.value = acropFormatTime(startV);
+            acropPreviewPlayer.currentTime = startV;
+            acropUpdateFill();
+        });
+    }
+
+    if (acropEndSlider) {
+        acropEndSlider.addEventListener('input', () => {
+            const startV = parseFloat(acropStartSlider.value);
+            let endV = parseFloat(acropEndSlider.value);
+            if (endV <= startV) {
+                endV = Math.min(acropDuration, startV + 0.05);
+                acropEndSlider.value = endV;
+            }
+            acropEndVal.value = acropFormatTime(endV);
+            acropPreviewPlayer.currentTime = endV;
+            acropUpdateFill();
+        });
+    }
+
+    if (acropStartVal) {
+        acropStartVal.addEventListener('change', () => {
+            const parsed = acropParseTimeInput(acropStartVal.value);
+            if (parsed === null) return;
+            const clamped = Math.max(0, Math.min(parsed, parseFloat(acropEndSlider.value) - 0.05));
+            acropStartSlider.value = clamped;
+            acropStartVal.value = acropFormatTime(clamped);
+            acropPreviewPlayer.currentTime = clamped;
+            acropUpdateFill();
+        });
+    }
+
+    if (acropEndVal) {
+        acropEndVal.addEventListener('change', () => {
+            const parsed = acropParseTimeInput(acropEndVal.value);
+            if (parsed === null) return;
+            const clamped = Math.min(acropDuration, Math.max(parsed, parseFloat(acropStartSlider.value) + 0.05));
+            acropEndSlider.value = clamped;
+            acropEndVal.value = acropFormatTime(clamped);
+            acropPreviewPlayer.currentTime = clamped;
+            acropUpdateFill();
+        });
+    }
+
+    function setAcropProgress(percent, statusText) {
+        if (acropProgressFill) acropProgressFill.style.width = percent + '%';
+        if (acropPercentage) acropPercentage.innerText = percent + '%';
+        if (statusText && acropStatusText) acropStatusText.innerText = statusText;
+    }
+
+    if (acropCropBtn) {
+        acropCropBtn.addEventListener('click', runAcropCrop);
+    }
+
+    async function runAcropCrop() {
+        if (!acropSelectedFile) return;
+        const startSec = parseFloat(acropStartSlider.value) || 0;
+        const endSec = parseFloat(acropEndSlider.value) || acropDuration;
+        if (endSec - startSec < 0.05) {
+            alert('দয়া করে কমপক্ষে কিছু সময়ের একটি অংশ সিলেক্ট করুন।');
+            return;
+        }
+        const format = acropFormatSelect ? acropFormatSelect.value : 'wav';
+
+        acropCropBtn.disabled = true;
+        if (acropFormatSelect) acropFormatSelect.disabled = true;
+        acropProgressBox.style.display = 'block';
+        acropSuccessBox.style.display = 'none';
+        setAcropProgress(0, 'ফাইল পড়া হচ্ছে... (Reading file...)');
+
+        // Dedicated AudioContext for this crop only — kept separate from the
+        // main editor's audio graph, same isolation approach as the Video →
+        // Audio converter above.
+        let decodeCtx = null;
+
+        try {
+            const arrayBuffer = await acropSelectedFile.arrayBuffer();
+            setAcropProgress(20, 'অডিও ডিকোড হচ্ছে... (Decoding audio...)');
+
+            const AudioCtx = window.AudioContext || window.webkitAudioContext;
+            decodeCtx = new AudioCtx();
+
+            let audioBuffer;
+            try {
+                audioBuffer = await decodeCtx.decodeAudioData(arrayBuffer);
+            } catch (decodeErr) {
+                throw new Error('DECODE_FAILED');
+            }
+
+            setAcropProgress(40, 'নির্বাচিত অংশ কাটা হচ্ছে... (Cropping selection...)');
+
+            const sampleRate = audioBuffer.sampleRate;
+            const startFrame = Math.max(0, Math.floor(startSec * sampleRate));
+            const endFrame = Math.min(audioBuffer.length, Math.ceil(endSec * sampleRate));
+            const frameCount = Math.max(1, endFrame - startFrame);
+            const numChannels = audioBuffer.numberOfChannels;
+
+            const croppedBuffer = decodeCtx.createBuffer(numChannels, frameCount, sampleRate);
+            for (let ch = 0; ch < numChannels; ch++) {
+                const sourceData = audioBuffer.getChannelData(ch);
+                const slice = sourceData.subarray(startFrame, startFrame + frameCount);
+                croppedBuffer.copyToChannel(slice, ch);
+            }
+
+            setAcropProgress(55, format === 'mp3'
+                ? 'MP3 এনকোড হচ্ছে... (Encoding MP3...)'
+                : 'WAV তৈরি হচ্ছে... (Building WAV...)');
+
+            let blob, ext, mimeLabel;
+            if (format === 'mp3') {
+                const lamejsReady = await ensureLamejsLoaded();
+                if (!lamejsReady) throw new Error('MP3_UNAVAILABLE');
+                blob = await v2aEncodeMp3(croppedBuffer, 128, (p) => {
+                    setAcropProgress(55 + Math.round(p * 40), 'MP3 এনকোড হচ্ছে... (Encoding MP3...)');
+                });
+                ext = 'mp3';
+                mimeLabel = 'MP3';
+            } else {
+                blob = v2aAudioBufferToWavBlob(croppedBuffer);
+                ext = 'wav';
+                mimeLabel = 'WAV';
+            }
+
+            setAcropProgress(100, 'সম্পন্ন! (Complete!)');
+
+            const baseName = acropSelectedFile.name.substring(0, acropSelectedFile.name.lastIndexOf('.')) || acropSelectedFile.name;
+            if (acropLastDownloadURL) URL.revokeObjectURL(acropLastDownloadURL);
+            acropLastDownloadURL = URL.createObjectURL(blob);
+            acropDownloadLink.href = acropLastDownloadURL;
+            acropDownloadLink.download = `${baseName}_cropped.${ext}`;
+            if (acropSuccessDesc) {
+                acropSuccessDesc.innerText = `${mimeLabel} ফাইল প্রস্তুত (${acropFormatTime(startSec)} - ${acropFormatTime(endSec)}) — "${baseName}_cropped.${ext}" ডাউনলোড করুন।`;
+            }
+
+            setTimeout(() => {
+                acropProgressBox.style.display = 'none';
+                acropSuccessBox.style.display = 'block';
+            }, 300);
+        } catch (err) {
+            console.error('Audio crop failed:', err);
+            acropProgressBox.style.display = 'none';
+            if (err && err.message === 'DECODE_FAILED') {
+                alert('এই ফাইলের অডিও ডিকোড করা যায়নি। ফরম্যাট/কোডেকটি সম্ভবত এই ব্রাউজার সাপোর্ট করে না।');
+            } else if (err && err.message === 'MP3_UNAVAILABLE') {
+                alert('MP3 এনকোডার লোড করা যায়নি (ইন্টারনেট সংযোগ প্রয়োজন)। দয়া করে WAV ফরম্যাট বেছে আবার চেষ্টা করুন।');
+                if (acropMp3Option) {
+                    acropMp3Option.disabled = true;
+                    acropMp3Option.innerText = 'MP3 (লোড করা যায়নি — ইন্টারনেট সংযোগ প্রয়োজন)';
+                }
+                if (acropFormatSelect) acropFormatSelect.value = 'wav';
+            } else {
+                alert('অডিও ক্রপ করতে সমস্যা হয়েছে। ফাইলটি অন্য একটি দিয়ে আবার চেষ্টা করুন।');
+            }
+        } finally {
+            if (decodeCtx) {
+                try { decodeCtx.close(); } catch (e) { /* ignore */ }
+            }
+            acropCropBtn.disabled = false;
+            if (acropFormatSelect) acropFormatSelect.disabled = false;
         }
     }
 });
