@@ -3964,6 +3964,8 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
 
+        if (window.saveStateToHistory) window.saveStateToHistory();
+
         if (state.isAdjustingCrop) {
             const coords = getCanvasCoords(e);
             
@@ -5865,6 +5867,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     if (deleteBlurRegionBtn) {
         deleteBlurRegionBtn.addEventListener('click', () => {
+            if (window.saveStateToHistory) window.saveStateToHistory();
             state.blurRegions = state.blurRegions.filter(r => r.id !== state.selectedBlurId);
             state.selectedBlurId = null;
             renderBlurRegionList();
@@ -6171,7 +6174,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }));
     if (highlightStartInput) highlightStartInput.addEventListener('input', () => { const item = selectedHighlight(); if (item) { item.startSec = Math.max(0, parseFloat(highlightStartInput.value) || 0); item.endSec = Math.max(item.startSec + .1, item.endSec); highlightEndInput.value = item.endSec; renderHighlightList(); drawFrame(); } });
     if (highlightEndInput) highlightEndInput.addEventListener('input', () => { const item = selectedHighlight(); if (item) { item.endSec = Math.max(item.startSec + .1, parseFloat(highlightEndInput.value) || item.startSec + 1); renderHighlightList(); drawFrame(); } });
-    if (deleteHighlightBtn) deleteHighlightBtn.addEventListener('click', () => { state.highlights = state.highlights.filter(h => h.id !== state.selectedHighlightId); state.selectedHighlightId = null; highlightTimingContainer.style.display = 'none'; renderHighlightList(); drawFrame(); });
+    if (deleteHighlightBtn) deleteHighlightBtn.addEventListener('click', () => { if (window.saveStateToHistory) window.saveStateToHistory(); state.highlights = state.highlights.filter(h => h.id !== state.selectedHighlightId); state.selectedHighlightId = null; highlightTimingContainer.style.display = 'none'; renderHighlightList(); drawFrame(); });
     window.onHighlightSelected = function(id) { state.selectedHighlightId = id; renderHighlightList(); showHighlightControls(id); };
 
     // --- Text Overlay Bindings (Phase 2C) ---
@@ -6213,6 +6216,7 @@ document.addEventListener('DOMContentLoaded', () => {
             endSec: Math.max(1, state.duration || 5)
         };
 
+        if (window.saveStateToHistory) window.saveStateToHistory();
         state.textOverlays.push(newItem);
         state.selectedTextOverlayId = newItem.id;
 
@@ -6288,6 +6292,7 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     deleteTextOverlayBtn.addEventListener('click', () => {
+        if (window.saveStateToHistory) window.saveStateToHistory();
         state.textOverlays = state.textOverlays.filter(t => t.id !== state.selectedTextOverlayId);
         state.selectedTextOverlayId = null;
         renderTextOverlayList();
@@ -6605,6 +6610,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function loadBrollImage(file) {
+        if (window.saveStateToHistory) window.saveStateToHistory();
         console.log("Loading B-roll image file:", file.name, "type:", file.type, "size:", file.size);
         const img = new Image();
         const url = URL.createObjectURL(file);
@@ -6716,6 +6722,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function loadBrollVideo(file) {
+        if (window.saveStateToHistory) window.saveStateToHistory();
         console.log("Loading B-roll video file:", file.name, "type:", file.type, "size:", file.size);
         const url = URL.createObjectURL(file);
         // A hidden <video> element that we manually play/pause/seek in sync with
@@ -7337,6 +7344,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     if (deleteBrollBtn) {
         deleteBrollBtn.addEventListener('click', () => {
+            if (window.saveStateToHistory) window.saveStateToHistory();
             const removed = state.brollOverlays.find(b => b.id === state.selectedBrollId);
             if (removed && removed.imageUrl) URL.revokeObjectURL(removed.imageUrl);
             if (removed && removed.type === 'video') {
@@ -7473,6 +7481,175 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
+    // --- Undo/Redo System ---
+    state.undoStack = [];
+    state.redoStack = [];
+
+    window.saveStateToHistory = function() {
+        const snapshot = {
+            textOverlays: JSON.parse(JSON.stringify(state.textOverlays || [])),
+            highlights: JSON.parse(JSON.stringify(state.highlights || [])),
+            stickers: JSON.parse(JSON.stringify(state.stickers || [])),
+            symbolOverlays: JSON.parse(JSON.stringify(state.symbolOverlays || [])),
+            shapeOverlays: JSON.parse(JSON.stringify(state.shapeOverlays || [])),
+            blurRegions: JSON.parse(JSON.stringify(state.blurRegions || [])),
+            subtitles: JSON.parse(JSON.stringify(state.subtitles || [])),
+            logoX: state.logoX,
+            logoY: state.logoY,
+            logoSize: state.logoSize,
+            logoOpacity: state.logoOpacity,
+            brollOverlays: state.brollOverlays.map(b => {
+                const copy = {...b};
+                delete copy.imageImg;
+                delete copy.file;
+                delete copy.videoEl;
+                return copy;
+            })
+        };
+        
+        // Prevent saving duplicate history snapshots (e.g. on click selection with no edits)
+        if (state.undoStack.length > 0) {
+            const last = state.undoStack[state.undoStack.length - 1];
+            if (JSON.stringify(last) === JSON.stringify(snapshot)) {
+                return;
+            }
+        }
+        
+        if (state.undoStack.length >= 50) {
+            state.undoStack.shift();
+        }
+        state.undoStack.push(snapshot);
+        state.redoStack = [];
+    };
+
+    window.undo = function() {
+        if (state.undoStack.length === 0) return;
+        
+        const currentSnapshot = {
+            textOverlays: JSON.parse(JSON.stringify(state.textOverlays || [])),
+            highlights: JSON.parse(JSON.stringify(state.highlights || [])),
+            stickers: JSON.parse(JSON.stringify(state.stickers || [])),
+            symbolOverlays: JSON.parse(JSON.stringify(state.symbolOverlays || [])),
+            shapeOverlays: JSON.parse(JSON.stringify(state.shapeOverlays || [])),
+            blurRegions: JSON.parse(JSON.stringify(state.blurRegions || [])),
+            subtitles: JSON.parse(JSON.stringify(state.subtitles || [])),
+            logoX: state.logoX,
+            logoY: state.logoY,
+            logoSize: state.logoSize,
+            logoOpacity: state.logoOpacity,
+            brollOverlays: state.brollOverlays.map(b => {
+                const copy = {...b};
+                delete copy.imageImg;
+                delete copy.file;
+                delete copy.videoEl;
+                return copy;
+            })
+        };
+        state.redoStack.push(currentSnapshot);
+        
+        const previousSnapshot = state.undoStack.pop();
+        restoreSnapshot(previousSnapshot);
+    };
+
+    window.redo = function() {
+        if (state.redoStack.length === 0) return;
+        
+        const currentSnapshot = {
+            textOverlays: JSON.parse(JSON.stringify(state.textOverlays || [])),
+            highlights: JSON.parse(JSON.stringify(state.highlights || [])),
+            stickers: JSON.parse(JSON.stringify(state.stickers || [])),
+            symbolOverlays: JSON.parse(JSON.stringify(state.symbolOverlays || [])),
+            shapeOverlays: JSON.parse(JSON.stringify(state.shapeOverlays || [])),
+            blurRegions: JSON.parse(JSON.stringify(state.blurRegions || [])),
+            subtitles: JSON.parse(JSON.stringify(state.subtitles || [])),
+            logoX: state.logoX,
+            logoY: state.logoY,
+            logoSize: state.logoSize,
+            logoOpacity: state.logoOpacity,
+            brollOverlays: state.brollOverlays.map(b => {
+                const copy = {...b};
+                delete copy.imageImg;
+                delete copy.file;
+                delete copy.videoEl;
+                return copy;
+            })
+        };
+        state.undoStack.push(currentSnapshot);
+        
+        const nextSnapshot = state.redoStack.pop();
+        restoreSnapshot(nextSnapshot);
+    };
+
+    function restoreSnapshot(snapshot) {
+        state.textOverlays = snapshot.textOverlays;
+        state.highlights = snapshot.highlights;
+        state.stickers = snapshot.stickers;
+        state.symbolOverlays = snapshot.symbolOverlays;
+        state.shapeOverlays = snapshot.shapeOverlays;
+        state.blurRegions = snapshot.blurRegions;
+        state.subtitles = snapshot.subtitles;
+        state.logoX = snapshot.logoX;
+        state.logoY = snapshot.logoY;
+        state.logoSize = snapshot.logoSize;
+        state.logoOpacity = snapshot.logoOpacity;
+        
+        state.brollOverlays = snapshot.brollOverlays.map(b => {
+            const existing = state.brollOverlays.find(ex => ex.id === b.id);
+            if (existing) {
+                b.imageImg = existing.imageImg;
+                b.file = existing.file;
+                b.videoEl = existing.videoEl;
+                b.originalImageUrl = existing.originalImageUrl;
+                b.originalFile = existing.originalFile;
+            }
+            return b;
+        });
+        
+        drawFrame();
+        renderBrollList();
+        if (window.renderTextList) window.renderTextList();
+        if (window.renderSubtitleList) window.renderSubtitleList();
+        if (window.renderHighlightList) window.renderHighlightList();
+        if (window.renderStickerList) window.renderStickerList();
+        if (window.renderSymbolList) window.renderSymbolList();
+        if (window.renderShapeOverlayList) window.renderShapeOverlayList();
+        if (window.renderBlurRegionList) window.renderBlurRegionList();
+        
+        // Sync logo controls in UI
+        const logoSizeSlider = document.getElementById('logo-size-slider');
+        const logoSizeVal = document.getElementById('logo-size-val');
+        if (logoSizeSlider && logoSizeVal) {
+            logoSizeSlider.value = state.logoSize;
+            logoSizeVal.innerText = state.logoSize + '%';
+        }
+        const logoOpacitySlider = document.getElementById('logo-opacity-slider');
+        const logoOpacityVal = document.getElementById('logo-opacity-val');
+        if (logoOpacitySlider && logoOpacityVal) {
+            logoOpacitySlider.value = Math.round(state.logoOpacity * 100);
+            logoOpacityVal.innerText = Math.round(state.logoOpacity * 100) + '%';
+        }
+    }
+
+    document.addEventListener('keydown', (e) => {
+        const activeTag = document.activeElement ? document.activeElement.tagName.toLowerCase() : '';
+        if (activeTag === 'input' || activeTag === 'textarea' || document.activeElement.isContentEditable) {
+            return;
+        }
+
+        const isCtrl = e.ctrlKey || e.metaKey;
+        if (isCtrl && e.key.toLowerCase() === 'z') {
+            e.preventDefault();
+            if (e.shiftKey) {
+                window.redo();
+            } else {
+                window.undo();
+            }
+        } else if (isCtrl && e.key.toLowerCase() === 'y') {
+            e.preventDefault();
+            window.redo();
+        }
+    });
+
     window.onBrollSelected = function(id) {
         renderBrollList();
         showBrollTimingFor(id);
@@ -7489,6 +7666,7 @@ document.addEventListener('DOMContentLoaded', () => {
     let stickerIdCounter = 1;
 
     function addSticker(emoji) {
+        if (window.saveStateToHistory) window.saveStateToHistory();
         const newItem = {
             id: stickerIdCounter++,
             emoji: emoji,
@@ -7577,6 +7755,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     if (deleteStickerBtn) {
         deleteStickerBtn.addEventListener('click', () => {
+            if (window.saveStateToHistory) window.saveStateToHistory();
             state.stickers = state.stickers.filter(s => s.id !== state.selectedStickerId);
             state.selectedStickerId = null;
             renderStickerList();
@@ -7628,6 +7807,7 @@ document.addEventListener('DOMContentLoaded', () => {
     let symbolIdCounter = 1;
 
     function addSymbol(type) {
+        if (window.saveStateToHistory) window.saveStateToHistory();
         const start = Math.max(0, state.currentTime || 0);
         const end = Math.min(state.duration || (start + 3), start + 3);
         const newItem = {
@@ -7767,6 +7947,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     if (deleteSymbolBtn) {
         deleteSymbolBtn.addEventListener('click', () => {
+            if (window.saveStateToHistory) window.saveStateToHistory();
             state.symbolOverlays = state.symbolOverlays.filter(s => s.id !== state.selectedSymbolId);
             state.selectedSymbolId = null;
             renderSymbolList();
@@ -7817,6 +7998,7 @@ document.addEventListener('DOMContentLoaded', () => {
     let shapeOverlayIdCounter = 1;
 
     function addShapeOverlay(type) {
+        if (window.saveStateToHistory) window.saveStateToHistory();
         const start = Math.max(0, state.currentTime || 0);
         const end = Math.min(state.duration || (start + 3), start + 3);
         const newItem = {
@@ -7997,6 +8179,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     if (deleteShapeOverlayBtn) {
         deleteShapeOverlayBtn.addEventListener('click', () => {
+            if (window.saveStateToHistory) window.saveStateToHistory();
             state.shapeOverlays = state.shapeOverlays.filter(s => s.id !== state.selectedShapeOverlayId);
             state.selectedShapeOverlayId = null;
             renderShapeOverlayList();
@@ -9304,6 +9487,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const saveProjectBtn = document.getElementById('save-project-btn');
     const loadProjectBtn = document.getElementById('load-project-btn');
+    const resetEditorBtn = document.getElementById('reset-editor-btn');
     const projectFileInput = document.getElementById('project-file-input');
 
     const saveProjectModal = document.getElementById('save-project-modal');
@@ -9374,6 +9558,109 @@ document.addEventListener('DOMContentLoaded', () => {
                 reader.readAsText(file);
                 projectFileInput.value = ''; // Reset input to allow reloading same file
             }
+        });
+    }
+
+    if (resetEditorBtn) {
+        resetEditorBtn.addEventListener('click', async () => {
+            const confirmReset = confirm(
+                "আপনি কি নিশ্চিত যে আপনি এডিটরের সবকিছু মুছে একটি নতুন প্রজেক্ট শুরু করতে চান?\n" +
+                "এর ফলে বর্তমান প্রজেক্টের সকল B-roll, টেক্সট, সাবটাইটেল এবং মিউজিক মুছে যাবে।"
+            );
+            if (!confirmReset) return;
+
+            // Clear IndexedDB cache
+            if (window.clearFilesFromDB) {
+                await window.clearFilesFromDB();
+            }
+
+            // Reset state variables to defaults
+            state.duration = 0;
+            state.startTime = 0;
+            state.endTime = 0;
+            state.isPlaying = false;
+            
+            state.logoFile = null;
+            state.logoImg = null;
+            state.logoX = 0.8;
+            state.logoY = 0.1;
+            state.logoSize = 15;
+            state.logoOpacity = 1.0;
+            
+            state.videoVolume = 1.0;
+            state.voiceoverVolume = 1.0;
+            state.voiceoverBlob = null;
+            state.voiceoverUrl = null;
+            state.voiceoverRecorded = false;
+            
+            state.bgMusicTracks = [];
+            state.selectedBgMusicTrackId = null;
+            
+            state.textOverlays = [];
+            state.highlights = [];
+            state.stickers = [];
+            state.symbolOverlays = [];
+            state.shapeOverlays = [];
+            state.blurRegions = [];
+            state.subtitles = [];
+            
+            state.bannerStyle = 'none';
+            state.headerText = '';
+            state.footerText = '';
+            
+            state.tickerEnabled = false;
+            state.tickerText = '';
+            
+            state.enableProgressBar = false;
+            
+            state.filterPreset = 'normal';
+            state.brightness = 100;
+            state.contrast = 100;
+            state.saturation = 100;
+            
+            state.clips = [];
+            state.activeClipId = null;
+
+            // Clear actual HTML Video / Audio files
+            if (state.video) {
+                state.video.src = '';
+                state.video.load();
+            }
+
+            // Remove localStorage auto-saves
+            localStorage.removeItem('StudioFlowProjectSave');
+            localStorage.removeItem('StudioFlowProjectSaveTime');
+
+            // Reset UI step navigation
+            state.currentStep = 1;
+            updateNavigation();
+
+            // Hide timing containers
+            if (brollTimingContainer) brollTimingContainer.style.display = 'none';
+            const textTimingContainer = document.getElementById('text-timing-container');
+            if (textTimingContainer) textTimingContainer.style.display = 'none';
+            const highlightTimingContainer = document.getElementById('highlight-timing-container');
+            if (highlightTimingContainer) highlightTimingContainer.style.display = 'none';
+            
+            // Re-render empty lists
+            renderBrollList();
+            if (window.renderTextList) window.renderTextList();
+            if (window.renderSubtitleList) window.renderSubtitleList();
+            if (window.renderHighlightList) window.renderHighlightList();
+            
+            // Show video dropzone and hide timeline controls
+            if (videoDropzone) videoDropzone.style.display = 'block';
+            const timelineControls = document.getElementById('timeline-controls');
+            if (timelineControls) timelineControls.style.display = 'none';
+            const overlayControls = document.querySelector('.canvas-overlay-controls');
+            if (overlayControls) overlayControls.style.display = 'none';
+
+            // Clear selected video name display
+            const selectedVideoName = document.getElementById('selected-video-name');
+            if (selectedVideoName) selectedVideoName.innerText = '';
+            
+            drawFrame();
+            alert("সফলভাবে এডিটর রিসেট করা হয়েছে! আপনি এখন নতুন প্রজেক্ট শুরু করতে পারেন।");
         });
     }
 
