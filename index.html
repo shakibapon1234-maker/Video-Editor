@@ -1214,6 +1214,76 @@
                             </div>
                         </div>
 
+                        <!-- Shape + Text Overlay (Word-style banner/callout shapes with editable text) -->
+                        <div class="card mt-4">
+                            <div class="card-header">
+                                <i class="fa-solid fa-icons card-icon"></i>
+                                <h3>Shape + Text (হেডলাইন শেপ)</h3>
+                            </div>
+                            <div class="card-body">
+                                <p class="help-text">নিউজ হেডলাইন বা ক্যাপশনের জন্য একটি শেপ বাছাই করুন, তারপর তার ভেতরে নিজের টেক্সট লিখুন। প্রিভিউতে ড্র্যাগ করে অবস্থান, কোণা ধরে সাইজ, আর উপরের গোল হ্যান্ডেল ধরে রোটেট করা যাবে — Symbol এর মতোই।</p>
+
+                                <div class="symbol-grid" id="shape-overlay-grid">
+                                    <button type="button" class="symbol-btn" data-shape-overlay="ribbon" title="Ribbon Banner"><svg class="shape-overlay-icon" viewBox="0 0 100 60"><polygon points="12,8 88,8 96,30 88,52 12,52 4,30" /></svg><span class="symbol-btn-label">রিবন ব্যানার</span></button>
+                                    <button type="button" class="symbol-btn" data-shape-overlay="wave" title="Wavy Banner"><svg class="shape-overlay-icon" viewBox="0 0 100 60"><path d="M6,18 Q25,6 44,18 T82,18 L94,18 L94,46 Q75,58 56,46 T18,46 L6,46 Z" /></svg><span class="symbol-btn-label">ওয়েভি ব্যানার</span></button>
+                                    <button type="button" class="symbol-btn" data-shape-overlay="cloud" title="Thought Cloud"><svg class="shape-overlay-icon" viewBox="0 0 100 68"><path d="M25,45 Q10,45 10,32 Q10,20 22,20 Q24,10 38,10 Q52,10 55,20 Q68,18 72,28 Q84,28 84,38 Q84,45 74,45 Z" /><circle cx="20" cy="54" r="4.5" /><circle cx="11" cy="61" r="2.4" /></svg><span class="symbol-btn-label">থট ক্লাউড</span></button>
+                                    <button type="button" class="symbol-btn" data-shape-overlay="star6" title="6-Point Star"><svg class="shape-overlay-icon" viewBox="0 0 100 100"><polygon points="50,12 82.9,69 17.1,69" /><polygon points="50,88 17.1,31 82.9,31" /></svg><span class="symbol-btn-label">৬-পয়েন্ট তারা</span></button>
+                                    <button type="button" class="symbol-btn" data-shape-overlay="oval" title="Oval Callout"><svg class="shape-overlay-icon" viewBox="0 0 100 68"><ellipse cx="50" cy="26" rx="40" ry="20" /><polygon points="24,40 14,58 34,44" /></svg><span class="symbol-btn-label">ওভাল ক্যালাউট</span></button>
+                                </div>
+
+                                <div class="sticker-list mt-4" id="shape-overlay-list">
+                                    <!-- Dynamically populated list of added shape overlays -->
+                                </div>
+
+                                <div class="sticker-controls mt-3" id="shape-overlay-controls-container" style="display: none;">
+                                    <div class="control-group">
+                                        <label>Text (টেক্সট)</label>
+                                        <textarea id="shape-overlay-text" class="form-input" rows="2" placeholder="এখানে লিখুন..."></textarea>
+                                    </div>
+                                    <div class="control-group mt-3">
+                                        <label>Shape Fill Color (শেপের রং)</label>
+                                        <div class="color-picker-wrapper">
+                                            <input type="color" id="shape-overlay-fill-color" value="#4f46e5">
+                                            <span class="color-value-text" id="shape-overlay-fill-color-val">#4f46e5</span>
+                                        </div>
+                                    </div>
+                                    <div class="control-group mt-3">
+                                        <label>Text Color (টেক্সট রং)</label>
+                                        <div class="color-picker-wrapper">
+                                            <input type="color" id="shape-overlay-text-color" value="#ffffff">
+                                            <span class="color-value-text" id="shape-overlay-text-color-val">#ffffff</span>
+                                        </div>
+                                    </div>
+                                    <div class="control-group mt-3">
+                                        <label>Font Size</label>
+                                        <div class="slider-val-container">
+                                            <input type="range" id="shape-overlay-fontsize-slider" min="12" max="80" value="28">
+                                            <span id="shape-overlay-fontsize-val">28px</span>
+                                        </div>
+                                    </div>
+                                    <div class="control-group mt-3">
+                                        <label>Shape Size (% of canvas width)</label>
+                                        <div class="slider-val-container">
+                                            <input type="range" id="shape-overlay-size-slider" min="8" max="90" value="32">
+                                            <span id="shape-overlay-size-val">32%</span>
+                                        </div>
+                                    </div>
+                                    <p class="help-text mt-2">রোটেট করতে প্রিভিউতে সিলেক্ট করা শেপের উপরে থাকা গোল হ্যান্ডেলটি ড্র্যাগ করুন।</p>
+                                    <div class="control-group mt-3">
+                                        <label>Show From (সেকেন্ড)</label>
+                                        <input type="number" id="shape-overlay-start" class="form-input" min="0" step="0.1" value="0">
+                                    </div>
+                                    <div class="control-group mt-2">
+                                        <label>Show Until (সেকেন্ড)</label>
+                                        <input type="number" id="shape-overlay-end" class="form-input" min="0" step="0.1" value="3">
+                                    </div>
+                                    <button id="delete-shape-overlay-btn" class="btn-text-danger mt-2">
+                                        <i class="fa-solid fa-trash-can"></i> Remove This Shape
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+
                         <!-- Video Progress Bar -->
                         <div class="card mt-4">
                             <div class="card-header">

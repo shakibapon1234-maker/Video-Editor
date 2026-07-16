@@ -136,6 +136,20 @@ window.VideoEditor = {
     symbolRotateStartAngle: 0,
     symbolRotateStartRotation: 0,
 
+    // Shape + Text Overlays (Word-style shapes: ribbon banner, wavy banner,
+    // thought cloud, 6-point star, oval callout) — user types text on top.
+    shapeOverlays: [],
+    selectedShapeOverlayId: null,
+    isDraggingShapeOverlay: false,
+    isResizingShapeOverlay: false,
+    isRotatingShapeOverlay: false,
+    dragShapeOverlayOffsetX: 0,
+    dragShapeOverlayOffsetY: 0,
+    shapeOverlayResizeStartX: 0,
+    shapeOverlayResizeStartSize: 30,
+    shapeOverlayRotateStartAngle: 0,
+    shapeOverlayRotateStartRotation: 0,
+
     // B-roll / Topic Image Overlays (Phase 5D)
     brollOverlays: [],
     selectedBrollId: null,
@@ -3489,6 +3503,73 @@ document.addEventListener('DOMContentLoaded', () => {
             });
         }
 
+        // --- Step F2c: Draw Shape + Text Overlays (Word-style shapes: ribbon
+        // banner, wavy banner, thought cloud, 6-point star, oval callout) ---
+        // Modeled on the Symbol overlay (drag + corner resize + rotate handle),
+        // but the box is rectangular (not square) since these shapes are wide/
+        // tall, and each carries its own multi-line text drawn on top of the fill.
+        if (state.shapeOverlays && state.shapeOverlays.length > 0) {
+            const shpCurrentTime = state.currentTime;
+            state.shapeOverlays.forEach((item) => {
+                const isVisible = (state.currentStep === 3 && !state.isPlaying)
+                    ? true
+                    : (shpCurrentTime >= item.startSec && shpCurrentTime <= item.endSec);
+                if (!isVisible) return;
+
+                const box = getShapeOverlayBox(item, canvasW, canvasH);
+                const rotation = item.rotation || 0;
+
+                state.ctx.save();
+                state.ctx.translate(box.cx, box.cy);
+                state.ctx.rotate(rotation * Math.PI / 180);
+                drawShapeOverlayPath(state.ctx, item.shapeType, box.w, box.h, item.fillColor || '#4f46e5');
+                if (item.text) {
+                    drawShapeOverlayText(state.ctx, item, box.w, box.h);
+                }
+                state.ctx.restore();
+
+                // Selection outline + resize/rotate handles in Step 3 for the active shape
+                if (state.currentStep === 3 && item.id === state.selectedShapeOverlayId) {
+                    state.ctx.save();
+                    state.ctx.translate(box.cx, box.cy);
+                    state.ctx.rotate(rotation * Math.PI / 180);
+
+                    const halfW = box.w / 2;
+                    const halfH = box.h / 2;
+                    state.ctx.strokeStyle = 'rgba(79, 70, 229, 0.9)';
+                    state.ctx.lineWidth = 2;
+                    state.ctx.setLineDash([6, 4]);
+                    state.ctx.strokeRect(-halfW - 6, -halfH - 6, box.w + 12, box.h + 12);
+                    state.ctx.setLineDash([]);
+
+                    // Resize handle (bottom-right corner)
+                    state.ctx.fillStyle = '#ffffff';
+                    state.ctx.fillRect(halfW + 6 - 6, halfH + 6 - 6, 12, 12);
+                    state.ctx.strokeStyle = '#4f46e5';
+                    state.ctx.strokeRect(halfW + 6 - 6, halfH + 6 - 6, 12, 12);
+
+                    // Rotate handle (small circle above the shape, connected by a line)
+                    const handleDist = Math.max(28, Math.min(canvasW, canvasH) * 0.05);
+                    state.ctx.beginPath();
+                    state.ctx.moveTo(0, -halfH - 6);
+                    state.ctx.lineTo(0, -halfH - 6 - handleDist);
+                    state.ctx.strokeStyle = 'rgba(79, 70, 229, 0.9)';
+                    state.ctx.lineWidth = 1.5;
+                    state.ctx.stroke();
+
+                    state.ctx.beginPath();
+                    state.ctx.arc(0, -halfH - 6 - handleDist, 8, 0, Math.PI * 2);
+                    state.ctx.fillStyle = '#ffffff';
+                    state.ctx.fill();
+                    state.ctx.strokeStyle = '#4f46e5';
+                    state.ctx.lineWidth = 2;
+                    state.ctx.stroke();
+
+                    state.ctx.restore();
+                }
+            });
+        }
+
         // --- Step G: Draw Auto Subtitle (Phase 5A) ---
         if (state.subtitlesEnabled && state.subtitles && state.subtitles.length > 0) {
             const currentTime = state.currentTime;
@@ -4092,6 +4173,49 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         }
 
+        // Shape+Text rotate handle check (must come BEFORE resize/drag checks)
+        if (state.currentStep === 3 && state.selectedShapeOverlayId !== null) {
+            if (findShapeOverlayRotateHandle(coords)) {
+                const item = state.shapeOverlays.find(s => s.id === state.selectedShapeOverlayId);
+                if (item) {
+                    const box = getShapeOverlayBox(item, canvasW, canvasH);
+                    state.isRotatingShapeOverlay = true;
+                    state.shapeOverlayRotateStartAngle = Math.atan2(coords.y - box.cy, coords.x - box.cx) * 180 / Math.PI;
+                    state.shapeOverlayRotateStartRotation = item.rotation || 0;
+                    e.preventDefault();
+                    return;
+                }
+            }
+        }
+
+        // Shape+Text resize handle check (must come BEFORE drag check)
+        if (state.currentStep === 3 && state.selectedShapeOverlayId !== null) {
+            if (findShapeOverlayResizeHandle(coords)) {
+                const item = state.shapeOverlays.find(s => s.id === state.selectedShapeOverlayId);
+                if (item) {
+                    state.isResizingShapeOverlay = true;
+                    state.shapeOverlayResizeStartX = coords.x;
+                    state.shapeOverlayResizeStartSize = item.size;
+                    e.preventDefault();
+                    return;
+                }
+            }
+        }
+
+        // Shape+Text drag/select
+        if (state.shapeOverlays && state.shapeOverlays.length > 0) {
+            const shapeHit = findShapeOverlayAt(coords);
+            if (shapeHit) {
+                state.selectedShapeOverlayId = shapeHit.id;
+                state.isDraggingShapeOverlay = true;
+                state.dragShapeOverlayOffsetX = coords.x - (shapeHit.x * canvasW);
+                state.dragShapeOverlayOffsetY = coords.y - (shapeHit.y * canvasH);
+                if (window.onShapeOverlaySelected) window.onShapeOverlaySelected(shapeHit.id);
+                e.preventDefault();
+                return;
+            }
+        }
+
         // Sticker/Emoji resize handle check (Phase 4A) — must come before drag check
         if (state.currentStep === 3 && state.selectedStickerId !== null) {
             if (findStickerResizeHandle(coords)) {
@@ -4510,6 +4634,228 @@ document.addEventListener('DOMContentLoaded', () => {
                 ctx.stroke();
             }
         }
+        ctx.restore();
+    }
+
+    // --- Shape + Text Overlay geometry + hit-testing ---
+    // Unlike symbols (square), these Word-style shapes are wide/tall, so each
+    // box has an independent width and height. item.size is percent of canvas
+    // width (same convention as symbols/stickers); height is derived from a
+    // fixed aspect ratio per shape type.
+    const SHAPE_OVERLAY_ASPECT = {
+        ribbon: 0.34,
+        wave: 0.4,
+        cloud: 0.62,
+        star6: 0.92,
+        oval: 0.56
+    };
+
+    function getShapeOverlayBox(item, canvasW, canvasH) {
+        const w = canvasW * (item.size / 100);
+        const aspect = SHAPE_OVERLAY_ASPECT[item.shapeType] || 0.5;
+        const h = w * aspect;
+        return {
+            cx: item.x * canvasW,
+            cy: item.y * canvasH,
+            w,
+            h
+        };
+    }
+
+    function findShapeOverlayAt(coords) {
+        const canvasW = state.canvas.width;
+        const canvasH = state.canvas.height;
+        for (let i = state.shapeOverlays.length - 1; i >= 0; i--) {
+            const item = state.shapeOverlays[i];
+            const box = getShapeOverlayBox(item, canvasW, canvasH);
+            let testX = coords.x, testY = coords.y;
+            if (item.rotation) {
+                const local = rotatePointAround(coords.x, coords.y, box.cx, box.cy, -(item.rotation * Math.PI / 180));
+                testX = local.x; testY = local.y;
+            }
+            const halfW = box.w / 2, halfH = box.h / 2;
+            if (testX >= box.cx - halfW && testX <= box.cx + halfW &&
+                testY >= box.cy - halfH && testY <= box.cy + halfH) {
+                return item;
+            }
+        }
+        return null;
+    }
+
+    function findShapeOverlayResizeHandle(coords) {
+        if (state.selectedShapeOverlayId === null) return false;
+        const item = state.shapeOverlays.find(s => s.id === state.selectedShapeOverlayId);
+        if (!item) return false;
+
+        const canvasW = state.canvas.width;
+        const canvasH = state.canvas.height;
+        const box = getShapeOverlayBox(item, canvasW, canvasH);
+        const halfW = box.w / 2, halfH = box.h / 2;
+
+        let testX = coords.x, testY = coords.y;
+        if (item.rotation) {
+            const local = rotatePointAround(coords.x, coords.y, box.cx, box.cy, -(item.rotation * Math.PI / 180));
+            testX = local.x; testY = local.y;
+        }
+
+        const rect = state.canvas.getBoundingClientRect();
+        const w_rect = rect.width;
+        const h_rect = rect.height;
+        if (w_rect === 0 || h_rect === 0) return false;
+        const r_canvas = canvasW / canvasH;
+        const r_rect = w_rect / h_rect;
+        const w_render = (r_canvas > r_rect) ? w_rect : h_rect * r_canvas;
+        const pad = 20 * (canvasW / w_render);
+
+        const handleX = box.cx + halfW + 6;
+        const handleY = box.cy + halfH + 6;
+        return Math.abs(testX - handleX) <= pad && Math.abs(testY - handleY) <= pad;
+    }
+
+    function findShapeOverlayRotateHandle(coords) {
+        const item = state.shapeOverlays.find(s => s.id === state.selectedShapeOverlayId);
+        if (!item) return false;
+        const canvasW = state.canvas.width;
+        const canvasH = state.canvas.height;
+        const box = getShapeOverlayBox(item, canvasW, canvasH);
+        const halfH = box.h / 2;
+        const handleDist = Math.max(28, Math.min(canvasW, canvasH) * 0.05);
+        const angleRad = (item.rotation || 0) * Math.PI / 180;
+        const world = rotatePointAround(box.cx, box.cy - halfH - 6 - handleDist, box.cx, box.cy, angleRad);
+        const rect = state.canvas.getBoundingClientRect();
+        const physScale = canvasW / rect.width;
+        const hr = 16 * physScale;
+        return Math.hypot(coords.x - world.x, coords.y - world.y) < hr;
+    }
+
+    // Draws one Word-style shape (filled path only, no text) centered at the
+    // current canvas origin inside a w x h bounding box, in the given color.
+    // Caller is expected to have already translated+rotated the context.
+    function drawShapeOverlayPath(ctx, type, w, h, color) {
+        const halfW = w / 2, halfH = h / 2;
+        ctx.save();
+        ctx.fillStyle = color;
+        ctx.lineJoin = 'round';
+
+        switch (type) {
+            case 'ribbon': {
+                // Horizontal banner with chevron-notched (arrow-pointed) ends,
+                // like a classic headline/news ribbon.
+                const notch = w * 0.09;
+                ctx.beginPath();
+                ctx.moveTo(-halfW + notch, -halfH);
+                ctx.lineTo(halfW - notch, -halfH);
+                ctx.lineTo(halfW, 0);
+                ctx.lineTo(halfW - notch, halfH);
+                ctx.lineTo(-halfW + notch, halfH);
+                ctx.lineTo(-halfW, 0);
+                ctx.closePath();
+                ctx.fill();
+                break;
+            }
+            case 'wave': {
+                // Rectangle with a wavy top and bottom edge.
+                const humps = 3;
+                const amp = h * 0.09;
+                const segW = w / humps;
+                ctx.beginPath();
+                ctx.moveTo(-halfW, -halfH);
+                for (let i = 0; i < humps; i++) {
+                    const xStart = -halfW + i * segW;
+                    const xMid = xStart + segW / 2;
+                    const xEnd = xStart + segW;
+                    const cy = -halfH + ((i % 2 === 0) ? -amp : amp);
+                    ctx.quadraticCurveTo(xMid, cy, xEnd, -halfH);
+                }
+                ctx.lineTo(halfW, halfH);
+                for (let i = humps - 1; i >= 0; i--) {
+                    const xEnd = -halfW + i * segW;
+                    const xMid = xEnd + segW / 2;
+                    const xStart = xEnd + segW;
+                    const cy = halfH + ((i % 2 === 0) ? amp : -amp);
+                    ctx.quadraticCurveTo(xMid, cy, xEnd, halfH);
+                }
+                ctx.closePath();
+                ctx.fill();
+                break;
+            }
+            case 'cloud': {
+                // Thought/speech cloud: overlapping circles forming the body,
+                // plus two small trailing bubbles as the speech tail.
+                ctx.beginPath();
+                const bumps = [
+                    { cx: -halfW * 0.52, cy: -halfH * 0.02, r: halfH * 0.58 },
+                    { cx: -halfW * 0.12, cy: -halfH * 0.42, r: halfH * 0.7 },
+                    { cx: halfW * 0.28, cy: -halfH * 0.3, r: halfH * 0.64 },
+                    { cx: halfW * 0.55, cy: halfH * 0.05, r: halfH * 0.54 },
+                    { cx: halfW * 0.1, cy: halfH * 0.32, r: halfH * 0.6 },
+                    { cx: -halfW * 0.32, cy: halfH * 0.28, r: halfH * 0.52 }
+                ];
+                bumps.forEach((b) => {
+                    ctx.moveTo(b.cx + b.r, b.cy);
+                    ctx.arc(b.cx, b.cy, b.r, 0, Math.PI * 2);
+                });
+                ctx.moveTo(-halfW * 0.36 + halfH * 0.16, halfH * 0.78);
+                ctx.arc(-halfW * 0.36, halfH * 0.78, halfH * 0.16, 0, Math.PI * 2);
+                ctx.moveTo(-halfW * 0.5 + halfH * 0.08, halfH * 0.98);
+                ctx.arc(-halfW * 0.5, halfH * 0.98, halfH * 0.08, 0, Math.PI * 2);
+                ctx.fill();
+                break;
+            }
+            case 'star6': {
+                // Hexagram (6-point star): two overlapping equilateral triangles.
+                const R = Math.min(w, h) / 2 * 0.98;
+                ctx.beginPath();
+                for (let i = 0; i < 3; i++) {
+                    const a = -Math.PI / 2 + i * (2 * Math.PI / 3);
+                    const x = R * Math.cos(a), y = R * Math.sin(a);
+                    if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+                }
+                ctx.closePath();
+                for (let i = 0; i < 3; i++) {
+                    const a = Math.PI / 2 + i * (2 * Math.PI / 3);
+                    const x = R * Math.cos(a), y = R * Math.sin(a);
+                    if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+                }
+                ctx.closePath();
+                ctx.fill();
+                break;
+            }
+            case 'oval': {
+                // Oval callout with a small pointed tail (speech-bubble style).
+                ctx.beginPath();
+                ctx.ellipse(0, -halfH * 0.08, halfW * 0.94, halfH * 0.82, 0, 0, Math.PI * 2);
+                ctx.closePath();
+                ctx.fill();
+                ctx.beginPath();
+                ctx.moveTo(-halfW * 0.22, halfH * 0.5);
+                ctx.lineTo(-halfW * 0.4, halfH * 1.02);
+                ctx.lineTo(halfW * 0.02, halfH * 0.62);
+                ctx.closePath();
+                ctx.fill();
+                break;
+            }
+            default: {
+                ctx.beginPath();
+                ctx.rect(-halfW, -halfH, w, h);
+                ctx.fill();
+            }
+        }
+        ctx.restore();
+    }
+
+    // Draws the user's text, word-wrapped and centered, on top of a shape
+    // overlay's fill. Caller has already translated+rotated the context.
+    function drawShapeOverlayText(ctx, item, w, h) {
+        const fontSize = item.fontSize || 28;
+        ctx.save();
+        ctx.font = `bold ${fontSize}px "${item.font || 'Hind Siliguri'}", "Plus Jakarta Sans", sans-serif`;
+        ctx.fillStyle = item.textColor || '#ffffff';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        const maxWidth = w * 0.7;
+        const lineHeight = fontSize * 1.22;
+        drawWrappedText(ctx, item.text, 0, (item.shapeType === 'oval' ? -h * 0.06 : 0), maxWidth, lineHeight);
         ctx.restore();
     }
 
@@ -4992,6 +5338,68 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
 
+        // Shape+Text rotate drag
+        if (state.isRotatingShapeOverlay && state.selectedShapeOverlayId !== null) {
+            const coords = getCanvasCoords(e);
+            const canvasW = state.canvas.width;
+            const canvasH = state.canvas.height;
+            const item = state.shapeOverlays.find(s => s.id === state.selectedShapeOverlayId);
+            if (item) {
+                const box = getShapeOverlayBox(item, canvasW, canvasH);
+                const currentAngle = Math.atan2(coords.y - box.cy, coords.x - box.cx) * 180 / Math.PI;
+                const delta = currentAngle - state.shapeOverlayRotateStartAngle;
+                let newRotation = state.shapeOverlayRotateStartRotation + delta;
+                if (!e.shiftKey) {
+                    const snapped = Math.round(newRotation / 15) * 15;
+                    if (Math.abs(newRotation - snapped) < 4) newRotation = snapped;
+                }
+                item.rotation = ((newRotation % 360) + 360) % 360;
+                drawFrame();
+            }
+            e.preventDefault();
+            return;
+        }
+
+        // Shape+Text resize (drag the corner handle to scale uniformly)
+        if (state.isResizingShapeOverlay && state.selectedShapeOverlayId !== null) {
+            const coords = getCanvasCoords(e);
+            const canvasW = state.canvas.width;
+            const item = state.shapeOverlays.find(s => s.id === state.selectedShapeOverlayId);
+            if (item) {
+                const deltaX = coords.x - state.shapeOverlayResizeStartX;
+                const scaleFactor = (deltaX / canvasW) * 100;
+                let newSize = state.shapeOverlayResizeStartSize + scaleFactor;
+                newSize = Math.max(8, Math.min(90, newSize));
+                item.size = newSize;
+
+                if (shapeOverlaySizeSlider) shapeOverlaySizeSlider.value = Math.round(newSize);
+                if (shapeOverlaySizeVal) shapeOverlaySizeVal.innerText = Math.round(newSize) + '%';
+
+                drawFrame();
+            }
+            e.preventDefault();
+            return;
+        }
+
+        // Shape+Text drag (move anywhere on the canvas)
+        if (state.isDraggingShapeOverlay && state.selectedShapeOverlayId !== null) {
+            const coords = getCanvasCoords(e);
+            const canvasW = state.canvas.width;
+            const canvasH = state.canvas.height;
+            const item = state.shapeOverlays.find(s => s.id === state.selectedShapeOverlayId);
+            if (item) {
+                let newX = (coords.x - state.dragShapeOverlayOffsetX) / canvasW;
+                let newY = (coords.y - state.dragShapeOverlayOffsetY) / canvasH;
+                newX = Math.max(0, Math.min(1, newX));
+                newY = Math.max(0, Math.min(1, newY));
+                item.x = newX;
+                item.y = newY;
+                drawFrame();
+            }
+            e.preventDefault();
+            return;
+        }
+
         // Sticker/Emoji resize (Phase 4A)
         if (state.isResizingSticker && state.selectedStickerId !== null) {
             const coords = getCanvasCoords(e);
@@ -5164,6 +5572,9 @@ document.addEventListener('DOMContentLoaded', () => {
         state.isDraggingSymbol = false;
         state.isResizingSymbol = false;
         state.isRotatingSymbol = false;
+        state.isDraggingShapeOverlay = false;
+        state.isResizingShapeOverlay = false;
+        state.isRotatingShapeOverlay = false;
     }
 
     // --- Video Crop Tool Bindings ---
@@ -6787,6 +7198,236 @@ document.addEventListener('DOMContentLoaded', () => {
         showSymbolControlsFor(id);
     };
 
+    // --- Shape + Text Overlay Bindings (ribbon banner, wavy banner, thought
+    // cloud, 6-point star, oval callout — Word-style shapes with editable text) ---
+    const shapeOverlayGrid = document.getElementById('shape-overlay-grid');
+    const shapeOverlayListEl = document.getElementById('shape-overlay-list');
+    const shapeOverlayControlsContainer = document.getElementById('shape-overlay-controls-container');
+    const shapeOverlayTextInput = document.getElementById('shape-overlay-text');
+    const shapeOverlayFillColorInput = document.getElementById('shape-overlay-fill-color');
+    const shapeOverlayFillColorVal = document.getElementById('shape-overlay-fill-color-val');
+    const shapeOverlayTextColorInput = document.getElementById('shape-overlay-text-color');
+    const shapeOverlayTextColorVal = document.getElementById('shape-overlay-text-color-val');
+    const shapeOverlayFontSizeSlider = document.getElementById('shape-overlay-fontsize-slider');
+    const shapeOverlayFontSizeVal = document.getElementById('shape-overlay-fontsize-val');
+    const shapeOverlaySizeSlider = document.getElementById('shape-overlay-size-slider');
+    const shapeOverlaySizeVal = document.getElementById('shape-overlay-size-val');
+    const shapeOverlayStartInput = document.getElementById('shape-overlay-start');
+    const shapeOverlayEndInput = document.getElementById('shape-overlay-end');
+    const deleteShapeOverlayBtn = document.getElementById('delete-shape-overlay-btn');
+
+    const SHAPE_OVERLAY_LABELS = {
+        ribbon: '▤',
+        wave: '≈',
+        cloud: '☁',
+        star6: '✶',
+        oval: '⬭'
+    };
+    const SHAPE_OVERLAY_NAMES_BN = {
+        ribbon: 'রিবন ব্যানার',
+        wave: 'ওয়েভি ব্যানার',
+        cloud: 'থট ক্লাউড',
+        star6: '৬-পয়েন্ট তারা',
+        oval: 'ওভাল ক্যালাউট'
+    };
+
+    let shapeOverlayIdCounter = 1;
+
+    function addShapeOverlay(type) {
+        const start = Math.max(0, state.currentTime || 0);
+        const end = Math.min(state.duration || (start + 3), start + 3);
+        const newItem = {
+            id: shapeOverlayIdCounter++,
+            shapeType: type,
+            text: 'আপনার টেক্সট',
+            x: 0.5,
+            y: 0.5,
+            size: 32, // percent of canvas width
+            rotation: 0,
+            fillColor: '#4f46e5',
+            textColor: '#ffffff',
+            fontSize: 28,
+            font: 'Hind Siliguri',
+            startSec: start,
+            endSec: end > start ? end : start + 3
+        };
+        state.shapeOverlays.push(newItem);
+        state.selectedShapeOverlayId = newItem.id;
+
+        renderShapeOverlayList();
+        showShapeOverlayControlsFor(newItem.id);
+        drawFrame();
+    }
+
+    if (shapeOverlayGrid) {
+        shapeOverlayGrid.querySelectorAll('.symbol-btn').forEach((btn) => {
+            btn.addEventListener('click', () => {
+                const type = btn.getAttribute('data-shape-overlay');
+                if (type) addShapeOverlay(type);
+            });
+        });
+    }
+
+    function renderShapeOverlayList() {
+        if (!shapeOverlayListEl) return;
+        shapeOverlayListEl.innerHTML = '';
+        state.shapeOverlays.forEach((item) => {
+            const row = document.createElement('div');
+            row.className = 'sticker-list-item' + (item.id === state.selectedShapeOverlayId ? ' active' : '');
+            row.style.display = 'flex';
+            row.style.alignItems = 'center';
+            row.style.justifyContent = 'space-between';
+            row.style.padding = '8px 12px';
+            row.style.borderRadius = '6px';
+            row.style.marginBottom = '6px';
+            row.style.cursor = 'pointer';
+            row.style.background = item.id === state.selectedShapeOverlayId ? 'rgba(79, 70, 229, 0.12)' : 'rgba(255,255,255,0.04)';
+            row.style.border = item.id === state.selectedShapeOverlayId ? '1px solid var(--primary)' : '1px solid transparent';
+
+            const label = document.createElement('span');
+            const shortText = (item.text || '').slice(0, 14) + ((item.text || '').length > 14 ? '…' : '');
+            label.innerText = (SHAPE_OVERLAY_LABELS[item.shapeType] || '▭') + '  ' + shortText;
+            label.style.fontSize = '13px';
+
+            const timeLabel = document.createElement('span');
+            timeLabel.innerText = `${item.startSec.toFixed(1)}s–${item.endSec.toFixed(1)}s`;
+            timeLabel.style.fontSize = '11px';
+            timeLabel.style.opacity = '0.6';
+
+            row.appendChild(label);
+            row.appendChild(timeLabel);
+
+            row.addEventListener('click', () => {
+                state.selectedShapeOverlayId = item.id;
+                renderShapeOverlayList();
+                showShapeOverlayControlsFor(item.id);
+                drawFrame();
+            });
+
+            shapeOverlayListEl.appendChild(row);
+        });
+    }
+
+    function showShapeOverlayControlsFor(id) {
+        const item = state.shapeOverlays.find(s => s.id === id);
+        if (!item) {
+            if (shapeOverlayControlsContainer) shapeOverlayControlsContainer.style.display = 'none';
+            return;
+        }
+        if (shapeOverlayControlsContainer) shapeOverlayControlsContainer.style.display = 'block';
+        if (shapeOverlayTextInput) shapeOverlayTextInput.value = item.text;
+        if (shapeOverlayFillColorInput) shapeOverlayFillColorInput.value = item.fillColor;
+        if (shapeOverlayFillColorVal) shapeOverlayFillColorVal.innerText = item.fillColor;
+        if (shapeOverlayTextColorInput) shapeOverlayTextColorInput.value = item.textColor;
+        if (shapeOverlayTextColorVal) shapeOverlayTextColorVal.innerText = item.textColor;
+        if (shapeOverlayFontSizeSlider) shapeOverlayFontSizeSlider.value = item.fontSize;
+        if (shapeOverlayFontSizeVal) shapeOverlayFontSizeVal.innerText = item.fontSize + 'px';
+        if (shapeOverlaySizeSlider) shapeOverlaySizeSlider.value = Math.round(item.size);
+        if (shapeOverlaySizeVal) shapeOverlaySizeVal.innerText = Math.round(item.size) + '%';
+        if (shapeOverlayStartInput) shapeOverlayStartInput.value = item.startSec.toFixed(1);
+        if (shapeOverlayEndInput) shapeOverlayEndInput.value = item.endSec.toFixed(1);
+    }
+
+    if (shapeOverlayTextInput) {
+        shapeOverlayTextInput.addEventListener('input', (e) => {
+            const item = state.shapeOverlays.find(s => s.id === state.selectedShapeOverlayId);
+            if (item) {
+                item.text = e.target.value;
+                renderShapeOverlayList();
+                drawFrame();
+            }
+        });
+    }
+
+    if (shapeOverlayFillColorInput) {
+        shapeOverlayFillColorInput.addEventListener('input', (e) => {
+            const item = state.shapeOverlays.find(s => s.id === state.selectedShapeOverlayId);
+            if (item) {
+                item.fillColor = e.target.value;
+                if (shapeOverlayFillColorVal) shapeOverlayFillColorVal.innerText = item.fillColor;
+                drawFrame();
+            }
+        });
+    }
+
+    if (shapeOverlayTextColorInput) {
+        shapeOverlayTextColorInput.addEventListener('input', (e) => {
+            const item = state.shapeOverlays.find(s => s.id === state.selectedShapeOverlayId);
+            if (item) {
+                item.textColor = e.target.value;
+                if (shapeOverlayTextColorVal) shapeOverlayTextColorVal.innerText = item.textColor;
+                drawFrame();
+            }
+        });
+    }
+
+    if (shapeOverlayFontSizeSlider) {
+        shapeOverlayFontSizeSlider.addEventListener('input', (e) => {
+            const item = state.shapeOverlays.find(s => s.id === state.selectedShapeOverlayId);
+            if (item) {
+                item.fontSize = parseInt(e.target.value);
+                if (shapeOverlayFontSizeVal) shapeOverlayFontSizeVal.innerText = item.fontSize + 'px';
+                drawFrame();
+            }
+        });
+    }
+
+    if (shapeOverlaySizeSlider) {
+        shapeOverlaySizeSlider.addEventListener('input', (e) => {
+            const item = state.shapeOverlays.find(s => s.id === state.selectedShapeOverlayId);
+            if (item) {
+                item.size = parseFloat(e.target.value);
+                if (shapeOverlaySizeVal) shapeOverlaySizeVal.innerText = Math.round(item.size) + '%';
+                drawFrame();
+            }
+        });
+    }
+
+    if (shapeOverlayStartInput) {
+        shapeOverlayStartInput.addEventListener('change', (e) => {
+            const item = state.shapeOverlays.find(s => s.id === state.selectedShapeOverlayId);
+            if (item) {
+                let v = Math.max(0, parseFloat(e.target.value) || 0);
+                if (v >= item.endSec) v = Math.max(0, item.endSec - 0.1);
+                item.startSec = v;
+                e.target.value = v.toFixed(1);
+                renderShapeOverlayList();
+                drawFrame();
+            }
+        });
+    }
+
+    if (shapeOverlayEndInput) {
+        shapeOverlayEndInput.addEventListener('change', (e) => {
+            const item = state.shapeOverlays.find(s => s.id === state.selectedShapeOverlayId);
+            if (item) {
+                let v = parseFloat(e.target.value) || (item.startSec + 1);
+                if (state.duration) v = Math.min(v, state.duration);
+                if (v <= item.startSec) v = item.startSec + 0.1;
+                item.endSec = v;
+                e.target.value = v.toFixed(1);
+                renderShapeOverlayList();
+                drawFrame();
+            }
+        });
+    }
+
+    if (deleteShapeOverlayBtn) {
+        deleteShapeOverlayBtn.addEventListener('click', () => {
+            state.shapeOverlays = state.shapeOverlays.filter(s => s.id !== state.selectedShapeOverlayId);
+            state.selectedShapeOverlayId = null;
+            renderShapeOverlayList();
+            showShapeOverlayControlsFor(null);
+            drawFrame();
+        });
+    }
+
+    // Allows canvas-click selection (from handlePointerDown) to sync the side-panel list & controls
+    window.onShapeOverlaySelected = function(id) {
+        renderShapeOverlayList();
+        showShapeOverlayControlsFor(id);
+    };
+
     // --- Thumbnail Generator (Phase 5B) ---
     const generateThumbnailBtn = document.getElementById('generate-thumbnail-btn');
     const thumbnailPreviewBox = document.getElementById('thumbnail-preview-box');
@@ -7363,6 +8004,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 highlights: state.highlights,
                 stickers: state.stickers,
                 symbolOverlays: state.symbolOverlays,
+                shapeOverlays: state.shapeOverlays,
                 blurRegions: state.blurRegions,
                 subtitles: state.subtitles
             };
@@ -7680,6 +8322,7 @@ document.addEventListener('DOMContentLoaded', () => {
             state.highlights = data.highlights || [];
             state.stickers = data.stickers || [];
             state.symbolOverlays = data.symbolOverlays || [];
+            state.shapeOverlays = data.shapeOverlays || [];
             state.brollOverlays = data.brollOverlays || [];
             state.blurRegions = data.blurRegions || [];
             state.subtitles = data.subtitles || [];
@@ -7801,6 +8444,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 highlights: state.highlights,
                 stickers: state.stickers,
                 symbolOverlays: state.symbolOverlays,
+                shapeOverlays: state.shapeOverlays,
                 brollOverlays: state.brollOverlays.map(b => {
                     const copy = {...b};
                     delete copy.imageImg;
@@ -8011,6 +8655,7 @@ document.addEventListener('DOMContentLoaded', () => {
             state.highlights = savedData.highlights || [];
             state.stickers = savedData.stickers || [];
             state.symbolOverlays = savedData.symbolOverlays || [];
+            state.shapeOverlays = savedData.shapeOverlays || [];
             state.brollOverlays = savedData.brollOverlays || [];
             state.blurRegions = savedData.blurRegions || [];
             state.subtitles = savedData.subtitles || [];

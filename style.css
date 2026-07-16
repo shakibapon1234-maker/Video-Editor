@@ -1665,6 +1665,12 @@ input:checked + .slider:before {
 .symbol-grid .symbol-btn:active {
     transform: scale(0.9);
 }
+.symbol-grid .symbol-btn .shape-overlay-icon {
+    width: 30px;
+    height: auto;
+    display: block;
+    fill: currentColor;
+}
 
 /* Segmented Toggle (e.g. B-roll Content Type: Image / Text) */
 .segmented-toggle {

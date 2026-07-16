@@ -259,7 +259,7 @@ document.addEventListener('DOMContentLoaded', () => {
         let audioBlob = null;
         if (window.renderAudioOffline) {
             try {
-                const audioBuffer = await window.renderAudioOffline(grandTotalDuration);
+                const audioBuffer = await window.renderAudioOffline(grandTotalFrames / 30);
                 if (audioBuffer) {
                     audioBlob = v2aAudioBufferToWavBlob(audioBuffer);
                 }

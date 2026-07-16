@@ -132,6 +132,21 @@ function compileVideo(ws, tempDir, filename, totalFrames) {
     console.log(`Compiling video at ${compiledPath}`);
     ws.send(JSON.stringify({ type: 'progress', step: 'compiling', current: 0, total: 100 }));
 
+    // Duplicate the last frame to pad the image sequence by exactly 1 frame.
+    // This ensures FFmpeg has a frame at the boundary timestamp (e.g. 215.0s),
+    // allowing the output video stream to have the exact requested duration
+    // instead of stopping at the last frame's presentation timestamp (214.967s).
+    const lastFramePath = path.join(tempDir, `frame_${String(totalFrames).padStart(5, '0')}.jpg`);
+    const extraFramePath = path.join(tempDir, `frame_${String(totalFrames + 1).padStart(5, '0')}.jpg`);
+    if (fs.existsSync(lastFramePath)) {
+        try {
+            fs.copyFileSync(lastFramePath, extraFramePath);
+            console.log(`Padded video sequence: duplicated frame ${totalFrames} to ${totalFrames + 1}`);
+        } catch (e) {
+            console.error('Failed to duplicate frame for padding:', e);
+        }
+    }
+
     const hasAudio = fs.existsSync(audioPath);
     const inputPattern = path.join(tempDir, 'frame_%05d.jpg').replace(/\\/g, '/');
     // JPEG image sequences do not contain a reliable frame-rate marker.  FFmpeg
@@ -149,20 +164,23 @@ function compileVideo(ws, tempDir, filename, totalFrames) {
         command = command.input(audioPath.replace(/\\/g, '/'));
     }
 
+    // Set output duration explicitly to prevent FFmpeg from truncating the last second early
+    const duration = totalFrames / 30 + 0.05;
+
     command
         .outputOptions([
             '-c:v libx264',
             '-pix_fmt yuv420p',
             '-preset medium',
-            '-crf 23'
+            '-crf 23',
+            `-t ${duration}`
         ])
         .output(compiledPath.replace(/\\/g, '/'));
 
     if (hasAudio) {
         command = command.outputOptions([
             '-c:a aac',
-            '-b:a 192k',
-            '-shortest' // trim audio to match video duration
+            '-b:a 192k'
         ]);
     }
 
