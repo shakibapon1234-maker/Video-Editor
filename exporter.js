@@ -462,7 +462,15 @@ document.addEventListener('DOMContentLoaded', () => {
 
                             const p = new Promise(async (r) => {
                                 const blob = await new Promise(res => canvas.toBlob(res, 'image/jpeg', 0.85));
-                                if (blob && !finished && !exportCancelled) ws.send(blob);
+                                // NOTE: do not gate this on `!finished`. This frame has already
+                                // been counted toward clipFrameIndex/frameIndex below, so it is
+                                // owed to the output — finish() sets `finished = true` synchronously
+                                // and then just awaits this same promise; checking `!finished` here
+                                // raced against that flag and silently dropped whatever frame(s)
+                                // were still mid-encode when the clip's target frame count was
+                                // reached, which is exactly what caused the exported video to
+                                // consistently come out ~1s short.
+                                if (blob && !exportCancelled) ws.send(blob);
                                 r();
                             });
                             activeBlobPromises.push(p);
@@ -489,7 +497,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
                         const p = new Promise(async (r) => {
                             const blob = await new Promise(res => canvas.toBlob(res, 'image/jpeg', 0.85));
-                            if (blob && !finished && !exportCancelled) ws.send(blob);
+                            // See note above in the overshoot loop — must not check
+                            // `!finished` here, or the frame that triggers finish()
+                            // (almost always the clip's LAST frame) gets dropped.
+                            if (blob && !exportCancelled) ws.send(blob);
                             r();
                         });
                         activeBlobPromises.push(p);
