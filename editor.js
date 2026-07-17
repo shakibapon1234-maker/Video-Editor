@@ -9131,7 +9131,14 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // --- Save project state into IndexedDB and LocalStorage ---
+    // Guard flag: while a "New Project" reset is in progress, no autosave
+    // (already scheduled, or newly triggered by the reset button's own click
+    // events) is allowed to write the old project back to storage. See the
+    // reset-editor-btn handler further down for why this is needed.
+    let editorIsResetting = false;
+
     async function saveProjectToBrowserStorage() {
+        if (editorIsResetting) return;
         try {
             const db = await getDB();
             
@@ -9570,11 +9577,20 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // --- New Project / Reset Editor (Bug fix) ---
     // Previously this button had no event listener at all, so clicking it did
-    // nothing -- the old video, clips, overlays, and settings stayed exactly
-    // as they were. The state was also being auto-saved to IndexedDB +
-    // localStorage on every input/change, and auto-restored on page load
-    // (see restoreProjectFromBrowserStorage below), so even a plain page
-    // refresh would silently bring the old project right back.
+    // nothing. That was fixed once already, but a second, subtler bug
+    // remained: clicking the button fires a global `mouseup`, which the
+    // debounced autosave listener (triggerAutoSave, ~1.2s below) picks up and
+    // schedules a save. The confirm() dialog blocks the main thread while the
+    // person decides, so by the time they click OK that timer is already
+    // overdue. Our own `await clearFilesFromDB()` then yields the thread --
+    // and that's exactly the moment the overdue autosave fires, writing the
+    // OLD in-memory project (still full of clips/B-roll/etc.) straight back
+    // into localStorage/IndexedDB and undoing the clear before the reload
+    // even happens. That's why the video looked cleared (its blob lost the
+    // race) but the B-roll list (pure metadata, no file needed) came back.
+    // Fix: cancel the pending timer and set editorIsResetting=true *before*
+    // doing any of the async clearing, so nothing can resurrect the project
+    // in between.
     const resetEditorBtn = document.getElementById('reset-editor-btn');
     if (resetEditorBtn) {
         resetEditorBtn.addEventListener('click', async () => {
@@ -9582,6 +9598,11 @@ document.addEventListener('DOMContentLoaded', () => {
             if (!confirm(confirmMsg)) return;
 
             resetEditorBtn.disabled = true;
+            editorIsResetting = true;
+            if (autoSaveTimeout) {
+                clearTimeout(autoSaveTimeout);
+                autoSaveTimeout = null;
+            }
             try {
                 // Clear both persistence layers so the reload below can't
                 // auto-restore the project we're trying to throw away.
