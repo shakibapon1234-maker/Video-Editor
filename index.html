@@ -1026,14 +1026,24 @@
                                 </div>
 
                                 <div class="broll-timing mt-3" id="broll-timing-container" style="display: none;">
-                                    <p class="help-text">এই আইটেমটি ভিডিওর কোন সময় থেকে কোন সময় পর্যন্ত দেখাবে তা নির্ধারণ করুন।</p>
+                                    <p class="help-text">এই আইটেমটি ভিডিওর কোন সময় থেকে কোন সময় পর্যন্ত দেখাবে তা নির্ধারণ করুন। প্লেহেড আইকনে ক্লিক করলে বর্তমান প্লেহেড সময় বসে যাবে।</p>
                                     <div class="control-group">
                                         <label>Show From (সেকেন্ড)</label>
-                                        <input type="number" id="broll-start" class="form-input" min="0" step="0.1" value="0">
+                                        <div class="input-with-playhead-btn">
+                                            <input type="number" id="broll-start" class="form-input" min="0" step="0.1" value="0">
+                                            <button type="button" id="broll-start-from-playhead" class="btn btn-outline playhead-capture-btn" title="বর্তমান প্লেহেড সময় বসান (Use current playhead time)">
+                                                <i class="fa-solid fa-location-crosshairs"></i>
+                                            </button>
+                                        </div>
                                     </div>
                                     <div class="control-group mt-2">
                                         <label>Show Until (সেকেন্ড)</label>
-                                        <input type="number" id="broll-end" class="form-input" min="0" step="0.1" value="3">
+                                        <div class="input-with-playhead-btn">
+                                            <input type="number" id="broll-end" class="form-input" min="0" step="0.1" value="3">
+                                            <button type="button" id="broll-end-from-playhead" class="btn btn-outline playhead-capture-btn" title="বর্তমান প্লেহেড সময় বসান (Use current playhead time)">
+                                                <i class="fa-solid fa-location-crosshairs"></i>
+                                            </button>
+                                        </div>
                                     </div>
 
                                     <!-- Edit Text B-roll Section (Phase 5D) -->

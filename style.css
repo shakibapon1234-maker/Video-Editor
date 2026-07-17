@@ -383,6 +383,26 @@ body {
     min-width: 58px;
     text-align: center;
     flex-shrink: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    line-height: 1.25;
+}
+
+/* Top line: mm:ss.s (unchanged look/behavior) */
+.seek-time-label .time-main {
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+/* Bottom line: the same moment as raw total seconds, so B-roll "Show From /
+   Show Until" values (which take plain seconds) can be read off directly
+   instead of converting mm:ss by hand. */
+.seek-time-label .time-secs {
+    font-size: 10px;
+    color: var(--text-secondary);
+    opacity: 0.7;
+    margin-top: 1px;
 }
 
 .seek-slider-wrapper {
@@ -1186,6 +1206,30 @@ input:checked + .slider:before {
 .voice-type-field .form-input {
     min-width: 0;
     flex: 1 1 auto;
+}
+
+/* B-roll "Show From / Show Until" fields: number input + a small button that
+   grabs the current playhead time, so seconds don't have to be typed by hand
+   after eyeballing mm:ss on the timeline. */
+.input-with-playhead-btn {
+    display: flex;
+    gap: 8px;
+    align-items: stretch;
+}
+
+.input-with-playhead-btn .form-input {
+    min-width: 0;
+    flex: 1 1 auto;
+}
+
+.playhead-capture-btn {
+    flex-shrink: 0;
+    width: 40px;
+    padding: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 14px;
 }
 
 .voice-language-select {

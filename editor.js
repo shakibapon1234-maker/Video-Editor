@@ -1469,8 +1469,8 @@ document.addEventListener('DOMContentLoaded', () => {
             seekSlider.value = current;
         }
         if (seekFill) seekFill.style.width = Math.max(0, Math.min(100, percent)) + '%';
-        if (seekCurrentTimeEl) seekCurrentTimeEl.innerText = formatTime(current);
-        if (seekTotalTimeEl) seekTotalTimeEl.innerText = formatTime(total);
+        if (seekCurrentTimeEl) seekCurrentTimeEl.innerHTML = formatTimeDual(current);
+        if (seekTotalTimeEl) seekTotalTimeEl.innerHTML = formatTimeDual(total);
     }
     
     // Trim Slider Interaction
@@ -1774,7 +1774,7 @@ document.addEventListener('DOMContentLoaded', () => {
             if (seekFill && state.duration) {
                 seekFill.style.width = Math.max(0, Math.min(100, (val / state.duration) * 100)) + '%';
             }
-            if (seekCurrentTimeEl) seekCurrentTimeEl.innerText = formatTime(val);
+            if (seekCurrentTimeEl) seekCurrentTimeEl.innerHTML = formatTimeDual(val);
 
             const activeClip = state.clips.find(c => c.id === state.activeClipId);
             if (activeClip && activeClip.type === 'image') {
@@ -2521,6 +2521,132 @@ document.addEventListener('DOMContentLoaded', () => {
                 return { x: 0, y: (canvasH - by) }; // 'bottom' (also the fallback default)
             };
 
+            // Splits text into visual "grapheme clusters" rather than raw UTF-16
+            // code units. This matters a lot for Bengali (and other complex-script)
+            // captions: a naive character split can sever a base consonant from its
+            // matra/combining mark, so animating "characters" independently would
+            // visibly break conjuncts apart. Intl.Segmenter (widely supported in
+            // Chromium-based browsers, which is what this app targets) clusters
+            // combining marks with their base correctly; we fall back to a plain
+            // code-point split only if it's unavailable.
+            const splitGraphemes = (text) => {
+                try {
+                    if (typeof Intl !== 'undefined' && Intl.Segmenter) {
+                        const seg = new Intl.Segmenter(undefined, { granularity: 'grapheme' });
+                        return Array.from(seg.segment(text), (s) => s.segment);
+                    }
+                } catch (e) { /* fall through to the simple split below */ }
+                return Array.from(text);
+            };
+
+            // Kinetic Typography (v2.8) — per-letter / per-word text entrance & exit
+            // styles, layered in addition to the existing whole-box styles (zoom,
+            // slide, rotate-in, etc. still work on text too, they just move the
+            // whole text box as one rigid unit). These instead animate the
+            // individual characters or words that make up the caption. Only called
+            // while tIn < animDur (entry) or tOut < animDur (exit); once settled,
+            // the caller falls back to a normal single centered fillText draw, same
+            // as every other style.
+            //
+            //   letter-rotate-settle — each letter spins in (alternating left/right)
+            //     and scales up, staggered left-to-right, landing flat.
+            //   letter-converge      — splits the caption into a left/right half at
+            //     the nearest word boundary (or, for a single word, at the middle
+            //     grapheme so a conjunct is never cut) and slides both halves in
+            //     from off-canvas on opposite sides so they arrive together.
+            //   letter-cascade-fade  — each letter fades in and settles down from
+            //     slightly above, staggered — a soft "rising captions" look.
+            //   word-pop-stagger     — each whole word pops in from 0 scale with a
+            //     bouncy overshoot, one word after another.
+            //
+            // Exit plays the same stagger in reverse order (last unit in is first
+            // unit out) so the text visually "unwinds" the way it wound in.
+            const drawKineticText = (ctx, item, style, text, cx, cy, tIn, tOut, animDur, strokeOnFill) => {
+                const isEntry = tIn < animDur;
+                const localT = isEntry ? tIn : Math.max(0, tOut);
+                const isExit = !isEntry;
+
+                ctx.textBaseline = 'middle';
+
+                if (style === 'letter-converge') {
+                    let splitIdx = text.indexOf(' ', Math.floor(text.length / 2));
+                    if (splitIdx === -1) splitIdx = text.lastIndexOf(' ', Math.floor(text.length / 2));
+                    let leftText, rightText;
+                    if (splitIdx === -1) {
+                        const graph = splitGraphemes(text);
+                        const mid = Math.ceil(graph.length / 2);
+                        leftText = graph.slice(0, mid).join('');
+                        rightText = graph.slice(mid).join('');
+                    } else {
+                        leftText = text.slice(0, splitIdx);
+                        rightText = text.slice(splitIdx); // keeps the boundary space with the right half
+                    }
+                    ctx.textAlign = 'left';
+                    const leftW = ctx.measureText(leftText).width;
+                    const rightW = ctx.measureText(rightText).width;
+                    const startX = cx - (leftW + rightW) / 2;
+
+                    const p = easeOutBackOvershoot(Math.max(0, Math.min(1, localT / animDur)));
+                    const clearDist = Math.max(canvasW, canvasH) * 0.7;
+                    const leftOffset = -(1 - p) * clearDist;
+                    const rightOffset = (1 - p) * clearDist;
+                    const fadeP = Math.max(0.1, Math.min(1, localT / (animDur * 0.6)));
+
+                    ctx.save();
+                    ctx.globalAlpha *= fadeP;
+                    if (strokeOnFill) {
+                        ctx.strokeText(leftText, startX + leftOffset, cy);
+                        ctx.strokeText(rightText, startX + leftW + rightOffset, cy);
+                    }
+                    ctx.fillText(leftText, startX + leftOffset, cy);
+                    ctx.fillText(rightText, startX + leftW + rightOffset, cy);
+                    ctx.restore();
+                    return;
+                }
+
+                const byWord = (style === 'word-pop-stagger');
+                const units = byWord ? text.split(/(\s+)/).filter((u) => u.length) : splitGraphemes(text);
+                const n = units.length;
+                if (n === 0) return;
+                const widths = units.map((u) => ctx.measureText(u).width);
+                const totalW = widths.reduce((a, b) => a + b, 0);
+
+                const perUnitDur = Math.max(0.12, animDur * (byWord ? 0.6 : 0.5));
+                const staggerSpan = Math.max(0, animDur - perUnitDur);
+
+                ctx.textAlign = 'left';
+                let x = cx - totalW / 2;
+                for (let i = 0; i < n; i++) {
+                    const w = widths[i];
+                    const order = isExit ? (n - 1 - i) : i; // exit unwinds in reverse order
+                    const delay = n > 1 ? (order / (n - 1)) * staggerSpan : 0;
+                    const p = Math.max(0, Math.min(1, (localT - delay) / perUnitDur));
+                    const eased = (style === 'word-pop-stagger') ? easeOutBackOvershoot(p) : brollEaseOut(p);
+                    const bouncy = (style === 'letter-rotate-settle') ? easeOutBackOvershoot(p) : eased;
+
+                    ctx.save();
+                    const ux = x + w / 2, uy = cy;
+                    ctx.globalAlpha *= Math.max(0.001, eased);
+                    ctx.translate(ux, uy);
+                    if (style === 'letter-rotate-settle') {
+                        ctx.rotate((1 - bouncy) * (Math.PI / 2) * (i % 2 === 0 ? 1 : -1));
+                        const sc = 0.3 + 0.7 * bouncy;
+                        ctx.scale(sc, sc);
+                    } else if (style === 'letter-cascade-fade') {
+                        ctx.translate(0, (1 - eased) * (item.fontSize * 0.5));
+                    } else if (style === 'word-pop-stagger') {
+                        const sc = 0.3 + 0.7 * bouncy;
+                        ctx.scale(sc, sc);
+                    }
+                    ctx.translate(-ux, -uy);
+                    if (strokeOnFill) ctx.strokeText(units[i], x, uy);
+                    ctx.fillText(units[i], x, uy);
+                    ctx.restore();
+
+                    x += w;
+                }
+            };
+
             state.brollOverlays.forEach((item) => {
                 if (item.type !== 'text' && !item.imageImg) return;
 
@@ -2870,6 +2996,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     let renderText = item.text;
                     let typewriterActive = false;
                     let cursorX = cx, cursorTop = cy, cursorBottom = cy;
+                    const kineticTextStyles = ['letter-rotate-settle', 'letter-converge', 'letter-cascade-fade', 'word-pop-stagger'];
                     if (style === 'typewriter' && brollAnimActive && tIn < animDur) {
                         typewriterActive = true;
                         const fullWidth = state.ctx.measureText(item.text).width;
@@ -2886,6 +3013,15 @@ document.addEventListener('DOMContentLoaded', () => {
                         cursorX = leftX + state.ctx.measureText(renderText).width + Math.max(2, item.fontSize * 0.04);
                         cursorTop = cy - item.fontSize * 0.42;
                         cursorBottom = cy + item.fontSize * 0.42;
+                    } else if (kineticTextStyles.includes(style) && brollAnimActive && (tIn < animDur || tOut < animDur)) {
+                        // Kinetic Typography: per-letter/word entrance & exit. Only takes
+                        // over while actually entering/exiting; once settled this falls
+                        // through to the plain centered draw below, same as every other style.
+                        if (item.mode === 'fullscreen') {
+                            state.ctx.lineWidth = Math.max(2, item.fontSize * 0.08);
+                            state.ctx.strokeStyle = 'rgba(0,0,0,0.55)';
+                        }
+                        drawKineticText(state.ctx, item, style, item.text, cx, cy, tIn, tOut, animDur, item.mode === 'fullscreen');
                     } else {
                         state.ctx.textAlign = 'center';
                         if (item.mode === 'fullscreen') {
@@ -3963,8 +4099,6 @@ document.addEventListener('DOMContentLoaded', () => {
             e.preventDefault();
             return;
         }
-
-        if (window.saveStateToHistory) window.saveStateToHistory();
 
         if (state.isAdjustingCrop) {
             const coords = getCanvasCoords(e);
@@ -5867,7 +6001,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
     if (deleteBlurRegionBtn) {
         deleteBlurRegionBtn.addEventListener('click', () => {
-            if (window.saveStateToHistory) window.saveStateToHistory();
             state.blurRegions = state.blurRegions.filter(r => r.id !== state.selectedBlurId);
             state.selectedBlurId = null;
             renderBlurRegionList();
@@ -6174,7 +6307,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }));
     if (highlightStartInput) highlightStartInput.addEventListener('input', () => { const item = selectedHighlight(); if (item) { item.startSec = Math.max(0, parseFloat(highlightStartInput.value) || 0); item.endSec = Math.max(item.startSec + .1, item.endSec); highlightEndInput.value = item.endSec; renderHighlightList(); drawFrame(); } });
     if (highlightEndInput) highlightEndInput.addEventListener('input', () => { const item = selectedHighlight(); if (item) { item.endSec = Math.max(item.startSec + .1, parseFloat(highlightEndInput.value) || item.startSec + 1); renderHighlightList(); drawFrame(); } });
-    if (deleteHighlightBtn) deleteHighlightBtn.addEventListener('click', () => { if (window.saveStateToHistory) window.saveStateToHistory(); state.highlights = state.highlights.filter(h => h.id !== state.selectedHighlightId); state.selectedHighlightId = null; highlightTimingContainer.style.display = 'none'; renderHighlightList(); drawFrame(); });
+    if (deleteHighlightBtn) deleteHighlightBtn.addEventListener('click', () => { state.highlights = state.highlights.filter(h => h.id !== state.selectedHighlightId); state.selectedHighlightId = null; highlightTimingContainer.style.display = 'none'; renderHighlightList(); drawFrame(); });
     window.onHighlightSelected = function(id) { state.selectedHighlightId = id; renderHighlightList(); showHighlightControls(id); };
 
     // --- Text Overlay Bindings (Phase 2C) ---
@@ -6216,7 +6349,6 @@ document.addEventListener('DOMContentLoaded', () => {
             endSec: Math.max(1, state.duration || 5)
         };
 
-        if (window.saveStateToHistory) window.saveStateToHistory();
         state.textOverlays.push(newItem);
         state.selectedTextOverlayId = newItem.id;
 
@@ -6292,7 +6424,6 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     deleteTextOverlayBtn.addEventListener('click', () => {
-        if (window.saveStateToHistory) window.saveStateToHistory();
         state.textOverlays = state.textOverlays.filter(t => t.id !== state.selectedTextOverlayId);
         state.selectedTextOverlayId = null;
         renderTextOverlayList();
@@ -6527,12 +6658,22 @@ document.addEventListener('DOMContentLoaded', () => {
         { value: 'thinking-character', label: 'Thinking Character (🤔 চিন্তা করার বাবল)' },
         { value: 'arrow-point', label: 'Arrow Point-in (তীর চিহ্ন দেখাবে)' },
         { value: 'highlight-sweep', label: 'Highlight Marker Sweep (মার্কার দিয়ে হাইলাইট)' },
-        { value: 'typewriter', label: 'Typewriter Reveal (টাইপরাইটারের মতো লেখা হবে)' },
+        { value: 'typewriter', label: 'Typewriter Reveal (টাইপরাইটারের মতো লেখা হবে)', textOnly: true },
         { value: 'magnifier-zoom', label: 'Magnifying Glass Zoom (🔍 ম্যাগনিফায়ার আইকন)' },
         { value: 'comparison-slide', label: 'Comparison Slide (Before/After স্লাইডার)' },
         { value: 'question-bounce', label: 'Question Mark Bounce (❓ লাফিয়ে আসবে)' },
         { value: 'confetti-pop', label: 'Confetti Pop (রঙিন কনফেত্তি ছড়িয়ে পড়বে)' },
         { value: 'heart-burst', label: 'Heart Burst (❤️ হার্ট ছড়িয়ে পড়বে)' },
+
+        // Kinetic Typography (v2.8) — per-letter/per-word text entrances. These
+        // only make sense for Text B-roll (each style animates the individual
+        // characters/words instead of the whole box as one rigid unit), so
+        // they're flagged textOnly and filtered out of the dropdown for image
+        // and video B-roll.
+        { value: 'letter-rotate-settle', label: '✍️ অক্ষর ঘুরে ঘুরে বসবে (Letter Spin & Settle)', textOnly: true },
+        { value: 'letter-converge', label: '🤝 দুই পাশ থেকে এসে মিলবে (Two-Side Converge)', textOnly: true },
+        { value: 'letter-cascade-fade', label: '✨ একটার পর একটা অক্ষর ভেসে উঠবে (Letter Cascade Fade)', textOnly: true },
+        { value: 'word-pop-stagger', label: '🔤 শব্দ ধরে ধরে পপ করে আসবে (Word-by-Word Pop)', textOnly: true },
         
         // Wings Fly Custom Presets (Style + Direction + Sound Combinations)
         { value: 'preset-wings-intro', label: 'Wings Intro Banner (বাম দিক থেকে স্লাইড ও সুইশ শব্দ)' },
@@ -6545,9 +6686,16 @@ document.addEventListener('DOMContentLoaded', () => {
         { value: 'preset-arrow-whoosh', label: 'Arrow Point + Whoosh (তীর চিহ্ন ও সুইশ শব্দ)' }
     ];
 
-    function populateBrollAnimStyleOptions() {
+    function populateBrollAnimStyleOptions(itemType) {
         if (!brollAnimStyleSelect) return;
-        brollAnimStyleSelect.innerHTML = BROLL_ANIM_STYLES.map(o => `<option value="${o.value}">${o.label}</option>`).join('');
+        // 'textOnly' styles (Typewriter + the kinetic per-letter/word entrances)
+        // animate actual characters, so they're meaningless for an image/video
+        // box — hide them there instead of leaving a confusing option that
+        // silently does nothing when picked.
+        const list = (itemType === 'text')
+            ? BROLL_ANIM_STYLES
+            : BROLL_ANIM_STYLES.filter(o => !o.textOnly);
+        brollAnimStyleSelect.innerHTML = list.map(o => `<option value="${o.value}">${o.label}</option>`).join('');
     }
 
     // Shows/hides the entry/exit direction pickers depending on whether the
@@ -6610,7 +6758,6 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function loadBrollImage(file) {
-        if (window.saveStateToHistory) window.saveStateToHistory();
         console.log("Loading B-roll image file:", file.name, "type:", file.type, "size:", file.size);
         const img = new Image();
         const url = URL.createObjectURL(file);
@@ -6722,7 +6869,6 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function loadBrollVideo(file) {
-        if (window.saveStateToHistory) window.saveStateToHistory();
         console.log("Loading B-roll video file:", file.name, "type:", file.type, "size:", file.size);
         const url = URL.createObjectURL(file);
         // A hidden <video> element that we manually play/pause/seek in sync with
@@ -7064,7 +7210,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         // Sync the animation/direction/speed/sound controls to this item
-        populateBrollAnimStyleOptions(item.mode);
+        populateBrollAnimStyleOptions(item.type);
         const defaultStyle = item.mode === 'pip' ? 'slide-pop' : 'zoom';
         if (brollAnimStyleSelect) brollAnimStyleSelect.value = getBrollPresetValue(item) || defaultStyle;
         if (brollEntryDirSelect) brollEntryDirSelect.value = item.entryDirection || 'bottom';
@@ -7299,6 +7445,28 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
+    // "Use current playhead time" buttons for the Show From / Show Until
+    // fields -- reuses the existing input listeners above (clamping,
+    // item.startSec/endSec assignment, renderBrollList) by just writing the
+    // value and dispatching a real 'input' event, instead of duplicating
+    // that logic here.
+    const brollStartFromPlayheadBtn = document.getElementById('broll-start-from-playhead');
+    const brollEndFromPlayheadBtn = document.getElementById('broll-end-from-playhead');
+
+    function setBrollTimeFromPlayhead(inputEl) {
+        if (!inputEl) return;
+        const current = (state.currentTime || 0).toFixed(1);
+        inputEl.value = current;
+        inputEl.dispatchEvent(new Event('input', { bubbles: true }));
+    }
+
+    if (brollStartFromPlayheadBtn) {
+        brollStartFromPlayheadBtn.addEventListener('click', () => setBrollTimeFromPlayhead(brollStartInput));
+    }
+    if (brollEndFromPlayheadBtn) {
+        brollEndFromPlayheadBtn.addEventListener('click', () => setBrollTimeFromPlayhead(brollEndInput));
+    }
+
     if (brollModeSelect) {
         brollModeSelect.addEventListener('change', (e) => {
             const item = state.brollOverlays.find(b => b.id === state.selectedBrollId);
@@ -7323,7 +7491,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 // that mode's more natural-feeling default when toggling, so it doesn't
                 // suddenly look like nothing changed.
                 item.animationStyle = item.mode === 'pip' ? 'slide-pop' : 'zoom';
-                populateBrollAnimStyleOptions();
+                populateBrollAnimStyleOptions(item.type);
                 if (brollAnimStyleSelect) brollAnimStyleSelect.value = item.animationStyle;
                 updateBrollDirectionRowsVisibility(item.animationStyle);
                 drawFrame();
@@ -7344,7 +7512,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
     if (deleteBrollBtn) {
         deleteBrollBtn.addEventListener('click', () => {
-            if (window.saveStateToHistory) window.saveStateToHistory();
             const removed = state.brollOverlays.find(b => b.id === state.selectedBrollId);
             if (removed && removed.imageUrl) URL.revokeObjectURL(removed.imageUrl);
             if (removed && removed.type === 'video') {
@@ -7481,175 +7648,6 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    // --- Undo/Redo System ---
-    state.undoStack = [];
-    state.redoStack = [];
-
-    window.saveStateToHistory = function() {
-        const snapshot = {
-            textOverlays: JSON.parse(JSON.stringify(state.textOverlays || [])),
-            highlights: JSON.parse(JSON.stringify(state.highlights || [])),
-            stickers: JSON.parse(JSON.stringify(state.stickers || [])),
-            symbolOverlays: JSON.parse(JSON.stringify(state.symbolOverlays || [])),
-            shapeOverlays: JSON.parse(JSON.stringify(state.shapeOverlays || [])),
-            blurRegions: JSON.parse(JSON.stringify(state.blurRegions || [])),
-            subtitles: JSON.parse(JSON.stringify(state.subtitles || [])),
-            logoX: state.logoX,
-            logoY: state.logoY,
-            logoSize: state.logoSize,
-            logoOpacity: state.logoOpacity,
-            brollOverlays: state.brollOverlays.map(b => {
-                const copy = {...b};
-                delete copy.imageImg;
-                delete copy.file;
-                delete copy.videoEl;
-                return copy;
-            })
-        };
-        
-        // Prevent saving duplicate history snapshots (e.g. on click selection with no edits)
-        if (state.undoStack.length > 0) {
-            const last = state.undoStack[state.undoStack.length - 1];
-            if (JSON.stringify(last) === JSON.stringify(snapshot)) {
-                return;
-            }
-        }
-        
-        if (state.undoStack.length >= 50) {
-            state.undoStack.shift();
-        }
-        state.undoStack.push(snapshot);
-        state.redoStack = [];
-    };
-
-    window.undo = function() {
-        if (state.undoStack.length === 0) return;
-        
-        const currentSnapshot = {
-            textOverlays: JSON.parse(JSON.stringify(state.textOverlays || [])),
-            highlights: JSON.parse(JSON.stringify(state.highlights || [])),
-            stickers: JSON.parse(JSON.stringify(state.stickers || [])),
-            symbolOverlays: JSON.parse(JSON.stringify(state.symbolOverlays || [])),
-            shapeOverlays: JSON.parse(JSON.stringify(state.shapeOverlays || [])),
-            blurRegions: JSON.parse(JSON.stringify(state.blurRegions || [])),
-            subtitles: JSON.parse(JSON.stringify(state.subtitles || [])),
-            logoX: state.logoX,
-            logoY: state.logoY,
-            logoSize: state.logoSize,
-            logoOpacity: state.logoOpacity,
-            brollOverlays: state.brollOverlays.map(b => {
-                const copy = {...b};
-                delete copy.imageImg;
-                delete copy.file;
-                delete copy.videoEl;
-                return copy;
-            })
-        };
-        state.redoStack.push(currentSnapshot);
-        
-        const previousSnapshot = state.undoStack.pop();
-        restoreSnapshot(previousSnapshot);
-    };
-
-    window.redo = function() {
-        if (state.redoStack.length === 0) return;
-        
-        const currentSnapshot = {
-            textOverlays: JSON.parse(JSON.stringify(state.textOverlays || [])),
-            highlights: JSON.parse(JSON.stringify(state.highlights || [])),
-            stickers: JSON.parse(JSON.stringify(state.stickers || [])),
-            symbolOverlays: JSON.parse(JSON.stringify(state.symbolOverlays || [])),
-            shapeOverlays: JSON.parse(JSON.stringify(state.shapeOverlays || [])),
-            blurRegions: JSON.parse(JSON.stringify(state.blurRegions || [])),
-            subtitles: JSON.parse(JSON.stringify(state.subtitles || [])),
-            logoX: state.logoX,
-            logoY: state.logoY,
-            logoSize: state.logoSize,
-            logoOpacity: state.logoOpacity,
-            brollOverlays: state.brollOverlays.map(b => {
-                const copy = {...b};
-                delete copy.imageImg;
-                delete copy.file;
-                delete copy.videoEl;
-                return copy;
-            })
-        };
-        state.undoStack.push(currentSnapshot);
-        
-        const nextSnapshot = state.redoStack.pop();
-        restoreSnapshot(nextSnapshot);
-    };
-
-    function restoreSnapshot(snapshot) {
-        state.textOverlays = snapshot.textOverlays;
-        state.highlights = snapshot.highlights;
-        state.stickers = snapshot.stickers;
-        state.symbolOverlays = snapshot.symbolOverlays;
-        state.shapeOverlays = snapshot.shapeOverlays;
-        state.blurRegions = snapshot.blurRegions;
-        state.subtitles = snapshot.subtitles;
-        state.logoX = snapshot.logoX;
-        state.logoY = snapshot.logoY;
-        state.logoSize = snapshot.logoSize;
-        state.logoOpacity = snapshot.logoOpacity;
-        
-        state.brollOverlays = snapshot.brollOverlays.map(b => {
-            const existing = state.brollOverlays.find(ex => ex.id === b.id);
-            if (existing) {
-                b.imageImg = existing.imageImg;
-                b.file = existing.file;
-                b.videoEl = existing.videoEl;
-                b.originalImageUrl = existing.originalImageUrl;
-                b.originalFile = existing.originalFile;
-            }
-            return b;
-        });
-        
-        drawFrame();
-        renderBrollList();
-        if (window.renderTextList) window.renderTextList();
-        if (window.renderSubtitleList) window.renderSubtitleList();
-        if (window.renderHighlightList) window.renderHighlightList();
-        if (window.renderStickerList) window.renderStickerList();
-        if (window.renderSymbolList) window.renderSymbolList();
-        if (window.renderShapeOverlayList) window.renderShapeOverlayList();
-        if (window.renderBlurRegionList) window.renderBlurRegionList();
-        
-        // Sync logo controls in UI
-        const logoSizeSlider = document.getElementById('logo-size-slider');
-        const logoSizeVal = document.getElementById('logo-size-val');
-        if (logoSizeSlider && logoSizeVal) {
-            logoSizeSlider.value = state.logoSize;
-            logoSizeVal.innerText = state.logoSize + '%';
-        }
-        const logoOpacitySlider = document.getElementById('logo-opacity-slider');
-        const logoOpacityVal = document.getElementById('logo-opacity-val');
-        if (logoOpacitySlider && logoOpacityVal) {
-            logoOpacitySlider.value = Math.round(state.logoOpacity * 100);
-            logoOpacityVal.innerText = Math.round(state.logoOpacity * 100) + '%';
-        }
-    }
-
-    document.addEventListener('keydown', (e) => {
-        const activeTag = document.activeElement ? document.activeElement.tagName.toLowerCase() : '';
-        if (activeTag === 'input' || activeTag === 'textarea' || document.activeElement.isContentEditable) {
-            return;
-        }
-
-        const isCtrl = e.ctrlKey || e.metaKey;
-        if (isCtrl && e.key.toLowerCase() === 'z') {
-            e.preventDefault();
-            if (e.shiftKey) {
-                window.redo();
-            } else {
-                window.undo();
-            }
-        } else if (isCtrl && e.key.toLowerCase() === 'y') {
-            e.preventDefault();
-            window.redo();
-        }
-    });
-
     window.onBrollSelected = function(id) {
         renderBrollList();
         showBrollTimingFor(id);
@@ -7666,7 +7664,6 @@ document.addEventListener('DOMContentLoaded', () => {
     let stickerIdCounter = 1;
 
     function addSticker(emoji) {
-        if (window.saveStateToHistory) window.saveStateToHistory();
         const newItem = {
             id: stickerIdCounter++,
             emoji: emoji,
@@ -7755,7 +7752,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
     if (deleteStickerBtn) {
         deleteStickerBtn.addEventListener('click', () => {
-            if (window.saveStateToHistory) window.saveStateToHistory();
             state.stickers = state.stickers.filter(s => s.id !== state.selectedStickerId);
             state.selectedStickerId = null;
             renderStickerList();
@@ -7807,7 +7803,6 @@ document.addEventListener('DOMContentLoaded', () => {
     let symbolIdCounter = 1;
 
     function addSymbol(type) {
-        if (window.saveStateToHistory) window.saveStateToHistory();
         const start = Math.max(0, state.currentTime || 0);
         const end = Math.min(state.duration || (start + 3), start + 3);
         const newItem = {
@@ -7947,7 +7942,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
     if (deleteSymbolBtn) {
         deleteSymbolBtn.addEventListener('click', () => {
-            if (window.saveStateToHistory) window.saveStateToHistory();
             state.symbolOverlays = state.symbolOverlays.filter(s => s.id !== state.selectedSymbolId);
             state.selectedSymbolId = null;
             renderSymbolList();
@@ -7998,7 +7992,6 @@ document.addEventListener('DOMContentLoaded', () => {
     let shapeOverlayIdCounter = 1;
 
     function addShapeOverlay(type) {
-        if (window.saveStateToHistory) window.saveStateToHistory();
         const start = Math.max(0, state.currentTime || 0);
         const end = Math.min(state.duration || (start + 3), start + 3);
         const newItem = {
@@ -8179,7 +8172,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
     if (deleteShapeOverlayBtn) {
         deleteShapeOverlayBtn.addEventListener('click', () => {
-            if (window.saveStateToHistory) window.saveStateToHistory();
             state.shapeOverlays = state.shapeOverlays.filter(s => s.id !== state.selectedShapeOverlayId);
             state.selectedShapeOverlayId = null;
             renderShapeOverlayList();
@@ -8308,6 +8300,15 @@ document.addEventListener('DOMContentLoaded', () => {
         const paddedMins = mins < 10 ? '0' + mins : mins;
         const paddedSecs = parseFloat(secs) < 10 ? '0' + secs : secs;
         return `${paddedMins}:${paddedSecs}`;
+    }
+
+    // Two-line time readout: mm:ss.s on top (as before), and the same moment
+    // as a plain total-seconds number underneath -- e.g. B-roll "Show From /
+    // Show Until" fields take raw seconds, so this saves manually converting
+    // "01:23.4" into "83.4" by hand every time.
+    function formatTimeDual(seconds) {
+        const safeSeconds = isFinite(seconds) ? Math.max(0, seconds) : 0;
+        return `<span class="time-main">${formatTime(safeSeconds)}</span><span class="time-secs">${safeSeconds.toFixed(1)}s</span>`;
     }
     
     function parseTimeString(timeStr) {
@@ -9487,7 +9488,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const saveProjectBtn = document.getElementById('save-project-btn');
     const loadProjectBtn = document.getElementById('load-project-btn');
-    const resetEditorBtn = document.getElementById('reset-editor-btn');
     const projectFileInput = document.getElementById('project-file-input');
 
     const saveProjectModal = document.getElementById('save-project-modal');
@@ -9561,113 +9561,43 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    if (resetEditorBtn) {
-        resetEditorBtn.addEventListener('click', async () => {
-            const confirmReset = confirm(
-                "আপনি কি নিশ্চিত যে আপনি এডিটরের সবকিছু মুছে একটি নতুন প্রজেক্ট শুরু করতে চান?\n" +
-                "এর ফলে বর্তমান প্রজেক্টের সকল B-roll, টেক্সট, সাবটাইটেল এবং মিউজিক মুছে যাবে।"
-            );
-            if (!confirmReset) return;
-
-            // Clear IndexedDB cache
-            if (window.clearFilesFromDB) {
-                await window.clearFilesFromDB();
-            }
-
-            // Reset state variables to defaults
-            state.duration = 0;
-            state.startTime = 0;
-            state.endTime = 0;
-            state.isPlaying = false;
-            
-            state.logoFile = null;
-            state.logoImg = null;
-            state.logoX = 0.8;
-            state.logoY = 0.1;
-            state.logoSize = 15;
-            state.logoOpacity = 1.0;
-            
-            state.videoVolume = 1.0;
-            state.voiceoverVolume = 1.0;
-            state.voiceoverBlob = null;
-            state.voiceoverUrl = null;
-            state.voiceoverRecorded = false;
-            
-            state.bgMusicTracks = [];
-            state.selectedBgMusicTrackId = null;
-            
-            state.textOverlays = [];
-            state.highlights = [];
-            state.stickers = [];
-            state.symbolOverlays = [];
-            state.shapeOverlays = [];
-            state.blurRegions = [];
-            state.subtitles = [];
-            
-            state.bannerStyle = 'none';
-            state.headerText = '';
-            state.footerText = '';
-            
-            state.tickerEnabled = false;
-            state.tickerText = '';
-            
-            state.enableProgressBar = false;
-            
-            state.filterPreset = 'normal';
-            state.brightness = 100;
-            state.contrast = 100;
-            state.saturation = 100;
-            
-            state.clips = [];
-            state.activeClipId = null;
-
-            // Clear actual HTML Video / Audio files
-            if (state.video) {
-                state.video.src = '';
-                state.video.load();
-            }
-
-            // Remove localStorage auto-saves
-            localStorage.removeItem('StudioFlowProjectSave');
-            localStorage.removeItem('StudioFlowProjectSaveTime');
-
-            // Reset UI step navigation
-            state.currentStep = 1;
-            updateNavigation();
-
-            // Hide timing containers
-            if (brollTimingContainer) brollTimingContainer.style.display = 'none';
-            const textTimingContainer = document.getElementById('text-timing-container');
-            if (textTimingContainer) textTimingContainer.style.display = 'none';
-            const highlightTimingContainer = document.getElementById('highlight-timing-container');
-            if (highlightTimingContainer) highlightTimingContainer.style.display = 'none';
-            
-            // Re-render empty lists
-            renderBrollList();
-            if (window.renderTextList) window.renderTextList();
-            if (window.renderSubtitleList) window.renderSubtitleList();
-            if (window.renderHighlightList) window.renderHighlightList();
-            
-            // Show video dropzone and hide timeline controls
-            if (videoDropzone) videoDropzone.style.display = 'block';
-            const timelineControls = document.getElementById('timeline-controls');
-            if (timelineControls) timelineControls.style.display = 'none';
-            const overlayControls = document.querySelector('.canvas-overlay-controls');
-            if (overlayControls) overlayControls.style.display = 'none';
-
-            // Clear selected video name display
-            const selectedVideoName = document.getElementById('selected-video-name');
-            if (selectedVideoName) selectedVideoName.innerText = '';
-            
-            drawFrame();
-            alert("সফলভাবে এডিটর রিসেট করা হয়েছে! আপনি এখন নতুন প্রজেক্ট শুরু করতে পারেন।");
-        });
-    }
-
     if (relinkModalCancel && relinkerModal) {
         relinkModalCancel.addEventListener('click', () => {
             relinkerModal.style.display = 'none';
             pendingImportData = null;
+        });
+    }
+
+    // --- New Project / Reset Editor (Bug fix) ---
+    // Previously this button had no event listener at all, so clicking it did
+    // nothing -- the old video, clips, overlays, and settings stayed exactly
+    // as they were. The state was also being auto-saved to IndexedDB +
+    // localStorage on every input/change, and auto-restored on page load
+    // (see restoreProjectFromBrowserStorage below), so even a plain page
+    // refresh would silently bring the old project right back.
+    const resetEditorBtn = document.getElementById('reset-editor-btn');
+    if (resetEditorBtn) {
+        resetEditorBtn.addEventListener('click', async () => {
+            const confirmMsg = 'আপনি কি নিশ্চিত যে নতুন প্রজেক্ট শুরু করতে চান?\n\nবর্তমান ভিডিও, ক্লিপ, ওভারলে এবং সব সেটিংস মুছে যাবে এবং এই কাজটি আর ফেরানো যাবে না।';
+            if (!confirm(confirmMsg)) return;
+
+            resetEditorBtn.disabled = true;
+            try {
+                // Clear both persistence layers so the reload below can't
+                // auto-restore the project we're trying to throw away.
+                localStorage.removeItem('studio_flow_project_settings');
+                await clearFilesFromDB();
+            } catch (e) {
+                console.error('Failed to clear saved project before reset:', e);
+            } finally {
+                // A full reload (rather than manually resetting the `state`
+                // object field-by-field) guarantees every in-memory value --
+                // canvas, video element, timeline, undo history, and every
+                // property added across all the feature phases -- goes back
+                // to its true default, with no risk of missing one and
+                // leaving stale data behind.
+                window.location.reload();
+            }
         });
     }
 
