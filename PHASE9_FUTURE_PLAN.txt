@@ -400,3 +400,25 @@ implement করা হবে, যেমনটা এতদিন করা হ�
 =====================================================
  তৈরি করা হয়েছে: পরবর্তী প্ল্যানিং সেশনের জন্য রেফারেন্স ডকুমেন্ট
 =====================================================
+
+=====================================================
+ PHASE 9 — COMPLETION STATUS (সর্বশেষ আপডেট: 2026-07-18)
+=====================================================
+
+নিচের ফিচারগুলো phase9.js মডিউলের মাধ্যমে implement করা হয়েছে
+(editor.js/exporter.js/index.html-এর সাথে ইন্টিগ্রেট করে):
+
+  [9-1] Split/Razor Tool           [DONE] - editor.js (splitClipBtn)
+  [9-2] Undo/Redo History Panel     [DONE] - phase9.js (history panel + delegated change capture)
+  [9-3] Clip Speed Control          [DONE] - phase9.js (clip-speed-slider, export অনুসরণ করে)
+  [9-4] SRT/VTT Subtitle Export     [DONE] - phase9.js (exportSubtitles + index.html buttons)
+  [9-5] Transitions (Crossfade)     [DONE] - phase9.js + exporter.js (Clip-to-Clip addendum)
+  [9-6] Multi-Aspect Batch Export   [DONE] - phase9.js (runMultiAspectExport) + exporter.js
+  [9-7] Ken Burns / Auto Zoom-Pan   [DONE] - phase9.js (image clip only)
+  [9-8] Video-in-Video PIP          [DONE] - editor.js (B-roll video mode)
+  [9-11] Freeze Frame               [DONE] - editor.js (freezeFrameBtn)
+  [9-12] Chroma Key (green screen)  [DONE] - phase9.js (chroma-key-toggle)
+
+অবশিষ্ট (পরে করা যেতে পারে):
+  [9-9] Text-to-Speech Voiceover    - ঐচ্ছিক/experimental (browser TTS, bn-BD সীমিত)
+  [9-10] Free Music Library          - static asset বান্ডেল করলে হালকা

@@ -1059,6 +1059,30 @@ input:checked + .slider:before {
 }
 
 .btn-sm {
+
+.multi-aspect-options {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px 12px;
+    margin-top: 8px;
+}
+
+.multi-aspect-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 13px;
+    color: var(--text-secondary);
+    cursor: pointer;
+}
+
+.multi-aspect-item input {
+    width: 16px;
+    height: 16px;
+    accent-color: var(--primary);
+    cursor: pointer;
+}
+
     padding: 6px 12px;
     font-size: 11px;
 }

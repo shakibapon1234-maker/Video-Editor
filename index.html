@@ -76,6 +76,20 @@
                     <p id="current-step-subtitle">Start by uploading your video clip and branding logo</p>
                 </div>
                 <div class="header-actions">
+                    <div class="history-controls" style="display: flex; align-items: center; gap: 4px; margin-right: 8px;">
+                        <button id="undo-btn" class="btn btn-outline btn-sm" type="button" title="Undo (Ctrl+Z)" disabled>
+                            <i class="fa-solid fa-rotate-left"></i>
+                        </button>
+                        <button id="redo-btn" class="btn btn-outline btn-sm" type="button" title="Redo (Ctrl+Y)" disabled>
+                            <i class="fa-solid fa-rotate-right"></i>
+                        </button>
+                        <div class="history-panel-wrap" style="position: relative;">
+                            <button id="history-panel-toggle" class="btn btn-outline btn-sm" type="button" title="History list">
+                                <i class="fa-solid fa-clock-rotate-left"></i>
+                            </button>
+                            <ul id="history-panel-list" class="history-panel-dropdown" style="display: none; position: absolute; top: 100%; right: 0; min-width: 200px; max-height: 240px; overflow-y: auto; background: var(--card-bg, #1e293b); border: 1px solid var(--border-color, #334155); border-radius: 8px; padding: 8px; margin-top: 4px; z-index: 100; list-style: none; font-size: 12px;"></ul>
+                        </div>
+                    </div>
                     <button id="save-project-btn" class="btn btn-outline" data-tooltip="প্রজেক্ট ফাইল সংরক্ষণ করুন (Save Project)">
                         <i class="fa-solid fa-floppy-disk"></i> Save Project
                     </button>
@@ -468,6 +482,130 @@
                                     <div class="slider-val-container">
                                         <input type="range" id="intro-transition-duration" min="0.5" max="3.0" value="1.0" step="0.1">
                                         <span id="intro-transition-duration-val">1.0s</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Phase 9: Clip Transition (between clips) -->
+                        <div class="card mt-4">
+                            <div class="card-header">
+                                <i class="fa-solid fa-shuffle card-icon"></i>
+                                <h3>Clip Transition (পরবর্তী ক্লিপে যাওয়ার সময়)</h3>
+                            </div>
+                            <div class="card-body">
+                                <p class="help-text">এক ক্লিপ শেষ হওয়ার সময় পরের ক্লিপে smooth transition। একাধিক ক্লিপ থাকলে কাজ করে।</p>
+                                <div class="control-group">
+                                    <label for="clip-transition-type">Transition Style</label>
+                                    <select id="clip-transition-type" class="form-select">
+                                        <option value="none" selected>None</option>
+                                        <option value="crossfade">Crossfade / Dissolve</option>
+                                        <option value="dip_black">Dip to Black</option>
+                                        <option value="push_right">Push Right</option>
+                                        <option value="push_left">Push Left</option>
+                                        <option value="wipe_right">Wipe Right</option>
+                                    </select>
+                                </div>
+                                <div class="control-group mt-3">
+                                    <label>Duration (0.2s – 1.5s)</label>
+                                    <div class="slider-val-container">
+                                        <input type="range" id="clip-transition-duration" min="0.2" max="1.5" value="0.5" step="0.1">
+                                        <span id="clip-transition-duration-val">0.5s</span>
+                                    </div>
+                                </div>
+                                <div class="toggle-control mt-3">
+                                    <div class="toggle-label">
+                                        <h4>Preview Transitions (লাইভ প্রিভিউ)</h4>
+                                        <p>কম-কনফিগ PC-তে বন্ধ রাখলে ল্যাগ কম হতে পারে</p>
+                                    </div>
+                                    <label class="switch">
+                                        <input type="checkbox" id="preview-transitions-toggle" checked>
+                                        <span class="slider round"></span>
+                                    </label>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Phase 9: Clip Speed -->
+                        <div class="card mt-4">
+                            <div class="card-header">
+                                <i class="fa-solid fa-gauge-high card-icon"></i>
+                                <h3>Clip Speed (ক্লিপ স্পিড)</h3>
+                            </div>
+                            <div class="card-body">
+                                <p class="help-text">সক্রিয় ক্লিপের ভিডিও টাইমিং 0.5x – 2x করুন। Export-এর duration-ও এই সেটিং অনুসরণ করে।</p>
+                                <div class="slider-val-container">
+                                    <input type="range" id="clip-speed-slider" min="0.5" max="2" value="1" step="0.05">
+                                    <span id="clip-speed-val">1.00x</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Phase 9: Ken Burns (image clips) -->
+                        <div class="card mt-4">
+                            <div class="card-header">
+                                <i class="fa-solid fa-panorama card-icon"></i>
+                                <h3>Ken Burns (ছবি ক্লিপে Zoom/Pan)</h3>
+                            </div>
+                            <div class="card-body">
+                                <p class="help-text">শুধু ছবি/photo ক্লিপে ধীরে zoom ও pan — ভিডিও ক্লিপে প্রযোজ্য নয়।</p>
+                                <div class="toggle-control">
+                                    <div class="toggle-label">
+                                        <h4>Enable Ken Burns</h4>
+                                    </div>
+                                    <label class="switch">
+                                        <input type="checkbox" id="ken-burns-toggle">
+                                        <span class="slider round"></span>
+                                    </label>
+                                </div>
+                                <div id="ken-burns-controls" style="display: none;">
+                                    <div class="control-group mt-3">
+                                        <label>Start Zoom (%)</label>
+                                        <input type="range" id="ken-burns-start-zoom" min="100" max="150" value="100">
+                                    </div>
+                                    <div class="control-group mt-2">
+                                        <label>End Zoom (%)</label>
+                                        <input type="range" id="ken-burns-end-zoom" min="100" max="150" value="115">
+                                    </div>
+                                    <div class="control-group mt-2">
+                                        <label>Pan Direction</label>
+                                        <select id="ken-burns-pan" class="form-select">
+                                            <option value="right">Right</option>
+                                            <option value="left">Left</option>
+                                            <option value="up">Up</option>
+                                            <option value="down">Down</option>
+                                        </select>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Phase 9: Chroma Key -->
+                        <div class="card mt-4">
+                            <div class="card-header">
+                                <i class="fa-solid fa-film card-icon"></i>
+                                <h3>Chroma Key (Green Screen)</h3>
+                            </div>
+                            <div class="card-body">
+                                <p class="help-text">সবুজ/নির্বাচিত রঙের ব্যাকগ্রাউন্ড সরিয়ে কালো ব্যাকগ্রাউন্ড দেখায়। ভারী ফিচার — প্রয়োজন না হলে বন্ধ রাখুন।</p>
+                                <div class="toggle-control">
+                                    <div class="toggle-label">
+                                        <h4>Enable Chroma Key</h4>
+                                    </div>
+                                    <label class="switch">
+                                        <input type="checkbox" id="chroma-key-toggle">
+                                        <span class="slider round"></span>
+                                    </label>
+                                </div>
+                                <div class="control-group mt-3">
+                                    <label>Key Color</label>
+                                    <input type="color" id="chroma-key-color" value="#00ff00">
+                                </div>
+                                <div class="control-group mt-2">
+                                    <label>Sensitivity</label>
+                                    <div class="slider-val-container">
+                                        <input type="range" id="chroma-key-threshold" min="10" max="120" value="45">
+                                        <span id="chroma-key-threshold-val">45</span>
                                     </div>
                                 </div>
                             </div>
@@ -1562,6 +1700,11 @@
                                     <input type="file" id="bgmusic-input" accept="audio/*" style="display: none;">
                                 </div>
 
+                                <p class="help-text mt-2">অথবা লাইব্রেরি থেকে বেছে নিন (Free Music Library):</p>
+                                <div class="music-library-grid mt-2" id="music-library-grid" style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
+                                    <!-- Populated by audio.js phase9 -->
+                                </div>
+
                                 <!-- One row per uploaded music track; click a row to edit its timing/volume below -->
                                 <div class="bgmusic-track-list mt-3" id="bgmusic-track-list"></div>
 
@@ -1771,6 +1914,16 @@
                                     </div>
                                 </div>
 
+                                <div class="subtitle-actions mt-3">
+                                    <p class="help-text">তৈরি করা সাবটাইটেল .srt বা .vtt ফাইল হিসেবে ডাউনলোড করুন (ভিডিও রি-রেন্ডার ছাড়াই):</p>
+                                    <button id="export-srt-btn" class="btn btn-outline mt-1" style="width: 100%;" type="button">
+                                        <i class="fa-solid fa-file-lines"></i> Export .SRT (SubRip)
+                                    </button>
+                                    <button id="export-vtt-btn" class="btn btn-outline mt-2" style="width: 100%;" type="button">
+                                        <i class="fa-solid fa-file-lines"></i> Export .VTT (WebVTT)
+                                    </button>
+                                </div>
+
                                 <p class="help-text mt-2" id="subtitle-browser-warning" style="display: none; color: #f87171;">
                                     আপনার ব্রাউজার Speech Recognition সাপোর্ট করে না। Chrome ব্যবহার করার চেষ্টা করুন।
                                 </p>
@@ -1912,10 +2065,31 @@
                                         <i class="fa-solid fa-download"></i> Download Video
                                     </a>
                                 </div>
+                                </div>
                         </div>
-                    </div>
 
-                    <!-- Batch Video Processing Card (Phase 7E) -->
+                        <!-- Phase 9: Multi-Aspect Batch Export -->
+                        <div class="card mt-4">
+                            <div class="card-header">
+                                <i class="fa-solid fa-clone card-icon"></i>
+                                <h3>Multi-Aspect Batch Export (একাধিক রেশিও)</h3>
+                            </div>
+                            <div class="card-body">
+                                <p class="help-text">একই এডিট করা টাইমলাইন থেকে 1:1, 4:5, 9:16, 16:9 — একাধিক aspect ratio-তে একসাথে এক্সপোর্ট করুন। প্রতিটা আলাদা ফাইল হিসেবে ডাউনলোড হবে। রেন্ডার সময় কয়েকগুণ বেশি লাগতে পারে — প্রয়োজনীয় রেশিওগুলোই সিলেক্ট করুন।</p>
+                                <div id="multi-aspect-options" class="multi-aspect-options">
+                                    <label class="multi-aspect-item"><input type="checkbox" class="multi-aspect-checkbox" value="1-1"> <span>1:1 (Square)</span></label>
+                                    <label class="multi-aspect-item"><input type="checkbox" class="multi-aspect-checkbox" value="4-5"> <span>4:5 (FB Feed)</span></label>
+                                    <label class="multi-aspect-item"><input type="checkbox" class="multi-aspect-checkbox" value="9-16"> <span>9:16 (Reels/Shorts)</span></label>
+                                    <label class="multi-aspect-item"><input type="checkbox" class="multi-aspect-checkbox" value="16-9"> <span>16:9 (Landscape)</span></label>
+                                </div>
+                                <button id="multi-aspect-export-btn" class="btn btn-primary btn-block mt-3" type="button" disabled>
+                                    <i class="fa-solid fa-layer-group"></i> Export Selected Ratios (<span id="multi-aspect-count">0</span>)
+                                </button>
+                                <p class="help-text mt-2" id="multi-aspect-current" style="display: none;"></p>
+                            </div>
+                        </div>
+
+                        <!-- Batch Video Processing Card (Phase 7E) -->
                     <div class="card mt-4">
                         <div class="card-header">
                             <i class="fa-solid fa-layer-group card-icon"></i>
@@ -2258,5 +2432,6 @@
     <script src="audio.js?v=4"></script>
     <script src="editor.js?v=4"></script>
     <script src="exporter.js?v=4"></script>
+    <script src="phase9.js?v=1"></script>
 </body>
 </html>

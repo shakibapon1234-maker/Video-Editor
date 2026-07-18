@@ -138,7 +138,10 @@ document.addEventListener('DOMContentLoaded', () => {
         '1080p': { maxDim: 1080, bitrate: 8_000_000 }
     };
 
-    renderBtn.addEventListener('click', startExport);
+        renderBtn.addEventListener('click', startExport);
+
+        // Exposed for Phase 9 Multi-Aspect Batch Export (phase9.js)
+        window.runExportPipeline = runExportPipeline;
 
     async function startExport() {
         if (!state.duration || !state.clips || state.clips.length === 0) {
@@ -155,7 +158,10 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         }
 
-        const totalDuration = state.clips.reduce((sum, c) => sum + Math.max(0, c.end - c.start), 0);
+        const totalDuration = state.clips.reduce((sum, c) => {
+            const speed = Math.max(0.5, Math.min(2, Number(c.speed) || 1));
+            return sum + (Math.max(0, c.end - c.start) / speed);
+        }, 0);
 
         if (totalDuration <= 0) {
             alert('Trim duration is invalid. Please set the trim range in Step 2.');
@@ -405,8 +411,10 @@ document.addEventListener('DOMContentLoaded', () => {
         // Runs at a controlled rate (0.4x) to decode smoothly without seeking.
         // Automatically pauses/resumes if canvas compression lags behind.
         async function captureVideoClipSequential(clip, clipTrimStart, clipTrimEnd, clipFrames, clipIndex) {
+            const clipSpeed = Math.max(0.5, Math.min(2, Number(clip.speed) || 1));
+            const sourceTimeForFrame = (frame) => clipTrimStart + ((frame / 30) * clipSpeed);
             video.pause();
-            video.playbackRate = 0.4; // 0.4x speed is very stable and lightweight
+            video.playbackRate = 0.4 * clipSpeed; // Stable decoding while preserving the selected timeline speed.
             await waitForSeek(video, clipTrimStart);
 
             let clipFrameIndex = 0;
@@ -440,7 +448,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         frameCallbackId = null;
 
                         const mediaTime = (meta && meta.mediaTime != null) ? meta.mediaTime : video.currentTime;
-                        let currentTarget = clipTrimStart + (clipFrameIndex / 30);
+                        let currentTarget = sourceTimeForFrame(clipFrameIndex);
 
                         // 1. Frame is too early — let the video keep playing
                         if (mediaTime < currentTarget - (1 / 60)) {
@@ -450,7 +458,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
                         // 2. Video overshot/skipped frames — fill the gap by duplicating
                         while (clipFrameIndex < clipFrames) {
-                            const loopTarget = clipTrimStart + (clipFrameIndex / 30);
+                            const loopTarget = sourceTimeForFrame(clipFrameIndex);
                             if (mediaTime <= loopTarget + (1 / 60)) {
                                 break; // Not overshot anymore
                             }
@@ -458,6 +466,9 @@ document.addEventListener('DOMContentLoaded', () => {
                             state.customExportTime = loopTarget;
                             state.exportTickerTime = elapsedBeforeCurrentClip + (clipFrameIndex / 30);
                             await syncBrollVideoOverlays(loopTarget);
+                            if (window.phase9PrepareTransitionFrame) {
+                                await window.phase9PrepareTransitionFrame(clip, loopTarget);
+                            }
                             if (window.drawEditorFrame) window.drawEditorFrame();
 
                             const p = new Promise(async (r) => {
@@ -489,10 +500,13 @@ document.addEventListener('DOMContentLoaded', () => {
                         }
 
                         // 3. Draw and queue the correct frame
-                        currentTarget = clipTrimStart + (clipFrameIndex / 30);
+                        currentTarget = sourceTimeForFrame(clipFrameIndex);
                         state.customExportTime = currentTarget;
                         state.exportTickerTime = elapsedBeforeCurrentClip + (clipFrameIndex / 30);
                         await syncBrollVideoOverlays(currentTarget);
+                        if (window.phase9PrepareTransitionFrame) {
+                            await window.phase9PrepareTransitionFrame(clip, currentTarget);
+                        }
                         if (window.drawEditorFrame) window.drawEditorFrame();
 
                         const p = new Promise(async (r) => {
@@ -575,6 +589,8 @@ document.addEventListener('DOMContentLoaded', () => {
             const clipTrimStart = clip.start;
             const clipTrimEnd = clip.end;
             const clipTrimDuration = Math.max(0, clipTrimEnd - clipTrimStart);
+            const clipSpeed = Math.max(0.5, Math.min(2, Number(clip.speed) || 1));
+            const clipOutputDuration = clipTrimDuration / clipSpeed;
             if (clipTrimDuration <= 0) continue;
 
             // Load clip
@@ -609,7 +625,7 @@ document.addEventListener('DOMContentLoaded', () => {
             // (Bresenham-style) technique: any leftover fraction of a frame is
             // carried forward and absorbed by the next clip instead of being
             // silently dropped or duplicated every single time.
-            const targetCumulativeFrames = Math.round((elapsedBeforeCurrentClip + clipTrimDuration) * 30);
+            const targetCumulativeFrames = Math.round((elapsedBeforeCurrentClip + clipOutputDuration) * 30);
             const clipFrames = Math.max(1, targetCumulativeFrames - clipsFramesEmitted);
             clipsFramesEmitted += clipFrames;
             
@@ -618,7 +634,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     if (exportCancelled) break;
 
                     const elapsedSecInClip = f / 30;
-                    const targetTime = clipTrimStart + elapsedSecInClip;
+                    const targetTime = clipTrimStart + (elapsedSecInClip * clipSpeed);
                     state.currentTime = targetTime;
 
                     // Same explicit-clock fix as the video path above so the
@@ -627,6 +643,10 @@ document.addEventListener('DOMContentLoaded', () => {
                     state.exportTickerTime = elapsedBeforeCurrentClip + elapsedSecInClip;
 
                     await syncBrollVideoOverlays(targetTime);
+
+                    if (window.phase9PrepareTransitionFrame) {
+                        await window.phase9PrepareTransitionFrame(clip, targetTime);
+                    }
 
                     if (window.drawEditorFrame) {
                         window.drawEditorFrame();
@@ -649,7 +669,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 await captureVideoClipSequential(clip, clipTrimStart, clipTrimEnd, clipFrames, clipIndex);
             }
             
-            elapsedBeforeCurrentClip += clipTrimDuration;
+            elapsedBeforeCurrentClip += clipOutputDuration;
         }
 
         // Done drawing clips — stop overriding the clock so live preview (and the

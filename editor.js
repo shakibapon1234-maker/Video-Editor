@@ -1663,6 +1663,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 updateCropDimensionsDisplay();
                 drawFrame();
                 renderClipTimeline();
+                if (window.syncPhase9ClipUI) window.syncPhase9ClipUI();
 
                 if (autoPlay) {
                     playVideo();
@@ -1689,8 +1690,10 @@ document.addEventListener('DOMContentLoaded', () => {
                 state.currentTime = state.startTime;
                 updatePlayhead();
                 updateCropDimensionsDisplay();
+                state.video.playbackRate = Math.max(0.5, Math.min(2, Number(clip.speed) || 1));
                 drawFrame();
                 renderClipTimeline();
+                if (window.syncPhase9ClipUI) window.syncPhase9ClipUI();
 
                 if (autoPlay) {
                     playVideo();
@@ -2311,7 +2314,15 @@ document.addEventListener('DOMContentLoaded', () => {
             const sy = (state.cropY || 0) * videoH;
             const sw = (state.cropW || 1) * videoW;
             const sh = (state.cropH || 1) * videoH;
-            state.ctx.drawImage(mediaSource, sx, sy, sw, sh, drawX, drawY, drawW, drawH);
+            if (window.phase9DrawMainMedia) {
+                window.phase9DrawMainMedia(
+                    state.ctx, mediaSource, sx, sy, sw, sh,
+                    drawX, drawY, drawW, drawH,
+                    activeClip, effectiveTime, videoW, videoH
+                );
+            } else {
+                state.ctx.drawImage(mediaSource, sx, sy, sw, sh, drawX, drawY, drawW, drawH);
+            }
         }
         state.ctx.restore();
 
@@ -9344,6 +9355,9 @@ document.addEventListener('DOMContentLoaded', () => {
                     layoutMode: state.layoutMode,
                     introTransitionType: state.introTransitionType || 'none',
                     introTransitionDuration: state.introTransitionDuration || 1.0,
+                    chromaKeyEnabled: !!state.chromaKeyEnabled,
+                    chromaKeyColor: state.chromaKeyColor || '#00ff00',
+                    chromaKeyThreshold: state.chromaKeyThreshold || 45,
                     introEnabled: state.introEnabled,
                     introTemplate: state.introTemplate,
                     introTitle: state.introTitle,
@@ -9799,6 +9813,9 @@ document.addEventListener('DOMContentLoaded', () => {
                     layoutMode: state.layoutMode,
                     introTransitionType: state.introTransitionType || 'none',
                     introTransitionDuration: state.introTransitionDuration || 1.0,
+                    chromaKeyEnabled: !!state.chromaKeyEnabled,
+                    chromaKeyColor: state.chromaKeyColor || '#00ff00',
+                    chromaKeyThreshold: state.chromaKeyThreshold || 45,
                     introEnabled: state.introEnabled,
                     introTemplate: state.introTemplate,
                     introTitle: state.introTitle,
