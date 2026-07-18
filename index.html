@@ -991,6 +991,16 @@
                                             <span class="color-value-text" id="broll-text-bg-color-val">#0f172a</span>
                                         </div>
                                     </div>
+                                    <div class="control-group mt-3">
+                                        <label class="checkbox-label" style="display:flex; align-items:center; gap:8px;">
+                                            <input type="checkbox" id="broll-text-highlight-enabled">
+                                            মার্কার-স্টাইল সলিড হাইলাইট (টেক্সটের ঠিক মাপে কালার ব্যান্ড)
+                                        </label>
+                                        <div id="broll-text-highlight-color-row" class="color-picker-wrapper mt-2" style="display:none;">
+                                            <input type="color" id="broll-text-highlight-color" value="#ffe600">
+                                            <span class="color-value-text" id="broll-text-highlight-color-val">#ffe600</span>
+                                        </div>
+                                    </div>
                                     <button id="add-broll-text-btn" class="btn btn-primary mt-3">
                                         <i class="fa-solid fa-plus"></i> Add Text B-roll
                                     </button>
@@ -1002,6 +1012,14 @@
                                         <option value="fullscreen">Fullscreen (পুরো স্ক্রিন)</option>
                                         <option value="pip">Picture-in-Picture (কোণায় ছোট বক্স)</option>
                                     </select>
+                                </div>
+
+                                <div class="control-group mt-3" id="broll-transparent-container">
+                                    <label class="checkbox-label" style="display:flex; align-items:center; gap:8px;">
+                                        <input type="checkbox" id="broll-transparent-bg" checked>
+                                        স্বচ্ছ ব্যাকগ্রাউন্ড (Transparent) — কোনো কালো বক্স/শ্যাডো থাকবে না
+                                    </label>
+                                    <p class="help-text mt-1">চেক থাকলে ছবি/টেক্সটের পেছনে/চারপাশে কোনো কালো ব্যাকগ্রাউন্ড দেখাবে না — background remove করা PNG পুরোপুরি স্বচ্ছ থাকবে। আনচেক করে "Normal" মোড বেছে নিলে PiP ছবির পেছনে হালকা কালো ব্যাকগ্রাউন্ড বক্স এবং ফুলস্ক্রিন টেক্সটে কালো আউটলাইন যোগ হবে (ভিডিও ফুটেজের ওপর আলাদা করে স্পষ্ট বোঝাতে সাহায্য করে)।</p>
                                 </div>
 
                                 <div class="control-group mt-3" id="broll-size-container">
@@ -1075,6 +1093,16 @@
                                             <div id="broll-edit-text-bg-color-row" class="color-picker-wrapper mt-2" style="display:none;">
                                                 <input type="color" id="broll-edit-text-bg-color" value="#0f172a">
                                                 <span class="color-value-text" id="broll-edit-text-bg-color-val">#0f172a</span>
+                                            </div>
+                                        </div>
+                                        <div class="control-group mt-2">
+                                            <label class="checkbox-label" style="display:flex; align-items:center; gap:8px;">
+                                                <input type="checkbox" id="broll-edit-text-highlight-enabled">
+                                                মার্কার-স্টাইল সলিড হাইলাইট (Solid Highlight)
+                                            </label>
+                                            <div id="broll-edit-text-highlight-color-row" class="color-picker-wrapper mt-2" style="display:none;">
+                                                <input type="color" id="broll-edit-text-highlight-color" value="#ffe600">
+                                                <span class="color-value-text" id="broll-edit-text-highlight-color-val">#ffe600</span>
                                             </div>
                                         </div>
                                     </div>
@@ -1655,6 +1683,10 @@
                                             <span class="slider round"></span>
                                         </label>
                                     </div>
+
+                                    <label class="mt-3">Line Highlight Color (মার্কার কালার)</label>
+                                    <p class="help-text">নিচের লিস্টে যেকোনো লাইনের পাশের হাইলাইটার আইকনে ক্লিক করে সেই লাইনটাকে এই কালারে সলিড হাইলাইট করুন।</p>
+                                    <input type="color" id="subtitle-line-highlight-color" value="#ffe600">
 
                                     <label class="mt-3">Caption Position (অবস্থান)</label>
                                     <select id="subtitle-position-select" class="form-select">

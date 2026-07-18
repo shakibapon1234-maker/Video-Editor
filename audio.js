@@ -1998,6 +1998,21 @@ document.addEventListener('DOMContentLoaded', () => {
             timeLabel.style.fontSize = '11px';
             timeLabel.style.opacity = '0.6';
 
+            // Marker-style highlight toggle — fills every line of this cue with a
+            // solid color band (see lineHighlight handling in editor.js drawFrame).
+            const highlightBtn = document.createElement('button');
+            highlightBtn.innerHTML = '<i class="fa-solid fa-highlighter"></i>';
+            highlightBtn.title = 'এই লাইনটা সলিড কালারে হাইলাইট করুন';
+            highlightBtn.style.background = 'transparent';
+            highlightBtn.style.border = 'none';
+            highlightBtn.style.cursor = 'pointer';
+            highlightBtn.style.color = sub.lineHighlight ? (state.subtitleStyle.lineHighlightColor || '#ffe600') : 'rgba(255,255,255,0.4)';
+            highlightBtn.addEventListener('click', () => {
+                sub.lineHighlight = !sub.lineHighlight;
+                renderSubtitleList();
+                if (window.drawEditorFrame) window.drawEditorFrame();
+            });
+
             const removeBtn = document.createElement('button');
             removeBtn.innerHTML = '<i class="fa-solid fa-xmark"></i>';
             removeBtn.style.background = 'transparent';
@@ -2012,6 +2027,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
             row.appendChild(label);
             row.appendChild(timeLabel);
+            row.appendChild(highlightBtn);
             row.appendChild(removeBtn);
             subtitleListEl.appendChild(row);
         });
@@ -2023,6 +2039,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const subtitleSnapStatus = document.getElementById('subtitle-snap-status');
     const subtitleFontsizeSlider = document.getElementById('subtitle-fontsize-slider');
     const subtitleHighlightToggle = document.getElementById('subtitle-highlight-toggle');
+    const subtitleLineHighlightColor = document.getElementById('subtitle-line-highlight-color');
     const subtitlePositionSelect = document.getElementById('subtitle-position-select');
     const subtitleBgpillToggle = document.getElementById('subtitle-bgpill-toggle');
 
@@ -2136,6 +2153,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const st = state.subtitleStyle || {};
         if (subtitleFontsizeSlider) subtitleFontsizeSlider.value = (st.fontSizePct != null ? st.fontSizePct * 100 : 4.5);
         if (subtitleHighlightToggle) subtitleHighlightToggle.checked = !!st.highlightEnabled;
+        if (subtitleLineHighlightColor) subtitleLineHighlightColor.value = st.lineHighlightColor || '#ffe600';
         if (subtitlePositionSelect) subtitlePositionSelect.value = st.position || 'bottom';
         if (subtitleBgpillToggle) subtitleBgpillToggle.checked = (st.bgPillEnabled !== false);
     }
@@ -2149,6 +2167,13 @@ document.addEventListener('DOMContentLoaded', () => {
     if (subtitleHighlightToggle) {
         subtitleHighlightToggle.addEventListener('change', (e) => {
             state.subtitleStyle.highlightEnabled = e.target.checked;
+            if (window.drawEditorFrame) window.drawEditorFrame();
+        });
+    }
+    if (subtitleLineHighlightColor) {
+        subtitleLineHighlightColor.addEventListener('input', (e) => {
+            state.subtitleStyle.lineHighlightColor = e.target.value;
+            renderSubtitleList();
             if (window.drawEditorFrame) window.drawEditorFrame();
         });
     }

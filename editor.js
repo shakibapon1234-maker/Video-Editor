@@ -213,7 +213,8 @@ window.VideoEditor = {
         position: 'bottom',   // 'bottom' | 'top'
         positionPct: 0.1,     // distance from the chosen edge, fraction of canvas height
         highlightEnabled: false, // word-by-word TikTok-style highlight
-        highlightColor: '#ffe600'
+        highlightColor: '#ffe600',
+        lineHighlightColor: '#ffe600' // marker-style solid background for a whole highlighted subtitle cue
     },
 
     // Intro / Outro Templates (Phase 5C)
@@ -2971,15 +2972,34 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
 
                 if (item.type === 'text') {
-                    if (item.mode === 'fullscreen') {
-                        // Dark scrim behind the text so it reads over any video content
-                        state.ctx.fillStyle = 'rgba(0,0,0,0.45)';
-                        state.ctx.fillRect(drawBoxX, drawBoxY, boxW, boxH);
-                    } else {
-                        state.ctx.fillStyle = 'rgba(0,0,0,0.55)';
+                    // "Normal" mode (transparentBg explicitly off) paints a solid dark
+                    // scrim/pill behind the text so it reads clearly over busy video.
+                    // Default is transparent — text sits directly on the footage with
+                    // no backdrop at all.
+                    if (item.transparentBg === false) {
+                        if (item.mode === 'fullscreen') {
+                            // Dark scrim behind the text so it reads over any video content
+                            state.ctx.fillStyle = 'rgba(0,0,0,0.45)';
+                            state.ctx.fillRect(drawBoxX, drawBoxY, boxW, boxH);
+                        } else {
+                            state.ctx.fillStyle = 'rgba(0,0,0,0.55)';
+                            if (state.ctx.roundRect) {
+                                state.ctx.beginPath();
+                                state.ctx.roundRect(drawBoxX, drawBoxY, boxW, boxH, 10);
+                                state.ctx.fill();
+                            } else {
+                                state.ctx.fillRect(drawBoxX, drawBoxY, boxW, boxH);
+                            }
+                        }
+                    }
+                    // Marker-style solid highlight — a tight-fit color band behind the
+                    // text, independent of the dark scrim above (both can combine, though
+                    // in practice you'd normally use one or the other).
+                    if (item.solidHighlight) {
+                        state.ctx.fillStyle = item.highlightColor || '#ffe600';
                         if (state.ctx.roundRect) {
                             state.ctx.beginPath();
-                            state.ctx.roundRect(drawBoxX, drawBoxY, boxW, boxH, 10);
+                            state.ctx.roundRect(drawBoxX, drawBoxY, boxW, boxH, Math.min(10, boxH * 0.15));
                             state.ctx.fill();
                         } else {
                             state.ctx.fillRect(drawBoxX, drawBoxY, boxW, boxH);
@@ -3004,7 +3024,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         const revealCount = Math.max(0, Math.min(item.text.length, Math.round(item.text.length * Math.max(0, Math.min(1, tIn / animDur)))));
                         renderText = item.text.slice(0, revealCount);
                         state.ctx.textAlign = 'left';
-                        if (item.mode === 'fullscreen') {
+                        if (item.mode === 'fullscreen' && item.transparentBg === false) {
                             state.ctx.lineWidth = Math.max(2, item.fontSize * 0.08);
                             state.ctx.strokeStyle = 'rgba(0,0,0,0.55)';
                             state.ctx.strokeText(renderText, leftX, cy);
@@ -3017,14 +3037,14 @@ document.addEventListener('DOMContentLoaded', () => {
                         // Kinetic Typography: per-letter/word entrance & exit. Only takes
                         // over while actually entering/exiting; once settled this falls
                         // through to the plain centered draw below, same as every other style.
-                        if (item.mode === 'fullscreen') {
+                        if (item.mode === 'fullscreen' && item.transparentBg === false) {
                             state.ctx.lineWidth = Math.max(2, item.fontSize * 0.08);
                             state.ctx.strokeStyle = 'rgba(0,0,0,0.55)';
                         }
-                        drawKineticText(state.ctx, item, style, item.text, cx, cy, tIn, tOut, animDur, item.mode === 'fullscreen');
+                        drawKineticText(state.ctx, item, style, item.text, cx, cy, tIn, tOut, animDur, item.mode === 'fullscreen' && item.transparentBg === false);
                     } else {
                         state.ctx.textAlign = 'center';
-                        if (item.mode === 'fullscreen') {
+                        if (item.mode === 'fullscreen' && item.transparentBg === false) {
                             state.ctx.lineWidth = Math.max(2, item.fontSize * 0.08);
                             state.ctx.strokeStyle = 'rgba(0,0,0,0.55)';
                             state.ctx.strokeText(renderText, cx, cy);
@@ -3100,7 +3120,11 @@ document.addEventListener('DOMContentLoaded', () => {
                             sy = Math.max(0, Math.min(slackH, (slackH / 2) + dirSign * (slackH / 2) * (panProgress * 2 - 1)));
                         }
                     }
-                    if (item.mode === 'pip') {
+                    // "Normal" mode (transparentBg explicitly turned off) keeps the old
+                    // translucent black backdrop behind PiP images so they stand out
+                    // against busy footage. Default is transparent — no backdrop — so
+                    // background-removed PNGs stay fully see-through.
+                    if (item.mode === 'pip' && item.transparentBg === false) {
                         state.ctx.fillStyle = 'rgba(0,0,0,0.25)';
                         state.ctx.fillRect(drawBoxX - 4, drawBoxY - 4, boxW + 8, boxH + 8);
                     }
@@ -3925,6 +3949,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 const outlineColor = st.outlineColor || '#000000';
                 const baseColor = st.color || '#ffffff';
                 const highlightColor = st.highlightColor || '#ffe600';
+                const lineHighlightColor = st.lineHighlightColor || '#ffe600';
                 let wordCursor = 0;
 
                 for (let li = 0; li < lines.length; li++) {
@@ -3933,6 +3958,19 @@ document.addEventListener('DOMContentLoaded', () => {
                     const lineW = ctx.measureText(lineText).width;
                     const startX = centerX - lineW / 2;
                     const lineY = blockCenterY - blockH / 2 + lineHeight * (li + 0.5);
+
+                    // Marker-style highlight: a solid, tight-fit color band behind this
+                    // whole line (not the padded bgPill, not a word-by-word text-color
+                    // swap) — like a highlighter pen drawn across just this line.
+                    if (activeSub.lineHighlight) {
+                        const markerPadX = fontSize * 0.18;
+                        const markerH = fontSize * 1.08;
+                        ctx.fillStyle = lineHighlightColor;
+                        ctx.beginPath();
+                        ctx.roundRect(startX - markerPadX, lineY - markerH / 2, lineW + markerPadX * 2, markerH, markerH * 0.2);
+                        ctx.fill();
+                    }
+
                     let cx = startX;
                     for (let wi = 0; wi < line.length; wi++) {
                         const w = line[wi];
@@ -4172,14 +4210,23 @@ document.addEventListener('DOMContentLoaded', () => {
         if (state.isAddingHighlight) {
             const coords = getCanvasCoords(e);
             const bounds = getRenderedVideoBounds();
-            if (coords.x < bounds.x || coords.x > bounds.x + bounds.w || coords.y < bounds.y || coords.y > bounds.y + bounds.h) return;
+            if (bounds.w <= 0 || bounds.h <= 0) return;
+            // Clamp into bounds instead of rejecting the click outright. A B-roll
+            // overlay (fullscreen at a custom size/offset, or a PiP dragged to
+            // cover most of the frame) can visually fill more of the canvas than
+            // getRenderedVideoBounds() reports for the underlying clip — without
+            // this clamp, a drag that starts anywhere in that "extra" visible area
+            // silently did nothing. Clamping matches the behaviour the drag-move
+            // handler already uses for freehand points (see below).
+            const clampedX = Math.max(bounds.x, Math.min(bounds.x + bounds.w, coords.x));
+            const clampedY = Math.max(bounds.y, Math.min(bounds.y + bounds.h, coords.y));
             const shape = document.getElementById('highlight-shape-select')?.value || 'rect';
             const color = document.getElementById('highlight-color')?.value || '#00e5ff';
             const lineWidth = parseInt(document.getElementById('highlight-line-width')?.value || '6');
             const fillOpacity = parseInt(document.getElementById('highlight-fill-opacity')?.value || '16');
             const drawDuration = parseFloat(document.getElementById('highlight-draw-speed')?.value || '0.6');
             const now = Math.max(0, state.currentTime || 0);
-            const startPoint = { x: (coords.x - bounds.x) / bounds.w, y: (coords.y - bounds.y) / bounds.h };
+            const startPoint = { x: (clampedX - bounds.x) / bounds.w, y: (clampedY - bounds.y) / bounds.h };
             const selected = state.highlights.find(h => h.id === state.selectedHighlightId);
             if (shape === 'freehand') {
                 // Every drag is exactly one side. Start the next drag at the last
@@ -6501,6 +6548,21 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
+    const brollTextHighlightEnabled = document.getElementById('broll-text-highlight-enabled');
+    const brollTextHighlightColor = document.getElementById('broll-text-highlight-color');
+    const brollTextHighlightColorVal = document.getElementById('broll-text-highlight-color-val');
+    const brollTextHighlightColorRow = document.getElementById('broll-text-highlight-color-row');
+    if (brollTextHighlightEnabled && brollTextHighlightColorRow) {
+        brollTextHighlightEnabled.addEventListener('change', () => {
+            brollTextHighlightColorRow.style.display = brollTextHighlightEnabled.checked ? 'flex' : 'none';
+        });
+    }
+    if (brollTextHighlightColor && brollTextHighlightColorVal) {
+        brollTextHighlightColor.addEventListener('input', (e) => {
+            brollTextHighlightColorVal.innerText = e.target.value;
+        });
+    }
+
     const brollEditTextBgEnabled = document.getElementById('broll-edit-text-bg-enabled');
     const brollEditTextBgColor = document.getElementById('broll-edit-text-bg-color');
     const brollEditTextBgColorVal = document.getElementById('broll-edit-text-bg-color-val');
@@ -6521,6 +6583,31 @@ document.addEventListener('DOMContentLoaded', () => {
             const item = state.brollOverlays.find(b => b.id === state.selectedBrollId);
             if (item && item.type === 'text') {
                 item.bgColor = e.target.value;
+                drawFrame();
+            }
+        });
+    }
+
+    const brollEditTextHighlightEnabled = document.getElementById('broll-edit-text-highlight-enabled');
+    const brollEditTextHighlightColor = document.getElementById('broll-edit-text-highlight-color');
+    const brollEditTextHighlightColorVal = document.getElementById('broll-edit-text-highlight-color-val');
+    const brollEditTextHighlightColorRow = document.getElementById('broll-edit-text-highlight-color-row');
+    if (brollEditTextHighlightEnabled && brollEditTextHighlightColorRow) {
+        brollEditTextHighlightEnabled.addEventListener('change', () => {
+            brollEditTextHighlightColorRow.style.display = brollEditTextHighlightEnabled.checked ? 'flex' : 'none';
+            const item = state.brollOverlays.find(b => b.id === state.selectedBrollId);
+            if (item && item.type === 'text') {
+                item.solidHighlight = brollEditTextHighlightEnabled.checked;
+                drawFrame();
+            }
+        });
+    }
+    if (brollEditTextHighlightColor && brollEditTextHighlightColorVal) {
+        brollEditTextHighlightColor.addEventListener('input', (e) => {
+            brollEditTextHighlightColorVal.innerText = e.target.value;
+            const item = state.brollOverlays.find(b => b.id === state.selectedBrollId);
+            if (item && item.type === 'text') {
+                item.highlightColor = e.target.value;
                 drawFrame();
             }
         });
@@ -6554,6 +6641,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const brollDropzone = document.getElementById('broll-dropzone');
     const brollInput = document.getElementById('broll-input');
     const brollModeSelect = document.getElementById('broll-mode-select');
+    const brollTransparentBg = document.getElementById('broll-transparent-bg');
     const brollSizeSlider = document.getElementById('broll-size-slider');
     const brollSizeVal = document.getElementById('broll-size-val');
     const brollSizeContainer = document.getElementById('broll-size-container');
@@ -6799,7 +6887,11 @@ document.addEventListener('DOMContentLoaded', () => {
                 // 'cover' fills the whole frame and crops any excess (old default
                 // behaviour). 'contain' shows the entire image with letterbox bars
                 // when its aspect ratio doesn't match the canvas.
-                fitMode: 'cover'
+                fitMode: 'cover',
+                // true (default) = fully transparent, no PiP backdrop box. false =
+                // "Normal" mode keeps the old translucent black backdrop behind PiP
+                // images so they stand out against busy footage.
+                transparentBg: brollTransparentBg ? brollTransparentBg.checked : true
             };
             state.brollOverlays.push(newItem);
             state.selectedBrollId = newItem.id;
@@ -6937,7 +7029,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 fitMode: 'cover',
                 // If the display window is longer than the video's own duration,
                 // the video loops from the beginning instead of freezing/going black.
-                loopVideo: true
+                loopVideo: true,
+                // See image B-roll: true (default) = no PiP backdrop box.
+                transparentBg: brollTransparentBg ? brollTransparentBg.checked : true
             };
             state.brollOverlays.push(newItem);
             state.selectedBrollId = newItem.id;
@@ -6979,6 +7073,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 color: brollTextColorInput ? brollTextColorInput.value : '#ffffff',
                 bgEnabled: brollTextBgEnabled ? brollTextBgEnabled.checked : false,
                 bgColor: brollTextBgColor ? brollTextBgColor.value : '#0f172a',
+                solidHighlight: brollTextHighlightEnabled ? brollTextHighlightEnabled.checked : false,
+                highlightColor: brollTextHighlightColor ? brollTextHighlightColor.value : '#ffe600',
                 mode: brollModeSelect ? brollModeSelect.value : 'fullscreen',
                 size: brollSizeSlider ? parseInt(brollSizeSlider.value) : 35,
                 x: 0.5,
@@ -6990,7 +7086,11 @@ document.addEventListener('DOMContentLoaded', () => {
                 exitDirection: 'same',
                 animationStyle: brollModeSelect && brollModeSelect.value === 'pip' ? 'slide-pop' : 'zoom',
                 animationSpeedSec: 0.4, // continuous drag-slider speed (seconds); 0.4 ~= old 'Normal' preset
-                soundEffect: 'none'
+                soundEffect: 'none',
+                // true (default) = plain text, no legibility outline. false =
+                // "Normal" mode keeps the old black stroke outline around
+                // fullscreen text so it reads clearly over busy footage.
+                transparentBg: brollTransparentBg ? brollTransparentBg.checked : true
             };
             state.brollOverlays.push(newItem);
             state.selectedBrollId = newItem.id;
@@ -7149,6 +7249,10 @@ document.addEventListener('DOMContentLoaded', () => {
             brollEndInput.value = item.endSec;
         }
         if (brollModeSelect) brollModeSelect.value = item.mode;
+        // Older items saved before this toggle existed have no transparentBg
+        // property at all — treat that as "transparent" (the new default) so
+        // existing PNGs/text immediately lose their black backdrop too.
+        if (brollTransparentBg) brollTransparentBg.checked = item.transparentBg !== false;
         if (brollSizeContainer) brollSizeContainer.style.display = 'block'; // always visible
 
         // Fit Mode only makes sense for a fullscreen IMAGE (Text B-roll has no
@@ -7177,6 +7281,12 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (brollEditTextBgColor) {
                     brollEditTextBgColor.value = item.bgColor || '#0f172a';
                     if (brollEditTextBgColorVal) brollEditTextBgColorVal.innerText = item.bgColor || '#0f172a';
+                }
+                if (brollEditTextHighlightEnabled) brollEditTextHighlightEnabled.checked = !!item.solidHighlight;
+                if (brollEditTextHighlightColorRow) brollEditTextHighlightColorRow.style.display = item.solidHighlight ? 'flex' : 'none';
+                if (brollEditTextHighlightColor) {
+                    brollEditTextHighlightColor.value = item.highlightColor || '#ffe600';
+                    if (brollEditTextHighlightColorVal) brollEditTextHighlightColorVal.innerText = item.highlightColor || '#ffe600';
                 }
             } else {
                 brollEditTextSection.style.display = 'none';
@@ -7505,6 +7615,16 @@ document.addEventListener('DOMContentLoaded', () => {
             if (item) {
                 item.size = parseInt(e.target.value);
                 if (brollSizeVal) brollSizeVal.innerText = item.size + '%';
+                drawFrame();
+            }
+        });
+    }
+
+    if (brollTransparentBg) {
+        brollTransparentBg.addEventListener('change', (e) => {
+            const item = state.brollOverlays.find(b => b.id === state.selectedBrollId);
+            if (item) {
+                item.transparentBg = e.target.checked;
                 drawFrame();
             }
         });
