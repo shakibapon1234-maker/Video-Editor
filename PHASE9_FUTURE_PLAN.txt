@@ -1,0 +1,402 @@
+=====================================================
+ STUDIO FLOW - PHASE 9 (ভবিষ্যৎ) ফিচার প্ল্যান
+ AI CONTEXT FILE - এখনো IMPLEMENT করা হয়নি
+=====================================================
+
+এই ফাইলটি শুধু প্ল্যানিং-এর জন্য। বর্তমানে ব্যাকগ্রাউন্ডে অন্য একটা কাজ
+(সম্ভবত 7A - Auto Silence Trimmer বা related কাজ) চলছে বলে এই ফিচারগুলো
+এখনই কোড করা হয়নি। ওই কাজ শেষ হওয়ার পর এই প্ল্যান অনুযায়ী একটা একটা করে
+এগোনো যাবে।
+
+গুরুত্বপূর্ণ constraint (সবসময় মাথায় রাখতে হবে):
+  - ব্যবহারকারীর PC কম-কনফিগারেশনের, তাই কোনো ফিচারই ভারী/blocking হওয়া
+    যাবে না (heavy real-time video processing, WASM-ভিত্তিক ভারী লাইব্রেরি,
+    বা main thread block করে এমন loop এড়িয়ে চলতে হবে)
+  - Undo/Redo ইতিমধ্যে আছে - শুধু history list/panel (কে কী change করল তার
+    দৃশ্যমান তালিকা) নাই। এটা bug না, এটা ঠিক আছে বলে confirmed।
+
+
+-----------------------------------------------------
+অগ্রাধিকার অনুযায়ী ক্রম (প্রস্তাবিত)
+-----------------------------------------------------
+
+1. Split/Razor Tool          - সবচেয়ে বেশি দরকারি, হালকা কাজ
+2. Undo/Redo History Panel   - existing undo/redo-এর উপর UI যোগ, হালকা
+3. Clip Speed Control        - মাঝারি জটিলতা (audio pitch handling লাগবে)
+4. SRT/VTT Subtitle Export   - হালকা কাজ, আলাদা ফাইল লেখা মাত্র
+5. Transitions (crossfade)   - মাঝারি, ক্যানভাস-লেভেলে করা সম্ভব
+6. Multi-Aspect Batch Export - মাঝারি-ভারী (একাধিকবার render pass লাগবে)
+7. Ken Burns / Auto Zoom-Pan - হালকা (ছবি-ভিত্তিক ক্লিপের জন্য)
+8. Video-in-Video PIP        - ভারী দিকে, শেষে বিবেচনা করা ভালো
+9. Text-to-Speech Voiceover  - browser SpeechSynthesis, হালকা কিন্তু bn-BD
+                                voice quality সীমিত হতে পারে
+10. Free Music Library        - static asset বান্ডেল করলে হালকা
+11. Freeze Frame              - হালকা, প্রায় already-existing logic দিয়ে সম্ভব
+12. Chroma Key (green screen) - সবচেয়ে ভারী, per-frame pixel processing
+
+
+-----------------------------------------------------
+বিস্তারিত: প্রতিটা ফিচারের সংক্ষিপ্ত ধারণা
+-----------------------------------------------------
+
+[9-1] Split/Razor Tool (editor.js)
+  কী করে: টাইমলাইনের প্লেহেড যেখানে আছে সেখানে ক্লিপকে দুই ভাগে ভাগ করে
+          state.clips array-এ নতুন একটা entry insert করবে (trimStart/
+          trimEnd যথাযথভাবে ভাগ হবে)।
+  ঝুঁকি: multi-clip render loop (exporter.js) নতুন split clip-গুলো ঠিকমতো
+          ধারাবাহিকভাবে ধরছে কিনা যাচাই লাগবে।
+
+[9-2] Undo/Redo History Panel (editor.js)
+  কী করে: state history stack-এর উপর একটা ছোট dropdown/list UI বসানো,
+          প্রতিটা entry-তে সংক্ষিপ্ত action label (যেমন "Trim changed",
+          "Filter applied") দেখাবে, ক্লিক করলে সেই point-এ jump করবে।
+  নোট: ভারী কিছু না, existing state snapshot mechanism reuse করা যাবে।
+
+[9-3] Clip Speed Control (editor.js + exporter.js)
+  কী করে: প্রতিটা ক্লিপে playbackRate slider (0.5x - 2x)। Preview-তে
+          video.playbackRate দিয়ে; export-এ frame-sampling rate পরিবর্তন
+          করে (audio pitch-correction লাগবে, নাহলে slow-mo-তে audio
+          demonic/deep শোনাবে)।
+  ঝুঁকি: seek-per-frame export logic (waitForSeek) এর সাথে সমন্বয় করতে
+          হবে যাতে speed-adjusted timeline ঠিক থাকে।
+
+[9-4] SRT/VTT Subtitle Export (exporter.js)
+  কী করে: state.subtitles array থেকে standard .srt/.vtt ফরম্যাটে টেক্সট
+          ফাইল বানিয়ে সরাসরি ডাউনলোড করা - কোনো video re-render লাগে না।
+  সহজতম ফিচার এই লিস্টে, প্রায় কোনো ঝুঁকি নেই।
+
+[9-5] Transitions - Crossfade (exporter.js)
+  কী করে: দুই ক্লিপের boundary-তে কয়েক ফ্রেম ধরে দুই canvas draw-কে
+          alpha-blend করা (globalAlpha দিয়ে)।
+  ঝুঁকি: seek-per-frame export আরও ধীর হতে পারে যদি দুই ভিডিও একসাথে
+          decode/draw করতে হয়; শুধু simple cut-crossfade (dip-to-black না)
+          দিয়ে শুরু করা ভালো।
+
+[9-6] Multi-Aspect Batch Export (exporter.js)
+  কী করে: একই timeline থেকে 1:1, 4:5, 9:16, 16:9 - একাধিক aspect ratio-তে
+          sequential render pass চালিয়ে একসাথে সব ডাউনলোড লিংক দেওয়া।
+  ঝুঁকি: রেন্ডার সময় কয়েকগুণ বেড়ে যাবে (প্রতিটা ratio আলাদা full export),
+          তাই UI-তে স্পষ্ট সময় estimate দেখানো জরুরি।
+
+[9-7] Ken Burns / Auto Zoom-Pan (editor.js)
+  কী করে: ছবি-ভিত্তিক ক্লিপে ধীরে ধীরে scale/translate animate করা
+          (start ও end zoom% + pan direction slider)।
+  হালকা: শুধু ছবির ক্ষেত্রে প্রযোজ্য, ভিডিও ক্লিপে লাগবে না।
+
+[9-8] Video-in-Video PIP (editor.js + exporter.js)
+  কী করে: B-roll-এর মতোই কিন্তু image-এর বদলে second video element,
+          drag-resize করে কোণায় বসানো।
+  ঝুঁকি: দুইটা video element একসাথে decode+seek করাতে হবে export-এ,
+          কম-কনফিগ PC-তে এটা সবচেয়ে ঝুঁকিপূর্ণ - সবার শেষে বিবেচনা করা ভালো।
+
+[9-9] Text-to-Speech Voiceover (audio.js)
+  কী করে: browser SpeechSynthesis API দিয়ে টেক্সট থেকে voiceover অডিও
+          generate করে existing voiceover pipeline-এ বসানো।
+  সীমাবদ্ধতা (honest note): বাংলা TTS voice quality browser-ভেদে অনেক
+          সীমিত/robotic হতে পারে; ভালো মানের জন্য external API লাগবে যা
+          বর্তমান "সম্পূর্ণ browser-based, কোনো server dependency না" নীতির
+          বাইরে যায় - তাই এটা optional/experimental হিসেবে রাখা উচিত।
+
+[9-10] Free Music Library (audio.js + index.html)
+  কী করে: কয়েকটা royalty-free ট্র্যাক প্রজেক্টের সাথে বান্ডেল করে
+          Background Music কার্ডে "Upload your own" এর পাশে একটা "Choose
+          from library" ট্যাব যোগ করা।
+  নোট: ফাইল সাইজ বাড়বে বলে সংখ্যায় সীমিত (৫-১০টা) রাখা ভালো।
+
+[9-11] Freeze Frame (editor.js + exporter.js)
+  কী করে: টাইমলাইনের যেকোনো পয়েন্টে "Freeze for X seconds" বাটন - সেই
+          মুহূর্তের frame কে duplicate করে N সেকেন্ড ধরে রাখা (Intro/Outro
+          static-card render logic-এর কাছাকাছি approach)।
+
+[9-12] Chroma Key / Green Screen (editor.js)
+  কী করে: canvas pixel data থেকে green/blue pixel detect করে transparent
+          করা এবং নিচে background বসানো।
+  ঝুঁকি: সবচেয়ে ভারী - প্রতি ফ্রেমে getImageData/putImageData লুপ, low-end
+          PC-তে preview lag করবে। শেষে, এবং সম্ভবত সীমিত resolution/toggle-
+          able "preview quality" সহ implement করা উচিত।
+
+
+-----------------------------------------------------
+পরবর্তী পদক্ষেপ
+-----------------------------------------------------
+
+ব্যাকগ্রাউন্ডের বর্তমান কাজ শেষ হলে এই ফাইল থেকে ক্রম অনুযায়ী (উপরের
+priority list) একটা একটা ফিচার নিয়ে audit-first ওয়ার্কফ্লো-তে এগোনো
+যাবে - প্রতিটার আগে সংশ্লিষ্ট .js ফাইলের বর্তমান কোড অডিট করে তারপর
+implement করা হবে, যেমনটা এতদিন করা হয়েছে।
+
+=====================================================
+ তৈরি করা হয়েছে: পরবর্তী প্ল্যানিং সেশনের জন্য রেফারেন্স ডকুমেন্ট
+=====================================================
+
+
+=====================================================
+ PHASE 9 ADDENDUM — Clip-to-Clip Transition (বিস্তারিত প্ল্যান)
+ যোগ করা হয়েছে: 2026-07-18
+=====================================================
+
+বর্তমান অবস্থা:
+  [DONE - PHASE 8] Intro Transition (প্রতিটা ক্লিপের শুরুতে animation):
+    - editor.js drawFrame()-এ implement করা হয়েছে
+    - Types: fade, zoom_spin, slide_right, slide_left, slide_top, slide_bottom
+    - Duration: 0.5s - 3.0s slider
+    - Export-এ (customExportTime দিয়ে) সঠিকভাবে কাজ করে
+    - Live preview + Export উভয়তেই সঠিক
+
+  [TODO - PHASE 9] True Clip-to-Clip Transition (Crossfade/Push/Wipe):
+    দুইটা ক্লিপের boundary-তে উভয় ক্লিপ একসাথে দেখিয়ে blend করা।
+
+-----------------------------------------------------
+[PHASE 9] Clip-to-Clip Transition — বিস্তারিত Implementation Plan
+-----------------------------------------------------
+
+FEATURE GOAL:
+  ক্লিপ ১ শেষ হওয়ার সময় এবং ক্লিপ ২ শুরু হওয়ার সময় একটা smooth
+  transition দেখানো হবে — যেখানে ক্লিপ ১ এবং ক্লিপ ২ একসাথে canvas-এ
+  blend করা হবে।
+
+SUPPORTED TRANSITION TYPES (প্রস্তাবিত):
+  A. Crossfade / Dissolve
+     - ক্লিপ ১ এর alpha ধীরে কমে, ক্লিপ ২ এর alpha ধীরে বাড়ে
+     - সবচেয়ে সহজ, সবচেয়ে নিরাপদ
+
+  B. Dip to Black
+     - ক্লিপ ১ → fade to black → ক্লিপ ২ fade in
+     - export-এ শুধু globalAlpha, দুই canvas draw লাগে না
+
+  C. Push / Slide (Left/Right)
+     - ক্লিপ ২ ডান/বাম থেকে ধাক্কা দিয়ে ক্লিপ ১ কে সরিয়ে দেয়
+     - দুই ক্লিপের frame একই canvas-এ পাশাপাশি আঁকতে হবে
+
+  D. Wipe (Horizontal/Vertical)
+     - একটা "curtain" line দিয়ে ক্লিপ ২ reveal হয়
+
+DATA MODEL পরিবর্তন (state.clips প্রতিটা entry):
+  প্রতিটা clip object-এ নতুন field যোগ:
+    clip.transitionType   : 'none' | 'crossfade' | 'dip_black' | 'push_right'
+                           | 'push_left' | 'wipe_right'  (default: 'none')
+    clip.transitionDuration: number (seconds, default: 0.5)
+  মানে হলো: এই clip শুরু হওয়ার আগে কোন ধরনের transition হবে।
+  (ক্লিপ ১ এর শেষ + ক্লিপ ২ এর শুরু = transition zone)
+
+UI পরিবর্তন:
+  - Step 2 (Trim & Layout) প্যানেলে বিদ্যমান "Video Intro Transition" card এর
+    পাশে অথবা নিচে একটা নতুন "Clip Transition (পরবর্তী ক্লিপে যাওয়ার সময়)"
+    card যোগ করতে হবে
+  - Dropdown: None / Crossfade / Dip to Black / Push Right / Push Left
+  - Duration slider: 0.2s - 1.5s
+
+LIVE PREVIEW তে কীভাবে কাজ করবে (editor.js):
+  drawFrame() এ:
+    1. বর্তমান state.clips থেকে active clip index বের করো (getActiveClipIndex)
+    2. Timeline-এ বর্তমান সময় (effectiveTime) কি পরবর্তী ক্লিপের transition
+       zone-এ আছে কিনা check করো:
+         overlapStart = nextClipStartTime - nextClip.transitionDuration
+         overlapEnd   = nextClipStartTime + nextClip.transitionDuration
+    3. যদি overlapStart < effectiveTime < nextClipStartTime:
+         - current clip draw করো (alpha: 1.0 → 0.0 এ ease করো)
+         - একটা offscreen canvas বা second video element-এ next clip seek করো
+         - সেটা draw করো alpha: 0.0 → 1.0 ease করে
+    4. যদি nextClipStartTime < effectiveTime < overlapEnd:
+         - next clip শুরু হয়েছে, similar blend logic
+
+  ঝুঁকি Live Preview:
+    - দুইটা video element একসাথে decode করতে হবে preview-তে
+    - কম-কনফিগ PC-তে সম্ভব একটু lag করতে পারে
+    - সমাধান: transition duration ছোট রাখা (max 1.5s) এবং
+      "preview transition" টগল অপশন রাখা
+
+EXPORT তে কীভাবে কাজ করবে (exporter.js):
+  বর্তমান clip-by-clip sequential export loop modify করতে হবে:
+
+  ক্লিপ N এর শেষ frames (transition zone):
+    for each frame in transitionOverlapFrames:
+      - offscreen canvas 1: clip N এর frame seek + draw
+      - offscreen canvas 2: clip N+1 এর frame seek + draw
+      - final canvas: blend(canvas1, canvas2) with globalAlpha
+      - send frame to encoder
+
+  এর জন্য দুইটা video element একসাথে seek করা লাগবে।
+  পরিকল্পনা:
+    - state.video (বর্তমান ব্যবহৃত) = clip N (outgoing)
+    - state.transitionVideoEl = নতুন একটা <video> element = clip N+1 (incoming)
+    - state.transitionCanvas = অফস্ক্রিন canvas
+
+  STEP-BY-STEP export logic পরিবর্তন:
+    Step 1: প্রতিটা clip loop এর আগে:
+      - পরবর্তী clip (N+1) এর transitionType check করো
+      - যদি none নয়: transitionFrameCount = Math.round(duration * fps)
+      - regular frames = clipFrames - transitionFrameCount
+
+    Step 2: regular frames (no overlap):
+      - বর্তমানের মতোই export
+
+    Step 3: transition frames (শেষ N frames):
+      - state.transitionVideoEl.src = nextClip.file (বা blob URL)
+      - প্রতিটা ফ্রেমে: clip N seek + clip N+1 seek একসাথে
+      - blend করে final canvas এ draw
+      - nextClip এর transition frame range: first N frames skip করতে হবে
+        (কারণ সেগুলো আগেই blend করা হয়েছে)
+
+    Step 4: nextClip শুরু হলে:
+      - transitionFrameCount টা frame skip করো (already exported)
+      - বাকি frames normal export
+
+SERIALIZATION (saveProject / loadProject):
+  প্রতিটা clip-এ transitionType এবং transitionDuration save/load করতে হবে।
+  Backward compatible: পুরনো project-এ এই field নাই → default 'none' ধরা হবে।
+
+TESTING CHECKLIST (implement এর পরে verify করতে হবে):
+  [ ] Single clip video: transition option দেখা যায় কিন্তু কোনো effect নেই
+  [ ] Two clips: crossfade live preview সঠিক
+  [ ] Two clips: crossfade export সঠিক (frame count ঠিক)
+  [ ] Three clips: সব transition boundary সঠিক
+  [ ] Mixed: clip 1→2 crossfade, clip 2→3 push right — সঠিক
+  [ ] Image clip involved in transition: সঠিক কাজ করে
+  [ ] Project save/load: transitionType ও duration persist হয়
+  [ ] Export duration: total duration transition overlap এ কমে না
+      (transition ক্লিপের duration থেকে cut হয়, নতুন সময় যোগ হয় না)
+
+COMPLEXITY ESTIMATE:
+  editor.js পরিবর্তন: ~100-150 lines (drawFrame transition logic)
+  exporter.js পরিবর্তন: ~150-200 lines (export loop refactor)
+  index.html পরিবর্তন: ~30-50 lines (UI card)
+  মোট: মাঝারি কাজ, ২-৩ session এ সম্পন্ন করা সম্ভব।
+
+IMPLEMENTATION ORDER (শুরু করলে):
+  Phase A: UI + data model (index.html + state) — 1 session
+  Phase B: Live preview crossfade only (editor.js) — 1 session
+  Phase C: Export crossfade (exporter.js) — 1 session
+  Phase D: Push/Wipe types (editor.js + exporter.js) — 1 session
+
+=====================================================
+ ADDENDUM শেষ
+=====================================================
+
+
+
+এই ফাইলটি শুধু প্ল্যানিং-এর জন্য। বর্তমানে ব্যাকগ্রাউন্ডে অন্য একটা কাজ
+(সম্ভবত 7A - Auto Silence Trimmer বা related কাজ) চলছে বলে এই ফিচারগুলো
+এখনই কোড করা হয়নি। ওই কাজ শেষ হওয়ার পর এই প্ল্যান অনুযায়ী একটা একটা করে
+এগোনো যাবে।
+
+গুরুত্বপূর্ণ constraint (সবসময় মাথায় রাখতে হবে):
+  - ব্যবহারকারীর PC কম-কনফিগারেশনের, তাই কোনো ফিচারই ভারী/blocking হওয়া
+    যাবে না (heavy real-time video processing, WASM-ভিত্তিক ভারী লাইব্রেরি,
+    বা main thread block করে এমন loop এড়িয়ে চলতে হবে)
+  - Undo/Redo ইতিমধ্যে আছে - শুধু history list/panel (কে কী change করল তার
+    দৃশ্যমান তালিকা) নাই। এটা bug না, এটা ঠিক আছে বলে confirmed।
+
+
+-----------------------------------------------------
+অগ্রাধিকার অনুযায়ী ক্রম (প্রস্তাবিত)
+-----------------------------------------------------
+
+1. Split/Razor Tool          - সবচেয়ে বেশি দরকারি, হালকা কাজ
+2. Undo/Redo History Panel   - existing undo/redo-এর উপর UI যোগ, হালকা
+3. Clip Speed Control        - মাঝারি জটিলতা (audio pitch handling লাগবে)
+4. SRT/VTT Subtitle Export   - হালকা কাজ, আলাদা ফাইল লেখা মাত্র
+5. Transitions (crossfade)   - মাঝারি, ক্যানভাস-লেভেলে করা সম্ভব
+6. Multi-Aspect Batch Export - মাঝারি-ভারী (একাধিকবার render pass লাগবে)
+7. Ken Burns / Auto Zoom-Pan - হালকা (ছবি-ভিত্তিক ক্লিপের জন্য)
+8. Video-in-Video PIP        - ভারী দিকে, শেষে বিবেচনা করা ভালো
+9. Text-to-Speech Voiceover  - browser SpeechSynthesis, হালকা কিন্তু bn-BD
+                                voice quality সীমিত হতে পারে
+10. Free Music Library        - static asset বান্ডেল করলে হালকা
+11. Freeze Frame              - হালকা, প্রায় already-existing logic দিয়ে সম্ভব
+12. Chroma Key (green screen) - সবচেয়ে ভারী, per-frame pixel processing
+
+
+-----------------------------------------------------
+বিস্তারিত: প্রতিটা ফিচারের সংক্ষিপ্ত ধারণা
+-----------------------------------------------------
+
+[9-1] Split/Razor Tool (editor.js)
+  কী করে: টাইমলাইনের প্লেহেড যেখানে আছে সেখানে ক্লিপকে দুই ভাগে ভাগ করে
+          state.clips array-এ নতুন একটা entry insert করবে (trimStart/
+          trimEnd যথাযথভাবে ভাগ হবে)।
+  ঝুঁকি: multi-clip render loop (exporter.js) নতুন split clip-গুলো ঠিকমতো
+          ধারাবাহিকভাবে ধরছে কিনা যাচাই লাগবে।
+
+[9-2] Undo/Redo History Panel (editor.js)
+  কী করে: state history stack-এর উপর একটা ছোট dropdown/list UI বসানো,
+          প্রতিটা entry-তে সংক্ষিপ্ত action label (যেমন "Trim changed",
+          "Filter applied") দেখাবে, ক্লিক করলে সেই point-এ jump করবে।
+  নোট: ভারী কিছু না, existing state snapshot mechanism reuse করা যাবে।
+
+[9-3] Clip Speed Control (editor.js + exporter.js)
+  কী করে: প্রতিটা ক্লিপে playbackRate slider (0.5x - 2x)। Preview-তে
+          video.playbackRate দিয়ে; export-এ frame-sampling rate পরিবর্তন
+          করে (audio pitch-correction লাগবে, নাহলে slow-mo-তে audio
+          demonic/deep শোনাবে)।
+  ঝুঁকি: seek-per-frame export logic (waitForSeek) এর সাথে সমন্বয় করতে
+          হবে যাতে speed-adjusted timeline ঠিক থাকে।
+
+[9-4] SRT/VTT Subtitle Export (exporter.js)
+  কী করে: state.subtitles array থেকে standard .srt/.vtt ফরম্যাটে টেক্সট
+          ফাইল বানিয়ে সরাসরি ডাউনলোড করা - কোনো video re-render লাগে না।
+  সহজতম ফিচার এই লিস্টে, প্রায় কোনো ঝুঁকি নেই।
+
+[9-5] Transitions - Crossfade (exporter.js)
+  কী করে: দুই ক্লিপের boundary-তে কয়েক ফ্রেম ধরে দুই canvas draw-কে
+          alpha-blend করা (globalAlpha দিয়ে)।
+  ঝুঁকি: seek-per-frame export আরও ধীর হতে পারে যদি দুই ভিডিও একসাথে
+          decode/draw করতে হয়; শুধু simple cut-crossfade (dip-to-black না)
+          দিয়ে শুরু করা ভালো।
+
+[9-6] Multi-Aspect Batch Export (exporter.js)
+  কী করে: একই timeline থেকে 1:1, 4:5, 9:16, 16:9 - একাধিক aspect ratio-তে
+          sequential render pass চালিয়ে একসাথে সব ডাউনলোড লিংক দেওয়া।
+  ঝুঁকি: রেন্ডার সময় কয়েকগুণ বেড়ে যাবে (প্রতিটা ratio আলাদা full export),
+          তাই UI-তে স্পষ্ট সময় estimate দেখানো জরুরি।
+
+[9-7] Ken Burns / Auto Zoom-Pan (editor.js)
+  কী করে: ছবি-ভিত্তিক ক্লিপে ধীরে ধীরে scale/translate animate করা
+          (start ও end zoom% + pan direction slider)।
+  হালকা: শুধু ছবির ক্ষেত্রে প্রযোজ্য, ভিডিও ক্লিপে লাগবে না।
+
+[9-8] Video-in-Video PIP (editor.js + exporter.js)
+  কী করে: B-roll-এর মতোই কিন্তু image-এর বদলে second video element,
+          drag-resize করে কোণায় বসানো।
+  ঝুঁকি: দুইটা video element একসাথে decode+seek করাতে হবে export-এ,
+          কম-কনফিগ PC-তে এটা সবচেয়ে ঝুঁকিপূর্ণ - সবার শেষে বিবেচনা করা ভালো।
+
+[9-9] Text-to-Speech Voiceover (audio.js)
+  কী করে: browser SpeechSynthesis API দিয়ে টেক্সট থেকে voiceover অডিও
+          generate করে existing voiceover pipeline-এ বসানো।
+  সীমাবদ্ধতা (honest note): বাংলা TTS voice quality browser-ভেদে অনেক
+          সীমিত/robotic হতে পারে; ভালো মানের জন্য external API লাগবে যা
+          বর্তমান "সম্পূর্ণ browser-based, কোনো server dependency না" নীতির
+          বাইরে যায় - তাই এটা optional/experimental হিসেবে রাখা উচিত।
+
+[9-10] Free Music Library (audio.js + index.html)
+  কী করে: কয়েকটা royalty-free ট্র্যাক প্রজেক্টের সাথে বান্ডেল করে
+          Background Music কার্ডে "Upload your own" এর পাশে একটা "Choose
+          from library" ট্যাব যোগ করা।
+  নোট: ফাইল সাইজ বাড়বে বলে সংখ্যায় সীমিত (৫-১০টা) রাখা ভালো।
+
+[9-11] Freeze Frame (editor.js + exporter.js)
+  কী করে: টাইমলাইনের যেকোনো পয়েন্টে "Freeze for X seconds" বাটন - সেই
+          মুহূর্তের frame কে duplicate করে N সেকেন্ড ধরে রাখা (Intro/Outro
+          static-card render logic-এর কাছাকাছি approach)।
+
+[9-12] Chroma Key / Green Screen (editor.js)
+  কী করে: canvas pixel data থেকে green/blue pixel detect করে transparent
+          করা এবং নিচে background বসানো।
+  ঝুঁকি: সবচেয়ে ভারী - প্রতি ফ্রেমে getImageData/putImageData লুপ, low-end
+          PC-তে preview lag করবে। শেষে, এবং সম্ভবত সীমিত resolution/toggle-
+          able "preview quality" সহ implement করা উচিত।
+
+
+-----------------------------------------------------
+পরবর্তী পদক্ষেপ
+-----------------------------------------------------
+
+ব্যাকগ্রাউন্ডের বর্তমান কাজ শেষ হলে এই ফাইল থেকে ক্রম অনুযায়ী (উপরের
+priority list) একটা একটা ফিচার নিয়ে audit-first ওয়ার্কফ্লো-তে এগোনো
+যাবে - প্রতিটার আগে সংশ্লিষ্ট .js ফাইলের বর্তমান কোড অডিট করে তারপর
+implement করা হবে, যেমনটা এতদিন করা হয়েছে।
+
+=====================================================
+ তৈরি করা হয়েছে: পরবর্তী প্ল্যানিং সেশনের জন্য রেফারেন্স ডকুমেন্ট
+=====================================================

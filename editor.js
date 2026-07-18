@@ -64,6 +64,10 @@ window.VideoEditor = {
     selectedBgMusicTrackId: null,
     bgMusicDuckingEnabled: true,
 
+    // Intro Transition states
+    introTransitionType: 'none', // 'none', 'fade', 'zoom_spin', 'slide_right', 'slide_left', 'slide_top', 'slide_bottom'
+    introTransitionDuration: 1.0, // seconds
+
     // Facebook Banner Headline state
     bannerStyle: 'none',
     headerText: '',
@@ -924,6 +928,28 @@ document.addEventListener('DOMContentLoaded', () => {
         progressBarHeightVal.innerText = state.progressBarHeight + 'px';
         drawFrame();
     });
+
+    // --- Video Intro Transition Bindings ---
+    const introTransitionTypeSelect = document.getElementById('intro-transition-type');
+    const introTransitionDurationSlider = document.getElementById('intro-transition-duration');
+    const introTransitionDurationVal = document.getElementById('intro-transition-duration-val');
+
+    if (introTransitionTypeSelect) {
+        introTransitionTypeSelect.addEventListener('change', () => {
+            state.introTransitionType = introTransitionTypeSelect.value;
+            drawFrame();
+        });
+    }
+
+    if (introTransitionDurationSlider) {
+        introTransitionDurationSlider.addEventListener('input', (e) => {
+            state.introTransitionDuration = parseFloat(e.target.value);
+            if (introTransitionDurationVal) {
+                introTransitionDurationVal.innerText = state.introTransitionDuration.toFixed(1) + 's';
+            }
+            drawFrame();
+        });
+    }
 
     // --- Cinematic Filters & Adjustments Bindings ---
     const brightnessSlider = document.getElementById('brightness-slider');
@@ -2177,7 +2203,63 @@ document.addEventListener('DOMContentLoaded', () => {
         
         // --- Step A: Apply Cinematic Filters & Color Adjustments ---
         state.ctx.save();
-        
+
+        // Calculate intro transition values
+        // During export, customExportTime holds the clip-absolute time; during
+        // live playback state.currentTime is used. Both are subtracted from
+        // state.startTime (clip trim-start) to get elapsed seconds within the clip.
+        const isExporting = (state.customExportTime !== undefined);
+        const effectiveTime = isExporting ? state.customExportTime : state.currentTime;
+        const elapsed = effectiveTime - state.startTime;
+        const shouldAnimate = state.isPlaying || isExporting;
+        const transitionActive = shouldAnimate && 
+                                 state.introTransitionType && 
+                                 state.introTransitionType !== 'none' && 
+                                 elapsed >= 0 &&
+                                 elapsed < state.introTransitionDuration;
+
+        let transScale = 1;
+        let transRotation = 0;
+        let transX = 0;
+        let transY = 0;
+        let transAlpha = 1;
+        let transBlur = 0;
+
+        if (transitionActive) {
+            const p = elapsed / state.introTransitionDuration; // 0 to 1
+            const eased = 1 - Math.pow(1 - p, 3); // cubic ease-out
+            
+            if (state.introTransitionType === 'fade') {
+                transAlpha = eased;
+            } else if (state.introTransitionType === 'zoom_spin') {
+                transScale = 0.1 + 0.9 * eased;
+                transRotation = (1 - eased) * (-Math.PI);
+                transAlpha = eased;
+                transBlur = (1 - eased) * 20;
+            } else if (state.introTransitionType === 'slide_right') {
+                transX = canvasW * (1 - eased);
+            } else if (state.introTransitionType === 'slide_left') {
+                transX = -canvasW * (1 - eased);
+            } else if (state.introTransitionType === 'slide_top') {
+                transY = -canvasH * (1 - eased);
+            } else if (state.introTransitionType === 'slide_bottom') {
+                transY = canvasH * (1 - eased);
+            }
+        }
+
+        if (transX !== 0 || transY !== 0) {
+            state.ctx.translate(transX, transY);
+        }
+        if (transScale !== 1 || transRotation !== 0) {
+            state.ctx.translate(canvasW / 2, canvasH / 2);
+            state.ctx.scale(transScale, transScale);
+            state.ctx.rotate(transRotation);
+            state.ctx.translate(-canvasW / 2, -canvasH / 2);
+        }
+        if (transAlpha !== 1) {
+            state.ctx.globalAlpha = transAlpha;
+        }
+
         let filterVal = '';
         let bVal = state.brightness;
         let cVal = state.contrast;
@@ -2217,6 +2299,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (sepiaVal > 0) filterVal += `sepia(${sepiaVal}%) `;
         if (grayscaleVal > 0) filterVal += `grayscale(${grayscaleVal}%) `;
         if (hueVal > 0) filterVal += `hue-rotate(${hueVal}deg) `;
+        if (transBlur > 0.1) filterVal += `blur(${transBlur.toFixed(1)}px) `;
         
         state.ctx.filter = filterVal;
         
@@ -9159,6 +9242,19 @@ document.addEventListener('DOMContentLoaded', () => {
             if (outroDurationVal) outroDurationVal.innerText = state.outroDuration.toFixed(1) + 's';
         }
 
+        // Video Intro Transition settings
+        const introTransitionTypeSelect = document.getElementById('intro-transition-type');
+        const introTransitionDurationSlider = document.getElementById('intro-transition-duration');
+        const introTransitionDurationVal = document.getElementById('intro-transition-duration-val');
+
+        if (introTransitionTypeSelect) introTransitionTypeSelect.value = state.introTransitionType || 'none';
+        if (introTransitionDurationSlider) {
+            introTransitionDurationSlider.value = state.introTransitionDuration || 1.0;
+            if (introTransitionDurationVal) {
+                introTransitionDurationVal.innerText = (state.introTransitionDuration || 1.0).toFixed(1) + 's';
+            }
+        }
+
         // Subtitles enabled
         const subtitlesEnabledToggle = document.getElementById('subtitles-enabled-toggle');
         if (subtitlesEnabledToggle) subtitlesEnabledToggle.checked = state.subtitlesEnabled;
@@ -9246,6 +9342,8 @@ document.addEventListener('DOMContentLoaded', () => {
                     gradeBMid: state.gradeBMid,
                     gradeBHigh: state.gradeBHigh,
                     layoutMode: state.layoutMode,
+                    introTransitionType: state.introTransitionType || 'none',
+                    introTransitionDuration: state.introTransitionDuration || 1.0,
                     introEnabled: state.introEnabled,
                     introTemplate: state.introTemplate,
                     introTitle: state.introTitle,
@@ -9699,6 +9797,8 @@ document.addEventListener('DOMContentLoaded', () => {
                     gradeBMid: state.gradeBMid,
                     gradeBHigh: state.gradeBHigh,
                     layoutMode: state.layoutMode,
+                    introTransitionType: state.introTransitionType || 'none',
+                    introTransitionDuration: state.introTransitionDuration || 1.0,
                     introEnabled: state.introEnabled,
                     introTemplate: state.introTemplate,
                     introTitle: state.introTitle,

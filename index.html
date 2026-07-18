@@ -443,6 +443,36 @@
                             </div>
                         </div>
 
+                        <!-- Video Intro Transition Card -->
+                        <div class="card mt-4">
+                            <div class="card-header">
+                                <i class="fa-solid fa-film card-icon"></i>
+                                <h3>Video Intro Transition (শুরুর ট্রানজিশন)</h3>
+                            </div>
+                            <div class="card-body">
+                                <p class="help-text">ভিডিওর শুরুতেই রানিং ফুটেজটি সোয়াইপ বা জুম হয়ে স্ক্রিনে ফিট হওয়ার জন্য ট্রানজিশন ইফেক্ট সেট করুন।</p>
+                                <div class="control-group">
+                                    <label for="intro-transition-type">Transition Style (ট্রানজিশন স্টাইল)</label>
+                                    <select id="intro-transition-type" class="form-select">
+                                        <option value="none" selected>None (কোনো ট্রানজিশন নেই)</option>
+                                        <option value="fade">Fade In (ফেড ইন)</option>
+                                        <option value="zoom_spin">Zoom & Spin In (ঘুরে ঘুরে স্ক্রিনে ফিট)</option>
+                                        <option value="slide_right">Slide In from Right (ডান থেকে সোয়াইপ)</option>
+                                        <option value="slide_left">Slide In from Left (বাম থেকে সোয়াইপ)</option>
+                                        <option value="slide_top">Slide In from Top (উপর থেকে সোয়াইপ)</option>
+                                        <option value="slide_bottom">Slide In from Bottom (নিচ থেকে সোয়াইপ)</option>
+                                    </select>
+                                </div>
+                                <div class="control-group mt-3">
+                                    <label>Transition Duration (সময়কাল)</label>
+                                    <div class="slider-val-container">
+                                        <input type="range" id="intro-transition-duration" min="0.5" max="3.0" value="1.0" step="0.1">
+                                        <span id="intro-transition-duration-val">1.0s</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
                         <!-- Blur/Mosaic Tool (Phase 4B) -->
                         <div class="card mt-4">
                             <div class="card-header">
