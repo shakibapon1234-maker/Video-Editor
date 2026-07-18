@@ -195,6 +195,18 @@ window.VideoEditor = {
     highlightFreehandSegmentStart: null,
     highlightPreviewPoint: null,
 
+    // Background Fill Regions — solid colour rectangles drawn on top of everything
+    fillRegions: [],
+    selectedFillId: null,
+    isAddingFill: false,
+    isDrawingNewFill: false,
+    fillDragStartX: 0,
+    fillDragStartY: 0,
+    isDraggingFill: false,
+    isResizingFill: false,
+    dragFillOffsetX: 0,
+    dragFillOffsetY: 0,
+
     // Auto Subtitle (Phase 5A)
     subtitles: [],
     isSubtitleRecognitionActive: false,
@@ -2325,178 +2337,6 @@ document.addEventListener('DOMContentLoaded', () => {
             });
         }
 
-        // --- Step A2.5: Video Highlights / Callouts ---
-        // Stored independently from B-roll so a highlight can point to any part of
-        // the underlying running video without covering it with an image or text.
-        if (state.highlights && state.highlights.length > 0) {
-            const currentTime = state.currentTime || 0;
-            state.highlights.forEach((item) => {
-                if (currentTime < item.startSec || currentTime > item.endSec) return;
-                const x = drawX + item.x * drawW;
-                const y = drawY + item.y * drawH;
-                const w = item.w * drawW;
-                const h = item.h * drawH;
-                const isFreehand = item.shape === 'freehand';
-                const previewPoint = isFreehand && state.isDrawingNewHighlight && item.id === state.selectedHighlightId
-                    ? state.highlightPreviewPoint : null;
-                const pathPoints = previewPoint ? [...item.points, previewPoint] : item.points;
-                if (isFreehand && (!pathPoints || pathPoints.length < 2)) return;
-                if (!isFreehand && (w <= 0 || h <= 0)) return;
-
-                const color = item.color || '#00e5ff';
-                const alpha = Math.max(0, Math.min(0.85, (item.fillOpacity ?? 16) / 100));
-                const width = Math.max(1, item.lineWidth || 6);
-                // The neon "glow" is a stroke-only effect. Applying it to the fill as
-                // well (as before) made the fill look like a blurry, washed-out haze
-                // that didn't track the Fill Opacity slider at all — a 0% fill would
-                // still show a soft colored smear because the *shadow* had its own,
-                // separate full-strength opacity. Keeping the glow modest and firmly
-                // scoped to stroke() calls only fixes both the "haze" and the
-                // slider-doesn't-do-anything complaints in one go.
-                const glowBlur = Math.min(width * 0.6, 6);
-                state.ctx.save();
-                state.ctx.strokeStyle = color;
-                state.ctx.lineWidth = width;
-                state.ctx.lineJoin = 'round';
-                state.ctx.lineCap = 'round';
-
-                // While the shape is still being sized by dragging on the preview,
-                // show it as-is (no trace animation — its geometry isn't final yet).
-                // During normal playback/export, animate it: the outline starts at
-                // one point, travels all the way around the shape, and finishes
-                // back at that same point, instead of just popping in.
-                const isBeingSizedNow = state.isDrawingNewHighlight && item.id === state.selectedHighlightId;
-                const drawDuration = Math.max(0.15, Math.min((item.endSec - item.startSec) - 0.05, item.drawDuration || 0.6));
-                const elapsed = Math.max(0, currentTime - item.startSec);
-                const traceProgress = isBeingSizedNow ? 1 : Math.min(1, elapsed / drawDuration);
-
-                // Walks an ordered list of points (a "trace path") and adds line
-                // segments to the current canvas path up to `progress` (0–1) of its
-                // total length, so the stroke appears to be travelling along it.
-                const traceOutline = (points, progress) => {
-                    if (!points || points.length < 2) return;
-                    state.ctx.moveTo(points[0].x, points[0].y);
-                    if (progress >= 1) {
-                        for (let i = 1; i < points.length; i++) state.ctx.lineTo(points[i].x, points[i].y);
-                        return;
-                    }
-                    let total = 0;
-                    const segLens = [];
-                    for (let i = 1; i < points.length; i++) {
-                        const len = Math.hypot(points[i].x - points[i - 1].x, points[i].y - points[i - 1].y);
-                        segLens.push(len);
-                        total += len;
-                    }
-                    const target = total * Math.max(0, progress);
-                    let covered = 0;
-                    for (let i = 0; i < segLens.length; i++) {
-                        const segLen = segLens[i];
-                        if (covered + segLen <= target) {
-                            state.ctx.lineTo(points[i + 1].x, points[i + 1].y);
-                            covered += segLen;
-                        } else {
-                            const ratio = segLen > 0 ? (target - covered) / segLen : 0;
-                            state.ctx.lineTo(
-                                points[i].x + (points[i + 1].x - points[i].x) * ratio,
-                                points[i].y + (points[i + 1].y - points[i].y) * ratio
-                            );
-                            break;
-                        }
-                    }
-                };
-
-                if (isFreehand) {
-                    if (isBeingSizedNow) {
-                        state.ctx.beginPath();
-                        state.ctx.moveTo(drawX + pathPoints[0].x * drawW, drawY + pathPoints[0].y * drawH);
-                        pathPoints.slice(1).forEach(point => state.ctx.lineTo(drawX + point.x * drawW, drawY + point.y * drawH));
-                        // Keep a multi-side freehand path open while the editor is still
-                        // adding sides. Closing it early creates an unwanted diagonal.
-                        if (item.isClosed) {
-                            state.ctx.closePath();
-                            state.ctx.shadowBlur = 0;
-                            state.ctx.fillStyle = hexToRgba(color, alpha);
-                            state.ctx.fill();
-                        }
-                        state.ctx.shadowColor = color;
-                        state.ctx.shadowBlur = glowBlur;
-                        state.ctx.stroke();
-                    } else {
-                        const px = pathPoints.map(p => ({ x: drawX + p.x * drawW, y: drawY + p.y * drawH }));
-                        const loopPoints = item.isClosed ? [...px, px[0]] : px;
-                        state.ctx.beginPath();
-                        traceOutline(loopPoints, traceProgress);
-                        if (item.isClosed && traceProgress >= 1) {
-                            state.ctx.closePath();
-                            state.ctx.shadowBlur = 0;
-                            state.ctx.fillStyle = hexToRgba(color, alpha * traceProgress);
-                            state.ctx.fill();
-                        }
-                        state.ctx.shadowColor = color;
-                        state.ctx.shadowBlur = glowBlur;
-                        state.ctx.stroke();
-                    }
-                } else if (item.shape === 'underline') {
-                    // A line has no enclosed area to loop back around, so it simply
-                    // draws left-to-right over the same duration.
-                    state.ctx.beginPath();
-                    traceOutline([{ x, y: y + h }, { x: x + w, y: y + h }], traceProgress);
-                    state.ctx.shadowColor = color;
-                    state.ctx.shadowBlur = glowBlur;
-                    state.ctx.stroke();
-                } else {
-                    let outline;
-                    if (item.shape === 'circle') {
-                        const cx = x + w / 2, cy = y + h / 2, rx = w / 2, ry = h / 2;
-                        const segments = 48;
-                        outline = [];
-                        // Start at the top of the ellipse and travel clockwise all the
-                        // way around back to that exact same starting point.
-                        for (let i = 0; i <= segments; i++) {
-                            const theta = -Math.PI / 2 + (i / segments) * Math.PI * 2;
-                            outline.push({ x: cx + rx * Math.cos(theta), y: cy + ry * Math.sin(theta) });
-                        }
-                    } else if (item.shape === 'hexagon') {
-                        const inset = Math.min(w * 0.25, h * 0.35);
-                        const verts = [
-                            { x: x + inset, y },
-                            { x: x + w - inset, y },
-                            { x: x + w, y: y + h / 2 },
-                            { x: x + w - inset, y: y + h },
-                            { x: x + inset, y: y + h },
-                            { x, y: y + h / 2 }
-                        ];
-                        outline = [...verts, verts[0]];
-                    } else {
-                        outline = [{ x, y }, { x: x + w, y }, { x: x + w, y: y + h }, { x, y: y + h }, { x, y }];
-                    }
-                    state.ctx.beginPath();
-                    traceOutline(outline, traceProgress);
-                    if (traceProgress >= 1) state.ctx.closePath();
-                    // The fill grows in alongside the outline so the highlight reads
-                    // like a marker sweeping around and shading the area as it goes,
-                    // rather than the fill just appearing once the trace finishes.
-                    // Filled with no shadow so it stays crisp and matches the Fill
-                    // Opacity slider exactly — only the outline stroke gets the glow.
-                    state.ctx.shadowBlur = 0;
-                    state.ctx.fillStyle = hexToRgba(color, alpha * traceProgress);
-                    state.ctx.fill();
-                    state.ctx.shadowColor = color;
-                    state.ctx.shadowBlur = glowBlur;
-                    state.ctx.stroke();
-                }
-
-                // Editing guides are preview-only and never appear in normal playback/export.
-                if (state.currentStep === 3 && state.isAddingHighlight && item.id === state.selectedHighlightId) {
-                    state.ctx.shadowBlur = 0;
-                    state.ctx.setLineDash([6, 4]);
-                    state.ctx.strokeStyle = '#ffffff';
-                    state.ctx.lineWidth = 1.5;
-                    state.ctx.strokeRect(x - 4, y - 4, w + 8, h + 8);
-                }
-                state.ctx.restore();
-            });
-        }
 
         // --- Step E: Draw B-roll / Topic Image Overlays (Phase 5D, unified in v2.5) ---
         // NOTE: Steps B/B2/C/D (banners, ticker, logo, progress bar) have been moved
@@ -3869,7 +3709,194 @@ document.addEventListener('DOMContentLoaded', () => {
             });
         }
 
-        // --- Step G: Draw Auto Subtitle (Phase 5A) ---
+        // --- Step E1.5: Background Fill Regions ---
+        // Rendered on top of B-roll and text overlays but below the highlight callout guides.
+        if (state.fillRegions && state.fillRegions.length > 0) {
+            const currentTime = state.currentTime || 0;
+            const canvasW = state.canvas.width;
+            const canvasH = state.canvas.height;
+            state.fillRegions.forEach(item => {
+                if (currentTime < item.startSec || currentTime > item.endSec) return;
+                if (item.w <= 0 || item.h <= 0) return;
+                const rx = item.x * canvasW;
+                const ry = item.y * canvasH;
+                const rw = item.w * canvasW;
+                const rh = item.h * canvasH;
+                state.ctx.save();
+                state.ctx.globalAlpha = Math.max(0, Math.min(1, (item.opacity ?? 80) / 100));
+                state.ctx.fillStyle = item.color || '#000000';
+                state.ctx.fillRect(rx, ry, rw, rh);
+                state.ctx.globalAlpha = 1;
+                // Selection outline in edit mode
+                if (state.currentStep === 3 && state.isAddingFill && item.id === state.selectedFillId) {
+                    state.ctx.strokeStyle = '#ffffff';
+                    state.ctx.lineWidth = 2;
+                    state.ctx.setLineDash([6, 4]);
+                    state.ctx.strokeRect(rx - 2, ry - 2, rw + 4, rh + 4);
+                    state.ctx.setLineDash([]);
+                    // Resize handle (bottom-right corner)
+                    state.ctx.fillStyle = '#ffffff';
+                    state.ctx.strokeStyle = '#4f46e5';
+                    state.ctx.lineWidth = 1.5;
+                    state.ctx.fillRect(rx + rw - 6, ry + rh - 6, 12, 12);
+                    state.ctx.strokeRect(rx + rw - 6, ry + rh - 6, 12, 12);
+                }
+                state.ctx.restore();
+            });
+        }
+
+        // --- Step E2: Video Highlights / Callouts (rendered AFTER B-roll so highlights
+        // appear on top of B-roll images, text overlays and any other canvas content) ---
+        if (state.highlights && state.highlights.length > 0) {
+            const currentTime = state.currentTime || 0;
+            // Re-read drawX/drawW from the current bounds so coordinates still map
+            // correctly even when the layout changes between the two render steps.
+            const hBounds = getRenderedVideoBounds();
+            const hDrawX = hBounds.x, hDrawY = hBounds.y;
+            const hDrawW = hBounds.w, hDrawH = hBounds.h;
+            state.highlights.forEach((item) => {
+                if (currentTime < item.startSec || currentTime > item.endSec) return;
+                const x = hDrawX + item.x * hDrawW;
+                const y = hDrawY + item.y * hDrawH;
+                const w = item.w * hDrawW;
+                const h = item.h * hDrawH;
+                const isFreehand = item.shape === 'freehand';
+                const previewPoint = isFreehand && state.isDrawingNewHighlight && item.id === state.selectedHighlightId
+                    ? state.highlightPreviewPoint : null;
+                const pathPoints = previewPoint ? [...item.points, previewPoint] : item.points;
+                if (isFreehand && (!pathPoints || pathPoints.length < 2)) return;
+                if (!isFreehand && (w <= 0 || h <= 0)) return;
+
+                const color = item.color || '#00e5ff';
+                const alpha = Math.max(0, Math.min(0.85, (item.fillOpacity ?? 16) / 100));
+                const width = Math.max(1, item.lineWidth || 6);
+                const glowBlur = Math.min(width * 0.6, 6);
+                state.ctx.save();
+                state.ctx.strokeStyle = color;
+                state.ctx.lineWidth = width;
+                state.ctx.lineJoin = 'round';
+                state.ctx.lineCap = 'round';
+
+                const isBeingSizedNow = state.isDrawingNewHighlight && item.id === state.selectedHighlightId;
+                const drawDuration = Math.max(0.15, Math.min((item.endSec - item.startSec) - 0.05, item.drawDuration || 0.6));
+                const elapsed = Math.max(0, currentTime - item.startSec);
+                const traceProgress = isBeingSizedNow ? 1 : Math.min(1, elapsed / drawDuration);
+
+                const traceOutline = (points, progress) => {
+                    if (!points || points.length < 2) return;
+                    state.ctx.moveTo(points[0].x, points[0].y);
+                    if (progress >= 1) {
+                        for (let i = 1; i < points.length; i++) state.ctx.lineTo(points[i].x, points[i].y);
+                        return;
+                    }
+                    let total = 0;
+                    const segLens = [];
+                    for (let i = 1; i < points.length; i++) {
+                        const len = Math.hypot(points[i].x - points[i - 1].x, points[i].y - points[i - 1].y);
+                        segLens.push(len);
+                        total += len;
+                    }
+                    const target = total * Math.max(0, progress);
+                    let covered = 0;
+                    for (let i = 0; i < segLens.length; i++) {
+                        const segLen = segLens[i];
+                        if (covered + segLen <= target) {
+                            state.ctx.lineTo(points[i + 1].x, points[i + 1].y);
+                            covered += segLen;
+                        } else {
+                            const ratio = segLen > 0 ? (target - covered) / segLen : 0;
+                            state.ctx.lineTo(
+                                points[i].x + (points[i + 1].x - points[i].x) * ratio,
+                                points[i].y + (points[i + 1].y - points[i].y) * ratio
+                            );
+                            break;
+                        }
+                    }
+                };
+
+                if (isFreehand) {
+                    if (isBeingSizedNow) {
+                        state.ctx.beginPath();
+                        state.ctx.moveTo(hDrawX + pathPoints[0].x * hDrawW, hDrawY + pathPoints[0].y * hDrawH);
+                        pathPoints.slice(1).forEach(point => state.ctx.lineTo(hDrawX + point.x * hDrawW, hDrawY + point.y * hDrawH));
+                        if (item.isClosed) {
+                            state.ctx.closePath();
+                            state.ctx.shadowBlur = 0;
+                            state.ctx.fillStyle = hexToRgba(color, alpha);
+                            state.ctx.fill();
+                        }
+                        state.ctx.shadowColor = color;
+                        state.ctx.shadowBlur = glowBlur;
+                        state.ctx.stroke();
+                    } else {
+                        const px = pathPoints.map(p => ({ x: hDrawX + p.x * hDrawW, y: hDrawY + p.y * hDrawH }));
+                        const loopPoints = item.isClosed ? [...px, px[0]] : px;
+                        state.ctx.beginPath();
+                        traceOutline(loopPoints, traceProgress);
+                        if (item.isClosed && traceProgress >= 1) {
+                            state.ctx.closePath();
+                            state.ctx.shadowBlur = 0;
+                            state.ctx.fillStyle = hexToRgba(color, alpha * traceProgress);
+                            state.ctx.fill();
+                        }
+                        state.ctx.shadowColor = color;
+                        state.ctx.shadowBlur = glowBlur;
+                        state.ctx.stroke();
+                    }
+                } else if (item.shape === 'underline') {
+                    state.ctx.beginPath();
+                    traceOutline([{ x, y: y + h }, { x: x + w, y: y + h }], traceProgress);
+                    state.ctx.shadowColor = color;
+                    state.ctx.shadowBlur = glowBlur;
+                    state.ctx.stroke();
+                } else {
+                    let outline;
+                    if (item.shape === 'circle') {
+                        const cx = x + w / 2, cy = y + h / 2, rx = w / 2, ry = h / 2;
+                        const segments = 48;
+                        outline = [];
+                        for (let i = 0; i <= segments; i++) {
+                            const theta = -Math.PI / 2 + (i / segments) * Math.PI * 2;
+                            outline.push({ x: cx + rx * Math.cos(theta), y: cy + ry * Math.sin(theta) });
+                        }
+                    } else if (item.shape === 'hexagon') {
+                        const inset = Math.min(w * 0.25, h * 0.35);
+                        const verts = [
+                            { x: x + inset, y },
+                            { x: x + w - inset, y },
+                            { x: x + w, y: y + h / 2 },
+                            { x: x + w - inset, y: y + h },
+                            { x: x + inset, y: y + h },
+                            { x, y: y + h / 2 }
+                        ];
+                        outline = [...verts, verts[0]];
+                    } else {
+                        outline = [{ x, y }, { x: x + w, y }, { x: x + w, y: y + h }, { x, y: y + h }, { x, y }];
+                    }
+                    state.ctx.beginPath();
+                    traceOutline(outline, traceProgress);
+                    if (traceProgress >= 1) state.ctx.closePath();
+                    state.ctx.shadowBlur = 0;
+                    state.ctx.fillStyle = hexToRgba(color, alpha * traceProgress);
+                    state.ctx.fill();
+                    state.ctx.shadowColor = color;
+                    state.ctx.shadowBlur = glowBlur;
+                    state.ctx.stroke();
+                }
+
+                // Editing guides — preview-only, not exported.
+                if (state.currentStep === 3 && state.isAddingHighlight && item.id === state.selectedHighlightId) {
+                    state.ctx.shadowBlur = 0;
+                    state.ctx.setLineDash([6, 4]);
+                    state.ctx.strokeStyle = '#ffffff';
+                    state.ctx.lineWidth = 1.5;
+                    state.ctx.strokeRect(x - 4, y - 4, w + 8, h + 8);
+                }
+                state.ctx.restore();
+            });
+        }
+
+
         if (state.subtitlesEnabled && state.subtitles && state.subtitles.length > 0) {
             const currentTime = state.currentTime;
             const activeSub = state.subtitles.find(s => currentTime >= s.startSec && currentTime <= s.endSec);
@@ -4206,8 +4233,67 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
 
+        // Background Fill tool — drag a rectangle anywhere on the canvas to paint a solid colour block.
+        if (state.isAddingFill) {
+            const coords = getCanvasCoords(e);
+            const now = Math.max(0, state.currentTime || 0);
+            const canvasW = state.canvas.width;
+            const canvasH = state.canvas.height;
+            const nx = coords.x / canvasW;
+            const ny = coords.y / canvasH;
+
+            // Check if clicking on an existing fill region for drag/resize
+            const hitRegion = [...(state.fillRegions || [])].reverse().find(r => {
+                if (now < r.startSec || now > r.endSec) return false;
+                const rx = r.x * canvasW, ry = r.y * canvasH;
+                const rw = r.w * canvasW, rh = r.h * canvasH;
+                return coords.x >= rx && coords.x <= rx + rw && coords.y >= ry && coords.y <= ry + rh;
+            });
+
+            if (hitRegion) {
+                state.selectedFillId = hitRegion.id;
+                const rx = hitRegion.x * canvasW, ry = hitRegion.y * canvasH;
+                const rw = hitRegion.w * canvasW, rh = hitRegion.h * canvasH;
+                // Bottom-right corner resize handle (20px)
+                if (Math.hypot(coords.x - (rx + rw), coords.y - (ry + rh)) < 20) {
+                    state.isResizingFill = true;
+                } else {
+                    state.isDraggingFill = true;
+                    state.dragFillOffsetX = coords.x - rx;
+                    state.dragFillOffsetY = coords.y - ry;
+                }
+                if (window.onFillSelected) window.onFillSelected(hitRegion.id);
+                drawFrame();
+                e.preventDefault();
+                return;
+            }
+
+            // Start drawing a new fill region
+            const fillColor = document.getElementById('fill-region-color')?.value || '#000000';
+            const fillOpacity = parseInt(document.getElementById('fill-region-opacity')?.value || '80');
+            const item = {
+                id: Date.now(),
+                color: fillColor,
+                opacity: fillOpacity,
+                x: nx, y: ny, w: 0, h: 0,
+                startSec: now,
+                endSec: Math.max(now + 1, state.endTime || state.duration || 5)
+            };
+            state.fillRegions = state.fillRegions || [];
+            state.fillRegions.push(item);
+            state.selectedFillId = item.id;
+            state.isDrawingNewFill = true;
+            state.fillDragStartX = nx;
+            state.fillDragStartY = ny;
+            if (window.onFillSelected) window.onFillSelected(item.id);
+            drawFrame();
+            e.preventDefault();
+            return;
+        }
+
         // Video Highlight tool — drag across the live preview to make a callout.
         if (state.isAddingHighlight) {
+
             const coords = getCanvasCoords(e);
             const bounds = getRenderedVideoBounds();
             if (bounds.w <= 0 || bounds.h <= 0) return;
@@ -5434,6 +5520,41 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
 
+        // Background Fill tool — handle draw / drag / resize during mousemove
+        if (state.isAddingFill && (state.isDrawingNewFill || state.isDraggingFill || state.isResizingFill)) {
+            const coords = getCanvasCoords(e);
+            const canvasW = state.canvas.width;
+            const canvasH = state.canvas.height;
+            const item = (state.fillRegions || []).find(r => r.id === state.selectedFillId);
+            if (!item) return;
+
+            if (state.isDrawingNewFill) {
+                const x0 = state.fillDragStartX * canvasW;
+                const y0 = state.fillDragStartY * canvasH;
+                const x1 = Math.max(0, Math.min(canvasW, coords.x));
+                const y1 = Math.max(0, Math.min(canvasH, coords.y));
+                item.x = Math.min(x0, x1) / canvasW;
+                item.y = Math.min(y0, y1) / canvasH;
+                item.w = Math.abs(x1 - x0) / canvasW;
+                item.h = Math.abs(y1 - y0) / canvasH;
+            } else if (state.isDraggingFill) {
+                let nx = (coords.x - state.dragFillOffsetX) / canvasW;
+                let ny = (coords.y - state.dragFillOffsetY) / canvasH;
+                nx = Math.max(0, Math.min(1 - item.w, nx));
+                ny = Math.max(0, Math.min(1 - item.h, ny));
+                item.x = nx;
+                item.y = ny;
+            } else if (state.isResizingFill) {
+                const rx = item.x * canvasW, ry = item.y * canvasH;
+                const newW = Math.max(0.01, (coords.x - rx) / canvasW);
+                const newH = Math.max(0.01, (coords.y - ry) / canvasH);
+                item.w = Math.min(1 - item.x, newW);
+                item.h = Math.min(1 - item.y, newH);
+            }
+            drawFrame();
+            return;
+        }
+
         // Blur/Mosaic region tool (Phase 4B)
         if (state.isAddingBlur && (state.isDrawingNewBlur || state.isDraggingBlur || state.isResizingBlur)) {
             const coords = getCanvasCoords(e);
@@ -5945,6 +6066,24 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
 
+        // Background Fill tool — finalise draw / drag / resize
+        if (state.isDrawingNewFill || state.isDraggingFill || state.isResizingFill) {
+            const wasDrawing = state.isDrawingNewFill;
+            state.isDrawingNewFill = false;
+            state.isDraggingFill = false;
+            state.isResizingFill = false;
+            // Discard tiny accidental clicks
+            const item = (state.fillRegions || []).find(r => r.id === state.selectedFillId);
+            if (wasDrawing && item && (item.w < 0.01 || item.h < 0.01)) {
+                state.fillRegions = state.fillRegions.filter(r => r.id !== item.id);
+                state.selectedFillId = null;
+            }
+            if (window.onFillSelected) window.onFillSelected(state.selectedFillId);
+            if (typeof triggerAutoSave === 'function') triggerAutoSave();
+            drawFrame();
+            return;
+        }
+
         state.isDraggingLogo = false;
         state.isResizingLogo = false;
         state.isDraggingTextOverlay = false;
@@ -6343,7 +6482,14 @@ document.addEventListener('DOMContentLoaded', () => {
     if (highlightToolToggle) highlightToolToggle.addEventListener('change', () => {
         state.isAddingHighlight = highlightToolToggle.checked;
         highlightActionsContainer.style.display = state.isAddingHighlight ? 'block' : 'none';
-        if (state.isAddingHighlight) renderHighlightList();
+        if (state.isAddingHighlight) {
+            renderHighlightList();
+            if (fillToolToggle && fillToolToggle.checked) {
+                fillToolToggle.checked = false;
+                state.isAddingFill = false;
+                if (fillActionsContainer) fillActionsContainer.style.display = 'none';
+            }
+        }
         drawFrame();
     });
     [highlightShapeSelect, highlightColorInput, highlightLineWidth, highlightFillOpacity, highlightDrawSpeed].forEach(el => el && el.addEventListener('input', () => {
@@ -6357,8 +6503,104 @@ document.addEventListener('DOMContentLoaded', () => {
     if (deleteHighlightBtn) deleteHighlightBtn.addEventListener('click', () => { state.highlights = state.highlights.filter(h => h.id !== state.selectedHighlightId); state.selectedHighlightId = null; highlightTimingContainer.style.display = 'none'; renderHighlightList(); drawFrame(); });
     window.onHighlightSelected = function(id) { state.selectedHighlightId = id; renderHighlightList(); showHighlightControls(id); };
 
+    // --- Background Fill Tool Bindings ---
+    const fillToolToggle = document.getElementById('fill-tool-toggle');
+    const fillActionsContainer = document.getElementById('fill-actions-container');
+    const fillColorInput = document.getElementById('fill-region-color');
+    const fillColorVal = document.getElementById('fill-region-color-val');
+    const fillOpacitySlider = document.getElementById('fill-region-opacity');
+    const fillOpacityVal = document.getElementById('fill-region-opacity-val');
+    const fillListEl = document.getElementById('fill-list');
+    const fillTimingContainer = document.getElementById('fill-timing-container');
+    const fillStartInput = document.getElementById('fill-start');
+    const fillEndInput = document.getElementById('fill-end');
+    const deleteFillBtn = document.getElementById('delete-fill-btn');
+
+    function selectedFill() { return (state.fillRegions || []).find(r => r.id === state.selectedFillId); }
+
+    function renderFillList() {
+        if (!fillListEl) return;
+        fillListEl.innerHTML = '';
+        (state.fillRegions || []).forEach((item, index) => {
+            const row = document.createElement('div');
+            row.className = 'text-overlay-list-item' + (item.id === state.selectedFillId ? ' active' : '');
+            row.style.cssText = `display:flex;align-items:center;justify-content:space-between;padding:8px 12px;border-radius:6px;margin-bottom:6px;cursor:pointer;background:${item.id === state.selectedFillId ? 'rgba(255,200,0,.12)' : 'rgba(255,255,255,.04)'};border:1px solid ${item.id === state.selectedFillId ? '#ffc800' : 'transparent'};`;
+            row.innerHTML = `<span style="font-size:13px"><i class="fa-solid fa-fill-drip" style="color:${item.color}"></i> Fill ${index + 1}</span><span style="font-size:11px;opacity:.6">${item.startSec.toFixed(1)}s–${item.endSec.toFixed(1)}s</span>`;
+            row.addEventListener('click', () => { state.selectedFillId = item.id; showFillControls(item.id); renderFillList(); drawFrame(); });
+            fillListEl.appendChild(row);
+        });
+    }
+
+    function showFillControls(id) {
+        const item = (state.fillRegions || []).find(r => r.id === id);
+        if (!item) { if (fillTimingContainer) fillTimingContainer.style.display = 'none'; return; }
+        if (fillTimingContainer) fillTimingContainer.style.display = 'block';
+        if (fillColorInput) { fillColorInput.value = item.color; }
+        if (fillColorVal) fillColorVal.innerText = item.color.toUpperCase();
+        if (fillOpacitySlider) fillOpacitySlider.value = item.opacity ?? 80;
+        if (fillOpacityVal) fillOpacityVal.innerText = (item.opacity ?? 80) + '%';
+        if (fillStartInput) fillStartInput.value = item.startSec;
+        if (fillEndInput) fillEndInput.value = item.endSec;
+    }
+
+    if (fillToolToggle) fillToolToggle.addEventListener('change', () => {
+        state.isAddingFill = fillToolToggle.checked;
+        if (fillActionsContainer) fillActionsContainer.style.display = state.isAddingFill ? 'block' : 'none';
+        if (state.isAddingFill) {
+            renderFillList();
+            if (highlightToolToggle && highlightToolToggle.checked) {
+                highlightToolToggle.checked = false;
+                state.isAddingHighlight = false;
+                highlightActionsContainer.style.display = 'none';
+            }
+        }
+        drawFrame();
+    });
+
+    if (fillColorInput) fillColorInput.addEventListener('input', () => {
+        if (fillColorVal) fillColorVal.innerText = fillColorInput.value.toUpperCase();
+        const item = selectedFill(); if (item) { item.color = fillColorInput.value; drawFrame(); }
+    });
+
+    if (fillOpacitySlider) fillOpacitySlider.addEventListener('input', () => {
+        if (fillOpacityVal) fillOpacityVal.innerText = fillOpacitySlider.value + '%';
+        const item = selectedFill(); if (item) { item.opacity = parseInt(fillOpacitySlider.value); drawFrame(); }
+    });
+
+    if (fillStartInput) fillStartInput.addEventListener('input', () => {
+        const item = selectedFill();
+        if (item) {
+            item.startSec = Math.max(0, parseFloat(fillStartInput.value) || 0);
+            item.endSec = Math.max(item.startSec + 0.1, item.endSec);
+            if (fillEndInput) fillEndInput.value = item.endSec;
+            renderFillList(); drawFrame();
+        }
+    });
+
+    if (fillEndInput) fillEndInput.addEventListener('input', () => {
+        const item = selectedFill();
+        if (item) {
+            item.endSec = Math.max(item.startSec + 0.1, parseFloat(fillEndInput.value) || item.startSec + 1);
+            renderFillList(); drawFrame();
+        }
+    });
+
+    if (deleteFillBtn) deleteFillBtn.addEventListener('click', () => {
+        state.fillRegions = (state.fillRegions || []).filter(r => r.id !== state.selectedFillId);
+        state.selectedFillId = null;
+        if (fillTimingContainer) fillTimingContainer.style.display = 'none';
+        renderFillList(); drawFrame();
+    });
+
+    window.onFillSelected = function(id) {
+        state.selectedFillId = id;
+        renderFillList();
+        showFillControls(id);
+    };
+
     // --- Text Overlay Bindings (Phase 2C) ---
     const textOverlayInput = document.getElementById('text-overlay-input');
+
     const textOverlayFontsizeSlider = document.getElementById('text-overlay-fontsize');
     const textOverlayFontsizeVal = document.getElementById('text-overlay-fontsize-val');
     const textOverlayColorInput = document.getElementById('text-overlay-color');
@@ -8889,6 +9131,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 },
                 textOverlays: state.textOverlays,
                 highlights: state.highlights,
+                fillRegions: state.fillRegions || [],
                 stickers: state.stickers,
                 symbolOverlays: state.symbolOverlays,
                 shapeOverlays: state.shapeOverlays,
@@ -9211,6 +9454,7 @@ document.addEventListener('DOMContentLoaded', () => {
             Object.assign(state, data.settings);
             state.textOverlays = data.textOverlays || [];
             state.highlights = data.highlights || [];
+            state.fillRegions = data.fillRegions || [];
             state.stickers = data.stickers || [];
             state.symbolOverlays = data.symbolOverlays || [];
             state.shapeOverlays = data.shapeOverlays || [];
@@ -9340,6 +9584,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 },
                 textOverlays: state.textOverlays,
                 highlights: state.highlights,
+                fillRegions: state.fillRegions || [],
                 stickers: state.stickers,
                 symbolOverlays: state.symbolOverlays,
                 shapeOverlays: state.shapeOverlays,
@@ -9551,6 +9796,7 @@ document.addEventListener('DOMContentLoaded', () => {
             Object.assign(state, savedData.settings);
             state.textOverlays = savedData.textOverlays || [];
             state.highlights = savedData.highlights || [];
+            state.fillRegions = savedData.fillRegions || [];
             state.stickers = savedData.stickers || [];
             state.symbolOverlays = savedData.symbolOverlays || [];
             state.shapeOverlays = savedData.shapeOverlays || [];
@@ -10273,19 +10519,21 @@ document.addEventListener('DOMContentLoaded', () => {
                 drawFrame();
                 break;
             case 'arrowleft':
-                // Step backward by 0.05s
+                // Step backward by 1s
                 e.preventDefault();
-                let targetPrevTime = Math.max(0, state.currentTime - 0.05);
+                let targetPrevTime = Math.max(0, state.currentTime - 1.0);
                 state.currentTime = targetPrevTime;
                 updatePlayhead();
+                drawFrame();
                 break;
             case 'arrowright':
-                // Step forward by 0.05s
+                // Step forward by 1s
                 e.preventDefault();
                 let maxDuration = activeClip.duration || state.duration || 5;
-                let targetNextTime = Math.min(maxDuration, state.currentTime + 0.05);
+                let targetNextTime = Math.min(maxDuration, state.currentTime + 1.0);
                 state.currentTime = targetNextTime;
                 updatePlayhead();
+                drawFrame();
                 break;
         }
     });

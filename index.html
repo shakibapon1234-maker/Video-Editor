@@ -841,6 +841,44 @@
                             </div>
                         </div>
 
+                        <!-- Background Fill Tool (ব্যাকগ্রাউন্ড ফিল) -->
+                        <div class="card mt-4">
+                            <div class="card-header">
+                                <i class="fa-solid fa-fill-drip card-icon"></i>
+                                <h3>Background Fill (ব্যাকগ্রাউন্ড ফিল)</h3>
+                            </div>
+                            <div class="card-body">
+                                <p class="help-text">ভিডিওর যেকোনো জায়গায় drag করুন — সেই এলাকাটা solid color দিয়ে fill হয়ে যাবে। Text, Image, B-roll সবার উপরে কাজ করে।</p>
+                                <label class="toggle-row mt-3">
+                                    <div><strong>Draw Fill on Preview</strong><p>ক্যানভাসে drag করে fill আঁকুন</p></div>
+                                    <input type="checkbox" id="fill-tool-toggle"><span class="toggle-slider"></span>
+                                </label>
+                                <div id="fill-actions-container" style="display:none;">
+                                    <div class="control-group color-select-group mt-3">
+                                        <label>Fill Color (রঙ)</label>
+                                        <div class="color-picker-wrapper">
+                                            <input type="color" id="fill-region-color" value="#000000">
+                                            <span class="color-value-text" id="fill-region-color-val">#000000</span>
+                                        </div>
+                                    </div>
+                                    <div class="control-group mt-2">
+                                        <label>Opacity (স্বচ্ছতা)</label>
+                                        <div class="slider-val-container">
+                                            <input type="range" id="fill-region-opacity" min="5" max="100" value="80">
+                                            <span id="fill-region-opacity-val">80%</span>
+                                        </div>
+                                    </div>
+                                    <div id="fill-list" class="text-overlay-list mt-3"></div>
+                                    <div id="fill-timing-container" class="text-overlay-timing mt-3" style="display:none;">
+                                        <p class="help-text">এই fill-টি কোন সময়ে দেখা যাবে তা ঠিক করুন।</p>
+                                        <div class="control-group"><label>Show From (সেকেন্ড)</label><input type="number" id="fill-start" class="form-input" min="0" step="0.1"></div>
+                                        <div class="control-group mt-2"><label>Show Until (সেকেন্ড)</label><input type="number" id="fill-end" class="form-input" min="0" step="0.1"></div>
+                                        <button id="delete-fill-btn" class="btn-text-danger mt-2" type="button"><i class="fa-solid fa-trash-can"></i> Remove This Fill</button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
                         <div class="card mt-4">
                             <div class="card-header">
                                 <i class="fa-solid fa-font card-icon"></i>
@@ -1198,12 +1236,12 @@
                                             <option value="rise">Rise / Build-up (উত্থান শব্দ)</option>
                                             <option value="bass_drop">Bass Drop (বেস ড্রপ শব্দ)</option>
                                             <option value="notification">Notification Ding (নোটিফিকেশন শব্দ)</option>
-                                            <option value="yes_ding">Yes! মুড (উজ্জ্বল, ইতিবাচক টোন)</option>
-                                            <option value="no_buzz">No! মুড (বাজার/ভুল উত্তরের টোন)</option>
-                                            <option value="wow_swoop">Wow! মুড (রাইজিং সারপ্রাইজ হুইসল)</option>
+                                            <option value="yes_ding">Yes! (আসল ভয়েস)</option>
+                                            <option value="no_buzz">No! (আসল ভয়েস)</option>
+                                            <option value="wow_swoop">Wow! (আসল ভয়েস)</option>
                                             <option value="custom">নিজের সাউন্ড আপলোড করুন (Custom Upload)</option>
                                         </select>
-                                        <p class="help-text mt-1">প্রিভিউ প্লে করলে বা ভিডিও এক্সপোর্ট করলে, ঠিক যেই মুহূর্তে B-roll আসে ও চলে যায়, তখন এই শব্দটি বাজবে। "Yes/No/Wow" এখানে আসল ভয়েস না — কাছাকাছি মুডের সিন্থেসাইজড টোন। আসল ভয়েস ক্লিপের জন্য নিচের "Custom Upload" ব্যবহার করুন।</p>
+                                        <p class="help-text mt-1">প্রিভিউ বা এক্সপোর্টে B-roll আসা/যাওয়ার সময় এই শব্দ বাজবে। Yes/No/Wow এখন আসল spoken voice। আরও কাস্টম ভয়েস ক্লিপের জন্য নিচের "Custom Upload" ব্যবহার করুন।</p>
                                         <div class="control-group mt-2" id="broll-custom-sound-container" style="display:none;">
                                             <label>কাস্টম সাউন্ড ফাইল (mp3/wav) — ফ্রি সাইট থেকে ডাউনলোড করা yes/no/wow ক্লিপ এখানে আপলোড করুন</label>
                                             <input type="file" id="broll-custom-sound-input" accept="audio/*" class="form-input">
@@ -2141,6 +2179,7 @@
     <video id="hidden-video" style="display: none;" crossOrigin="anonymous"></video>
 
     <!-- JS Scripts -->
+    <script src="speech_data.js?v=1"></script>
     <script src="audio.js?v=4"></script>
     <script src="editor.js?v=4"></script>
     <script src="exporter.js?v=4"></script>

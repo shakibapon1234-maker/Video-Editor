@@ -375,7 +375,38 @@ class VoiceChangerEffect {
 
 document.addEventListener('DOMContentLoaded', () => {
     const state = window.VideoEditor;
-    
+
+    // --- Pre-decode spoken voice buffers for "Yes", "No", "Wow" B-roll SFX ---
+    // speech_data.js (loaded before this file) exposes window.BROLL_SPEECH_DATA
+    // as a plain object with keys "yes", "no", "wow" whose values are base64-
+    // encoded 8 kHz 16-bit mono WAV files synthesized from Windows TTS.
+    // We decode them into AudioBuffers once at startup and cache them in
+    // window._brollVoiceBuffers so that synthBrollSfx() can use them
+    // synchronously — which is also required by OfflineAudioContext during export.
+    window._brollVoiceBuffers = {};
+    (async () => {
+        const data = window.BROLL_SPEECH_DATA;
+        if (!data) return;
+        try {
+            const tmpCtx = new (window.AudioContext || window.webkitAudioContext)();
+            for (const [key, b64] of Object.entries(data)) {
+                try {
+                    const raw = atob(b64);
+                    const bytes = new Uint8Array(raw.length);
+                    for (let i = 0; i < raw.length; i++) bytes[i] = raw.charCodeAt(i);
+                    const buf = await tmpCtx.decodeAudioData(bytes.buffer.slice(0));
+                    window._brollVoiceBuffers[key] = buf;
+                } catch (e) {
+                    console.warn('speech_data: failed to decode', key, e);
+                }
+            }
+            await tmpCtx.close();
+        } catch (e) {
+            console.warn('speech_data: AudioContext unavailable at startup', e);
+        }
+    })();
+
+
     // UI selectors
     const noiseCancelToggle = document.getElementById('noise-cancel-toggle');
     const noiseLevelContainer = document.getElementById('noise-level-container');
@@ -1519,6 +1550,28 @@ document.addEventListener('DOMContentLoaded', () => {
     // maintaining two copies of the same synthesis code.
     function synthBrollSfx(ctx, destNode, type, when) {
         if (!type || type === 'none' || type === 'custom') return;
+
+        // --- Real spoken voice for "Yes!", "No!", "Wow!" ---
+        // Use pre-decoded AudioBuffers (decoded at startup from the embedded base64
+        // WAV data in speech_data.js). These play through the same Web Audio graph
+        // as every other SFX, so they work identically in live preview and
+        // in the offline OfflineAudioContext used for video export.
+        const voiceKey = type === 'yes_ding' ? 'yes' : type === 'no_buzz' ? 'no' : type === 'wow_swoop' ? 'wow' : null;
+        if (voiceKey) {
+            const buf = window._brollVoiceBuffers && window._brollVoiceBuffers[voiceKey];
+            if (buf) {
+                const src = ctx.createBufferSource();
+                src.buffer = buf;
+                const g = ctx.createGain();
+                g.gain.setValueAtTime(0.9, when);
+                src.connect(g);
+                g.connect(destNode);
+                src.start(when);
+                return; // skip synthesized fallback
+            }
+            // If buffer is not yet ready (e.g. first frame before decode completes),
+            // fall through to the synthesized approximation below as a graceful fallback.
+        }
 
         const now = when;
         const sfxGain = ctx.createGain();
