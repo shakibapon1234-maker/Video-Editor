@@ -1278,6 +1278,107 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
+    // --- Remove Audio (Mute Video) ---
+    // Unlike the Video → Audio tool above (pure client-side Web Audio decode),
+    // this needs to hand back a full VIDEO file with its audio stream dropped,
+    // which the browser can't remux on its own. So the raw file is uploaded to
+    // the local Node server (server.js's /api/remove-audio route), which runs
+    // a fast ffmpeg stream-copy (-c:v copy -an) — no video re-encode, just the
+    // audio track discarded — and hands back a download link, same as the
+    // main exporter's WebSocket render pipeline does for full exports.
+    const muteDropzone = document.getElementById('mute-dropzone');
+    const muteFileInput = document.getElementById('mute-file-input');
+    const muteDropzoneLabel = document.getElementById('mute-dropzone-label');
+    const muteConvertBtn = document.getElementById('mute-convert-btn');
+    const muteProgressBox = document.getElementById('mute-progress-box');
+    const muteSuccessBox = document.getElementById('mute-success-box');
+    const muteSuccessDesc = document.getElementById('mute-success-desc');
+    const muteDownloadLink = document.getElementById('mute-download-link');
+    const muteErrorBox = document.getElementById('mute-error-box');
+    const muteErrorDesc = document.getElementById('mute-error-desc');
+
+    let muteSelectedFile = null;
+
+    if (muteDropzone && muteFileInput) {
+        muteDropzone.addEventListener('click', () => muteFileInput.click());
+
+        muteFileInput.addEventListener('change', (e) => {
+            if (e.target.files && e.target.files[0]) handleMuteFile(e.target.files[0]);
+            muteFileInput.value = '';
+        });
+
+        muteDropzone.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            muteDropzone.classList.add('drag-over');
+        });
+        muteDropzone.addEventListener('dragleave', () => {
+            muteDropzone.classList.remove('drag-over');
+        });
+        muteDropzone.addEventListener('drop', (e) => {
+            e.preventDefault();
+            muteDropzone.classList.remove('drag-over');
+            if (e.dataTransfer.files && e.dataTransfer.files[0]) handleMuteFile(e.dataTransfer.files[0]);
+        });
+    }
+
+    function handleMuteFile(file) {
+        if (!file.type.startsWith('video/')) {
+            alert('দয়া করে একটি ভিডিও ফাইল নির্বাচন করুন। (Please select a video file.)');
+            return;
+        }
+        muteSelectedFile = file;
+        if (muteDropzoneLabel) muteDropzoneLabel.innerText = file.name;
+        if (muteConvertBtn) muteConvertBtn.style.display = 'block';
+        if (muteProgressBox) muteProgressBox.style.display = 'none';
+        if (muteSuccessBox) muteSuccessBox.style.display = 'none';
+        if (muteErrorBox) muteErrorBox.style.display = 'none';
+    }
+
+    if (muteConvertBtn) {
+        muteConvertBtn.addEventListener('click', runRemoveAudio);
+    }
+
+    async function runRemoveAudio() {
+        if (!muteSelectedFile) return;
+
+        muteConvertBtn.disabled = true;
+        if (muteProgressBox) muteProgressBox.style.display = 'block';
+        if (muteSuccessBox) muteSuccessBox.style.display = 'none';
+        if (muteErrorBox) muteErrorBox.style.display = 'none';
+
+        try {
+            const response = await fetch(`/api/remove-audio?filename=${encodeURIComponent(muteSelectedFile.name)}`, {
+                method: 'POST',
+                headers: { 'Content-Type': muteSelectedFile.type || 'application/octet-stream' },
+                body: muteSelectedFile
+            });
+
+            const result = await response.json();
+            if (!response.ok) {
+                throw new Error(result.error || `Server error (${response.status})`);
+            }
+
+            if (muteDownloadLink) {
+                muteDownloadLink.href = result.downloadUrl;
+                muteDownloadLink.download = result.filename;
+            }
+            if (muteSuccessDesc) {
+                muteSuccessDesc.innerText = `"${result.filename}" প্রস্তুত — কোনো সাউন্ড নেই।`;
+            }
+            if (muteProgressBox) muteProgressBox.style.display = 'none';
+            if (muteSuccessBox) muteSuccessBox.style.display = 'block';
+        } catch (err) {
+            console.error('Remove-audio failed:', err);
+            if (muteProgressBox) muteProgressBox.style.display = 'none';
+            if (muteErrorBox) muteErrorBox.style.display = 'block';
+            if (muteErrorDesc) {
+                muteErrorDesc.innerText = `সাউন্ড রিমুভ করা যায়নি: ${err.message}। সার্ভার (node server.js) চালু আছে কিনা দেখুন।`;
+            }
+        } finally {
+            muteConvertBtn.disabled = false;
+        }
+    }
+
     // --- Audio Crop / Trim Tool (Phase 8B) ---
     // Independent of the main editor project: upload ANY audio file, preview
     // it with a native <audio> player, pick a Start/End range with a

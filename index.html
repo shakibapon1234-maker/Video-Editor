@@ -1236,12 +1236,9 @@
                                             <option value="rise">Rise / Build-up (উত্থান শব্দ)</option>
                                             <option value="bass_drop">Bass Drop (বেস ড্রপ শব্দ)</option>
                                             <option value="notification">Notification Ding (নোটিফিকেশন শব্দ)</option>
-                                            <option value="yes_ding">Yes! (আসল ভয়েস)</option>
-                                            <option value="no_buzz">No! (আসল ভয়েস)</option>
-                                            <option value="wow_swoop">Wow! (আসল ভয়েস)</option>
                                             <option value="custom">নিজের সাউন্ড আপলোড করুন (Custom Upload)</option>
                                         </select>
-                                        <p class="help-text mt-1">প্রিভিউ বা এক্সপোর্টে B-roll আসা/যাওয়ার সময় এই শব্দ বাজবে। Yes/No/Wow এখন আসল spoken voice। আরও কাস্টম ভয়েস ক্লিপের জন্য নিচের "Custom Upload" ব্যবহার করুন।</p>
+                                        <p class="help-text mt-1">প্রিভিউ বা এক্সপোর্টে B-roll আসা/যাওয়ার সময় এই শব্দ বাজবে। কাস্টম ভয়েস ক্লিপের জন্য নিচের "Custom Upload" ব্যবহার করুন।</p>
                                         <div class="control-group mt-2" id="broll-custom-sound-container" style="display:none;">
                                             <label>কাস্টম সাউন্ড ফাইল (mp3/wav) — ফ্রি সাইট থেকে ডাউনলোড করা yes/no/wow ক্লিপ এখানে আপলোড করুন</label>
                                             <input type="file" id="broll-custom-sound-input" accept="audio/*" class="form-input">
@@ -1999,6 +1996,55 @@
                             </div>
                         </div>
 
+                        <!-- Remove Audio (Mute Video) -->
+                        <div class="card mt-4">
+                            <div class="card-header">
+                                <i class="fa-solid fa-volume-xmark card-icon"></i>
+                                <h3>Remove Audio (নিঃশব্দ ভিডিও)</h3>
+                            </div>
+                            <div class="card-body">
+                                <p class="help-text">যেকোনো ভিডিও ফাইল আপলোড করুন, এর অডিও ট্র্যাক সম্পূর্ণ রিমুভ করে দেওয়া হবে — কোনো সাউন্ডই থাকবে না। ভিডিও কোয়ালিটি অপরিবর্তিত থাকবে, শুধু সাউন্ড বাদ যাবে। এটি বর্তমান প্রজেক্টের সাথে সম্পর্কহীন — সরাসরি নতুন যেকোনো ভিডিও ফাইল এখানে আপলোড করুন।</p>
+
+                                <div class="file-selector-box mt-3" id="mute-dropzone">
+                                    <i class="fa-solid fa-file-video"></i>
+                                    <span id="mute-dropzone-label">Drag & Drop Video here or Click to Select</span>
+                                    <button class="btn btn-sm btn-outline" type="button">Select Video</button>
+                                    <input type="file" id="mute-file-input" accept="video/*" style="display: none;">
+                                </div>
+
+                                <button id="mute-convert-btn" class="btn btn-primary btn-block mt-3" type="button" style="display: none;">
+                                    <i class="fa-solid fa-volume-xmark"></i> Remove Audio
+                                </button>
+
+                                <!-- Progress -->
+                                <div class="render-progress-box mt-4" id="mute-progress-box" style="display: none;">
+                                    <div class="progress-info">
+                                        <span id="mute-status-text">Removing audio... (সাউন্ড বাদ দেওয়া হচ্ছে...)</span>
+                                    </div>
+                                    <div class="progress-bar-container">
+                                        <div class="progress-bar-fill" id="mute-progress-fill" style="width: 100%;"></div>
+                                    </div>
+                                </div>
+
+                                <!-- Success & Download -->
+                                <div class="render-success-box mt-4" id="mute-success-box" style="display: none;">
+                                    <div class="success-icon-container">
+                                        <i class="fa-solid fa-circle-check"></i>
+                                    </div>
+                                    <h3>Done!</h3>
+                                    <p id="mute-success-desc">আপনার নিঃশব্দ ভিডিও প্রস্তুত।</p>
+                                    <a id="mute-download-link" href="#" download="video_no_audio.mp4" class="btn btn-success btn-block mt-3">
+                                        <i class="fa-solid fa-download"></i> Download Video (No Audio)
+                                    </a>
+                                </div>
+
+                                <!-- Error -->
+                                <div class="render-success-box mt-4" id="mute-error-box" style="display: none; border-color: #f87171;">
+                                    <p id="mute-error-desc" style="color: #f87171;"></p>
+                                </div>
+                            </div>
+                        </div>
+
                         <!-- Audio Crop / Trim Tool -->
                         <div class="card mt-4">
                             <div class="card-header">
@@ -2179,7 +2225,6 @@
     <video id="hidden-video" style="display: none;" crossOrigin="anonymous"></video>
 
     <!-- JS Scripts -->
-    <script src="speech_data.js?v=1"></script>
     <script src="audio.js?v=4"></script>
     <script src="editor.js?v=4"></script>
     <script src="exporter.js?v=4"></script>

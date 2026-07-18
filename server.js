@@ -214,6 +214,62 @@ function compileVideo(ws, tempDir, filename, totalFrames) {
         .run();
 }
 
+// --- Remove Audio (Mute Video) ---
+// Strips the audio track from an uploaded video entirely. This is a plain
+// remux (-c:v copy -an), not a re-encode -- we never touch the video pixels,
+// so it doesn't need the frame-by-frame WebSocket render pipeline the main
+// exporter uses. It's just a raw file upload -> ffmpeg -> download link.
+const MUTE_TEMP_DIR = path.join(__dirname, 'temp_mute');
+if (!fs.existsSync(MUTE_TEMP_DIR)) fs.mkdirSync(MUTE_TEMP_DIR);
+
+app.post('/api/remove-audio', express.raw({ type: '*/*', limit: '2gb' }), (req, res) => {
+    if (!req.body || !req.body.length) {
+        return res.status(400).json({ error: 'No video data received.' });
+    }
+
+    const originalName = decodeURIComponent(req.query.filename || 'video.mp4');
+    const ext = path.extname(originalName) || '.mp4';
+    const baseName = path.basename(originalName, ext) || 'video';
+    const inputPath = path.join(MUTE_TEMP_DIR, `mute_in_${Date.now()}${ext}`);
+
+    fs.writeFile(inputPath, req.body, (writeErr) => {
+        if (writeErr) {
+            console.error('Failed to save uploaded video for audio removal:', writeErr);
+            return res.status(500).json({ error: writeErr.message });
+        }
+
+        // Same "find a free filename" pattern as compileVideo().
+        let outputPath = path.join(OUTPUT_DIR, `${baseName}_no_audio${ext}`);
+        let counter = 1;
+        while (fs.existsSync(outputPath)) {
+            outputPath = path.join(OUTPUT_DIR, `${baseName}_no_audio_${counter}${ext}`);
+            counter++;
+        }
+
+        console.log(`Removing audio: ${inputPath} -> ${outputPath}`);
+
+        ffmpeg(inputPath)
+            .outputOptions([
+                '-c:v copy', // don't re-encode video -- just drop the audio stream, so this is near-instant
+                '-an',       // "-an" = no audio in the output at all
+                '-movflags +faststart'
+            ])
+            .output(outputPath)
+            .on('end', () => {
+                console.log('Audio removed successfully:', outputPath);
+                res.json({ downloadUrl: `/exports/${path.basename(outputPath)}`, filename: path.basename(outputPath) });
+                fs.unlink(inputPath, () => {});
+            })
+            .on('error', (err, stdout, stderr) => {
+                console.error('Remove-audio ffmpeg error:', err.message);
+                console.error('FFmpeg stderr:', stderr);
+                res.status(500).json({ error: `FFmpeg error: ${err.message}` });
+                fs.unlink(inputPath, () => {});
+            })
+            .run();
+    });
+});
+
 // Serve downloads folder
 app.use('/exports', express.static(OUTPUT_DIR));
 

@@ -376,37 +376,6 @@ class VoiceChangerEffect {
 document.addEventListener('DOMContentLoaded', () => {
     const state = window.VideoEditor;
 
-    // --- Pre-decode spoken voice buffers for "Yes", "No", "Wow" B-roll SFX ---
-    // speech_data.js (loaded before this file) exposes window.BROLL_SPEECH_DATA
-    // as a plain object with keys "yes", "no", "wow" whose values are base64-
-    // encoded 8 kHz 16-bit mono WAV files synthesized from Windows TTS.
-    // We decode them into AudioBuffers once at startup and cache them in
-    // window._brollVoiceBuffers so that synthBrollSfx() can use them
-    // synchronously — which is also required by OfflineAudioContext during export.
-    window._brollVoiceBuffers = {};
-    (async () => {
-        const data = window.BROLL_SPEECH_DATA;
-        if (!data) return;
-        try {
-            const tmpCtx = new (window.AudioContext || window.webkitAudioContext)();
-            for (const [key, b64] of Object.entries(data)) {
-                try {
-                    const raw = atob(b64);
-                    const bytes = new Uint8Array(raw.length);
-                    for (let i = 0; i < raw.length; i++) bytes[i] = raw.charCodeAt(i);
-                    const buf = await tmpCtx.decodeAudioData(bytes.buffer.slice(0));
-                    window._brollVoiceBuffers[key] = buf;
-                } catch (e) {
-                    console.warn('speech_data: failed to decode', key, e);
-                }
-            }
-            await tmpCtx.close();
-        } catch (e) {
-            console.warn('speech_data: AudioContext unavailable at startup', e);
-        }
-    })();
-
-
     // UI selectors
     const noiseCancelToggle = document.getElementById('noise-cancel-toggle');
     const noiseLevelContainer = document.getElementById('noise-level-container');
@@ -1551,28 +1520,6 @@ document.addEventListener('DOMContentLoaded', () => {
     function synthBrollSfx(ctx, destNode, type, when) {
         if (!type || type === 'none' || type === 'custom') return;
 
-        // --- Real spoken voice for "Yes!", "No!", "Wow!" ---
-        // Use pre-decoded AudioBuffers (decoded at startup from the embedded base64
-        // WAV data in speech_data.js). These play through the same Web Audio graph
-        // as every other SFX, so they work identically in live preview and
-        // in the offline OfflineAudioContext used for video export.
-        const voiceKey = type === 'yes_ding' ? 'yes' : type === 'no_buzz' ? 'no' : type === 'wow_swoop' ? 'wow' : null;
-        if (voiceKey) {
-            const buf = window._brollVoiceBuffers && window._brollVoiceBuffers[voiceKey];
-            if (buf) {
-                const src = ctx.createBufferSource();
-                src.buffer = buf;
-                const g = ctx.createGain();
-                g.gain.setValueAtTime(0.9, when);
-                src.connect(g);
-                g.connect(destNode);
-                src.start(when);
-                return; // skip synthesized fallback
-            }
-            // If buffer is not yet ready (e.g. first frame before decode completes),
-            // fall through to the synthesized approximation below as a graceful fallback.
-        }
-
         const now = when;
         const sfxGain = ctx.createGain();
         sfxGain.gain.setValueAtTime(0.0001, now);
@@ -1958,10 +1905,23 @@ document.addEventListener('DOMContentLoaded', () => {
         speechRecognizer.onerror = (event) => {
             console.warn('Speech recognition error:', event.error);
             if (event.error === 'no-speech') return; // keep listening through silence
-            // Flush any not-yet-finalized text before giving up, so a hard
-            // error doesn't silently drop the last thing that was said.
+
+            // 'network' and 'aborted' are transient hiccups (a momentary drop
+            // talking to the recognition service, or a session we ourselves
+            // restarted) rather than something the user needs to fix. onend
+            // always fires right after onerror and already flushes pending
+            // text and restarts the session when active -- so just let it,
+            // instead of tearing the whole feature down over a blip. Treating
+            // these as fatal was why subtitles would randomly stop appearing
+            // partway through a video with no visible cause.
+            if (event.error === 'network' || event.error === 'aborted') return;
+
+            // Fatal errors (mic permission denied, no mic present, etc.) --
+            // flush whatever we have and stop for real, since retrying would
+            // just fail again in a loop.
             flushInterimAsSegment();
             stopSubtitleRecognition();
+            alert('Speech recognition বন্ধ হয়ে গেছে (' + event.error + ')। মাইক্রোফোন পারমিশন দিয়েছেন কিনা চেক করুন।');
         };
 
         speechRecognizer.onend = () => {
@@ -2636,9 +2596,14 @@ document.addEventListener('DOMContentLoaded', () => {
         return renderedBuffer;
     };
 
-    // Stop listening automatically once the trimmed playback range ends or video is paused
+    // Stop listening automatically once the trimmed playback range ends or video is
+    // genuinely paused by the user. NOTE: this 'pause' event also fires internally
+    // every time playback crosses a clip boundary (switchActiveClip pauses the
+    // <video> element to swap its src) -- state.isClipTransitionInProgress tells us
+    // that case apart so a multi-clip project doesn't kill subtitle generation at
+    // every single clip cut.
     state.video.addEventListener('pause', () => {
-        if (state.isSubtitleRecognitionActive) {
+        if (state.isSubtitleRecognitionActive && !state.isClipTransitionInProgress) {
             stopSubtitleRecognition();
         }
     });

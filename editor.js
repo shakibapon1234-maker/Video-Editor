@@ -210,6 +210,13 @@ window.VideoEditor = {
     // Auto Subtitle (Phase 5A)
     subtitles: [],
     isSubtitleRecognitionActive: false,
+    // True only while switchActiveClip is mid-transition to the next clip during
+    // continuous playback. The video's native 'pause' event fires every time we
+    // swap clip.url between clips, even though playback is about to auto-resume --
+    // without this flag that internal pause was indistinguishable from the user
+    // actually stopping playback, so Listen & Generate silently died at every
+    // clip boundary (see the 'pause' listener near the bottom of audio.js).
+    isClipTransitionInProgress: false,
     subtitlesEnabled: true,
     // Subtitle caption styling (driven by the "Bangla Caption Style" preset)
     subtitleStyle: {
@@ -1592,6 +1599,11 @@ document.addEventListener('DOMContentLoaded', () => {
         // Persist the outgoing clip's crop area before switching away from it.
         syncCropToActiveClip();
 
+        // Only mark this as an "in-progress" transition (as opposed to a real
+        // stop) when we're about to auto-resume on the next clip -- that's the
+        // case the subtitle 'pause' listener needs to ignore.
+        if (autoPlay) state.isClipTransitionInProgress = true;
+
         state.video.pause();
         state.isPlaying = false;
         const playPauseBtnEl = document.getElementById('play-pause-btn');
@@ -1629,6 +1641,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (autoPlay) {
                     playVideo();
                 }
+                state.isClipTransitionInProgress = false;
             }, 0);
         } else {
             state.video.src = clip.url;
@@ -1656,7 +1669,15 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (autoPlay) {
                     playVideo();
                 }
+                state.isClipTransitionInProgress = false;
             };
+
+            // Safety net: if this clip's video never fires 'loadedmetadata'
+            // (corrupt file, load stalls, etc.) don't leave the flag stuck on,
+            // or a genuine later pause would never stop subtitle recognition.
+            if (autoPlay) {
+                setTimeout(() => { state.isClipTransitionInProgress = false; }, 4000);
+            }
         }
     }
 
@@ -2627,6 +2648,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 const style = item.animationStyle || (item.mode === 'pip' ? 'slide-pop' : 'zoom');
                 let alpha = 1, scaleAmt = 1, rotateAmt = 0, blurPx = 0, wipeFrac = 1;
                 let offX = 0, offY = 0; // absolute px offset applied to the box during entry/exit
+                let hangAngle = 0; // pendulum-swing rotation for 'hanging-sign-swing', pivoted at the string, not the box center
 
                 if (brollAnimActive && style !== 'none') {
                     if (style === 'slide' || style === 'slide-pop') {
@@ -2651,16 +2673,46 @@ document.addEventListener('DOMContentLoaded', () => {
                             scaleAmt = (tIn < animDur || tOut < animDur) ? (0.7 + 0.3 * eased) : 1;
                             alpha = Math.max(0.15, tIn < animDur ? eased : (tOut < animDur ? eased : 1));
                         }
-                    } else if (style === 'wipe' || style === 'highlight-sweep' || style === 'comparison-slide') {
+                    } else if (style === 'wipe' || style === 'highlight-sweep' || style === 'comparison-slide' || style === 'plane-banner-trail') {
                         // Directional reveal: a growing clip rectangle wipes the box's
                         // content into view from the entry edge, then wipes it away on exit.
                         // 'highlight-sweep' reuses this exact reveal mechanic and additionally
                         // paints a translucent marker-color bar in step with it (see the
                         // drawing section below), so the content looks "highlighted on".
+                        // 'plane-banner-trail' also reuses it: the content (text/image)
+                        // reveals left-to-right exactly like sky-writing letters trailing
+                        // behind a plane; the plane + dashed trail itself is drawn on top
+                        // in the annotation section below, flying in lockstep with wipeFrac.
                         if (tIn < animDur) {
                             wipeFrac = brollEaseOut(tIn / animDur);
                         } else if (tOut < animDur) {
                             wipeFrac = brollEaseOut(tOut / animDur);
+                        }
+                    } else if (style === 'hanging-sign-swing') {
+                        // A sign hung on a string from a fixed pin above the box: it
+                        // lowers into place while swinging like a damped pendulum, then
+                        // gently keeps swaying while on screen, and swings back up on exit.
+                        // The rotation pivot is the pin point (above the box), not the box
+                        // center, so this is handled with its own transform below rather
+                        // than the generic rotateAmt/scaleAmt path.
+                        if (tIn < animDur) {
+                            const p = Math.max(0, Math.min(1, tIn / animDur));
+                            const dropEase = brollEaseOut(Math.min(1, p / 0.6));
+                            offY = -(boxH * 0.7) * (1 - dropEase);
+                            alpha = Math.max(0.25, dropEase);
+                            const decay = Math.pow(1 - p, 1.5);
+                            hangAngle = decay * Math.sin(p * Math.PI * 3.4) * (Math.PI / 8);
+                        } else if (tOut < animDur) {
+                            const p = Math.max(0, Math.min(1, tOut / animDur));
+                            const dropEase = brollEaseOut(Math.min(1, p / 0.6));
+                            offY = -(boxH * 0.7) * (1 - dropEase);
+                            alpha = Math.max(0.25, dropEase);
+                            const decay = Math.pow(1 - p, 1.5);
+                            hangAngle = decay * Math.sin(p * Math.PI * 3.4) * (Math.PI / 8);
+                        } else {
+                            // Idle hold: a slow, small continuous sway so the sign feels
+                            // alive on a string rather than freezing dead-still mid-air.
+                            hangAngle = Math.sin(tIn * 1.4) * (Math.PI / 60);
                         }
                     } else if (style === 'rotate-in') {
                         // Gentle spin-and-scale settle on the way in, mirrored on the way out.
@@ -2790,13 +2842,43 @@ document.addEventListener('DOMContentLoaded', () => {
 
                 const cx = drawBoxX + boxW / 2;
                 const cy = drawBoxY + boxH / 2;
-                if (rotateAmt !== 0 || scaleAmt !== 1) {
+                let hangPinX = 0, hangPinY = 0, hangStringLen = 0;
+                if (style === 'hanging-sign-swing') {
+                    // Pivot at a pin fixed a little above the box's resting position
+                    // (not affected by the entry/exit drop offset, so the string
+                    // visibly pays out/reels in as the sign lowers/raises).
+                    hangStringLen = Math.max(18, boxH * 0.22);
+                    hangPinX = boxX + boxW / 2;
+                    hangPinY = boxY - hangStringLen;
+                    state.ctx.translate(hangPinX, hangPinY);
+                    state.ctx.rotate(hangAngle);
+                    state.ctx.translate(-hangPinX, -hangPinY);
+                } else if (rotateAmt !== 0 || scaleAmt !== 1) {
                     state.ctx.translate(cx, cy);
                     if (rotateAmt !== 0) state.ctx.rotate(rotateAmt);
                     state.ctx.scale(scaleAmt, scaleAmt);
                     state.ctx.translate(-cx, -cy);
                 }
+                if (style === 'hanging-sign-swing') {
+                    // String + pin, drawn inside the same rotated space so they swing
+                    // together with the sign, like it's genuinely hanging from the pin.
+                    const signTopMidX = drawBoxX + boxW / 2;
+                    state.ctx.strokeStyle = 'rgba(255,255,255,0.85)';
+                    state.ctx.lineWidth = 2;
+                    state.ctx.beginPath();
+                    state.ctx.moveTo(hangPinX, hangPinY);
+                    state.ctx.lineTo(signTopMidX, drawBoxY);
+                    state.ctx.stroke();
+                    state.ctx.fillStyle = '#ef4444';
+                    state.ctx.beginPath();
+                    state.ctx.arc(hangPinX, hangPinY, Math.max(5, boxH * 0.05), 0, Math.PI * 2);
+                    state.ctx.fill();
+                    state.ctx.strokeStyle = 'rgba(0,0,0,0.25)';
+                    state.ctx.lineWidth = 1.5;
+                    state.ctx.stroke();
+                }
                 if (wipeFrac < 0.999) {
+                    state.ctx.save();
                     state.ctx.beginPath();
                     state.ctx.rect(drawBoxX, drawBoxY, boxW * Math.max(0, wipeFrac), boxH);
                     state.ctx.clip();
@@ -3054,18 +3136,66 @@ document.addEventListener('DOMContentLoaded', () => {
                     }
                 }
 
+                // Pop the wipe-reveal clip (pushed above with its own save()) before any
+                // annotation drawing — annotations like the flying plane are positioned
+                // above/outside the box rect and must not be clipped away by it.
+                if (wipeFrac < 0.999) state.ctx.restore();
+
                 // Hand-drawn-style annotation markers (v2.5) — layered on top of the
                 // content after it's painted, growing in sync with the entry (and
                 // shrinking back out on exit) so they feel "drawn on" rather than
                 // just appearing instantly.
-                if (brollAnimActive && (style === 'circle-highlight' || style === 'underline-draw' || style === 'checkmark-pop' || style === 'thinking-character' || style === 'arrow-point' || style === 'magnifier-zoom' || style === 'question-bounce' || style === 'confetti-pop' || style === 'heart-burst')) {
+                if (brollAnimActive && (style === 'circle-highlight' || style === 'underline-draw' || style === 'checkmark-pop' || style === 'thinking-character' || style === 'arrow-point' || style === 'magnifier-zoom' || style === 'question-bounce' || style === 'confetti-pop' || style === 'heart-burst' || style === 'plane-banner-trail')) {
                     let annoP = 1;
-                    if (tIn < animDur) annoP = brollEaseOut(tIn / animDur);
-                    else if (tOut < animDur) annoP = brollEaseOut(tOut / animDur);
+                    let annoInEntry = false, annoInExit = false;
+                    if (tIn < animDur) { annoP = brollEaseOut(tIn / animDur); annoInEntry = true; }
+                    else if (tOut < animDur) { annoP = brollEaseOut(tOut / animDur); annoInExit = true; }
 
                     if (annoP > 0.01) {
                         const markColor = (item.type === 'text') ? item.color : '#fbbf24';
-                        if (style === 'circle-highlight') {
+                        if (style === 'plane-banner-trail') {
+                            // A little paper plane flies across the top of the box, towing a
+                            // dashed trail behind it — the box content underneath reveals via
+                            // the shared wipeFrac clip (set above), so it looks like the text/
+                            // image is being "written"/towed into view by the plane, sky-writing
+                            // style. Only drawn during entry/exit (annoInEntry/annoInExit); it
+                            // parks off-frame during the hold, same as the wipe/reveal it drives.
+                            if (annoInEntry || annoInExit) {
+                                const dir = annoInEntry ? (item.entryDirection || 'left') : resolvedExitDir;
+                                const flyingRightward = (dir !== 'right');
+                                // annoP already runs 0->1 in the direction of travel for entry;
+                                // for exit we want the plane to continue exiting the way it came,
+                                // so it keeps moving forward (not reversing) as annoP grows.
+                                const travelP = annoInEntry ? annoP : (1 - annoP);
+                                const startX = drawBoxX - boxW * 0.15;
+                                const endX = drawBoxX + boxW * 1.15;
+                                const laneY = drawBoxY - Math.max(14, boxH * 0.18);
+                                const planeX = flyingRightward
+                                    ? startX + (endX - startX) * travelP
+                                    : endX - (endX - startX) * travelP;
+                                const trailFromX = flyingRightward ? startX : planeX;
+                                const trailToX = flyingRightward ? planeX : endX;
+
+                                state.ctx.save();
+                                state.ctx.strokeStyle = 'rgba(255,255,255,0.75)';
+                                state.ctx.lineWidth = Math.max(1.5, boxH * 0.02);
+                                state.ctx.setLineDash([6, 6]);
+                                state.ctx.beginPath();
+                                state.ctx.moveTo(trailFromX, laneY);
+                                state.ctx.lineTo(trailToX, laneY);
+                                state.ctx.stroke();
+                                state.ctx.setLineDash([]);
+
+                                const planeSize = Math.max(16, Math.min(boxW, boxH) * 0.22);
+                                state.ctx.translate(planeX, laneY);
+                                if (!flyingRightward) state.ctx.scale(-1, 1);
+                                state.ctx.font = `${planeSize}px "Segoe UI Emoji", sans-serif`;
+                                state.ctx.textAlign = 'center';
+                                state.ctx.textBaseline = 'middle';
+                                state.ctx.fillText('✈️', 0, 0);
+                                state.ctx.restore();
+                            }
+                        } else if (style === 'circle-highlight') {
                             // A slightly-imperfect ellipse "circled" around the box, drawn as a
                             // growing arc so it looks hand-drawn rather than a static ring.
                             const rx = boxW / 2 * 1.18, ry = boxH / 2 * 1.45;
@@ -6994,6 +7124,8 @@ document.addEventListener('DOMContentLoaded', () => {
         { value: 'question-bounce', label: 'Question Mark Bounce (❓ লাফিয়ে আসবে)' },
         { value: 'confetti-pop', label: 'Confetti Pop (রঙিন কনফেত্তি ছড়িয়ে পড়বে)' },
         { value: 'heart-burst', label: 'Heart Burst (❤️ হার্ট ছড়িয়ে পড়বে)' },
+        { value: 'hanging-sign-swing', label: 'Hanging Sign Swing (🔴 পিন থেকে ঝুলে দুলতে দুলতে আসবে)' },
+        { value: 'plane-banner-trail', label: 'Plane Banner Trail (✈️ প্লেন উড়ে গিয়ে লেখা রেখে যাবে)' },
 
         // Kinetic Typography (v2.8) — per-letter/per-word text entrances. These
         // only make sense for Text B-roll (each style animates the individual
@@ -7033,8 +7165,8 @@ document.addEventListener('DOMContentLoaded', () => {
     function updateBrollDirectionRowsVisibility(style) {
         // 'pan' only cares about a single pan direction (reuses the entry-direction
         // picker) and has no separate exit phase, so its exit-direction row stays hidden.
-        const usesEntryDirection = (style === 'slide' || style === 'slide-pop' || style === 'pan' || style === 'arrow-point');
-        const usesExitDirection = (style === 'slide' || style === 'slide-pop');
+        const usesEntryDirection = (style === 'slide' || style === 'slide-pop' || style === 'pan' || style === 'arrow-point' || style === 'plane-banner-trail');
+        const usesExitDirection = (style === 'slide' || style === 'slide-pop' || style === 'plane-banner-trail');
         if (brollDirectionRow) brollDirectionRow.style.display = usesEntryDirection ? 'block' : 'none';
         if (brollExitDirectionRow) brollExitDirectionRow.style.display = usesExitDirection ? 'block' : 'none';
     }
