@@ -2411,6 +2411,22 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
+    let subtitleConnectTimeout = null; // fires if onstart never arrives -- prevents a permanent "Connecting..." state
+    let subtitleRestartFailCount = 0;  // consecutive failed auto-restarts after onend, before we give up and tell the user
+    let dubSessionStartMs = null;      // wall-clock time the current recognition SESSION began (persists across internal onend/restart cycles)
+    let dubVideoAutoPlayed = false;    // only auto-play the clip once per session; never re-trigger play() on internal restarts
+
+    // Elapsed real time (seconds) since the current Listen&Generate / Dub session
+    // started -- NOT the video's playhead. Using video.currentTime here used to mean:
+    // (a) speech had to fit inside the clip's own length, and (b) if the clip ended
+    // and something called .play() again, the browser replays from 0, silently
+    // resetting every timestamp after that point (the "only first part synced" bug).
+    // A wall-clock timer has neither problem: it only ever counts up, regardless of
+    // whether the video is playing, paused, ended, or not even present.
+    function getSubtitleElapsedSeconds() {
+        return dubSessionStartMs ? (Date.now() - dubSessionStartMs) / 1000 : 0;
+    }
+
     function startSubtitleRecognition(dubMode = false) {
         if (!state.duration) {
             alert('সাবটাইটেল তৈরি করার আগে অনুগ্রহ করে একটি ভিডিও ক্লিপ আপলোড/লোড করুন।');
@@ -2427,19 +2443,54 @@ document.addEventListener('DOMContentLoaded', () => {
         speechRecognizer.interimResults = true;
         speechRecognizer.lang = 'bn-BD'; // Bangla recognition; falls back gracefully if unsupported
 
-        subtitleSegmentStartTime = state.video.currentTime;
+        dubSessionStartMs = Date.now();
+        dubVideoAutoPlayed = false;
+        subtitleSegmentStartTime = 0;
         latestInterimText = '';
 
+        // Safety net: if the recognition service never calls onstart (this happens
+        // silently on a flaky/blocked connection to the browser's speech service --
+        // neither onerror nor onend fires either), the buttons were getting stuck on
+        // "Connecting..." forever with no feedback. Give it a few seconds, then bail
+        // out visibly instead of hanging.
+        if (subtitleConnectTimeout) clearTimeout(subtitleConnectTimeout);
+        subtitleConnectTimeout = setTimeout(() => {
+            subtitleConnectTimeout = null;
+            if (!state.isSubtitleRecognitionActive) return; // onstart already succeeded and cleared this, or user cancelled
+            console.warn('Speech recognition did not start within 7s -- giving up.');
+            try { speechRecognizer.abort ? speechRecognizer.abort() : speechRecognizer.stop(); } catch (e) {}
+            state.isSubtitleRecognitionActive = false;
+            isVoiceDubMode = false;
+            if (state.video) state.video.muted = false;
+            if (voiceDubHint) voiceDubHint.style.display = 'none';
+            if (generateSubtitleBtn) generateSubtitleBtn.innerHTML = '<i class="fa-solid fa-closed-captioning"></i> Listen & Generate (ভিডিও থেকে শোনা শুরু করুন)';
+            if (voiceDubBtn) voiceDubBtn.innerHTML = '<i class="fa-solid fa-microphone-lines"></i> Voice Dub Mode (নিজে বলুন — ভিডিও চুপ থাকবে)';
+            alert('Speech recognition সার্ভিসের সাথে সংযোগ করা যায়নি (৭ সেকেন্ডেও শুরু হয়নি)। ইন্টারনেট কানেকশন চেক করুন, অথবা Chrome ব্রাউজার ব্যবহার করছেন কিনা নিশ্চিত করুন, তারপর আবার চেষ্টা করুন।');
+        }, 7000);
+
         speechRecognizer.onstart = () => {
-            setTimeout(() => {
-                if (state.isSubtitleRecognitionActive && state.video.paused) {
-                    // In dub mode, play with mute already set; in normal mode, play normally
-                    state.video.play();
-                }
-            }, 300); // 300ms buffer to prime recording stream before playing video
+            if (subtitleConnectTimeout) { clearTimeout(subtitleConnectTimeout); subtitleConnectTimeout = null; }
+            subtitleRestartFailCount = 0;
+            // Auto-play the clip ONCE, purely as a visual reference for the user to
+            // watch while they speak -- it no longer drives any timing. We never
+            // re-trigger play() on later internal restarts, so a clip that reaches
+            // its end just stays ended (no silent replay-from-0, no forced stop --
+            // the user can keep talking as long as they want after the clip finishes).
+            if (dubMode && !dubVideoAutoPlayed) {
+                dubVideoAutoPlayed = true;
+                setTimeout(() => {
+                    if (state.isSubtitleRecognitionActive && state.video.paused && !state.video.ended) {
+                        state.video.play();
+                    }
+                }, 300); // 300ms buffer to prime recording stream before playing video
+            }
+            // Only touch the button belonging to the mode that's actually running --
+            // previously generateSubtitleBtn was updated unconditionally below in the
+            // try{} block even during dub mode, so it stayed stuck on "Connecting..."
+            // forever while voiceDubBtn correctly flipped to "Stop Dub Mode".
             if (dubMode && voiceDubBtn) {
                 voiceDubBtn.innerHTML = '<i class="fa-solid fa-stop"></i> Stop Dub Mode (থামান)';
-            } else if (generateSubtitleBtn) {
+            } else if (!dubMode && generateSubtitleBtn) {
                 generateSubtitleBtn.innerHTML = '<i class="fa-solid fa-stop"></i> Stop Listening (থামান)';
             }
         };
@@ -2464,6 +2515,7 @@ document.addEventListener('DOMContentLoaded', () => {
             if (event.error === 'no-speech') return; // keep listening through silence
             if (event.error === 'network' || event.error === 'aborted') return;
 
+            if (subtitleConnectTimeout) { clearTimeout(subtitleConnectTimeout); subtitleConnectTimeout = null; }
             flushInterimAsSegment();
             stopSubtitleRecognition();
             
@@ -2480,22 +2532,53 @@ document.addEventListener('DOMContentLoaded', () => {
 
         speechRecognizer.onend = () => {
             flushInterimAsSegment();
+            // Chrome's continuous mode still ends the session periodically (network
+            // hiccups, ~60s internal limits, etc.) and expects the caller to restart
+            // it. The old code did `try { speechRecognizer.start(); } catch(e) {}` --
+            // if that restart threw for any reason other than "already started" the
+            // error was silently swallowed, state.isSubtitleRecognitionActive stayed
+            // true, and the UI kept showing "Stop Listening/Stop Dub Mode" while no
+            // more speech was ever transcribed. That's the "sometimes writes text,
+            // then just stops" symptom. Now we retry once on a short delay (restarting
+            // immediately after onend often fails with InvalidStateError), and if that
+            // also fails we stop cleanly and tell the user instead of hanging silently.
             if (state.isSubtitleRecognitionActive && !state.video.paused) {
-                try { speechRecognizer.start(); } catch (e) { /* already started */ }
+                try {
+                    speechRecognizer.start();
+                } catch (e) {
+                    setTimeout(() => {
+                        if (!state.isSubtitleRecognitionActive) return;
+                        try {
+                            speechRecognizer.start();
+                        } catch (e2) {
+                            subtitleRestartFailCount++;
+                            console.error('Speech recognition restart failed:', e2);
+                            stopSubtitleRecognition();
+                            alert('Speech recognition মাঝপথে বন্ধ হয়ে গেছে এবং আবার চালু করা যায়নি। অনুগ্রহ করে আবার "Listen & Generate" বা "Voice Dub Mode"-এ ক্লিক করুন।');
+                        }
+                    }, 250);
+                }
             }
         };
 
         try {
             speechRecognizer.start();
             state.isSubtitleRecognitionActive = true;
-            if (generateSubtitleBtn) {
+            if (!dubMode && generateSubtitleBtn) {
                 generateSubtitleBtn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Connecting (সংযোগ করা হচ্ছে...)';
             }
         } catch (e) {
             console.error('Could not start speech recognition:', e);
+            if (subtitleConnectTimeout) { clearTimeout(subtitleConnectTimeout); subtitleConnectTimeout = null; }
             alert('Speech recognition শুরু করা যায়নি। মাইক্রোফোন পারমিশন দিয়েছেন কিনা চেক করুন।');
-            if (generateSubtitleBtn) {
+            if (!dubMode && generateSubtitleBtn) {
                 generateSubtitleBtn.innerHTML = '<i class="fa-solid fa-closed-captioning"></i> Listen & Generate (ভিডিও থেকে শোনা শুরু করুন)';
+            }
+            if (dubMode && voiceDubBtn) {
+                voiceDubBtn.innerHTML = '<i class="fa-solid fa-microphone-lines"></i> Voice Dub Mode (নিজে বলুন — ভিডিও চুপ থাকবে)';
+                isVoiceDubMode = false;
+                if (state.video) state.video.muted = false;
+                if (voiceDubHint) voiceDubHint.style.display = 'none';
             }
         }
     }
@@ -2503,7 +2586,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // Pushes a finished piece of transcript into state.subtitles with a
     // timestamp window, and advances the segment start marker for the next line.
     function commitSubtitleSegment(transcriptText) {
-        const endTime = state.video.currentTime;
+        const endTime = getSubtitleElapsedSeconds();
         const startTime = Math.max(subtitleSegmentStartTime, endTime - 4); // cap a single line to ~4s if recognition was slow
 
         state.subtitles.push({
@@ -2531,6 +2614,10 @@ document.addEventListener('DOMContentLoaded', () => {
         if (subtitleStopTimeout) {
             clearTimeout(subtitleStopTimeout);
             subtitleStopTimeout = null;
+        }
+        if (subtitleConnectTimeout) {
+            clearTimeout(subtitleConnectTimeout);
+            subtitleConnectTimeout = null;
         }
         state.isSubtitleRecognitionActive = false;
         flushInterimAsSegment();
@@ -3248,9 +3335,10 @@ document.addEventListener('DOMContentLoaded', () => {
         stopLibraryPreview();
     });
 
-    state.video.addEventListener('seeking', () => {
-        if (state.isSubtitleRecognitionActive) {
-            subtitleSegmentStartTime = state.video.currentTime;
-        }
-    });
+    // NOTE: recognition timing no longer depends on the video at all (see
+    // getSubtitleElapsedSeconds) -- the clip can end, stay paused, or never even
+    // be playing, and a Listen & Generate / Dub session keeps running until the
+    // user stops it. So there's intentionally no 'ended' or 'seeking' handler
+    // here tied to subtitle timing anymore -- the clip is purely a visual
+    // reference now, not a timing source.
 });

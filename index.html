@@ -2432,6 +2432,86 @@
                                             <i class="fa-solid fa-scissors"></i> Crop Audio
                                         </button>
                                     </div>
+
+                                    <!-- Add Audio (combine two audio files) -->
+                                    <div id="acropadd-section" style="border-top: 1px solid rgba(255,255,255,0.1); padding-top: 15px; margin-top: 18px;">
+                                        <h4 style="margin: 0 0 4px;"><i class="fa-solid fa-layer-group"></i> Add Audio (দুইটা অডিও এক করুন)</h4>
+                                        <p class="help-text">আরেকটি অডিও ফাইল যোগ করুন — এটিকে উপরের অডিওর সাথে জোড়া লাগিয়ে (একটার পর একটা) অথবা একসাথে মিশিয়ে (Overlay) একটি নতুন ফাইল হিসেবে ডাউনলোড করুন।</p>
+
+                                        <div class="file-selector-box mt-2" id="acropadd-dropzone">
+                                            <i class="fa-solid fa-file-audio"></i>
+                                            <span id="acropadd-dropzone-label">Drag & Drop 2nd Audio here or Click to Select</span>
+                                            <button class="btn btn-sm btn-outline" type="button">Select 2nd Audio</button>
+                                            <input type="file" id="acropadd-file-input" accept="audio/*" style="display: none;">
+                                        </div>
+
+                                        <div id="acropadd-options-box" style="display: none;">
+                                            <div class="control-group mt-3">
+                                                <label>মোড (Mode)</label>
+                                                <select id="acropadd-mode-select" class="form-select">
+                                                    <option value="concat">Join One After Another (একটার পর একটা জোড়া লাগান)</option>
+                                                    <option value="mix">Mix / Overlay Together (একসাথে মিশিয়ে দিন)</option>
+                                                </select>
+                                            </div>
+
+                                            <div id="acropadd-order-box" class="control-group mt-3">
+                                                <label>কোনটা আগে বাজবে? (Order)</label>
+                                                <select id="acropadd-order-select" class="form-select">
+                                                    <option value="first-second">1st Audio → 2nd Audio</option>
+                                                    <option value="second-first">2nd Audio → 1st Audio</option>
+                                                </select>
+                                            </div>
+
+                                            <div id="acropadd-mix-volumes" style="display: none;">
+                                                <div class="control-group mt-3">
+                                                    <label>1st Audio Volume</label>
+                                                    <div class="slider-val-container">
+                                                        <input type="range" id="acropadd-vol1-slider" min="0" max="200" value="100">
+                                                        <span id="acropadd-vol1-val">100%</span>
+                                                    </div>
+                                                </div>
+                                                <div class="control-group mt-3">
+                                                    <label>2nd Audio Volume</label>
+                                                    <div class="slider-val-container">
+                                                        <input type="range" id="acropadd-vol2-slider" min="0" max="200" value="100">
+                                                        <span id="acropadd-vol2-val">100%</span>
+                                                    </div>
+                                                </div>
+                                            </div>
+
+                                            <button id="acropadd-combine-btn" class="btn btn-primary btn-block mt-3" type="button">
+                                                <i class="fa-solid fa-layer-group"></i> Combine Audio
+                                            </button>
+                                        </div>
+
+                                        <!-- Combine Progress -->
+                                        <div class="render-progress-box mt-4" id="acropadd-progress-box" style="display: none;">
+                                            <div class="progress-info">
+                                                <span id="acropadd-status-text">Processing...</span>
+                                                <span id="acropadd-percentage">0%</span>
+                                            </div>
+                                            <div class="progress-bar-container">
+                                                <div class="progress-bar-fill" id="acropadd-progress-fill"></div>
+                                            </div>
+                                        </div>
+
+                                        <!-- Combine Success -->
+                                        <div class="render-success-box mt-4" id="acropadd-success-box" style="display: none;">
+                                            <div class="success-icon-container">
+                                                <i class="fa-solid fa-circle-check"></i>
+                                            </div>
+                                            <h3>Audio Combined!</h3>
+                                            <p id="acropadd-success-desc">আপনার একত্রিত অডিও ফাইল প্রস্তুত।</p>
+                                            <a id="acropadd-download-link" href="#" download="combined_audio.wav" class="btn btn-success btn-block mt-3">
+                                                <i class="fa-solid fa-download"></i> Download Audio
+                                            </a>
+                                        </div>
+
+                                        <!-- Combine Error -->
+                                        <div class="render-success-box mt-4" id="acropadd-error-box" style="display: none; border-color: #f87171;">
+                                            <p id="acropadd-error-desc" style="color: #f87171;"></p>
+                                        </div>
+                                    </div>
                                 </div>
 
                                 <!-- Crop Progress -->
@@ -2455,6 +2535,109 @@
                                     <a id="acrop-download-link" href="#" download="cropped_audio.wav" class="btn btn-success btn-block mt-3">
                                         <i class="fa-solid fa-download"></i> Download Audio
                                     </a>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Add Audio to Video Tool -->
+                        <div class="card mt-4">
+                            <div class="card-header">
+                                <i class="fa-solid fa-music card-icon"></i>
+                                <h3>Add Audio to Video (ভিডিওতে অডিও যোগ করুন)</h3>
+                            </div>
+                            <div class="card-body">
+                                <p class="help-text">একটি ভিডিও ও একটি অডিও ফাইল আপলোড করুন — নতুন অডিওটি ভিডিওর সাথে যোগ করে (বা আগের সাউন্ড বদলে) নতুন ভিডিও ডাউনলোড করুন। এটি বর্তমান প্রজেক্টের সাথে সম্পর্কহীন — সরাসরি যেকোনো ভিডিও/অডিও ফাইল এখানে আপলোড করুন।</p>
+
+                                <div class="file-selector-box mt-3" id="addaudio-video-dropzone">
+                                    <i class="fa-solid fa-file-video"></i>
+                                    <span id="addaudio-video-dropzone-label">Drag & Drop Video here or Click to Select</span>
+                                    <button class="btn btn-sm btn-outline" type="button">Select Video</button>
+                                    <input type="file" id="addaudio-video-file-input" accept="video/*" style="display: none;">
+                                </div>
+
+                                <div class="file-selector-box mt-3" id="addaudio-audio-dropzone">
+                                    <i class="fa-solid fa-file-audio"></i>
+                                    <span id="addaudio-audio-dropzone-label">Drag & Drop Audio here or Click to Select</span>
+                                    <button class="btn btn-sm btn-outline" type="button">Select Audio</button>
+                                    <input type="file" id="addaudio-audio-file-input" accept="audio/*" style="display: none;">
+                                </div>
+
+                                <div id="addaudio-options-box" style="display: none;">
+                                    <div class="control-group mt-3">
+                                        <label>মোড (Mode)</label>
+                                        <select id="addaudio-mode-select" class="form-select">
+                                            <option value="replace">Replace Original Audio (আগের সাউন্ড বদলে দিন)</option>
+                                            <option value="mix">Mix with Original Audio (আগের সাউন্ডের সাথে মিশিয়ে দিন)</option>
+                                        </select>
+                                    </div>
+
+                                    <div id="addaudio-mix-volumes" style="display: none;">
+                                        <div class="control-group mt-3">
+                                            <label>Original Video Volume</label>
+                                            <div class="slider-val-container">
+                                                <input type="range" id="addaudio-video-volume-slider" min="0" max="200" value="100">
+                                                <span id="addaudio-video-volume-val">100%</span>
+                                            </div>
+                                        </div>
+                                        <div class="control-group mt-3">
+                                            <label>New Audio Volume</label>
+                                            <div class="slider-val-container">
+                                                <input type="range" id="addaudio-audio-volume-slider" min="0" max="200" value="100">
+                                                <span id="addaudio-audio-volume-val">100%</span>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <div class="control-group mt-3">
+                                        <label>New Audio Start Offset (নতুন অডিও কখন শুরু হবে)</label>
+                                        <div class="time-field" style="max-width: 140px;">
+                                            <input type="text" id="addaudio-offset-val" value="00:00.0">
+                                        </div>
+                                        <p class="help-text mt-1">mm:ss.s ফরম্যাটে লিখুন — নতুন অডিও ভিডিওর এই সময় থেকে বাজা শুরু করবে।</p>
+                                    </div>
+
+                                    <div class="toggle-control mt-3">
+                                        <div class="toggle-label">
+                                            <h4>Trim to Video Length</h4>
+                                            <p>ভিডিওর দৈর্ঘ্য অনুযায়ী অডিও কাটুন — বন্ধ থাকলে দীর্ঘ অডিও ভিডিওর পরেও চলতে থাকবে (আউটপুট বড় হবে)।</p>
+                                        </div>
+                                        <label class="switch">
+                                            <input type="checkbox" id="addaudio-shortest-toggle" checked>
+                                            <span class="slider round"></span>
+                                        </label>
+                                    </div>
+
+                                    <button id="addaudio-run-btn" class="btn btn-primary btn-block mt-3" type="button">
+                                        <i class="fa-solid fa-music"></i> Add Audio to Video
+                                    </button>
+                                </div>
+
+                                <!-- Progress -->
+                                <div class="render-progress-box mt-4" id="addaudio-progress-box" style="display: none;">
+                                    <div class="progress-info">
+                                        <span id="addaudio-status-text">Processing... (প্রসেসিং হচ্ছে...)</span>
+                                        <span></span>
+                                    </div>
+                                    <div class="progress-bar-container">
+                                        <div class="progress-bar-fill" id="addaudio-progress-fill" style="width: 100%;"></div>
+                                    </div>
+                                </div>
+
+                                <!-- Success -->
+                                <div class="render-success-box mt-4" id="addaudio-success-box" style="display: none;">
+                                    <div class="success-icon-container">
+                                        <i class="fa-solid fa-circle-check"></i>
+                                    </div>
+                                    <h3>Done!</h3>
+                                    <p id="addaudio-success-desc">আপনার নতুন ভিডিও প্রস্তুত।</p>
+                                    <a id="addaudio-download-link" href="#" download="video_with_audio.mp4" class="btn btn-success btn-block mt-3">
+                                        <i class="fa-solid fa-download"></i> Download Video
+                                    </a>
+                                </div>
+
+                                <!-- Error -->
+                                <div class="render-success-box mt-4" id="addaudio-error-box" style="display: none; border-color: #f87171;">
+                                    <p id="addaudio-error-desc" style="color: #f87171;"></p>
                                 </div>
                             </div>
                         </div>

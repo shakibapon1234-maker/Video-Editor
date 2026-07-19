@@ -1707,4 +1707,466 @@ document.addEventListener('DOMContentLoaded', () => {
             if (acropFormatSelect) acropFormatSelect.disabled = false;
         }
     }
+
+    // --- Add Audio (combine two audio files) ---
+    // Lives inside the Audio Crop/Trim card. Once the primary audio file is
+    // loaded above, the user can pick a second audio file here and combine
+    // it with the first entirely client-side (Web Audio API decode + manual
+    // buffer join/mix), then encode the result with the same WAV/MP3
+    // helpers used by the crop tool. Two modes:
+    //   - concat: lay the two buffers end-to-end (pick which plays first)
+    //   - mix:    overlay both buffers from time 0, each with its own
+    //             volume gain, summed and soft-clamped to avoid clipping
+    const acropaddDropzone = document.getElementById('acropadd-dropzone');
+    const acropaddFileInput = document.getElementById('acropadd-file-input');
+    const acropaddDropzoneLabel = document.getElementById('acropadd-dropzone-label');
+    const acropaddOptionsBox = document.getElementById('acropadd-options-box');
+    const acropaddModeSelect = document.getElementById('acropadd-mode-select');
+    const acropaddOrderBox = document.getElementById('acropadd-order-box');
+    const acropaddOrderSelect = document.getElementById('acropadd-order-select');
+    const acropaddMixVolumes = document.getElementById('acropadd-mix-volumes');
+    const acropaddVol1Slider = document.getElementById('acropadd-vol1-slider');
+    const acropaddVol1Val = document.getElementById('acropadd-vol1-val');
+    const acropaddVol2Slider = document.getElementById('acropadd-vol2-slider');
+    const acropaddVol2Val = document.getElementById('acropadd-vol2-val');
+    const acropaddCombineBtn = document.getElementById('acropadd-combine-btn');
+    const acropaddProgressBox = document.getElementById('acropadd-progress-box');
+    const acropaddStatusText = document.getElementById('acropadd-status-text');
+    const acropaddPercentage = document.getElementById('acropadd-percentage');
+    const acropaddProgressFill = document.getElementById('acropadd-progress-fill');
+    const acropaddSuccessBox = document.getElementById('acropadd-success-box');
+    const acropaddSuccessDesc = document.getElementById('acropadd-success-desc');
+    const acropaddDownloadLink = document.getElementById('acropadd-download-link');
+    const acropaddErrorBox = document.getElementById('acropadd-error-box');
+    const acropaddErrorDesc = document.getElementById('acropadd-error-desc');
+
+    let acropaddSelectedFile = null;
+    let acropaddLastDownloadURL = null;
+
+    if (acropaddDropzone && acropaddFileInput) {
+        acropaddDropzone.addEventListener('click', () => acropaddFileInput.click());
+        acropaddFileInput.addEventListener('change', (e) => {
+            if (e.target.files && e.target.files[0]) handleAcropaddFile(e.target.files[0]);
+            acropaddFileInput.value = '';
+        });
+        acropaddDropzone.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            acropaddDropzone.classList.add('drag-over');
+        });
+        acropaddDropzone.addEventListener('dragleave', () => {
+            acropaddDropzone.classList.remove('drag-over');
+        });
+        acropaddDropzone.addEventListener('drop', (e) => {
+            e.preventDefault();
+            acropaddDropzone.classList.remove('drag-over');
+            if (e.dataTransfer.files && e.dataTransfer.files[0]) handleAcropaddFile(e.dataTransfer.files[0]);
+        });
+    }
+
+    function handleAcropaddFile(file) {
+        if (!acropSelectedFile) {
+            alert('প্রথমে উপরে প্রাইমারি অডিও ফাইলটি আপলোড করুন। (Please upload the primary audio file above first.)');
+            return;
+        }
+        if (!file.type.startsWith('audio/')) {
+            alert('দয়া করে একটি অডিও ফাইল নির্বাচন করুন। (Please select an audio file.)');
+            return;
+        }
+        acropaddSelectedFile = file;
+        if (acropaddDropzoneLabel) acropaddDropzoneLabel.innerText = file.name;
+        if (acropaddSuccessBox) acropaddSuccessBox.style.display = 'none';
+        if (acropaddErrorBox) acropaddErrorBox.style.display = 'none';
+        if (acropaddOptionsBox) acropaddOptionsBox.style.display = 'block';
+    }
+
+    if (acropaddModeSelect) {
+        acropaddModeSelect.addEventListener('change', () => {
+            const isMix = acropaddModeSelect.value === 'mix';
+            if (acropaddMixVolumes) acropaddMixVolumes.style.display = isMix ? 'block' : 'none';
+            if (acropaddOrderBox) acropaddOrderBox.style.display = isMix ? 'none' : 'block';
+        });
+    }
+
+    if (acropaddVol1Slider && acropaddVol1Val) {
+        acropaddVol1Slider.addEventListener('input', () => {
+            acropaddVol1Val.innerText = acropaddVol1Slider.value + '%';
+        });
+    }
+    if (acropaddVol2Slider && acropaddVol2Val) {
+        acropaddVol2Slider.addEventListener('input', () => {
+            acropaddVol2Val.innerText = acropaddVol2Slider.value + '%';
+        });
+    }
+
+    function setAcropaddProgress(percent, statusText) {
+        if (acropaddProgressFill) acropaddProgressFill.style.width = percent + '%';
+        if (acropaddPercentage) acropaddPercentage.innerText = percent + '%';
+        if (statusText && acropaddStatusText) acropaddStatusText.innerText = statusText;
+    }
+
+    if (acropaddCombineBtn) {
+        acropaddCombineBtn.addEventListener('click', runAcropaddCombine);
+    }
+
+    async function runAcropaddCombine() {
+        if (!acropSelectedFile || !acropaddSelectedFile) return;
+
+        const mode = acropaddModeSelect ? acropaddModeSelect.value : 'concat';
+        const order = acropaddOrderSelect ? acropaddOrderSelect.value : 'first-second';
+        const vol1 = acropaddVol1Slider ? (parseInt(acropaddVol1Slider.value, 10) / 100) : 1;
+        const vol2 = acropaddVol2Slider ? (parseInt(acropaddVol2Slider.value, 10) / 100) : 1;
+        const format = acropFormatSelect ? acropFormatSelect.value : 'wav';
+
+        acropaddCombineBtn.disabled = true;
+        acropaddProgressBox.style.display = 'block';
+        acropaddSuccessBox.style.display = 'none';
+        acropaddErrorBox.style.display = 'none';
+        setAcropaddProgress(0, 'ফাইল পড়া হচ্ছে... (Reading files...)');
+
+        // Dedicated AudioContext, kept separate from the main editor's audio
+        // graph — both files are decoded through the SAME context so the
+        // browser resamples them to a common sample rate automatically.
+        let decodeCtx = null;
+
+        try {
+            const AudioCtx = window.AudioContext || window.webkitAudioContext;
+            decodeCtx = new AudioCtx();
+
+            const [buf1ArrayBuf, buf2ArrayBuf] = await Promise.all([
+                acropSelectedFile.arrayBuffer(),
+                acropaddSelectedFile.arrayBuffer()
+            ]);
+
+            setAcropaddProgress(20, 'অডিও ডিকোড হচ্ছে... (Decoding audio...)');
+
+            let bufferA, bufferB;
+            try {
+                bufferA = await decodeCtx.decodeAudioData(buf1ArrayBuf);
+            } catch (e) {
+                throw new Error('DECODE_FAILED_1');
+            }
+            try {
+                bufferB = await decodeCtx.decodeAudioData(buf2ArrayBuf);
+            } catch (e) {
+                throw new Error('DECODE_FAILED_2');
+            }
+
+            setAcropaddProgress(45, mode === 'mix'
+                ? 'অডিও মিশ্রণ করা হচ্ছে... (Mixing audio...)'
+                : 'অডিও জোড়া লাগানো হচ্ছে... (Joining audio...)');
+
+            const sampleRate = decodeCtx.sampleRate;
+            const numChannels = Math.max(bufferA.numberOfChannels, bufferB.numberOfChannels);
+
+            // channelData(buf, ch) reuses channel 0 for any buffer with fewer
+            // channels than the combined output (e.g. mono source, stereo output).
+            function channelData(buf, ch) {
+                return buf.getChannelData(Math.min(ch, buf.numberOfChannels - 1));
+            }
+
+            let combinedBuffer;
+            if (mode === 'mix') {
+                const length = Math.max(bufferA.length, bufferB.length);
+                combinedBuffer = decodeCtx.createBuffer(numChannels, length, sampleRate);
+                for (let ch = 0; ch < numChannels; ch++) {
+                    const out = combinedBuffer.getChannelData(ch);
+                    const dataA = channelData(bufferA, ch);
+                    const dataB = channelData(bufferB, ch);
+                    for (let i = 0; i < length; i++) {
+                        let sample = (i < dataA.length ? dataA[i] * vol1 : 0) + (i < dataB.length ? dataB[i] * vol2 : 0);
+                        // Soft-clamp to avoid harsh digital clipping when both
+                        // tracks peak at the same time.
+                        if (sample > 1) sample = 1;
+                        if (sample < -1) sample = -1;
+                        out[i] = sample;
+                    }
+                }
+            } else {
+                const first = order === 'second-first' ? bufferB : bufferA;
+                const second = order === 'second-first' ? bufferA : bufferB;
+                const length = first.length + second.length;
+                combinedBuffer = decodeCtx.createBuffer(numChannels, length, sampleRate);
+                for (let ch = 0; ch < numChannels; ch++) {
+                    const out = combinedBuffer.getChannelData(ch);
+                    out.set(channelData(first, ch), 0);
+                    out.set(channelData(second, ch), first.length);
+                }
+            }
+
+            setAcropaddProgress(60, format === 'mp3'
+                ? 'MP3 এনকোড হচ্ছে... (Encoding MP3...)'
+                : 'WAV তৈরি হচ্ছে... (Building WAV...)');
+
+            let blob, ext, mimeLabel;
+            if (format === 'mp3') {
+                const lamejsReady = await ensureLamejsLoaded();
+                if (!lamejsReady) throw new Error('MP3_UNAVAILABLE');
+                blob = await v2aEncodeMp3(combinedBuffer, 128, (p) => {
+                    setAcropaddProgress(60 + Math.round(p * 35), 'MP3 এনকোড হচ্ছে... (Encoding MP3...)');
+                });
+                ext = 'mp3';
+                mimeLabel = 'MP3';
+            } else {
+                blob = v2aAudioBufferToWavBlob(combinedBuffer);
+                ext = 'wav';
+                mimeLabel = 'WAV';
+            }
+
+            setAcropaddProgress(100, 'সম্পন্ন! (Complete!)');
+
+            if (acropaddLastDownloadURL) URL.revokeObjectURL(acropaddLastDownloadURL);
+            acropaddLastDownloadURL = URL.createObjectURL(blob);
+            acropaddDownloadLink.href = acropaddLastDownloadURL;
+            acropaddDownloadLink.download = `combined_audio.${ext}`;
+            if (acropaddSuccessDesc) {
+                acropaddSuccessDesc.innerText = mode === 'mix'
+                    ? `${mimeLabel} ফাইল প্রস্তুত — দুটি অডিও একসাথে মিশিয়ে "combined_audio.${ext}" তৈরি হয়েছে।`
+                    : `${mimeLabel} ফাইল প্রস্তুত — দুটি অডিও জোড়া লাগিয়ে "combined_audio.${ext}" তৈরি হয়েছে।`;
+            }
+
+            setTimeout(() => {
+                acropaddProgressBox.style.display = 'none';
+                acropaddSuccessBox.style.display = 'block';
+            }, 300);
+        } catch (err) {
+            console.error('Add-audio combine failed:', err);
+            acropaddProgressBox.style.display = 'none';
+            if (err && (err.message === 'DECODE_FAILED_1' || err.message === 'DECODE_FAILED_2')) {
+                const which = err.message === 'DECODE_FAILED_1' ? 'প্রথম' : 'দ্বিতীয়';
+                acropaddErrorBox.style.display = 'block';
+                if (acropaddErrorDesc) acropaddErrorDesc.innerText = `${which} অডিও ফাইলটি ডিকোড করা যায়নি। ফরম্যাট/কোডেকটি সম্ভবত এই ব্রাউজার সাপোর্ট করে না।`;
+            } else if (err && err.message === 'MP3_UNAVAILABLE') {
+                acropaddErrorBox.style.display = 'block';
+                if (acropaddErrorDesc) acropaddErrorDesc.innerText = 'MP3 এনকোডার লোড করা যায়নি (ইন্টারনেট সংযোগ প্রয়োজন)। দয়া করে WAV ফরম্যাট বেছে আবার চেষ্টা করুন।';
+                if (acropFormatSelect) acropFormatSelect.value = 'wav';
+            } else {
+                acropaddErrorBox.style.display = 'block';
+                if (acropaddErrorDesc) acropaddErrorDesc.innerText = 'অডিও একত্রিত করতে সমস্যা হয়েছে। ফাইলগুলো অন্য কিছু দিয়ে আবার চেষ্টা করুন।';
+            }
+        } finally {
+            if (decodeCtx) {
+                try { decodeCtx.close(); } catch (e) { /* ignore */ }
+            }
+            acropaddCombineBtn.disabled = false;
+        }
+    }
+    // Same reasoning as Remove Audio above: the browser can't remux/mix a full
+    // audio track into an existing video container on its own, so the two raw
+    // files are streamed to the local Node server (server.js's /api/add-audio
+    // routes), which uses ffmpeg to either replace the video's audio track
+    // entirely or mix it with the original, then hands back a download link.
+    // Independent of the main editor project — any video/audio pair works.
+    const addaudioVideoDropzone = document.getElementById('addaudio-video-dropzone');
+    const addaudioVideoFileInput = document.getElementById('addaudio-video-file-input');
+    const addaudioVideoDropzoneLabel = document.getElementById('addaudio-video-dropzone-label');
+    const addaudioAudioDropzone = document.getElementById('addaudio-audio-dropzone');
+    const addaudioAudioFileInput = document.getElementById('addaudio-audio-file-input');
+    const addaudioAudioDropzoneLabel = document.getElementById('addaudio-audio-dropzone-label');
+    const addaudioOptionsBox = document.getElementById('addaudio-options-box');
+    const addaudioModeSelect = document.getElementById('addaudio-mode-select');
+    const addaudioMixVolumes = document.getElementById('addaudio-mix-volumes');
+    const addaudioVideoVolumeSlider = document.getElementById('addaudio-video-volume-slider');
+    const addaudioVideoVolumeVal = document.getElementById('addaudio-video-volume-val');
+    const addaudioAudioVolumeSlider = document.getElementById('addaudio-audio-volume-slider');
+    const addaudioAudioVolumeVal = document.getElementById('addaudio-audio-volume-val');
+    const addaudioOffsetVal = document.getElementById('addaudio-offset-val');
+    const addaudioShortestToggle = document.getElementById('addaudio-shortest-toggle');
+    const addaudioRunBtn = document.getElementById('addaudio-run-btn');
+    const addaudioProgressBox = document.getElementById('addaudio-progress-box');
+    const addaudioStatusText = document.getElementById('addaudio-status-text');
+    const addaudioSuccessBox = document.getElementById('addaudio-success-box');
+    const addaudioSuccessDesc = document.getElementById('addaudio-success-desc');
+    const addaudioDownloadLink = document.getElementById('addaudio-download-link');
+    const addaudioErrorBox = document.getElementById('addaudio-error-box');
+    const addaudioErrorDesc = document.getElementById('addaudio-error-desc');
+
+    let addaudioVideoFile = null;
+    let addaudioAudioFile = null;
+
+    function addaudioMaybeShowOptions() {
+        if (addaudioOptionsBox) {
+            addaudioOptionsBox.style.display = (addaudioVideoFile && addaudioAudioFile) ? 'block' : 'none';
+        }
+    }
+
+    if (addaudioVideoDropzone && addaudioVideoFileInput) {
+        addaudioVideoDropzone.addEventListener('click', () => addaudioVideoFileInput.click());
+        addaudioVideoFileInput.addEventListener('change', (e) => {
+            if (e.target.files && e.target.files[0]) handleAddaudioVideoFile(e.target.files[0]);
+            addaudioVideoFileInput.value = '';
+        });
+        addaudioVideoDropzone.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            addaudioVideoDropzone.classList.add('drag-over');
+        });
+        addaudioVideoDropzone.addEventListener('dragleave', () => {
+            addaudioVideoDropzone.classList.remove('drag-over');
+        });
+        addaudioVideoDropzone.addEventListener('drop', (e) => {
+            e.preventDefault();
+            addaudioVideoDropzone.classList.remove('drag-over');
+            if (e.dataTransfer.files && e.dataTransfer.files[0]) handleAddaudioVideoFile(e.dataTransfer.files[0]);
+        });
+    }
+
+    if (addaudioAudioDropzone && addaudioAudioFileInput) {
+        addaudioAudioDropzone.addEventListener('click', () => addaudioAudioFileInput.click());
+        addaudioAudioFileInput.addEventListener('change', (e) => {
+            if (e.target.files && e.target.files[0]) handleAddaudioAudioFile(e.target.files[0]);
+            addaudioAudioFileInput.value = '';
+        });
+        addaudioAudioDropzone.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            addaudioAudioDropzone.classList.add('drag-over');
+        });
+        addaudioAudioDropzone.addEventListener('dragleave', () => {
+            addaudioAudioDropzone.classList.remove('drag-over');
+        });
+        addaudioAudioDropzone.addEventListener('drop', (e) => {
+            e.preventDefault();
+            addaudioAudioDropzone.classList.remove('drag-over');
+            if (e.dataTransfer.files && e.dataTransfer.files[0]) handleAddaudioAudioFile(e.dataTransfer.files[0]);
+        });
+    }
+
+    function handleAddaudioVideoFile(file) {
+        if (!file.type.startsWith('video/')) {
+            alert('দয়া করে একটি ভিডিও ফাইল নির্বাচন করুন। (Please select a video file.)');
+            return;
+        }
+        addaudioVideoFile = file;
+        if (addaudioVideoDropzoneLabel) addaudioVideoDropzoneLabel.innerText = file.name;
+        if (addaudioSuccessBox) addaudioSuccessBox.style.display = 'none';
+        if (addaudioErrorBox) addaudioErrorBox.style.display = 'none';
+        addaudioMaybeShowOptions();
+    }
+
+    function handleAddaudioAudioFile(file) {
+        if (!file.type.startsWith('audio/')) {
+            alert('দয়া করে একটি অডিও ফাইল নির্বাচন করুন। (Please select an audio file.)');
+            return;
+        }
+        addaudioAudioFile = file;
+        if (addaudioAudioDropzoneLabel) addaudioAudioDropzoneLabel.innerText = file.name;
+        if (addaudioSuccessBox) addaudioSuccessBox.style.display = 'none';
+        if (addaudioErrorBox) addaudioErrorBox.style.display = 'none';
+        addaudioMaybeShowOptions();
+    }
+
+    if (addaudioModeSelect) {
+        addaudioModeSelect.addEventListener('change', () => {
+            if (addaudioMixVolumes) {
+                addaudioMixVolumes.style.display = (addaudioModeSelect.value === 'mix') ? 'block' : 'none';
+            }
+        });
+    }
+
+    if (addaudioVideoVolumeSlider && addaudioVideoVolumeVal) {
+        addaudioVideoVolumeSlider.addEventListener('input', () => {
+            addaudioVideoVolumeVal.innerText = addaudioVideoVolumeSlider.value + '%';
+        });
+    }
+    if (addaudioAudioVolumeSlider && addaudioAudioVolumeVal) {
+        addaudioAudioVolumeSlider.addEventListener('input', () => {
+            addaudioAudioVolumeVal.innerText = addaudioAudioVolumeSlider.value + '%';
+        });
+    }
+
+    // Parses "mm:ss.s" (or plain seconds) into a float seconds value.
+    function addaudioParseOffset(str) {
+        if (!str) return 0;
+        str = str.trim();
+        if (str.includes(':')) {
+            const parts = str.split(':');
+            const mins = parseFloat(parts[0]) || 0;
+            const secs = parseFloat(parts[1]) || 0;
+            return Math.max(0, mins * 60 + secs);
+        }
+        const val = parseFloat(str);
+        return isNaN(val) ? 0 : Math.max(0, val);
+    }
+
+    if (addaudioRunBtn) {
+        addaudioRunBtn.addEventListener('click', runAddAudioToVideo);
+    }
+
+    async function runAddAudioToVideo() {
+        if (!addaudioVideoFile || !addaudioAudioFile) return;
+
+        const mode = addaudioModeSelect ? addaudioModeSelect.value : 'replace';
+        const videoVolume = addaudioVideoVolumeSlider ? (parseInt(addaudioVideoVolumeSlider.value, 10) / 100) : 1;
+        const audioVolume = addaudioAudioVolumeSlider ? (parseInt(addaudioAudioVolumeSlider.value, 10) / 100) : 1;
+        const offsetSec = addaudioParseOffset(addaudioOffsetVal ? addaudioOffsetVal.value : '0');
+        const shortest = addaudioShortestToggle ? addaudioShortestToggle.checked : true;
+
+        addaudioRunBtn.disabled = true;
+        if (addaudioProgressBox) addaudioProgressBox.style.display = 'block';
+        if (addaudioSuccessBox) addaudioSuccessBox.style.display = 'none';
+        if (addaudioErrorBox) addaudioErrorBox.style.display = 'none';
+        if (addaudioStatusText) addaudioStatusText.innerText = 'সেশন শুরু হচ্ছে... (Starting session...)';
+
+        try {
+            // Step 1: init a temp session on the server.
+            const initRes = await fetch('/api/add-audio/init', { method: 'POST' });
+            const initResult = await initRes.json();
+            if (!initRes.ok) throw new Error(initResult.error || `Server error (${initRes.status})`);
+            const sessionId = initResult.sessionId;
+
+            // Step 2: upload the video file.
+            if (addaudioStatusText) addaudioStatusText.innerText = 'ভিডিও আপলোড হচ্ছে... (Uploading video...)';
+            const videoUploadRes = await fetch(`/api/add-audio/upload-video?session=${encodeURIComponent(sessionId)}&filename=${encodeURIComponent(addaudioVideoFile.name)}`, {
+                method: 'POST',
+                headers: { 'Content-Type': addaudioVideoFile.type || 'application/octet-stream' },
+                body: addaudioVideoFile
+            });
+            const videoUploadResult = await videoUploadRes.json();
+            if (!videoUploadRes.ok) throw new Error(videoUploadResult.error || `Server error (${videoUploadRes.status})`);
+
+            // Step 3: upload the audio file.
+            if (addaudioStatusText) addaudioStatusText.innerText = 'অডিও আপলোড হচ্ছে... (Uploading audio...)';
+            const audioUploadRes = await fetch(`/api/add-audio/upload-audio?session=${encodeURIComponent(sessionId)}&filename=${encodeURIComponent(addaudioAudioFile.name)}`, {
+                method: 'POST',
+                headers: { 'Content-Type': addaudioAudioFile.type || 'application/octet-stream' },
+                body: addaudioAudioFile
+            });
+            const audioUploadResult = await audioUploadRes.json();
+            if (!audioUploadRes.ok) throw new Error(audioUploadResult.error || `Server error (${audioUploadRes.status})`);
+
+            // Step 4: compile with ffmpeg on the server.
+            if (addaudioStatusText) addaudioStatusText.innerText = 'ভিডিওতে অডিও যোগ করা হচ্ছে... (Adding audio to video...)';
+            const compileRes = await fetch(`/api/add-audio/compile?session=${encodeURIComponent(sessionId)}`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    mode,
+                    videoVolume,
+                    audioVolume,
+                    offsetSec,
+                    shortest,
+                    filename: addaudioVideoFile.name
+                })
+            });
+            const compileResult = await compileRes.json();
+            if (!compileRes.ok) throw new Error(compileResult.error || `Server error (${compileRes.status})`);
+
+            if (addaudioDownloadLink) {
+                addaudioDownloadLink.href = compileResult.downloadUrl;
+                addaudioDownloadLink.download = compileResult.filename;
+            }
+            if (addaudioSuccessDesc) {
+                addaudioSuccessDesc.innerText = `"${compileResult.filename}" প্রস্তুত।`;
+            }
+            if (addaudioProgressBox) addaudioProgressBox.style.display = 'none';
+            if (addaudioSuccessBox) addaudioSuccessBox.style.display = 'block';
+        } catch (err) {
+            console.error('Add-audio failed:', err);
+            if (addaudioProgressBox) addaudioProgressBox.style.display = 'none';
+            if (addaudioErrorBox) addaudioErrorBox.style.display = 'block';
+            if (addaudioErrorDesc) {
+                addaudioErrorDesc.innerText = `অডিও যোগ করা যায়নি: ${err.message}। সার্ভার (node server.js) চালু আছে কিনা দেখুন।`;
+            }
+        } finally {
+            addaudioRunBtn.disabled = false;
+        }
+    }
 });

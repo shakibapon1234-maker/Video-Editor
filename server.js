@@ -339,6 +339,162 @@ app.post('/api/remove-audio', express.raw({ type: '*/*', limit: '2gb' }), (req, 
     });
 });
 
+// --- Add Audio to Video ---
+// Takes a video file and a separate audio file and produces a new video
+// with the audio either replacing the original track entirely, or mixed
+// together with it. Like Remove Audio, this needs ffmpeg (the browser can't
+// remux/mix audio into an existing video container), but this tool needs
+// TWO files instead of one, so it's a 3-step session flow instead of a
+// single raw upload:
+//   1. POST /api/add-audio/init            -> creates a temp session dir
+//   2. POST /api/add-audio/upload-video    -> raw video bytes, saved to session dir
+//   3. POST /api/add-audio/upload-audio    -> raw audio bytes, saved to session dir
+//   4. POST /api/add-audio/compile         -> runs ffmpeg, returns download link
+// Kept as raw uploads (no multer) to match the rest of this file's style.
+const ADDAUDIO_TEMP_DIR = path.join(__dirname, 'temp_addaudio');
+if (!fs.existsSync(ADDAUDIO_TEMP_DIR)) fs.mkdirSync(ADDAUDIO_TEMP_DIR);
+
+// In-memory session registry: sessionId -> { tempDir, videoPath, audioPath, videoOriginalName }
+const addAudioSessions = new Map();
+
+function addAudioSessionOrError(req, res) {
+    const sessionId = req.query.session;
+    const session = sessionId && addAudioSessions.get(sessionId);
+    if (!session) {
+        res.status(400).json({ error: 'Invalid or expired session. Please start over.' });
+        return null;
+    }
+    return session;
+}
+
+app.post('/api/add-audio/init', (req, res) => {
+    try {
+        const sessionId = `addaudio_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+        const tempDir = path.join(ADDAUDIO_TEMP_DIR, sessionId);
+        fs.mkdirSync(tempDir);
+        addAudioSessions.set(sessionId, { tempDir, videoPath: null, audioPath: null, videoOriginalName: 'video.mp4', createdAt: Date.now() });
+        res.json({ sessionId });
+    } catch (err) {
+        console.error('add-audio init error:', err);
+        res.status(500).json({ error: String(err && err.message ? err.message : err) });
+    }
+});
+
+app.post('/api/add-audio/upload-video', express.raw({ type: '*/*', limit: '2gb' }), (req, res) => {
+    const session = addAudioSessionOrError(req, res);
+    if (!session) return;
+    if (!req.body || !req.body.length) {
+        return res.status(400).json({ error: 'No video data received.' });
+    }
+    const originalName = decodeURIComponent(req.query.filename || 'video.mp4');
+    const ext = path.extname(originalName) || '.mp4';
+    const videoPath = path.join(session.tempDir, `video${ext}`);
+    fs.writeFile(videoPath, req.body, (writeErr) => {
+        if (writeErr) {
+            console.error('Failed to save uploaded video:', writeErr);
+            return res.status(500).json({ error: writeErr.message });
+        }
+        session.videoPath = videoPath;
+        session.videoOriginalName = originalName;
+        res.json({ ok: true });
+    });
+});
+
+app.post('/api/add-audio/upload-audio', express.raw({ type: '*/*', limit: '2gb' }), (req, res) => {
+    const session = addAudioSessionOrError(req, res);
+    if (!session) return;
+    if (!req.body || !req.body.length) {
+        return res.status(400).json({ error: 'No audio data received.' });
+    }
+    const originalName = decodeURIComponent(req.query.filename || 'audio.mp3');
+    const ext = path.extname(originalName) || '.mp3';
+    const audioPath = path.join(session.tempDir, `audio${ext}`);
+    fs.writeFile(audioPath, req.body, (writeErr) => {
+        if (writeErr) {
+            console.error('Failed to save uploaded audio:', writeErr);
+            return res.status(500).json({ error: writeErr.message });
+        }
+        session.audioPath = audioPath;
+        res.json({ ok: true });
+    });
+});
+
+app.post('/api/add-audio/compile', (req, res) => {
+    const sessionId = req.query.session;
+    const session = sessionId && addAudioSessions.get(sessionId);
+    if (!session || !session.videoPath || !session.audioPath) {
+        return res.status(400).json({ error: 'Upload both a video and an audio file before compiling.' });
+    }
+
+    const { mode = 'replace', videoVolume = 1, audioVolume = 1, offsetSec = 0, shortest = true } = req.body || {};
+    const offsetMs = Math.max(0, Math.round((parseFloat(offsetSec) || 0) * 1000));
+    const vVol = Math.max(0, parseFloat(videoVolume));
+    const aVol = Math.max(0, parseFloat(audioVolume));
+
+    const originalName = req.body.filename || session.videoOriginalName || 'video.mp4';
+    const ext = path.extname(originalName) || '.mp4';
+    const baseName = path.basename(originalName, ext) || 'video';
+
+    let outputPath = path.join(OUTPUT_DIR, `${baseName}_with_audio${ext}`);
+    let counter = 1;
+    while (fs.existsSync(outputPath)) {
+        outputPath = path.join(OUTPUT_DIR, `${baseName}_with_audio_${counter}${ext}`);
+        counter++;
+    }
+
+    let filterStr, mapArgs;
+    if (mode === 'mix') {
+        // Mix the new audio with the video's existing audio track. Each side
+        // gets its own volume filter before amix combines them; duration
+        // follows the video's original audio length when "shortest" is on
+        // (matching the video, same as -shortest below) or the longer of the
+        // two tracks otherwise.
+        filterStr = `[0:a]volume=${vVol}[va];[1:a]adelay=${offsetMs}:all=1,volume=${aVol}[na];[va][na]amix=inputs=2:duration=${shortest ? 'first' : 'longest'}:dropout_transition=2[aout]`;
+        mapArgs = ['-map', '0:v:0', '-map', '[aout]'];
+    } else {
+        // Replace mode: drop the video's own audio, use only the new track
+        // (still respecting the start offset and volume).
+        filterStr = `[1:a]adelay=${offsetMs}:all=1,volume=${aVol}[aout]`;
+        mapArgs = ['-map', '0:v:0', '-map', '[aout]'];
+    }
+
+    console.log(`Adding audio (${mode}): ${session.videoPath} + ${session.audioPath} -> ${outputPath}`);
+
+    const outputOptions = [
+        '-filter_complex', filterStr,
+        ...mapArgs,
+        '-c:v', 'copy',
+        '-c:a', 'aac',
+        '-b:a', '192k',
+        '-movflags', '+faststart'
+    ];
+    if (shortest) outputOptions.push('-shortest');
+
+    ffmpeg()
+        .input(session.videoPath)
+        .input(session.audioPath)
+        .outputOptions(outputOptions)
+        .output(outputPath)
+        .on('end', () => {
+            console.log('Add-audio compile complete:', outputPath);
+            res.json({ downloadUrl: `/exports/${path.basename(outputPath)}`, filename: path.basename(outputPath) });
+            setTimeout(() => cleanupDir(session.tempDir), 5000);
+            addAudioSessions.delete(sessionId);
+        })
+        .on('error', (err, stdout, stderr) => {
+            console.error('Add-audio ffmpeg error:', err.message);
+            console.error('FFmpeg stderr:', stderr);
+            let message = `FFmpeg error: ${err.message}`;
+            if (mode === 'mix' && /Stream map .*0:a.* matches no streams|does not contain any stream/i.test(stderr || '')) {
+                message = 'মূল ভিডিওতে কোনো অডিও ট্র্যাক নেই, তাই Mix করা যায়নি। "Replace Original Audio" মোড ব্যবহার করুন।';
+            }
+            res.status(500).json({ error: message });
+            cleanupDir(session.tempDir);
+            addAudioSessions.delete(sessionId);
+        })
+        .run();
+});
+
 // Serve downloads folder
 app.use('/exports', express.static(OUTPUT_DIR));
 
