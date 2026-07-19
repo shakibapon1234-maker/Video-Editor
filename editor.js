@@ -481,6 +481,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 state.currentTime = 0;
                 updatePlayhead();
                 drawFrame();
+                if (window.recordEditorHistory) {
+                    window.recordEditorHistory('Video added');
+                }
             };
             img.src = fileURL;
         } else {
@@ -542,6 +545,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 state.currentTime = 0;
                 updatePlayhead();
                 drawFrame();
+                if (window.recordEditorHistory) {
+                    window.recordEditorHistory('Video added');
+                }
             };
         }
     }
@@ -591,6 +597,10 @@ document.addEventListener('DOMContentLoaded', () => {
             state.logoY = 0.1;
             
             drawFrame();
+            if (window.captureUndoCheckpoint) window.captureUndoCheckpoint();
+            if (window.recordEditorHistory) {
+                window.recordEditorHistory('Logo added');
+            }
         };
     }
     
@@ -607,6 +617,10 @@ document.addEventListener('DOMContentLoaded', () => {
         logoControlCard.style.display = 'none';
         logoInput.value = '';
         drawFrame();
+        if (window.captureUndoCheckpoint) window.captureUndoCheckpoint();
+        if (window.recordEditorHistory) {
+            window.recordEditorHistory('Logo removed');
+        }
     });
     
     // Logo styling controls
@@ -632,6 +646,10 @@ document.addEventListener('DOMContentLoaded', () => {
             state.aspectRatio = targetBtn.dataset.ratio;
             updateCanvasDimensions();
             drawFrame();
+            if (window.captureUndoCheckpoint) window.captureUndoCheckpoint();
+            if (window.recordEditorHistory) {
+                window.recordEditorHistory('Format changed');
+            }
         });
     });
 
@@ -737,6 +755,10 @@ document.addEventListener('DOMContentLoaded', () => {
         });
 
         triggerAutoSave();
+        if (window.captureUndoCheckpoint) window.captureUndoCheckpoint();
+        if (window.recordEditorHistory) {
+            window.recordEditorHistory('Platform preset changed');
+        }
     }
 
     platformPresetBtns.forEach(btn => {
@@ -1042,6 +1064,10 @@ document.addEventListener('DOMContentLoaded', () => {
             targetBtn.classList.add('active');
             state.layoutMode = targetBtn.dataset.mode;
             drawFrame();
+            if (window.captureUndoCheckpoint) window.captureUndoCheckpoint();
+            if (window.recordEditorHistory) {
+                window.recordEditorHistory('Layout mode changed');
+            }
         });
     });
     
@@ -1592,6 +1618,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 };
                 state.clips.push(newClip);
                 renderClipTimeline();
+                if (window.recordEditorHistory) {
+                    window.recordEditorHistory('Clip added');
+                }
             };
             img.src = url;
         } else {
@@ -1614,6 +1643,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 };
                 state.clips.push(newClip);
                 renderClipTimeline();
+                if (window.recordEditorHistory) {
+                    window.recordEditorHistory('Clip added');
+                }
             };
         }
     }
@@ -1671,10 +1703,16 @@ document.addEventListener('DOMContentLoaded', () => {
                 state.isClipTransitionInProgress = false;
             }, 0);
         } else {
-            state.video.src = clip.url;
-            state.video.load();
+            let isSameSrc = false;
+            try {
+                const absVideoSrc = new URL(state.video.src, window.location.href).href;
+                const absClipUrl = new URL(clip.url, window.location.href).href;
+                isSameSrc = (absVideoSrc === absClipUrl);
+            } catch (e) {
+                isSameSrc = (state.video.src === clip.url);
+            }
 
-            state.video.onloadedmetadata = () => {
+            const onMetadataLoaded = () => {
                 state.duration = clip.duration;
                 state.startTime = clip.start;
                 state.endTime = clip.end;
@@ -1700,6 +1738,15 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
                 state.isClipTransitionInProgress = false;
             };
+
+            if (isSameSrc) {
+                // Same source - execute immediately without reloading to avoid playback freeze
+                setTimeout(onMetadataLoaded, 0);
+            } else {
+                state.video.src = clip.url;
+                state.video.load();
+                state.video.onloadedmetadata = onMetadataLoaded;
+            }
 
             // Safety net: if this clip's video never fires 'loadedmetadata'
             // (corrupt file, load stalls, etc.) don't leave the flag stuck on,
@@ -1759,6 +1806,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 } else {
                     renderClipTimeline();
                 }
+                if (window.recordEditorHistory) {
+                    window.recordEditorHistory('Clip removed');
+                }
             });
 
             block.appendChild(label);
@@ -1774,6 +1824,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 state.clips.splice(idx, 0, moved);
                 draggedClipIndex = null;
                 renderClipTimeline();
+                if (window.recordEditorHistory) {
+                    window.recordEditorHistory('Clips reordered');
+                }
             });
 
             clipTimelineListEl.appendChild(block);
@@ -4414,6 +4467,8 @@ document.addEventListener('DOMContentLoaded', () => {
             
             // Check if pointer is within the video bounds
             if (coords.x >= drawX && coords.x <= drawX + drawW && coords.y >= drawY && coords.y <= drawY + drawH) {
+                // Capture pre-action state before crop changes begin
+                if (window.captureUndoCheckpoint) window.captureUndoCheckpoint();
                 const cropPixelX = drawX + state.cropX * drawW;
                 const cropPixelY = drawY + state.cropY * drawH;
                 const cropPixelW = state.cropW * drawW;
@@ -4678,6 +4733,9 @@ document.addEventListener('DOMContentLoaded', () => {
         // Logo behavior
         if (state.logoImg) {
             const check = isPointerOnLogo(coords);
+            if (check.isResize || check.isOver) {
+                if (window.captureUndoCheckpoint) window.captureUndoCheckpoint();
+            }
             const logoW = canvasW * (state.logoSize / 100);
             const logoH = logoW * (state.logoImg.naturalHeight / state.logoImg.naturalWidth);
             const lx = state.logoX * canvasW;
@@ -4703,6 +4761,7 @@ document.addEventListener('DOMContentLoaded', () => {
             if (findBrollRotateHandle(coords)) {
                 const item = state.brollOverlays.find(b => b.id === state.selectedBrollId);
                 if (item) {
+                    if (window.captureUndoCheckpoint) window.captureUndoCheckpoint();
                     const box = getBrollBoxRect(item, canvasW, canvasH);
                     state.isRotatingBroll = true;
                     state.brollRotateStartAngle = Math.atan2(coords.y - box.cy, coords.x - box.cx) * 180 / Math.PI;
@@ -4739,6 +4798,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (state.brollOverlays && state.brollOverlays.length > 0) {
             const brollHit = findBrollPipAt(coords);
             if (brollHit) {
+                if (window.captureUndoCheckpoint) window.captureUndoCheckpoint();
                 state.selectedBrollId = brollHit.id;
                 state.isDraggingBroll = true;
 
@@ -6236,6 +6296,9 @@ document.addEventListener('DOMContentLoaded', () => {
             updateCropDimensionsDisplay();
             updateCanvasDimensions();
             drawFrame();
+            if (window.recordEditorHistory) {
+                window.recordEditorHistory('Crop changed');
+            }
             return;
         }
 
@@ -6264,12 +6327,17 @@ document.addEventListener('DOMContentLoaded', () => {
             }
             // Keep a two-point freehand line too; it can be given a time range and
             // extended into a box/polygon with another drag from its endpoint.
+            let isRemoved = false;
             if (item && ((item.shape === 'freehand' && item.points.length < 2) || (item.shape !== 'freehand' && (item.w < 0.01 || item.h < 0.01)))) {
                 state.highlights = state.highlights.filter(h => h.id !== item.id);
                 state.selectedHighlightId = null;
+                isRemoved = true;
             }
             if (window.onHighlightSelected) window.onHighlightSelected(state.selectedHighlightId);
             drawFrame();
+            if (!isRemoved && window.recordEditorHistory) {
+                window.recordEditorHistory('Highlight added');
+            }
             return;
         }
 
@@ -6280,13 +6348,18 @@ document.addEventListener('DOMContentLoaded', () => {
             state.isResizingBlur = false;
 
             const region = state.blurRegions.find(r => r.id === state.selectedBlurId);
+            let isRemoved = false;
             if (wasDrawing && region && (region.w < 0.02 || region.h < 0.02)) {
                 // Discard accidental tiny/zero-size box from a simple click
                 state.blurRegions = state.blurRegions.filter(r => r.id !== region.id);
                 state.selectedBlurId = null;
+                isRemoved = true;
             }
             if (window.onBlurRegionSelected) window.onBlurRegionSelected(state.selectedBlurId);
             drawFrame();
+            if (!isRemoved && window.recordEditorHistory) {
+                window.recordEditorHistory(wasDrawing ? 'Blur region added' : 'Blur region modified');
+            }
             return;
         }
 
@@ -6298,15 +6371,28 @@ document.addEventListener('DOMContentLoaded', () => {
             state.isResizingFill = false;
             // Discard tiny accidental clicks
             const item = (state.fillRegions || []).find(r => r.id === state.selectedFillId);
+            let isRemoved = false;
             if (wasDrawing && item && (item.w < 0.01 || item.h < 0.01)) {
                 state.fillRegions = state.fillRegions.filter(r => r.id !== item.id);
                 state.selectedFillId = null;
+                isRemoved = true;
             }
             if (window.onFillSelected) window.onFillSelected(state.selectedFillId);
             if (typeof triggerAutoSave === 'function') triggerAutoSave();
             drawFrame();
+            if (!isRemoved && window.recordEditorHistory) {
+                window.recordEditorHistory(wasDrawing ? 'Background fill added' : 'Background fill modified');
+            }
             return;
         }
+
+        let recordedAction = null;
+        if (state.isDraggingLogo || state.isResizingLogo) recordedAction = 'Logo modified';
+        else if (state.isDraggingTextOverlay) recordedAction = 'Text overlay modified';
+        else if (state.isDraggingBroll || state.isResizingBroll || state.isRotatingBroll) recordedAction = 'B-roll modified';
+        else if (state.isDraggingSticker || state.isResizingSticker) recordedAction = 'Sticker modified';
+        else if (state.isDraggingSymbol || state.isResizingSymbol || state.isRotatingSymbol) recordedAction = 'Symbol modified';
+        else if (state.isDraggingShapeOverlay || state.isResizingShapeOverlay || state.isRotatingShapeOverlay) recordedAction = 'Shape modified';
 
         state.isDraggingLogo = false;
         state.isResizingLogo = false;
@@ -6322,6 +6408,10 @@ document.addEventListener('DOMContentLoaded', () => {
         state.isDraggingShapeOverlay = false;
         state.isResizingShapeOverlay = false;
         state.isRotatingShapeOverlay = false;
+
+        if (recordedAction && window.recordEditorHistory) {
+            window.recordEditorHistory(recordedAction);
+        }
     }
 
     // --- Video Crop Tool Bindings ---
@@ -6433,6 +6523,7 @@ document.addEventListener('DOMContentLoaded', () => {
     };
     
     resetCropBtn.addEventListener('click', () => {
+        if (window.captureUndoCheckpoint) window.captureUndoCheckpoint();
         state.cropX = 0;
         state.cropY = 0;
         state.cropW = 1;
@@ -6441,6 +6532,9 @@ document.addEventListener('DOMContentLoaded', () => {
         updateCropDimensionsDisplay();
         updateCanvasDimensions();
         drawFrame();
+        if (window.recordEditorHistory) {
+            window.recordEditorHistory('Crop reset');
+        }
     });
 
     if (autoReframeBtn) {
@@ -6640,6 +6734,9 @@ document.addEventListener('DOMContentLoaded', () => {
         drawFrame();
 
         if (typeof triggerAutoSave === 'function') triggerAutoSave();
+        if (window.recordEditorHistory) {
+            window.recordEditorHistory('Auto-reframe applied');
+        }
     }
 
     function updateCropDimensionsDisplay() {
@@ -7366,6 +7463,9 @@ document.addEventListener('DOMContentLoaded', () => {
             renderBrollList();
             showBrollTimingFor(newItem.id);
             drawFrame();
+            if (window.recordEditorHistory) {
+                window.recordEditorHistory('B-roll image added');
+            }
             console.log("Added B-roll overlay:", newItem);
         };
         
@@ -7506,6 +7606,9 @@ document.addEventListener('DOMContentLoaded', () => {
             renderBrollList();
             showBrollTimingFor(newItem.id);
             drawFrame();
+            if (window.recordEditorHistory) {
+                window.recordEditorHistory('B-roll video added');
+            }
             console.log("Added Video B-roll overlay:", newItem);
         };
 
@@ -7566,6 +7669,9 @@ document.addEventListener('DOMContentLoaded', () => {
             renderBrollList();
             showBrollTimingFor(newItem.id);
             drawFrame();
+            if (window.recordEditorHistory) {
+                window.recordEditorHistory('B-roll text added');
+            }
         });
     }
 
@@ -8115,6 +8221,9 @@ document.addEventListener('DOMContentLoaded', () => {
             renderBrollList();
             if (brollTimingContainer) brollTimingContainer.style.display = 'none';
             drawFrame();
+            if (window.recordEditorHistory) {
+                window.recordEditorHistory('B-roll removed');
+            }
         });
     }
 
@@ -10920,4 +11029,12 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Bind global trigger to allow re-render on demands
     window.triggerCanvasRedraw = drawFrame;
+    window.renderBlurRegionList = renderBlurRegionList;
+    window.renderHighlightList = renderHighlightList;
+    window.renderFillList = renderFillList;
+    window.renderTextOverlayList = renderTextOverlayList;
+    window.renderBrollList = renderBrollList;
+    window.renderStickerList = renderStickerList;
+    window.renderSymbolList = renderSymbolList;
+    window.renderShapeOverlayList = renderShapeOverlayList;
 });

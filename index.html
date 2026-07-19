@@ -87,7 +87,7 @@
                             <button id="history-panel-toggle" class="btn btn-outline btn-sm" type="button" title="History list">
                                 <i class="fa-solid fa-clock-rotate-left"></i>
                             </button>
-                            <ul id="history-panel-list" class="history-panel-dropdown" style="display: none; position: absolute; top: 100%; right: 0; min-width: 200px; max-height: 240px; overflow-y: auto; background: var(--card-bg, #1e293b); border: 1px solid var(--border-color, #334155); border-radius: 8px; padding: 8px; margin-top: 4px; z-index: 100; list-style: none; font-size: 12px;"></ul>
+                            <ul id="history-panel-list" class="history-panel-dropdown" style="display: none; position: fixed; top: 92px; right: 24px; min-width: 340px; max-width: calc(100vw - 32px); max-height: calc(100vh - 116px); overflow-y: auto; background: var(--card-bg, #1e293b); border: 1px solid var(--border-color, #334155); border-radius: 10px; padding: 10px; z-index: 1000; list-style: none; font-size: 14px; box-shadow: 0 12px 30px rgba(0,0,0,0.35);"></ul>
                         </div>
                     </div>
                     <button id="save-project-btn" class="btn btn-outline" data-tooltip="প্রজেক্ট ফাইল সংরক্ষণ করুন (Save Project)">
@@ -504,6 +504,12 @@
                                         <option value="push_right">Push Right</option>
                                         <option value="push_left">Push Left</option>
                                         <option value="wipe_right">Wipe Right</option>
+                                        <option value="wipe_left">Wipe Left</option>
+                                        <option value="zoom_in">Zoom In from Center</option>
+                                        <option value="zoom_out">Zoom Out to Fit</option>
+                                        <option value="spin_in">Spin In from Center</option>
+                                        <option value="spin_out">Spin Out to Fit</option>
+                                        <option value="zoom_rotate">Zoom + Rotate to Fit</option>
                                     </select>
                                 </div>
                                 <div class="control-group mt-3">
@@ -537,6 +543,41 @@
                                 <div class="slider-val-container">
                                     <input type="range" id="clip-speed-slider" min="0.5" max="2" value="1" step="0.05">
                                     <span id="clip-speed-val">1.00x</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Clip Zoom & Position (Static Zoom/Pan for Video/Image) -->
+                        <div class="card mt-4">
+                            <div class="card-header">
+                                <i class="fa-solid fa-magnifying-glass-plus card-icon"></i>
+                                <h3>Clip Zoom & Position (ক্লিপ জুম ও পজিশন)</h3>
+                            </div>
+                            <div class="card-body">
+                                <p class="help-text">যেকোনো ভিডিও বা ছবি ক্লিপ স্ট্যাটিক জুম করুন এবং পজিশন অ্যাডজাস্ট করুন।</p>
+                                
+                                <div class="control-group mt-3">
+                                    <div style="display: flex; justify-content: space-between; align-items: center;">
+                                        <label>Zoom / জুম (%)</label>
+                                        <span id="clip-zoom-val" style="font-size: 12px; color: var(--text-secondary);">100%</span>
+                                    </div>
+                                    <input type="range" id="clip-zoom-slider" min="100" max="300" value="100" class="form-range" style="width: 100%;">
+                                </div>
+
+                                <div class="control-group mt-3">
+                                    <div style="display: flex; justify-content: space-between; align-items: center;">
+                                        <label>Horizontal Offset / ডানে-বামে সরান (%)</label>
+                                        <span id="clip-offset-x-val" style="font-size: 12px; color: var(--text-secondary);">0%</span>
+                                    </div>
+                                    <input type="range" id="clip-offset-x-slider" min="-100" max="100" value="0" class="form-range" style="width: 100%;">
+                                </div>
+
+                                <div class="control-group mt-3">
+                                    <div style="display: flex; justify-content: space-between; align-items: center;">
+                                        <label>Vertical Offset / ওপরে-নিচে সরান (%)</label>
+                                        <span id="clip-offset-y-val" style="font-size: 12px; color: var(--text-secondary);">0%</span>
+                                    </div>
+                                    <input type="range" id="clip-offset-y-slider" min="-100" max="100" value="0" class="form-range" style="width: 100%;">
                                 </div>
                             </div>
                         </div>
@@ -1700,10 +1741,7 @@
                                     <input type="file" id="bgmusic-input" accept="audio/*" style="display: none;">
                                 </div>
 
-                                <p class="help-text mt-2">অথবা লাইব্রেরি থেকে বেছে নিন (Free Music Library):</p>
-                                <div class="music-library-grid mt-2" id="music-library-grid" style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
-                                    <!-- Populated by audio.js phase9 -->
-                                </div>
+
 
                                 <!-- One row per uploaded music track; click a row to edit its timing/volume below -->
                                 <div class="bgmusic-track-list mt-3" id="bgmusic-track-list"></div>
@@ -1769,6 +1807,12 @@
                                         <i class="fa-solid fa-microphone-slash"></i>
                                         <span>Microphone access needed</span>
                                     </div>
+                                    <div class="control-group mt-2">
+                                        <label for="voiceover-input-device">Recording Microphone</label>
+                                        <select id="voiceover-input-device" class="form-select">
+                                            <option value="">Default microphone</option>
+                                        </select>
+                                    </div>
                                     
                                     <div class="record-controls mt-3">
                                         <button id="record-voice-btn" class="btn btn-record" disabled>
@@ -1780,11 +1824,12 @@
                                     </div>
 
                                     <!-- [9-9] Text-to-Speech Voiceover (Experimental) -->
-                                    <div class="tts-section mt-4">
-                                        <div class="toggle-label">
+                                    <div class="card mt-4 tts-section">
+                                        <div class="card-header">
                                             <h4><i class="fa-solid fa-comment-dots"></i> Text-to-Speech Voiceover</h4>
-                                            <p class="help-text">টেক্সট লিখে কম্পিউটারের কণ্ঠে ভয়েসওভার তৈরি করুন (Experimental — bn-BD ভয়েস ব্রাউজারভেদে সীমিত হতে পারে)।</p>
                                         </div>
+                                        <div class="card-body">
+                                            <p class="help-text">Play Text শুধু browser-এর কণ্ঠ শুনাবে—এতে Voice Changer কাজ করে না। Voice Changer-সহ TTS voiceover পেতে Use Cloud TTS দিয়ে audio তৈরি করুন, তারপর নিচের Voice Changer নির্বাচন করে preview/export করুন।</p>
                                         <textarea id="tts-text" class="form-textarea mt-2" rows="3" placeholder="এখানে আপনার ভয়েসওভারের টেক্সট লিখুন..."></textarea>
                                         <div class="two-col-row mt-2">
                                             <div class="control-group">
@@ -1809,10 +1854,11 @@
                                                 <i class="fa-solid fa-stop"></i> Stop
                                             </button>
                                             <button id="tts-record-btn" class="btn btn-secondary">
-                                                <i class="fa-solid fa-wand-magic-sparkles"></i> Generate Voiceover
+                                                <i class="fa-solid fa-cloud-arrow-down"></i> Use Cloud TTS
                                             </button>
                                         </div>
                                         <p class="help-text mt-2" id="tts-status" style="display:none;"></p>
+                                        </div>
                                     </div>
 
                                     <div class="control-group mt-3" id="voice-changer-container">
@@ -1852,7 +1898,7 @@
                             </div>
                         </div>
 
-                        <div class="card mt-4">
+                        <div class="card mt-4" id="external-tts-card">
                             <div class="card-header">
                                 <i class="fa-solid fa-volume-high card-icon"></i>
                                 <h3>Volume Mixer</h3>
@@ -1875,6 +1921,51 @@
                             </div>
                         </div>
 
+                        <!-- [10-1] TTS External API (Experimental) -->
+                        <div class="card mt-4">
+                            <div class="card-header">
+                                <i class="fa-solid fa-robot card-icon"></i>
+                                <h3>TTS External API (পরীক্ষামূলক)</h3>
+                            </div>
+                            <div class="card-body">
+                                <p class="help-text">ক্লাউড API (যেমন ElevenLabs/OpenAI) ব্যবহার করে উচ্চমানের ভয়েসওভার তৈরি করুন। এটি experimental — API key ও internet লাগবে। আপনার PC-এর load নেয় না (cloud-এ processing)।</p>
+
+                                <div class="control-group mt-3">
+                                    <label>API Provider</label>
+                                    <select id="ext-tts-provider" class="form-select">
+                                        <option value="elevenlabs">ElevenLabs</option>
+                                        <option value="openai">OpenAI TTS</option>
+                                    </select>
+                                </div>
+
+                                <div class="control-group mt-3">
+                                    <label>API Key (সেভ থাকবে localStorage-এ)</label>
+                                    <input type="password" id="ext-tts-key" class="form-input" placeholder="sk-...">
+                                </div>
+
+                                <div class="control-group mt-3" id="ext-tts-voice-container">
+                                    <label>Voice / Model</label>
+                                    <input type="text" id="ext-tts-voice" class="form-input" placeholder="ElevenLabs: voice_id | OpenAI: alloy/echo/nova">
+                                </div>
+
+                                <div class="control-group mt-3">
+                                    <label>Text / টেক্সট</label>
+                                    <textarea id="ext-tts-text" class="form-textarea" rows="3" placeholder="ভয়েসওভারের টেক্সট লিখুন..."></textarea>
+                                </div>
+
+                                <div class="record-controls mt-3">
+                                    <button id="ext-tts-generate-btn" class="btn btn-secondary">
+                                        <i class="fa-solid fa-wand-magic-sparkles"></i> Generate Voiceover
+                                    </button>
+                                    <button id="ext-tts-save-key-btn" class="btn btn-outline">
+                                        <i class="fa-solid fa-key"></i> Save Key
+                                    </button>
+                                </div>
+
+                                <p class="help-text mt-2" id="ext-tts-status" style="display:none;"></p>
+                            </div>
+                        </div>
+
                         <!-- Auto Subtitle (Phase 5A) -->
                         <div class="card mt-4">
                             <div class="card-header">
@@ -1887,6 +1978,13 @@
                                 <button id="generate-subtitle-btn" class="btn btn-secondary btn-block mt-3">
                                     <i class="fa-solid fa-closed-captioning"></i> Listen & Generate (ভিডিও থেকে শোনা শুরু করুন)
                                 </button>
+
+                                <button id="voice-dub-btn" class="btn btn-outline btn-block mt-2">
+                                    <i class="fa-solid fa-microphone-lines"></i> Voice Dub Mode (নিজে বলুন — ভিডিও চুপ থাকবে)
+                                </button>
+                                <p class="help-text mt-1" id="voice-dub-hint" style="display:none;color:#a78bfa;">
+                                    <i class="fa-solid fa-circle-info"></i> ভিডিও মিউট হয়ে চলছে। ভিডিও দেখে নিজে মাইক্রোফোনে বলুন — প্রতিটি বাক্য সাথে সাথে সাবটাইটেল হবে।
+                                </p>
 
                                 <div class="toggle-control mt-3">
                                     <div class="toggle-label">

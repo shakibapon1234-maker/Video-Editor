@@ -15,6 +15,75 @@ const wss = new WebSocket.Server({ server });
 
 const PORT = 4000;
 
+// Parse JSON bodies for the TTS proxy route.
+app.use(express.json({ limit: '2mb' }));
+
+// ------------------------------------------------------------
+// [10-1] TTS External API — CORS-free proxy
+// ------------------------------------------------------------
+// The browser cannot call OpenAI/ElevenLabs directly (CORS block),
+// so the request is routed through this local server endpoint
+// instead. The server adds the API key header and forwards the
+// call, then streams the audio back to the browser.
+app.post('/api/tts-proxy', async (req, res) => {
+    try {
+        const { provider, apiKey, voice, text } = req.body || {};
+        if (!apiKey || !text) {
+            return res.status(400).json({ error: 'apiKey and text are required' });
+        }
+
+        let upstreamUrl, headers, body;
+
+        if (provider === 'openai') {
+            upstreamUrl = 'https://api.openai.com/v1/audio/speech';
+            headers = {
+                'Authorization': 'Bearer ' + apiKey,
+                'Content-Type': 'application/json'
+            };
+            body = JSON.stringify({
+                model: 'tts-1',
+                input: text,
+                voice: voice || 'alloy',
+                response_format: 'mp3'
+            });
+        } else if (provider === 'elevenlabs') {
+            if (!voice) return res.status(400).json({ error: 'ElevenLabs requires a voice id' });
+            upstreamUrl = 'https://api.elevenlabs.io/v1/text-to-speech/' + encodeURIComponent(voice);
+            headers = {
+                'xi-api-key': apiKey,
+                'Content-Type': 'application/json'
+            };
+            body = JSON.stringify({
+                text: text,
+                model_id: 'eleven_multilingual_v2',
+                voice_settings: { stability: 0.5, similarity_boost: 0.5 }
+            });
+        } else {
+            return res.status(400).json({ error: 'Unknown provider' });
+        }
+
+        const upstream = await fetch(upstreamUrl, {
+            method: 'POST',
+            headers,
+            body
+        });
+
+        if (!upstream.ok) {
+            const detail = await upstream.text();
+            return res.status(upstream.status).json({ error: detail.slice(0, 300) });
+        }
+
+        const buf = Buffer.from(await upstream.arrayBuffer());
+        res.setHeader('Content-Type', upstream.headers.get('content-type') || 'audio/mpeg');
+        res.setHeader('Access-Control-Allow-Origin', '*');
+        res.send(buf);
+    } catch (err) {
+        console.error('TTS proxy error:', err);
+        res.status(500).json({ error: String(err && err.message ? err.message : err) });
+    }
+});
+
+
 // Serve editor static files
 app.use(express.static(__dirname));
 

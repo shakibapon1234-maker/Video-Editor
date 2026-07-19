@@ -17,6 +17,9 @@ document.addEventListener('DOMContentLoaded', () => {
         if (clip.kenBurnsStartZoom == null) clip.kenBurnsStartZoom = 100;
         if (clip.kenBurnsEndZoom == null) clip.kenBurnsEndZoom = 115;
         if (!clip.kenBurnsPan) clip.kenBurnsPan = 'right';
+        if (clip.zoom == null || isNaN(clip.zoom)) clip.zoom = 100;
+        if (clip.offsetX == null || isNaN(clip.offsetX)) clip.offsetX = 0;
+        if (clip.offsetY == null || isNaN(clip.offsetY)) clip.offsetY = 0;
         return clip;
     }
 
@@ -58,8 +61,11 @@ document.addEventListener('DOMContentLoaded', () => {
     state.undoStack = state.undoStack || [];
     state.redoStack = state.redoStack || [];
     state.historyLabels = state.historyLabels || [];
+    state.redoLabels = state.redoLabels || [];
     const MAX_HISTORY = 40;
     let historySuspended = false;
+    let cachedLogoImg = null;
+    let cachedLogoFile = null;
 
     function serializeForHistory() {
         return JSON.stringify({
@@ -74,7 +80,12 @@ document.addEventListener('DOMContentLoaded', () => {
                 introTransitionDuration: state.introTransitionDuration,
                 chromaKeyEnabled: state.chromaKeyEnabled,
                 chromaKeyColor: state.chromaKeyColor,
-                chromaKeyThreshold: state.chromaKeyThreshold
+                chromaKeyThreshold: state.chromaKeyThreshold,
+                logoX: state.logoX,
+                logoY: state.logoY,
+                logoSize: state.logoSize,
+                logoOpacity: state.logoOpacity,
+                logoRemoved: !state.logoImg
             },
             clips: state.clips.map(c => {
                 const copy = { ...c };
@@ -82,7 +93,24 @@ document.addEventListener('DOMContentLoaded', () => {
                 delete copy.file;
                 return copy;
             }),
-            activeClipId: state.activeClipId
+            activeClipId: state.activeClipId,
+            
+            // Added support for all overlays and annotations
+            textOverlays: state.textOverlays || [],
+            highlights: state.highlights || [],
+            fillRegions: state.fillRegions || [],
+            stickers: state.stickers || [],
+            symbolOverlays: state.symbolOverlays || [],
+            shapeOverlays: state.shapeOverlays || [],
+            brollOverlays: (state.brollOverlays || []).map(b => {
+                const copy = { ...b };
+                delete copy.imageImg;
+                delete copy.file;
+                delete copy.videoEl;
+                return copy;
+            }),
+            blurRegions: state.blurRegions || [],
+            subtitles: state.subtitles || []
         });
     }
 
@@ -90,9 +118,101 @@ document.addEventListener('DOMContentLoaded', () => {
         historySuspended = true;
         try {
             const data = JSON.parse(jsonStr);
+            const oldClips = state.clips || []; // keep reference to current clips in memory
             Object.assign(state, data.settings);
-            state.clips = (data.clips || []).map(c => ensureClipDefaults({ ...c }));
+            state.clips = (data.clips || []).map(c => {
+                const existing = oldClips.find(oc => oc.id === c.id);
+                const restored = ensureClipDefaults({ ...c });
+                if (existing) {
+                    restored.file = existing.file;
+                    restored.imageImg = existing.imageImg;
+                }
+                return restored;
+            });
             state.activeClipId = data.activeClipId;
+
+            // Restore all overlays and annotations
+            state.textOverlays = data.textOverlays || [];
+            state.highlights = data.highlights || [];
+            state.fillRegions = data.fillRegions || [];
+            state.stickers = data.stickers || [];
+            state.symbolOverlays = data.symbolOverlays || [];
+            state.shapeOverlays = data.shapeOverlays || [];
+            state.blurRegions = data.blurRegions || [];
+            state.subtitles = data.subtitles || [];
+
+            const oldBrolls = state.brollOverlays || [];
+            state.brollOverlays = (data.brollOverlays || []).map(b => {
+                const existing = oldBrolls.find(ob => ob.id === b.id);
+                const restored = { ...b };
+                if (existing) {
+                    restored.file = existing.file;
+                    restored.imageImg = existing.imageImg;
+                    if (existing.type === 'video') {
+                        restored.videoEl = existing.videoEl;
+                    }
+                } else if (b.type === 'image' && b.imageUrl) {
+                    const img = new Image();
+                    img.onload = () => { restored.imageImg = img; if (window.drawEditorFrame) window.drawEditorFrame(); };
+                    img.src = b.imageUrl;
+                } else if (b.type === 'video' && b.videoUrl) {
+                    const vid = document.createElement('video');
+                    vid.muted = true;
+                    vid.playsInline = true;
+                    vid.preload = 'auto';
+                    vid.style.position = 'absolute';
+                    vid.style.width = '1px';
+                    vid.style.height = '1px';
+                    vid.style.opacity = '0';
+                    vid.style.pointerEvents = 'none';
+                    document.body.appendChild(vid);
+                    Object.defineProperty(vid, 'naturalWidth', { get: () => vid.videoWidth });
+                    Object.defineProperty(vid, 'naturalHeight', { get: () => vid.videoHeight });
+                    vid.src = b.videoUrl;
+                    vid.load();
+                    restored.videoEl = vid;
+                    restored.imageImg = vid;
+                }
+                return restored;
+            });
+
+            // Restore logo image elements and file objects if not removed
+            const logoPreviewBox = document.getElementById('logo-preview-box');
+            const logoDropzone = document.getElementById('logo-dropzone');
+            const logoControlCard = document.getElementById('logo-control-card');
+            const logoInput = document.getElementById('logo-input');
+            const logoImgPreview = document.getElementById('logo-img-preview');
+            
+            if (data.settings.logoRemoved) {
+                state.logoImg = null;
+                state.logoFile = null;
+                if (logoPreviewBox) logoPreviewBox.style.display = 'none';
+                if (logoDropzone) logoDropzone.style.display = 'flex';
+                if (logoControlCard) logoControlCard.style.display = 'none';
+                if (logoInput) logoInput.value = '';
+            } else if (cachedLogoImg) {
+                state.logoImg = cachedLogoImg;
+                state.logoFile = cachedLogoFile;
+                if (logoPreviewBox) logoPreviewBox.style.display = 'block';
+                if (logoDropzone) logoDropzone.style.display = 'none';
+                if (logoControlCard) logoControlCard.style.display = 'block';
+                if (logoImgPreview) logoImgPreview.src = state.logoImg.src;
+            }
+
+            // Sync logo UI controls
+            const logoSizeSlider = document.getElementById('logo-size-slider');
+            const logoSizeVal = document.getElementById('logo-size-val');
+            const logoOpacitySlider = document.getElementById('logo-opacity-slider');
+            const logoOpacityVal = document.getElementById('logo-opacity-val');
+            if (logoSizeSlider && state.logoSize !== undefined) {
+                logoSizeSlider.value = state.logoSize;
+                if (logoSizeVal) logoSizeVal.innerText = state.logoSize + '%';
+            }
+            if (logoOpacitySlider && state.logoOpacity !== undefined) {
+                logoOpacitySlider.value = Math.round(state.logoOpacity * 100);
+                if (logoOpacityVal) logoOpacityVal.innerText = Math.round(state.logoOpacity * 100) + '%';
+            }
+
             const active = state.clips.find(c => c.id === state.activeClipId);
             if (active) {
                 state.duration = active.duration;
@@ -107,27 +227,75 @@ document.addEventListener('DOMContentLoaded', () => {
                     img.onload = () => { active.imageImg = img; if (window.drawEditorFrame) window.drawEditorFrame(); };
                     img.src = active.url;
                 } else if (active.url && state.video) {
-                    state.video.src = active.url;
-                    state.video.load();
+                    // Clear any stale onloadedmetadata handler from switchActiveClip
+                    // to prevent it from firing after undo/redo and corrupting state.
+                    state.video.onloadedmetadata = null;
+                    let isSameSrc = false;
+                    try {
+                        const absVideoSrc = new URL(state.video.src, window.location.href).href;
+                        const absClipUrl = new URL(active.url, window.location.href).href;
+                        isSameSrc = (absVideoSrc === absClipUrl);
+                    } catch (e) {
+                        isSameSrc = (state.video.src === active.url);
+                    }
+                    if (!isSameSrc) {
+                        state.video.src = active.url;
+                        state.video.load();
+                    }
+                    // Seek to the clip's start position
+                    state.video.currentTime = active.start || 0;
                 }
             }
             if (window.renderClipTimeline) window.renderClipTimeline();
             if (window.syncPhase9ClipUI) window.syncPhase9ClipUI();
+            
+            // Re-render all annotation/overlay UI lists
+            if (window.renderBlurRegionList) window.renderBlurRegionList();
+            if (window.renderHighlightList) window.renderHighlightList();
+            if (window.renderFillList) window.renderFillList();
+            if (window.renderTextOverlayList) window.renderTextOverlayList();
+            if (window.renderBrollList) window.renderBrollList();
+            if (window.renderStickerList) window.renderStickerList();
+            if (window.renderSymbolList) window.renderSymbolList();
+            if (window.renderShapeOverlayList) window.renderShapeOverlayList();
+
             if (window.drawEditorFrame) window.drawEditorFrame();
         } finally {
             historySuspended = false;
         }
     }
 
+    let pendingUndoSnapshot = null; // pre-action snapshot captured before the action is applied
+
+    // Call this BEFORE applying an action to save the pre-action state.
+    function captureUndoCheckpoint() {
+        if (historySuspended || !state.clips || state.clips.length === 0) return;
+        if (state.logoImg) {
+            cachedLogoImg = state.logoImg;
+            cachedLogoFile = state.logoFile;
+        }
+        pendingUndoSnapshot = serializeForHistory();
+    }
+    window.captureUndoCheckpoint = captureUndoCheckpoint;
+
     function recordEditorHistory(label) {
         if (historySuspended || !state.clips || state.clips.length === 0) return;
-        state.undoStack.push(serializeForHistory());
+        if (state.logoImg) {
+            cachedLogoImg = state.logoImg;
+            cachedLogoFile = state.logoFile;
+        }
+        // Use the pre-action snapshot if one was captured, otherwise fall back to
+        // post-action snapshot (old behavior kept for safety).
+        const snap = pendingUndoSnapshot || serializeForHistory();
+        pendingUndoSnapshot = null;
+        state.undoStack.push(snap);
         state.historyLabels.push(label || 'Change');
         if (state.undoStack.length > MAX_HISTORY) {
             state.undoStack.shift();
             state.historyLabels.shift();
         }
         state.redoStack = [];
+        state.redoLabels = [];
         updateHistoryUI();
     }
     window.recordEditorHistory = recordEditorHistory;
@@ -137,6 +305,7 @@ document.addEventListener('DOMContentLoaded', () => {
         state.redoStack.push(serializeForHistory());
         const snap = state.undoStack.pop();
         const label = state.historyLabels.pop();
+        state.redoLabels.push(label || 'Change');
         applyHistorySnapshot(snap);
         updateHistoryUI();
         console.log('Undo:', label);
@@ -145,7 +314,7 @@ document.addEventListener('DOMContentLoaded', () => {
     function redoEditor() {
         if (state.redoStack.length === 0) return;
         state.undoStack.push(serializeForHistory());
-        state.historyLabels.push('Redo');
+        state.historyLabels.push(state.redoLabels.pop() || 'Redo');
         const snap = state.redoStack.pop();
         applyHistorySnapshot(snap);
         updateHistoryUI();
@@ -163,11 +332,25 @@ document.addEventListener('DOMContentLoaded', () => {
         if (undoBtn) undoBtn.disabled = state.undoStack.length === 0;
         if (redoBtn) redoBtn.disabled = state.redoStack.length === 0;
         if (!historyPanelList) return;
+        historyPanelList.style.display = historyPanelToggle && historyPanelToggle.classList.contains('open') ? 'block' : 'none';
         historyPanelList.innerHTML = '';
         const labels = [...state.historyLabels].reverse();
+        const heading = document.createElement('li');
+        heading.textContent = 'History — সর্বশেষ কাজ আগে';
+        heading.style.padding = '5px 10px 10px';
+        heading.style.fontWeight = '700';
+        heading.style.color = 'var(--text-primary, #fff)';
+        heading.style.borderBottom = '1px solid var(--border-color, #334155)';
+        heading.style.marginBottom = '6px';
+        historyPanelList.appendChild(heading);
         labels.forEach((lbl, i) => {
             const li = document.createElement('li');
             li.textContent = lbl;
+            li.style.padding = '9px 10px';
+            li.style.marginBottom = '4px';
+            li.style.borderRadius = '6px';
+            li.style.cursor = 'pointer';
+            li.style.background = 'rgba(255,255,255,0.04)';
             li.title = 'Jump back to this point (undo ' + (i + 1) + ' step(s))';
             li.addEventListener('click', () => {
                 for (let j = 0; j <= i; j++) undoEditor();
@@ -189,7 +372,10 @@ document.addEventListener('DOMContentLoaded', () => {
             historyPanelToggle.classList.toggle('open');
             updateHistoryUI();
         });
-        document.addEventListener('click', () => historyPanelToggle.classList.remove('open'));
+        document.addEventListener('click', () => {
+            historyPanelToggle.classList.remove('open');
+            updateHistoryUI();
+        });
     }
 
     // --- UI: clip speed, transition, ken burns, chroma ---
@@ -220,6 +406,10 @@ document.addEventListener('DOMContentLoaded', () => {
         const next = getNextClip(idx);
         const showTransition = idx >= 0 && idx < state.clips.length - 1;
 
+        if (showTransition && next && next.transitionType !== 'none') {
+            preloadTransitionVideo(next);
+        }
+
         if (clipTransitionType) {
             clipTransitionType.disabled = !showTransition;
             clipTransitionType.value = showTransition && next ? (next.transitionType || 'none') : 'none';
@@ -237,6 +427,27 @@ document.addEventListener('DOMContentLoaded', () => {
             if (clipSpeedVal) clipSpeedVal.textContent = (clip.speed || 1).toFixed(2) + 'x';
         }
 
+        // Static Zoom & Position Sync
+        const clipZoomSlider = document.getElementById('clip-zoom-slider');
+        const clipZoomVal = document.getElementById('clip-zoom-val');
+        const clipOffsetXSlider = document.getElementById('clip-offset-x-slider');
+        const clipOffsetXVal = document.getElementById('clip-offset-x-val');
+        const clipOffsetYSlider = document.getElementById('clip-offset-y-slider');
+        const clipOffsetYVal = document.getElementById('clip-offset-y-val');
+
+        if (clip && clipZoomSlider) {
+            clipZoomSlider.value = clip.zoom || 100;
+            if (clipZoomVal) clipZoomVal.textContent = (clip.zoom || 100) + '%';
+        }
+        if (clip && clipOffsetXSlider) {
+            clipOffsetXSlider.value = clip.offsetX || 0;
+            if (clipOffsetXVal) clipOffsetXVal.textContent = (clip.offsetX || 0) + '%';
+        }
+        if (clip && clipOffsetYSlider) {
+            clipOffsetYSlider.value = clip.offsetY || 0;
+            if (clipOffsetYVal) clipOffsetYVal.textContent = (clip.offsetY || 0) + '%';
+        }
+
         const isImage = clip && clip.type === 'image';
         if (kenBurnsControls) kenBurnsControls.style.display = isImage ? 'block' : 'none';
         if (kenBurnsToggle && clip) kenBurnsToggle.checked = !!clip.kenBurnsEnabled;
@@ -251,6 +462,47 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     window.syncPhase9ClipUI = syncPhase9ClipUI;
 
+    // Static Zoom & Position Bindings
+    const clipZoomSlider = document.getElementById('clip-zoom-slider');
+    const clipZoomVal = document.getElementById('clip-zoom-val');
+    const clipOffsetXSlider = document.getElementById('clip-offset-x-slider');
+    const clipOffsetXVal = document.getElementById('clip-offset-x-val');
+    const clipOffsetYSlider = document.getElementById('clip-offset-y-slider');
+    const clipOffsetYVal = document.getElementById('clip-offset-y-val');
+
+    if (clipZoomSlider) {
+        clipZoomSlider.addEventListener('input', (e) => {
+            const clip = getActiveClip();
+            if (!clip) return;
+            clip.zoom = parseInt(e.target.value) || 100;
+            if (clipZoomVal) clipZoomVal.textContent = clip.zoom + '%';
+            if (window.drawEditorFrame) window.drawEditorFrame();
+        });
+        clipZoomSlider.addEventListener('change', () => recordEditorHistory('Clip zoom changed'));
+    }
+
+    if (clipOffsetXSlider) {
+        clipOffsetXSlider.addEventListener('input', (e) => {
+            const clip = getActiveClip();
+            if (!clip) return;
+            clip.offsetX = parseInt(e.target.value) || 0;
+            if (clipOffsetXVal) clipOffsetXVal.textContent = clip.offsetX + '%';
+            if (window.drawEditorFrame) window.drawEditorFrame();
+        });
+        clipOffsetXSlider.addEventListener('change', () => recordEditorHistory('Clip horizontal offset changed'));
+    }
+
+    if (clipOffsetYSlider) {
+        clipOffsetYSlider.addEventListener('input', (e) => {
+            const clip = getActiveClip();
+            if (!clip) return;
+            clip.offsetY = parseInt(e.target.value) || 0;
+            if (clipOffsetYVal) clipOffsetYVal.textContent = clip.offsetY + '%';
+            if (window.drawEditorFrame) window.drawEditorFrame();
+        });
+        clipOffsetYSlider.addEventListener('change', () => recordEditorHistory('Clip vertical offset changed'));
+    }
+
     if (clipSpeedSlider) {
         clipSpeedSlider.addEventListener('input', (e) => {
             const clip = getActiveClip();
@@ -264,18 +516,21 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     if (clipTransitionType) {
+        clipTransitionType.addEventListener('focus', captureUndoCheckpoint);
         clipTransitionType.addEventListener('change', () => {
             const idx = getActiveClipIndex();
             const next = getNextClip(idx);
             if (!next) return;
             next.transitionType = clipTransitionType.value;
             if (clipTransitionDuration) clipTransitionDuration.disabled = next.transitionType === 'none';
+            if (next.transitionType !== 'none') preloadTransitionVideo(next);
             recordEditorHistory('Clip transition changed');
             if (window.drawEditorFrame) window.drawEditorFrame();
         });
     }
 
     if (clipTransitionDuration) {
+        clipTransitionDuration.addEventListener('focus', captureUndoCheckpoint);
         clipTransitionDuration.addEventListener('input', (e) => {
             const idx = getActiveClipIndex();
             const next = getNextClip(idx);
@@ -357,6 +612,29 @@ document.addEventListener('DOMContentLoaded', () => {
         return { drawX: nx, drawY: ny, drawW: nw, drawH: nh };
     }
 
+    // --- Static Zoom/Position and Ken Burns combined helper ---
+    function applyStaticAndDynamicTransform(baseDrawX, baseDrawY, baseDrawW, baseDrawH, clip, effectiveTime) {
+        ensureClipDefaults(clip);
+        let drawX = baseDrawX, drawY = baseDrawY, drawW = baseDrawW, drawH = baseDrawH;
+
+        // 1. Static clip zoom and positions (both video and image)
+        const zoom = (clip.zoom || 100) / 100;
+        const offsetX = clip.offsetX || 0;
+        const offsetY = clip.offsetY || 0;
+
+        if (zoom !== 1 || offsetX !== 0 || offsetY !== 0) {
+            drawW = baseDrawW * zoom;
+            drawH = baseDrawH * zoom;
+            drawX = baseDrawX - (drawW - baseDrawW) / 2 + (offsetX * baseDrawW / 100);
+            drawY = baseDrawY - (drawH - baseDrawH) / 2 + (offsetY * baseDrawH / 100);
+        }
+
+        // 2. Ken Burns zoom/pan (only image clips)
+        const kb = applyKenBurnsTransform(drawX, drawY, drawW, drawH, clip, effectiveTime);
+        return kb;
+    }
+    window.phase9ApplyStaticAndDynamicTransform = applyStaticAndDynamicTransform;
+
     // --- Chroma key (preview quality: half resolution) ---
     function parseChromaRGB(hex) {
         const safe = String(hex || '#00ff00').replace('#', '');
@@ -406,9 +684,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function computeTransitionBlend(effectiveTime, activeClip, clipIndex) {
         transitionBlend = null;
-        if (!state.previewTransitionsEnabled || state.customExportTime === undefined && !state.isPlaying && !state.customExportTime) {
-            // still allow during export and playback
-        }
+        if (!state.previewTransitionsEnabled && state.customExportTime === undefined) return;
         const next = getNextClip(clipIndex);
         if (!activeClip || !next || !next.transitionType || next.transitionType === 'none') return;
 
@@ -426,6 +702,10 @@ document.addEventListener('DOMContentLoaded', () => {
         };
     }
 
+    let transitionSeekInFlight = false;
+    let pendingTransitionSeek = null;
+    let liveTransitionKey = null;
+
     async function seekTransitionVideo(url, time) {
         if (transitionVideoEl.src !== url) {
             transitionVideoEl.src = url;
@@ -438,6 +718,51 @@ document.addEventListener('DOMContentLoaded', () => {
             transitionVideoEl.addEventListener('seeked', done);
             setTimeout(done, 500);
         });
+    }
+
+    function requestTransitionFrame(url, time, shouldPlay = false, playbackRate = 1) {
+        pendingTransitionSeek = { url, time, shouldPlay, playbackRate };
+        if (transitionSeekInFlight) return;
+        transitionSeekInFlight = true;
+        const run = async () => {
+            try {
+                while (pendingTransitionSeek) {
+                    const request = pendingTransitionSeek;
+                    pendingTransitionSeek = null;
+                    await seekTransitionVideo(request.url, request.time);
+                    if (request.shouldPlay && state.isPlaying) {
+                        transitionVideoEl.playbackRate = playbackRate || 1;
+                        transitionVideoEl.play().catch(() => {});
+                    }
+                    if (state.isPlaying && window.drawEditorFrame) window.drawEditorFrame();
+                }
+            } finally {
+                transitionSeekInFlight = false;
+                if (pendingTransitionSeek) {
+                    const nextRequest = pendingTransitionSeek;
+                    pendingTransitionSeek = null;
+                    requestTransitionFrame(nextRequest.url, nextRequest.time, nextRequest.shouldPlay, nextRequest.playbackRate);
+                }
+            }
+        };
+        run();
+    }
+
+    function preloadTransitionVideo(clip) {
+        if (!clip || clip.type === 'image' || !clip.url) return;
+        if (transitionVideoEl.src !== clip.url) {
+            transitionVideoEl.src = clip.url;
+            transitionVideoEl.load();
+            requestTransitionFrame(clip.url, clip.start || 0);
+        }
+    }
+
+    function startLiveTransition(incoming, incomingTime) {
+        if (!incoming || incoming.type === 'image' || !incoming.url) return;
+        const key = `${incoming.id}:${incomingTime.toFixed(3)}`;
+        if (liveTransitionKey) return;
+        liveTransitionKey = key;
+        requestTransitionFrame(incoming.url, incomingTime, true, incoming.speed || 1);
     }
 
     window.phase9PrepareTransitionFrame = async function (activeClip, effectiveTime) {
@@ -460,13 +785,12 @@ document.addEventListener('DOMContentLoaded', () => {
         const clipIndex = getActiveClipIndex();
         computeTransitionBlend(effectiveTime, activeClip, clipIndex);
 
-        let drawX = baseDrawX, drawY = baseDrawY, drawW = baseDrawW, drawH = baseDrawH;
-        const kb = applyKenBurnsTransform(drawX, drawY, drawW, drawH, activeClip, effectiveTime);
-        drawX = kb.drawX; drawY = kb.drawY; drawW = kb.drawW; drawH = kb.drawH;
-
-        const drawOutgoing = () => drawMediaWithChroma(ctx, mediaSource, sx, sy, sw, sh, drawX, drawY, drawW, drawH);
+        const outKb = applyStaticAndDynamicTransform(baseDrawX, baseDrawY, baseDrawW, baseDrawH, activeClip, effectiveTime);
+        const drawOutgoing = () => drawMediaWithChroma(ctx, mediaSource, sx, sy, sw, sh, outKb.drawX, outKb.drawY, outKb.drawW, outKb.drawH);
 
         if (!transitionBlend || transitionBlend.type === 'none') {
+            liveTransitionKey = null;
+            if (!transitionVideoEl.paused) transitionVideoEl.pause();
             drawOutgoing();
             return;
         }
@@ -474,6 +798,21 @@ document.addEventListener('DOMContentLoaded', () => {
         const p = transitionBlend.progress;
         const type = transitionBlend.type;
         const incoming = transitionBlend.incoming;
+        const incKb = applyStaticAndDynamicTransform(baseDrawX, baseDrawY, baseDrawW, baseDrawH, incoming, transitionBlend.incomingTime);
+        const drawIncoming = () => {
+            if (incoming.type === 'image' && incoming.imageImg) {
+                drawMediaWithChroma(ctx, incoming.imageImg, 0, 0, incoming.imageImg.naturalWidth, incoming.imageImg.naturalHeight, incKb.drawX, incKb.drawY, incKb.drawW, incKb.drawH);
+            } else if (transitionVideoEl.readyState >= 2) {
+                const inSx = (incoming.cropX || 0) * (transitionVideoEl.videoWidth || videoW);
+                const inSy = (incoming.cropY || 0) * (transitionVideoEl.videoHeight || videoH);
+                const inSw = (incoming.cropW != null ? incoming.cropW : 1) * (transitionVideoEl.videoWidth || videoW);
+                const inSh = (incoming.cropH != null ? incoming.cropH : 1) * (transitionVideoEl.videoHeight || videoH);
+                drawMediaWithChroma(ctx, transitionVideoEl, inSx, inSy, inSw, inSh, incKb.drawX, incKb.drawY, incKb.drawW, incKb.drawH);
+            }
+        };
+        if (state.isPlaying && state.customExportTime === undefined) {
+            startLiveTransition(incoming, transitionBlend.incomingTime);
+        }
 
         if (type === 'dip_black') {
             ctx.save();
@@ -488,17 +827,38 @@ document.addEventListener('DOMContentLoaded', () => {
             if (p > 0.5) {
                 ctx.save();
                 ctx.globalAlpha = (p - 0.5) * 2;
-                // incoming frame drawn at start — async seek handled best-effort next frame
-                if (incoming.type === 'image' && incoming.imageImg) {
-                    drawMediaWithChroma(ctx, incoming.imageImg, 0, 0, incoming.imageImg.naturalWidth, incoming.imageImg.naturalHeight, baseDrawX, baseDrawY, baseDrawW, baseDrawH);
-                } else if (transitionVideoEl.readyState >= 2) {
-                    drawMediaWithChroma(ctx, transitionVideoEl, sx, sy, sw, sh, baseDrawX, baseDrawY, baseDrawW, baseDrawH);
-                }
+                drawIncoming();
                 ctx.restore();
             }
-            if (incoming.type !== 'image' && incoming.url) {
-                seekTransitionVideo(incoming.url, transitionBlend.incomingTime);
+            return;
+        }
+
+        if (['zoom_in', 'zoom_out', 'spin_in', 'spin_out', 'zoom_rotate'].includes(type)) {
+            let scale = 1;
+            let rotation = 0;
+            if (type === 'zoom_in') scale = 0.2 + (0.8 * p);
+            else if (type === 'zoom_out') scale = 1.65 - (0.65 * p);
+            else if (type === 'spin_in') {
+                scale = 0.35 + (0.65 * p);
+                rotation = (1 - p) * Math.PI * 2;
+            } else if (type === 'spin_out') {
+                scale = 1.55 - (0.55 * p);
+                rotation = -(1 - p) * Math.PI * 2;
+            } else {
+                scale = 0.2 + (0.8 * p);
+                rotation = -(1 - p) * Math.PI * 2;
             }
+            ctx.save();
+            drawOutgoing();
+            ctx.restore();
+            ctx.save();
+            ctx.globalAlpha = p;
+            ctx.translate(state.canvas.width / 2, state.canvas.height / 2);
+            ctx.scale(scale, scale);
+            ctx.rotate(rotation);
+            ctx.translate(-state.canvas.width / 2, -state.canvas.height / 2);
+            drawIncoming();
+            ctx.restore();
             return;
         }
 
@@ -524,18 +884,7 @@ document.addEventListener('DOMContentLoaded', () => {
             ctx.clip();
         }
 
-        if (incoming.type === 'image' && incoming.imageImg) {
-            drawMediaWithChroma(ctx, incoming.imageImg, 0, 0, incoming.imageImg.naturalWidth, incoming.imageImg.naturalHeight, baseDrawX, baseDrawY, baseDrawW, baseDrawH);
-        } else {
-            if (incoming.url) seekTransitionVideo(incoming.url, transitionBlend.incomingTime);
-            if (transitionVideoEl.readyState >= 2) {
-                const inSx = (incoming.cropX || 0) * (transitionVideoEl.videoWidth || videoW);
-                const inSy = (incoming.cropY || 0) * (transitionVideoEl.videoHeight || videoH);
-                const inSw = (incoming.cropW != null ? incoming.cropW : 1) * (transitionVideoEl.videoWidth || videoW);
-                const inSh = (incoming.cropH != null ? incoming.cropH : 1) * (transitionVideoEl.videoHeight || videoH);
-                drawMediaWithChroma(ctx, transitionVideoEl, inSx, inSy, inSw, inSh, baseDrawX, baseDrawY, baseDrawW, baseDrawH);
-            }
-        }
+        drawIncoming();
         ctx.restore();
     };
 
@@ -544,6 +893,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (typeof origSwitch === 'function') {
         window.switchActiveClipGlobal = function (...args) {
             origSwitch.apply(this, args);
+            liveTransitionKey = null;
             const clip = getActiveClip();
             if (clip && clip.type !== 'image' && state.video) {
                 state.video.playbackRate = clip.speed || 1;
@@ -636,7 +986,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const PHASE9_CONTROL_IDS = new Set([
         'clip-speed-slider', 'clip-transition-type', 'clip-transition-duration',
         'ken-burns-toggle', 'ken-burns-start-zoom', 'ken-burns-end-zoom', 'ken-burns-pan',
-        'chroma-key-toggle', 'chroma-key-color', 'chroma-key-threshold'
+        'chroma-key-toggle', 'chroma-key-color', 'chroma-key-threshold',
+        'clip-zoom-slider', 'clip-offset-x-slider', 'clip-offset-y-slider'
     ]);
 
     function historyLabelFor(el) {
@@ -647,7 +998,7 @@ document.addEventListener('DOMContentLoaded', () => {
             'banner-style': 'Banner changed',
             'ticker-text': 'News ticker changed',
             'progress-bar-toggle': 'Progress bar toggled',
-            'logo-file': 'Logo changed',
+            'logo-input': 'Logo changed',
             'color-grade-toggle': 'Color grading toggled',
             'start-time': 'Trim changed',
             'end-time': 'Trim changed',
@@ -659,7 +1010,16 @@ document.addEventListener('DOMContentLoaded', () => {
             'broll-anim-style': 'B-roll animation changed',
             'subtitle-enabled-toggle': 'Subtitle toggled',
             'intro-enabled-toggle': 'Intro toggled',
-            'outro-enabled-toggle': 'Outro toggled'
+            'outro-enabled-toggle': 'Outro toggled',
+            
+            // Sliders
+            'video-volume-slider': 'Video volume changed',
+            'video-volume-slider-step2': 'Video volume changed',
+            'logo-size-slider': 'Logo size changed',
+            'logo-opacity-slider': 'Logo opacity changed',
+            'brightness-slider': 'Brightness changed',
+            'contrast-slider': 'Contrast changed',
+            'saturation-slider': 'Saturation changed'
         };
         if (labelMap[id]) return labelMap[id];
         const lbl = el.closest('label');
@@ -674,14 +1034,11 @@ document.addEventListener('DOMContentLoaded', () => {
         // Only record meaningful committed changes on inputs/selects/checkboxes
         const tag = el.tagName;
         if (tag !== 'INPUT' && tag !== 'SELECT' && tag !== 'TEXTAREA') return;
-        if (el.type === 'range') return; // handled on change too, but those are our sliders' live drag; skip range
-        if (el.type === 'file') {
+        if (el.type === 'range' && (el.id === 'seek-slider' || el.id === 'preview-volume-slider')) return;
+        
+        setTimeout(() => {
             recordEditorHistory(historyLabelFor(el));
-            return;
-        }
-        if (el.type === 'checkbox' || tag === 'SELECT' || tag === 'TEXTAREA' || el.type === 'text' || el.type === 'color' || el.type === 'number') {
-            recordEditorHistory(historyLabelFor(el));
-        }
+        }, 50);
     }, true);
 
     // Trim sliders (range) fire "change" on release — capture those commits.

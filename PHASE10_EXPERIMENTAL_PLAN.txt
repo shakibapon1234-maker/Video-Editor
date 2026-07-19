@@ -1,0 +1,75 @@
+=====================================================
+  STUDIO FLOW - PHASE 10 (পরীক্ষামূলক / Experimental)
+  AI CONTEXT FILE - External/Cloud-assisted Features
+=====================================================
+
+নোট: এই ফিচারগুলো মূল নীতি "সম্পূর্ণ browser-based, কোনো server
+dependency না" থেকে ব্যতিক্রম হিসেবে যোগ করা হচ্ছে, কারণ এগুলো
+external API/cloud ব্যবহার করে। এগুলো সম্পূর্ণ OPTIONAL/EXPERIMENTAL
+এবং আলাদা toggle/section-এ রাখা হয়েছে যাতে মূল app-এর কোনো
+সমস্যা না হয়।
+
+কম-কনফিগ PC constraint:
+  - External API ব্যবহার করলে আপনার PC-এর load কমে (cloud-এ processing)
+  - তবে internet connection + API key লাগবে
+  - Local server-এ টেস্ট করা যাবে, কিন্তু CORS বা API rate-limit
+    সমস্যা হতে পারে
+
+
+-----------------------------------------------------
+ফিচার লিস্ট (অগ্রাধিকার অনুযায়ী)
+-----------------------------------------------------
+
+[10-1] TTS External API (যেমন: ElevenLabs, OpenAI TTS)
+  কী করে: টেক্সট ইনপুট -> external API-তে পাঠায় ->返回 audio
+          blob -> existing voiceover pipeline-এ বসায়
+  কম-কনফিগ PC: ✅ ভালো (cloud load)
+  সীমাবদ্ধতা: API key লাগবে, internet দরকার, free tier limited
+  ঝুঁকি: CORS (local server-এ সাধারণত OK), API cost
+  পরিকল্পনা:
+    - index.html-এ "TTS (External API)" card যোগ
+    - API provider select (ElevenLabs / OpenAI)
+    - API key input (password field, localStorage-এ save)
+    - Voice/model select
+    - "Generate" button -> fetch() -> audio blob -> voiceover pipeline
+    - Error handling + status message
+
+[10-2] Auto-Caption Translate
+  কী করে: existing subtitles (bn) -> translate -> en (বা reverse)
+          -> new subtitle track তৈরি
+  কম-কফিগ PC: ⚠️ API-তে depend, PC load কম
+  সীমাবদ্ধতা: External translate API লাগবে (Google/Yandex/LibreTranslate)
+  ঝুঁকি: Unofficial Google Translate endpoint blocked হতে পারে
+  পরিকল্পনা:
+    - Subtitle card-এ "Translate Subtitles" button
+    - Target language select
+    - API call -> translated text -> state.subtitles (new copy)
+    - SRT/VTT export-এ translated version অপশন
+
+[10-3] AI Thumbnail Generator
+  কী করে: ভিডিও ফ্রেম -> external API (image generation/edit) ->
+          AI thumbnail suggest করে
+  কম-কনফিগ PC: ✅ ভালো (cloud load)
+  সীমাবদ্ধতা: External API (Stability/LocalAI/DALL-E), ভারী cost
+  ঝুঁকি: Image upload = বড় payload, slow internet-এ ধীর
+  পরিকল্পনা:
+    - Thumbnail card-এ "AI Suggest" button
+    - Current frame upload -> API -> returned image -> preview
+    - "Use as Thumbnail" -> canvas-এ বসানো
+
+
+-----------------------------------------------------
+IMPLEMENTATION ORDER (আপনার টেস্ট-এর জন্য)
+-----------------------------------------------------
+
+Step 1: [10-1] TTS External API (সবচেয়ে safe, PC load নেই)
+Step 2: [10-2] Auto-Caption Translate (API depend)
+Step 3: [10-3] AI Thumbnail (সবচেয়ে ভারী payload)
+
+প্রতিটা ফিচার আলাদা card/section-এ, main flow-এর বাইরে।
+আপনি লোকাল সার্ভারে টেস্ট করবেন, প্রবলেম হলে commit করবেন না।
+
+
+=====================================================
+  তৈরি করা হয়েছে: 2026-07-19 (Phase 10 planning)
+=====================================================

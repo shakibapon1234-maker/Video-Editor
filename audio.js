@@ -376,6 +376,13 @@ class VoiceChangerEffect {
 document.addEventListener('DOMContentLoaded', () => {
     const state = window.VideoEditor;
 
+    // Remove any previously added built-in library tracks (lib_*) since the
+    // Free Music Library feature has been removed.
+    if (state && Array.isArray(state.bgMusicTracks)) {
+        state.bgMusicTracks = state.bgMusicTracks.filter(t => !String(t.id || '').startsWith('lib_'));
+    }
+
+
     // UI selectors
     const noiseCancelToggle = document.getElementById('noise-cancel-toggle');
     const noiseLevelContainer = document.getElementById('noise-level-container');
@@ -417,6 +424,10 @@ document.addEventListener('DOMContentLoaded', () => {
     // DOM (played/volume-controlled entirely by JS below — see Bug 7 in
     // PROJECT_PLAN.txt for why we stopped using a single native <audio controls>).
     const bgMusicTrackAudioEls = new Map(); // trackId -> HTMLAudioElement
+
+    // Free Music Library Preview variables
+    let previewAudio = null;
+    let previewingTrackId = null;
 
     function getBgMusicTrackAudioEl(track) {
         let el = bgMusicTrackAudioEls.get(track.id);
@@ -717,17 +728,133 @@ document.addEventListener('DOMContentLoaded', () => {
     window.getLibraryDefById = getLibraryDefById;
     window.renderLibraryTrackToWavBlob = renderLibraryTrackToWavBlob;
 
+    function playLibraryPreview(def, playIconEl) {
+        if (previewingTrackId === def.id) {
+            stopLibraryPreview();
+            return;
+        }
+
+        stopLibraryPreview();
+
+        playIconEl.className = 'fa-solid fa-circle-notch fa-spin music-library-play-icon';
+        playIconEl.style.color = '#38bdf8'; // blue loading spinner
+
+        renderLibraryTrackToWavBlob(def).then(blob => {
+            if (previewingTrackId !== null) {
+                // Another preview started in the meantime
+                return;
+            }
+            const url = URL.createObjectURL(blob);
+            previewAudio = new Audio(url);
+            previewAudio.loop = true;
+            previewAudio.volume = 0.5;
+            previewAudio.play().then(() => {
+                previewingTrackId = def.id;
+                playIconEl.className = 'fa-solid fa-circle-stop music-library-play-icon';
+                playIconEl.style.color = '#ef4444'; // red stop icon
+            }).catch(err => {
+                console.error('Error playing preview:', err);
+                playIconEl.className = 'fa-solid fa-circle-play music-library-play-icon';
+                playIconEl.style.color = 'var(--primary, #38bdf8)';
+            });
+
+            previewAudio.onended = () => {
+                stopLibraryPreview();
+            };
+        }).catch(err => {
+            console.error('Failed to render preview:', err);
+            playIconEl.className = 'fa-solid fa-circle-play music-library-play-icon';
+            playIconEl.style.color = 'var(--primary, #38bdf8)';
+        });
+    }
+
+    function stopLibraryPreview() {
+        if (previewAudio) {
+            previewAudio.pause();
+            previewAudio = null;
+        }
+        previewingTrackId = null;
+        const playIcons = document.querySelectorAll('.music-library-play-icon');
+        playIcons.forEach(icon => {
+            icon.className = 'fa-solid fa-circle-play music-library-play-icon';
+            icon.style.color = 'var(--primary, #38bdf8)';
+        });
+    }
+
     function renderMusicLibrary() {
         const grid = document.getElementById('music-library-grid');
         if (!grid) return;
         grid.innerHTML = '';
         MUSIC_LIBRARY.forEach((def) => {
-            const btn = document.createElement('button');
-            btn.className = 'btn btn-outline btn-sm music-library-item';
-            btn.innerText = `${def.emoji} ${def.name}`;
-            btn.title = 'লাইব্রেরি থেকে এই ট্র্যাকটি যোগ করুন';
-            btn.addEventListener('click', () => addLibraryTrack(def));
-            grid.appendChild(btn);
+            const container = document.createElement('div');
+            container.style.display = 'flex';
+            container.style.alignItems = 'center';
+            container.style.background = 'rgba(255,255,255,0.03)';
+            container.style.border = '1.5px solid rgba(255,255,255,0.08)';
+            container.style.borderRadius = '6px';
+            container.style.padding = '6px 10px';
+            container.style.justifyContent = 'space-between';
+            container.style.gap = '8px';
+
+            // Left side: Play button & Name
+            const leftDiv = document.createElement('div');
+            leftDiv.style.display = 'flex';
+            leftDiv.style.alignItems = 'center';
+            leftDiv.style.gap = '8px';
+            leftDiv.style.flex = '1';
+
+            const playBtn = document.createElement('button');
+            playBtn.type = 'button';
+            playBtn.style.background = 'transparent';
+            playBtn.style.border = 'none';
+            playBtn.style.cursor = 'pointer';
+            playBtn.style.padding = '0';
+            playBtn.style.display = 'flex';
+            playBtn.style.alignItems = 'center';
+            playBtn.style.justifyContent = 'center';
+            playBtn.title = 'মিউজিকটি শুনুন (Preview)';
+            
+            const playIcon = document.createElement('i');
+            playIcon.className = 'fa-solid fa-circle-play music-library-play-icon';
+            playIcon.style.fontSize = '18px';
+            playIcon.style.color = 'var(--primary, #38bdf8)';
+            playIcon.style.transition = 'transform 0.1s ease';
+            playBtn.appendChild(playIcon);
+
+            playBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                playLibraryPreview(def, playIcon);
+            });
+            // Hover effect
+            playBtn.addEventListener('mouseenter', () => playIcon.style.transform = 'scale(1.15)');
+            playBtn.addEventListener('mouseleave', () => playIcon.style.transform = 'scale(1)');
+
+            const nameSpan = document.createElement('span');
+            nameSpan.innerText = `${def.emoji} ${def.name}`;
+            nameSpan.style.fontSize = '13px';
+            nameSpan.style.fontWeight = '500';
+            nameSpan.style.color = 'var(--text-primary, #f1f5f9)';
+
+            leftDiv.appendChild(playBtn);
+            leftDiv.appendChild(nameSpan);
+
+            // Right side: Add button
+            const addBtn = document.createElement('button');
+            addBtn.type = 'button';
+            addBtn.className = 'btn btn-primary btn-sm';
+            addBtn.style.padding = '4px 10px';
+            addBtn.style.fontSize = '12px';
+            addBtn.style.borderRadius = '4px';
+            addBtn.innerText = 'Add';
+            addBtn.title = 'লাইব্রেরি থেকে এই মিউজিক প্রজেক্টে যোগ করুন';
+            addBtn.addEventListener('click', () => {
+                stopLibraryPreview();
+                addLibraryTrack(def);
+            });
+
+            container.appendChild(leftDiv);
+            container.appendChild(addBtn);
+            grid.appendChild(container);
         });
     }
     window.renderMusicLibraryGlobal = renderMusicLibrary;
@@ -1704,8 +1831,7 @@ document.addEventListener('DOMContentLoaded', () => {
         state.bgMusicDuckingEnabled = e.target.checked;
     });
 
-    // [9-10] Free Music Library — populate the in-app royalty-free selector.
-    renderMusicLibrary();
+
 
     // --- 5. Sync Voiceover during preview playback ---
     // (Background music playback/looping/switching-between-tracks is handled entirely
@@ -2209,6 +2335,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // --- 7. Auto Subtitle (Phase 5A) ---
     const generateSubtitleBtn = document.getElementById('generate-subtitle-btn');
+    const voiceDubBtn = document.getElementById('voice-dub-btn');
+    const voiceDubHint = document.getElementById('voice-dub-hint');
     const subtitleEnabledToggle = document.getElementById('subtitle-enabled-toggle');
     const subtitleListEl = document.getElementById('subtitle-list');
     const subtitleBrowserWarning = document.getElementById('subtitle-browser-warning');
@@ -2217,6 +2345,9 @@ document.addEventListener('DOMContentLoaded', () => {
     let speechRecognizer = null;
     let subtitleSegmentStartTime = 0;
     let latestInterimText = ''; // running not-yet-final transcript, flushed if a session ends before finalizing
+    let subtitleStopTimeout = null;
+    let isVoiceDubMode = false;  // when true, video plays muted and user speaks into mic
+    let dubSegmentStartVideoTime = 0; // video.currentTime when current speech segment began
 
     if (subtitleEnabledToggle) {
         subtitleEnabledToggle.addEventListener('change', (e) => {
@@ -2232,6 +2363,10 @@ document.addEventListener('DOMContentLoaded', () => {
         } else {
             generateSubtitleBtn.addEventListener('click', () => {
                 if (state.isSubtitleRecognitionActive) {
+                    if (subtitleStopTimeout) {
+                        clearTimeout(subtitleStopTimeout);
+                        subtitleStopTimeout = null;
+                    }
                     stopSubtitleRecognition();
                 } else {
                     startSubtitleRecognition();
@@ -2240,33 +2375,76 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    function startSubtitleRecognition() {
+    // ── Voice Dub Mode ──────────────────────────────────────────────────────
+    // Plays the video silently while the user speaks into the microphone.
+    // Speech recognition fires onstart/onresult exactly as normal, but the
+    // timing reference is video.currentTime (the video position) so that the
+    // generated subtitle segment windows are perfectly aligned with the video
+    // without any echo-cancellation or network-delay artefacts.
+    if (voiceDubBtn) {
+        if (!SpeechRecognitionImpl) {
+            voiceDubBtn.disabled = true;
+        } else {
+            voiceDubBtn.addEventListener('click', () => {
+                if (state.isSubtitleRecognitionActive) {
+                    // Stop dub mode
+                    isVoiceDubMode = false;
+                    if (subtitleStopTimeout) { clearTimeout(subtitleStopTimeout); subtitleStopTimeout = null; }
+                    stopSubtitleRecognition();
+                    // Restore video volume
+                    if (state.video) state.video.muted = false;
+                    if (voiceDubHint) voiceDubHint.style.display = 'none';
+                    voiceDubBtn.innerHTML = '<i class="fa-solid fa-microphone-lines"></i> Voice Dub Mode (নিজে বলুন — ভিডিও চুপ থাকবে)';
+                } else {
+                    if (!state.duration) {
+                        alert('আগে একটি ভিডিও ক্লিপ আপলোড করুন।');
+                        return;
+                    }
+                    isVoiceDubMode = true;
+                    // Mute the video so only the user's mic voice is captured
+                    if (state.video) state.video.muted = true;
+                    if (voiceDubHint) voiceDubHint.style.display = 'block';
+                    voiceDubBtn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Connecting... (সংযোগ করা হচ্ছে...)';
+                    startSubtitleRecognition(true /* dubMode */);
+                }
+            });
+        }
+    }
+
+    function startSubtitleRecognition(dubMode = false) {
         if (!state.duration) {
-            alert('Please load a video first before generating subtitles.');
+            alert('সাবটাইটেল তৈরি করার আগে অনুগ্রহ করে একটি ভিডিও ক্লিপ আপলোড/লোড করুন।');
             return;
+        }
+
+        if (subtitleStopTimeout) {
+            clearTimeout(subtitleStopTimeout);
+            subtitleStopTimeout = null;
         }
 
         speechRecognizer = new SpeechRecognitionImpl();
         speechRecognizer.continuous = true;
-        // Turned ON (was false). With interimResults:false, Chrome's bn-BD
-        // recognizer often only delivers a "final" result right as a session
-        // ends — and these sessions auto-terminate every so often (network
-        // timeout / silence detection). If that termination happened mid-
-        // sentence, NOTHING had been finalized yet, so onend fired, we
-        // restarted, and everything spoken in that window was silently lost —
-        // this is why only one word at a time was making it through. Now we
-        // track the latest interim (non-final) text as we go, and flush
-        // whatever we have (final or not) both when a result finalizes AND
-        // when the session ends, instead of only ever trusting isFinal.
         speechRecognizer.interimResults = true;
         speechRecognizer.lang = 'bn-BD'; // Bangla recognition; falls back gracefully if unsupported
 
         subtitleSegmentStartTime = state.video.currentTime;
         latestInterimText = '';
 
+        speechRecognizer.onstart = () => {
+            setTimeout(() => {
+                if (state.isSubtitleRecognitionActive && state.video.paused) {
+                    // In dub mode, play with mute already set; in normal mode, play normally
+                    state.video.play();
+                }
+            }, 300); // 300ms buffer to prime recording stream before playing video
+            if (dubMode && voiceDubBtn) {
+                voiceDubBtn.innerHTML = '<i class="fa-solid fa-stop"></i> Stop Dub Mode (থামান)';
+            } else if (generateSubtitleBtn) {
+                generateSubtitleBtn.innerHTML = '<i class="fa-solid fa-stop"></i> Stop Listening (থামান)';
+            }
+        };
+
         speechRecognizer.onresult = (event) => {
-            // event.results is a running list; only look at newly-updated results
-            // from resultIndex onward (older ones were already handled).
             for (let i = event.resultIndex; i < event.results.length; i++) {
                 const result = event.results[i];
                 const transcriptText = (result[0] && result[0].transcript || '').trim();
@@ -2276,8 +2454,6 @@ document.addEventListener('DOMContentLoaded', () => {
                     commitSubtitleSegment(transcriptText);
                     latestInterimText = '';
                 } else {
-                    // Keep the running partial text so it isn't lost if the
-                    // session ends before Google's engine ever finalizes it.
                     latestInterimText = transcriptText;
                 }
             }
@@ -2286,30 +2462,23 @@ document.addEventListener('DOMContentLoaded', () => {
         speechRecognizer.onerror = (event) => {
             console.warn('Speech recognition error:', event.error);
             if (event.error === 'no-speech') return; // keep listening through silence
-
-            // 'network' and 'aborted' are transient hiccups (a momentary drop
-            // talking to the recognition service, or a session we ourselves
-            // restarted) rather than something the user needs to fix. onend
-            // always fires right after onerror and already flushes pending
-            // text and restarts the session when active -- so just let it,
-            // instead of tearing the whole feature down over a blip. Treating
-            // these as fatal was why subtitles would randomly stop appearing
-            // partway through a video with no visible cause.
             if (event.error === 'network' || event.error === 'aborted') return;
 
-            // Fatal errors (mic permission denied, no mic present, etc.) --
-            // flush whatever we have and stop for real, since retrying would
-            // just fail again in a loop.
             flushInterimAsSegment();
             stopSubtitleRecognition();
-            alert('Speech recognition বন্ধ হয়ে গেছে (' + event.error + ')। মাইক্রোফোন পারমিশন দিয়েছেন কিনা চেক করুন।');
+            
+            let errorMsg = 'Speech recognition বন্ধ হয়ে গেছে (' + event.error + ')।';
+            if (event.error === 'not-allowed') {
+                errorMsg = 'মাইক্রোফোন পারমিশন ব্লক করা আছে! দয়া করে ব্রাউজারের অ্যাড্রেস বারের বাম পাশে লক (Lock) আইকনে ক্লিক করে Microphone permission Allow করুন।';
+            } else if (event.error === 'service-not-allowed') {
+                errorMsg = 'ভয়েস রিকগনিশন সার্ভিস ব্যবহারের অনুমতি দেওয়া হচ্ছে না। অনুগ্রহ করে গুগল ক্রোম ব্রাউজার ব্যবহার করুন।';
+            } else if (event.error === 'language-not-supported') {
+                errorMsg = 'বাংলা ভাষা (bn-BD) আপনার ব্রাউজারে সাপোর্ট করছে না।';
+            }
+            alert(errorMsg);
         };
 
         speechRecognizer.onend = () => {
-            // Browser cut the session (periodic auto-stop, silence, network
-            // hiccup, etc). Flush whatever partial text we were holding so it
-            // still ends up as a subtitle line instead of vanishing, then
-            // restart if the user is still actively listening.
             flushInterimAsSegment();
             if (state.isSubtitleRecognitionActive && !state.video.paused) {
                 try { speechRecognizer.start(); } catch (e) { /* already started */ }
@@ -2319,14 +2488,15 @@ document.addEventListener('DOMContentLoaded', () => {
         try {
             speechRecognizer.start();
             state.isSubtitleRecognitionActive = true;
-            generateSubtitleBtn.innerHTML = '<i class="fa-solid fa-stop"></i> Stop Listening (থামান)';
-
-            if (state.video.paused) {
-                state.video.play();
+            if (generateSubtitleBtn) {
+                generateSubtitleBtn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Connecting (সংযোগ করা হচ্ছে...)';
             }
         } catch (e) {
             console.error('Could not start speech recognition:', e);
             alert('Speech recognition শুরু করা যায়নি। মাইক্রোফোন পারমিশন দিয়েছেন কিনা চেক করুন।');
+            if (generateSubtitleBtn) {
+                generateSubtitleBtn.innerHTML = '<i class="fa-solid fa-closed-captioning"></i> Listen & Generate (ভিডিও থেকে শোনা শুরু করুন)';
+            }
         }
     }
 
@@ -2358,13 +2528,24 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function stopSubtitleRecognition() {
+        if (subtitleStopTimeout) {
+            clearTimeout(subtitleStopTimeout);
+            subtitleStopTimeout = null;
+        }
         state.isSubtitleRecognitionActive = false;
         flushInterimAsSegment();
         if (speechRecognizer) {
             try { speechRecognizer.stop(); } catch (e) {}
         }
+        // Reset both buttons
         if (generateSubtitleBtn) {
             generateSubtitleBtn.innerHTML = '<i class="fa-solid fa-closed-captioning"></i> Listen & Generate (ভিডিও থেকে শোনা শুরু করুন)';
+        }
+        if (isVoiceDubMode) {
+            isVoiceDubMode = false;
+            if (state.video) state.video.muted = false;
+            if (voiceDubHint) voiceDubHint.style.display = 'none';
+            if (voiceDubBtn) voiceDubBtn.innerHTML = '<i class="fa-solid fa-microphone-lines"></i> Voice Dub Mode (নিজে বলুন — ভিডিও চুপ থাকবে)';
         }
     }
 
@@ -2512,16 +2693,80 @@ document.addEventListener('DOMContentLoaded', () => {
 
                 const maxLook = 2.0;   // seconds to search for the nearest speech boundary
                 const padding = 0.05;  // tiny pad so the first/last sound isn't clipped
+                const newSubtitles = [];
 
                 state.subtitles.forEach(s => {
-                    const onsetSeg = nearestSpeechBoundary(speechRegions, s.startSec, maxLook);
-                    if (onsetSeg) s.startSec = Math.max(0, onsetSeg.start - padding);
+                    // Find all speech regions overlapping s.startSec to s.endSec
+                    // (we allow a margin of 0.5s)
+                    const overlappingRegions = speechRegions.filter(reg => {
+                        return reg.end > s.startSec - 0.5 && reg.start < s.endSec + 0.5;
+                    });
 
-                    const offsetSeg = nearestSpeechBoundary(speechRegions, s.endSec, maxLook);
-                    if (offsetSeg) s.endSec = offsetSeg.end + padding;
+                    if (overlappingRegions.length <= 1) {
+                        // Keep as single segment, snap to nearest boundary
+                        const onsetSeg = nearestSpeechBoundary(speechRegions, s.startSec, maxLook);
+                        if (onsetSeg) s.startSec = Math.max(0, onsetSeg.start - padding);
 
-                    if (s.endSec <= s.startSec) s.endSec = s.startSec + 0.4;
+                        const offsetSeg = nearestSpeechBoundary(speechRegions, s.endSec, maxLook);
+                        if (offsetSeg) s.endSec = offsetSeg.end + padding;
+
+                        if (s.endSec <= s.startSec) s.endSec = s.startSec + 0.4;
+                        newSubtitles.push(s);
+                    } else {
+                        // Split subtitle segment into multiple parts based on the overlapping regions
+                        const words = s.text.split(/\s+/).filter(Boolean);
+                        if (words.length === 0) {
+                            newSubtitles.push(s);
+                            return;
+                        }
+
+                        // Distribute words across the overlapping regions
+                        const numRegions = overlappingRegions.length;
+                        const wordCounts = Array(numRegions).fill(0);
+
+                        if (words.length <= numRegions) {
+                            for (let i = 0; i < words.length; i++) {
+                                wordCounts[i] = 1;
+                            }
+                        } else {
+                            // Give each region at least 1 word
+                            for (let i = 0; i < numRegions; i++) {
+                                wordCounts[i] = 1;
+                            }
+                            let remaining = words.length - numRegions;
+                            const durations = overlappingRegions.map(r => Math.max(0.01, r.end - r.start));
+                            const totalDuration = durations.reduce((a, b) => a + b, 0);
+
+                            let distributed = 0;
+                            for (let i = 0; i < numRegions - 1; i++) {
+                                const share = Math.round((durations[i] / totalDuration) * remaining);
+                                wordCounts[i] += share;
+                                distributed += share;
+                            }
+                            wordCounts[numRegions - 1] += (remaining - distributed);
+                        }
+
+                        // Create subtitle segments
+                        let wordIdx = 0;
+                        overlappingRegions.forEach((reg, idx) => {
+                            const count = wordCounts[idx];
+                            if (count > 0) {
+                                const subWords = words.slice(wordIdx, wordIdx + count);
+                                wordIdx += count;
+
+                                newSubtitles.push({
+                                    id: s.id + '_' + idx + '_' + Math.random(),
+                                    text: subWords.join(' '),
+                                    startSec: Math.max(0, reg.start - padding),
+                                    endSec: reg.end + padding,
+                                    lineHighlight: s.lineHighlight // carry over highlight settings
+                                });
+                            }
+                        });
+                    }
                 });
+
+                state.subtitles = newSubtitles;
 
                 renderSubtitleList();
                 if (window.drawEditorFrame) window.drawEditorFrame();
@@ -2985,7 +3230,27 @@ document.addEventListener('DOMContentLoaded', () => {
     // every single clip cut.
     state.video.addEventListener('pause', () => {
         if (state.isSubtitleRecognitionActive && !state.isClipTransitionInProgress) {
-            stopSubtitleRecognition();
+            if (subtitleStopTimeout) clearTimeout(subtitleStopTimeout);
+            subtitleStopTimeout = setTimeout(() => {
+                if (state.video.paused && state.isSubtitleRecognitionActive) {
+                    stopSubtitleRecognition();
+                }
+                subtitleStopTimeout = null;
+            }, 1500); // 1.5s delay to capture trailing words
+        }
+    });
+
+    state.video.addEventListener('play', () => {
+        if (subtitleStopTimeout) {
+            clearTimeout(subtitleStopTimeout);
+            subtitleStopTimeout = null;
+        }
+        stopLibraryPreview();
+    });
+
+    state.video.addEventListener('seeking', () => {
+        if (state.isSubtitleRecognitionActive) {
+            subtitleSegmentStartTime = state.video.currentTime;
         }
     });
 });
