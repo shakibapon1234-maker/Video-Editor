@@ -498,12 +498,13 @@ document.addEventListener('DOMContentLoaded', () => {
         if (bgMusicTrackVolumeVal) bgMusicTrackVolumeVal.innerText = pct + '%';
     }
 
-    function addBgMusicTrack(file) {
+    function addBgMusicTrack(file, nameOverride, libraryId) {
         const track = {
             id: 'bgm_' + Date.now() + '_' + Math.floor(Math.random() * 1000),
             blob: file,
             url: URL.createObjectURL(file),
-            name: file.name,
+            name: nameOverride || file.name,
+            libraryId: libraryId || null, // non-null = built-in Free Music Library track
             duration: null, // filled in once metadata loads, used for loop-modulo math
             volume: 0.4,
             startSec: 0,
@@ -530,6 +531,206 @@ document.addEventListener('DOMContentLoaded', () => {
         showBgMusicTrackDetail(track.id);
         if (bgMusicFilename) bgMusicFilename.innerText = `${state.bgMusicTracks.length} track(s) added — click "Add Music Track" for more`;
     }
+
+    // ============================================================
+    // [9-10] Free Music Library
+    // ------------------------------------------------------------
+    // Royalty-free ambient loops generated entirely in the browser
+    // via the Web Audio API (no external files / server dependency,
+    // no extra bundle size). Each definition is rendered into a WAV
+    // blob on demand and then added through the normal
+    // addBgMusicTrack() path, so preview + export both "just work".
+    // ============================================================
+
+    // Sequence = array of [semitoneOffsetFromRoot, beatsToHold].
+    // We synthesize a gentle sine/triangle pad with a soft attack/release
+    // envelope per note so it sounds musical rather than a raw beep.
+    const MUSIC_LIBRARY = [
+        {
+            id: 'lib_calm',
+            name: 'Calm Ambient',
+            emoji: '🌿',
+            rootHz: 220.00, // A3
+            wave: 'sine',
+            bpm: 70,
+            sequence: [[0, 4], [4, 4], [7, 4], [5, 4], [0, 4], [9, 4], [7, 4], [4, 4]],
+            padGain: 0.18
+        },
+        {
+            id: 'lib_uplift',
+            name: 'Uplifting',
+            emoji: '☀️',
+            rootHz: 261.63, // C4
+            wave: 'triangle',
+            bpm: 96,
+            sequence: [[0, 2], [4, 2], [7, 2], [12, 2], [7, 2], [4, 2], [0, 4], [5, 4]],
+            padGain: 0.16
+        },
+        {
+            id: 'lib_corporate',
+            name: 'Corporate',
+            emoji: '💼',
+            rootHz: 196.00, // G3
+            wave: 'sine',
+            bpm: 84,
+            sequence: [[0, 4], [7, 4], [12, 4], [7, 4], [0, 4], [5, 4], [9, 4], [7, 4]],
+            padGain: 0.17
+        },
+        {
+            id: 'lib_lofi',
+            name: 'Lo-Fi Chill',
+            emoji: '🎧',
+            rootHz: 174.61, // F3
+            wave: 'triangle',
+            bpm: 62,
+            sequence: [[0, 4], [3, 4], [7, 4], [10, 4], [0, 4], [8, 4], [7, 4], [3, 4]],
+            padGain: 0.15
+        }
+    ];
+
+    function midiOffsetToHz(rootHz, semi) {
+        return rootHz * Math.pow(2, semi / 12);
+    }
+
+    // Render one library definition into a WAV Blob using OfflineAudioContext.
+    async function renderLibraryTrackToWavBlob(def) {
+        const sampleRate = 44100;
+        // Always render a self-contained loop of a few bars; the multi-track
+        // engine loops it across the chosen Start–End window at preview/export.
+        const beatSec = 60 / def.bpm;
+        const totalBeats = def.sequence.reduce((s, n) => s + n[1], 0);
+        const duration = Math.max(1, totalBeats * beatSec);
+        const frames = Math.ceil(duration * sampleRate);
+
+        const offline = new (window.OfflineAudioContext || window.webkitOfflineAudioContext)(2, frames, sampleRate);
+
+        const master = offline.createGain();
+        master.gain.value = 1.0;
+        master.connect(offline.destination);
+
+        let cursor = 0;
+        for (const [semi, beats] of def.sequence) {
+            const hz = midiOffsetToHz(def.rootHz, semi);
+            const noteLen = beats * beatSec;
+
+            const osc = offline.createOscillator();
+            osc.type = def.wave;
+            osc.frequency.value = hz;
+
+            const pad = offline.createGain();
+            const attack = Math.min(0.08, noteLen * 0.2);
+            const release = Math.min(0.25, noteLen * 0.4);
+            pad.gain.setValueAtTime(0.0001, cursor);
+            pad.gain.exponentialRampToValueAtTime(def.padGain, cursor + attack);
+            pad.gain.setValueAtTime(def.padGain, cursor + Math.max(attack, noteLen - release));
+            pad.gain.exponentialRampToValueAtTime(0.0001, cursor + noteLen);
+
+            // A soft sub-octave adds warmth without extra files.
+            const sub = offline.createOscillator();
+            sub.type = 'sine';
+            sub.frequency.value = hz / 2;
+            const subPad = offline.createGain();
+            subPad.gain.setValueAtTime(0.0001, cursor);
+            subPad.gain.exponentialRampToValueAtTime(def.padGain * 0.4, cursor + attack);
+            subPad.gain.setValueAtTime(def.padGain * 0.4, cursor + Math.max(attack, noteLen - release));
+            subPad.gain.exponentialRampToValueAtTime(0.0001, cursor + noteLen);
+
+            osc.connect(pad);
+            sub.connect(subPad);
+            pad.connect(master);
+            subPad.connect(master);
+
+            osc.start(cursor);
+            osc.stop(cursor + noteLen);
+            sub.start(cursor);
+            sub.stop(cursor + noteLen);
+
+            cursor += noteLen;
+        }
+
+        const rendered = await offline.startRendering();
+        return audioBufferToWavBlob(rendered);
+    }
+
+    // Standard 44-byte-header PCM WAV writer (mirrors exporter.js helper,
+    // kept local so this module stays self-contained).
+    function audioBufferToWavBlob(audioBuffer) {
+        const numChannels = audioBuffer.numberOfChannels;
+        const sampleRate = audioBuffer.sampleRate;
+        const bitDepth = 16;
+        const bytesPerSample = bitDepth / 8;
+        const blockAlign = numChannels * bytesPerSample;
+        const numFrames = audioBuffer.length;
+        const dataSize = numFrames * blockAlign;
+        const buffer = new ArrayBuffer(44 + dataSize);
+        const view = new DataView(buffer);
+
+        const writeString = (offset, str) => {
+            for (let i = 0; i < str.length; i++) view.setUint8(offset + i, str.charCodeAt(i));
+        };
+
+        writeString(0, 'RIFF');
+        view.setUint32(4, 36 + dataSize, true);
+        writeString(8, 'WAVE');
+        writeString(12, 'fmt ');
+        view.setUint32(16, 16, true);
+        view.setUint16(20, 1, true);
+        view.setUint16(22, numChannels, true);
+        view.setUint32(24, sampleRate, true);
+        view.setUint32(28, sampleRate * blockAlign, true);
+        view.setUint16(32, blockAlign, true);
+        view.setUint16(34, bitDepth, true);
+        writeString(36, 'data');
+        view.setUint32(40, dataSize, true);
+
+        const channelData = [];
+        for (let ch = 0; ch < numChannels; ch++) channelData.push(audioBuffer.getChannelData(ch));
+
+        let offset = 44;
+        for (let i = 0; i < numFrames; i++) {
+            for (let ch = 0; ch < numChannels; ch++) {
+                let sample = Math.max(-1, Math.min(1, channelData[ch][i]));
+                sample = sample < 0 ? sample * 0x8000 : sample * 0x7fff;
+                view.setInt16(offset, sample, true);
+                offset += 2;
+            }
+        }
+        return new Blob([view], { type: 'audio/wav' });
+    }
+
+    async function addLibraryTrack(def) {
+        try {
+            const blob = await renderLibraryTrackToWavBlob(def);
+            addBgMusicTrack(blob, `🎵 ${def.name} (Library)`, def.id);
+        } catch (err) {
+            console.error('Free Music Library render failed:', err);
+            if (bgMusicFilename) bgMusicFilename.innerText = '⚠️ লাইব্রেরি ট্র্যাক লোড করা যায়নি';
+        }
+    }
+
+    // Find a built-in library definition by its id (used to re-render a
+    // library track after a project is loaded/saved, since the synth blob
+    // is not persisted).
+    function getLibraryDefById(id) {
+        return MUSIC_LIBRARY.find(d => d.id === id) || null;
+    }
+    window.getLibraryDefById = getLibraryDefById;
+    window.renderLibraryTrackToWavBlob = renderLibraryTrackToWavBlob;
+
+    function renderMusicLibrary() {
+        const grid = document.getElementById('music-library-grid');
+        if (!grid) return;
+        grid.innerHTML = '';
+        MUSIC_LIBRARY.forEach((def) => {
+            const btn = document.createElement('button');
+            btn.className = 'btn btn-outline btn-sm music-library-item';
+            btn.innerText = `${def.emoji} ${def.name}`;
+            btn.title = 'লাইব্রেরি থেকে এই ট্র্যাকটি যোগ করুন';
+            btn.addEventListener('click', () => addLibraryTrack(def));
+            grid.appendChild(btn);
+        });
+    }
+    window.renderMusicLibraryGlobal = renderMusicLibrary;
 
     function removeBgMusicTrack(id) {
         const idx = state.bgMusicTracks.findIndex(t => t.id === id);
@@ -1205,6 +1406,183 @@ document.addEventListener('DOMContentLoaded', () => {
         voiceoverPreviewBox.style.display = 'none';
         voiceoverVolumeContainer.style.display = 'none';
     });
+
+    // ============================================================
+    // [9-9] Text-to-Speech Voiceover (Experimental)
+    // ------------------------------------------------------------
+    // Uses the browser SpeechSynthesis API to speak user text, then
+    // captures the spoken audio into a blob that flows through the
+    // existing voiceover pipeline (state.voiceoverBlob / preview /
+    // export). TTS audio is captured from the AudioContext output
+    // destination via MediaRecorder — supported in Chromium-based
+    // browsers; quality of bn-BD voices varies by platform.
+    // ============================================================
+    const ttsText = document.getElementById('tts-text');
+    const ttsLang = document.getElementById('tts-lang');
+    const ttsVoice = document.getElementById('tts-voice');
+    const ttsPlayBtn = document.getElementById('tts-play-btn');
+    const ttsStopBtn = document.getElementById('tts-stop-btn');
+    const ttsRecordBtn = document.getElementById('tts-record-btn');
+    const ttsStatus = document.getElementById('tts-status');
+
+    let ttsVoicesLoaded = false;
+    let ttsUtterance = null;
+
+    function populateTtsVoices() {
+        if (!('speechSynthesis' in window)) return;
+        const voices = window.speechSynthesis.getVoices();
+        if (ttsVoice) {
+            const current = ttsVoice.value;
+            ttsVoice.innerHTML = '<option value="">Default</option>';
+            voices.forEach((v, i) => {
+                const opt = document.createElement('option');
+                opt.value = String(i);
+                opt.innerText = `${v.name} (${v.lang})`;
+                ttsVoice.appendChild(opt);
+            });
+            if (current) ttsVoice.value = current;
+        }
+        ttsVoicesLoaded = true;
+    }
+
+    if ('speechSynthesis' in window) {
+        populateTtsVoices();
+        window.speechSynthesis.onvoiceschanged = populateTtsVoices;
+    } else if (ttsStatus) {
+        ttsStatus.style.display = 'block';
+        ttsStatus.innerText = '⚠️ এই ব্রাউজারে Text-to-Speech সাপোর্ট করে না।';
+    }
+
+    function buildTtsUtterance() {
+        const text = (ttsText && ttsText.value || '').trim();
+        if (!text) return null;
+        const u = new SpeechSynthesisUtterance(text);
+        u.lang = (ttsLang && ttsLang.value) || 'bn-BD';
+        if (ttsVoicesLoaded && ttsVoice && ttsVoice.value) {
+            const voices = window.speechSynthesis.getVoices();
+            const v = voices[parseInt(ttsVoice.value, 10)];
+            if (v) u.voice = v;
+        }
+        return u;
+    }
+
+    function showTtsStatus(msg) {
+        if (!ttsStatus) return;
+        ttsStatus.style.display = msg ? 'block' : 'none';
+        ttsStatus.innerText = msg || '';
+    }
+
+    if (ttsPlayBtn) {
+        ttsPlayBtn.addEventListener('click', () => {
+            if (!('speechSynthesis' in window)) {
+                showTtsStatus('⚠️ এই ব্রাউজারে Text-to-Speech সাপোর্ট করে না।');
+                return;
+            }
+            const u = buildTtsUtterance();
+            if (!u) { showTtsStatus('দয়া করে ভয়েসওভারের জন্য কিছু টেক্সট লিখুন।'); return; }
+            window.speechSynthesis.cancel();
+            if (ttsPlayBtn) ttsPlayBtn.style.display = 'none';
+            if (ttsStopBtn) ttsStopBtn.style.display = 'inline-flex';
+            showTtsStatus('🔊 বাজানো হচ্ছে...');
+            u.onend = () => {
+                if (ttsPlayBtn) ttsPlayBtn.style.display = 'inline-flex';
+                if (ttsStopBtn) ttsStopBtn.style.display = 'none';
+                showTtsStatus('');
+            };
+            u.onerror = () => {
+                if (ttsPlayBtn) ttsPlayBtn.style.display = 'inline-flex';
+                if (ttsStopBtn) ttsStopBtn.style.display = 'none';
+                showTtsStatus('⚠️ টেক্সট বাজানো যায়নি।');
+            };
+            ttsUtterance = u;
+            window.speechSynthesis.speak(u);
+        });
+    }
+
+    if (ttsStopBtn) {
+        ttsStopBtn.addEventListener('click', () => {
+            if ('speechSynthesis' in window) window.speechSynthesis.cancel();
+            if (ttsPlayBtn) ttsPlayBtn.style.display = 'inline-flex';
+            if (ttsStopBtn) ttsStopBtn.style.display = 'none';
+            showTtsStatus('');
+        });
+    }
+
+    if (ttsRecordBtn) {
+        ttsRecordBtn.addEventListener('click', async () => {
+            if (!('speechSynthesis' in window)) {
+                showTtsStatus('⚠️ এই ব্রাউজারে Text-to-Speech সাপোর্ট করে না।');
+                return;
+            }
+            const u = buildTtsUtterance();
+            if (!u) { showTtsStatus('দয়া করে ভয়েসওভারের জন্য কিছু টেক্সট লিখুন।'); return; }
+            if (!audioCtx) { showTtsStatus('⚠️ অডিও ইঞ্জিন প্রস্তুত নয়, অনুগ্রহ করে পেজ রিফ্রেশ করুন।'); return; }
+
+            try {
+                await audioCtx.resume();
+                // Capture the AudioContext output (where TTS is routed in Chromium).
+                const destStream = audioCtx.createMediaStreamDestination();
+                const recorder = new MediaRecorder(destStream.stream);
+                const chunks = [];
+                recorder.ondataavailable = (e) => { if (e.data && e.data.size) chunks.push(e.data); };
+
+                const done = new Promise((resolve) => {
+                    recorder.onstop = () => resolve(new Blob(chunks, { type: recorder.mimeType || 'audio/webm' }));
+                });
+
+                // Re-route the destination so TTS is captured (Chromium routes the
+                // speech output through the active audio output, captured here).
+                audioCtx.destination.connect(destStream);
+
+                let stopped = false;
+                u.onend = () => {
+                    if (stopped) return;
+                    stopped = true;
+                    try { recorder.stop(); } catch (e) {}
+                    try { audioCtx.destination.disconnect(destStream); } catch (e) {}
+                    if (ttsRecordBtn) ttsRecordBtn.disabled = false;
+                    if (ttsPlayBtn) ttsPlayBtn.style.display = 'inline-flex';
+                    if (ttsStopBtn) ttsStopBtn.style.display = 'none';
+                };
+                u.onerror = () => {
+                    if (stopped) return;
+                    stopped = true;
+                    try { recorder.stop(); } catch (e) {}
+                    try { audioCtx.destination.disconnect(destStream); } catch (e) {}
+                    if (ttsRecordBtn) ttsRecordBtn.disabled = false;
+                    showTtsStatus('⚠️ টেক্সট বাজানো যায়নি।');
+                };
+
+                recorder.start();
+                if (ttsRecordBtn) ttsRecordBtn.disabled = true;
+                if (ttsPlayBtn) ttsPlayBtn.style.display = 'none';
+                if (ttsStopBtn) ttsStopBtn.style.display = 'inline-flex';
+                showTtsStatus('🎙️ ভয়েসওভার তৈরি হচ্ছে... (স্পিক করা হচ্ছে)');
+
+                window.speechSynthesis.cancel();
+                window.speechSynthesis.speak(u);
+
+                const blob = await done;
+                if (!blob || blob.size === 0) {
+                    showTtsStatus('⚠️ অডিও ক্যাপচার করা যায়নি (এই ব্রাউজার এই পদ্ধতি সাপোর্ট করে না)। টেক্সট প্লে করে মাইক্রোফোন দিয়ে রেকর্ড করতে পারেন।');
+                    return;
+                }
+
+                // Feed the captured TTS audio into the existing voiceover pipeline.
+                state.voiceoverBlob = blob;
+                state.voiceoverUrl = URL.createObjectURL(blob);
+                state.voiceoverRecorded = true;
+                if (voiceoverAudioPreview) voiceoverAudioPreview.src = state.voiceoverUrl;
+                if (voiceoverPreviewBox) voiceoverPreviewBox.style.display = 'block';
+                if (voiceoverVolumeContainer) voiceoverVolumeContainer.style.display = 'block';
+                showTtsStatus('✅ ভয়েসওভার তৈরি হয়েছে! এক্সপোর্ট করার আগে প্রিভিউ শুনুন।');
+            } catch (err) {
+                console.error('TTS voiceover generation failed:', err);
+                showTtsStatus('⚠️ ভয়েসওভার তৈরি করতে সমস্যা হয়েছে: ' + (err && err.message ? err.message : err));
+                if (ttsRecordBtn) ttsRecordBtn.disabled = false;
+            }
+        });
+    }
     
     // Voiceover volume controls
     voiceoverVolumeSlider.addEventListener('input', (e) => {
@@ -1325,6 +1703,9 @@ document.addEventListener('DOMContentLoaded', () => {
     bgMusicDuckingToggle.addEventListener('change', (e) => {
         state.bgMusicDuckingEnabled = e.target.checked;
     });
+
+    // [9-10] Free Music Library — populate the in-app royalty-free selector.
+    renderMusicLibrary();
 
     // --- 5. Sync Voiceover during preview playback ---
     // (Background music playback/looping/switching-between-tracks is handled entirely

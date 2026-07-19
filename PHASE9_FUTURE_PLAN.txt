@@ -418,7 +418,11 @@ implement করা হবে, যেমনটা এতদিন করা হ�
   [9-8] Video-in-Video PIP          [DONE] - editor.js (B-roll video mode)
   [9-11] Freeze Frame               [DONE] - editor.js (freezeFrameBtn)
   [9-12] Chroma Key (green screen)  [DONE] - phase9.js (chroma-key-toggle)
+  [9-10] Free Music Library          [DONE] - audio.js (MUSIC_LIBRARY + renderLibraryTrackToWavBlob,
+                                            in-app selector grid in the Background Music card;
+                                            synth loops re-render on project save/load/auto-restore)
+  [9-9] Text-to-Speech Voiceover     [DONE] - audio.js + index.html (SpeechSynthesis-based TTS,
+                                            experimental capture into the existing voiceover pipeline)
 
 অবশিষ্ট (পরে করা যেতে পারে):
-  [9-9] Text-to-Speech Voiceover    - ঐচ্ছিক/experimental (browser TTS, bn-BD সীমিত)
-  [9-10] Free Music Library          - static asset বান্ডেল করলে হালকা
+  (সব ফিচার সম্পন্ন)

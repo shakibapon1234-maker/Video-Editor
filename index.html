@@ -1779,6 +1779,42 @@
                                         </button>
                                     </div>
 
+                                    <!-- [9-9] Text-to-Speech Voiceover (Experimental) -->
+                                    <div class="tts-section mt-4">
+                                        <div class="toggle-label">
+                                            <h4><i class="fa-solid fa-comment-dots"></i> Text-to-Speech Voiceover</h4>
+                                            <p class="help-text">টেক্সট লিখে কম্পিউটারের কণ্ঠে ভয়েসওভার তৈরি করুন (Experimental — bn-BD ভয়েস ব্রাউজারভেদে সীমিত হতে পারে)।</p>
+                                        </div>
+                                        <textarea id="tts-text" class="form-textarea mt-2" rows="3" placeholder="এখানে আপনার ভয়েসওভারের টেক্সট লিখুন..."></textarea>
+                                        <div class="two-col-row mt-2">
+                                            <div class="control-group">
+                                                <label>Language / ভাষা</label>
+                                                <select id="tts-lang" class="form-select">
+                                                    <option value="bn-BD">বাংলা (bn-BD)</option>
+                                                    <option value="en-US">English (en-US)</option>
+                                                </select>
+                                            </div>
+                                            <div class="control-group">
+                                                <label>Voice / কণ্ঠ</label>
+                                                <select id="tts-voice" class="form-select">
+                                                    <option value="">Default</option>
+                                                </select>
+                                            </div>
+                                        </div>
+                                        <div class="record-controls mt-3">
+                                            <button id="tts-play-btn" class="btn btn-outline">
+                                                <i class="fa-solid fa-volume-high"></i> Play Text
+                                            </button>
+                                            <button id="tts-stop-btn" class="btn btn-outline" style="display: none;">
+                                                <i class="fa-solid fa-stop"></i> Stop
+                                            </button>
+                                            <button id="tts-record-btn" class="btn btn-secondary">
+                                                <i class="fa-solid fa-wand-magic-sparkles"></i> Generate Voiceover
+                                            </button>
+                                        </div>
+                                        <p class="help-text mt-2" id="tts-status" style="display:none;"></p>
+                                    </div>
+
                                     <div class="control-group mt-3" id="voice-changer-container">
                                         <label for="voice-changer-select"><i class="fa-solid fa-wand-magic-sparkles"></i> Voice Changer (কণ্ঠ পরিবর্তনকারী)</label>
                                         <select id="voice-changer-select" class="form-select">

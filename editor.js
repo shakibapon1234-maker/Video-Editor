@@ -9508,6 +9508,27 @@ document.addEventListener('DOMContentLoaded', () => {
                     if (cachedFile) {
                         track.blob = cachedFile;
                         track.url = URL.createObjectURL(cachedFile);
+                    } else if (track.libraryId && window.getLibraryDefById) {
+                        // [9-10] Built-in Free Music Library track — re-render
+                        // its synth blob instead of treating it as missing.
+                        try {
+                            const def = window.getLibraryDefById(track.libraryId);
+                            if (def) {
+                                const blob = await window.renderLibraryTrackToWavBlob(def);
+                                track.blob = blob;
+                                track.url = URL.createObjectURL(blob);
+                            }
+                        } catch (err) {
+                            console.error('Failed to re-render library track:', err);
+                        }
+                        if (!track.blob) {
+                            missingFiles.push({
+                                type: 'bgmusic',
+                                id: track.id,
+                                name: track.name,
+                                meta: `ব্যাকগ্রাউন্ড মিউজিক ট্র্যাক`
+                            });
+                        }
                     } else {
                         missingFiles.push({
                             type: 'bgmusic',
@@ -10023,6 +10044,19 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (file) {
                     trackMeta.blob = file;
                     trackMeta.url = URL.createObjectURL(file);
+                } else if (trackMeta.libraryId && window.getLibraryDefById) {
+                    // [9-10] Built-in library track was not persisted as a file —
+                    // re-render its synth blob on restore.
+                    try {
+                        const def = window.getLibraryDefById(trackMeta.libraryId);
+                        if (def) {
+                            const blob = await window.renderLibraryTrackToWavBlob(def);
+                            trackMeta.blob = blob;
+                            trackMeta.url = URL.createObjectURL(blob);
+                        }
+                    } catch (err) {
+                        console.error('Failed to re-render library track on restore:', err);
+                    }
                 }
             }
 
