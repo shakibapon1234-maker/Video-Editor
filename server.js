@@ -84,6 +84,28 @@ app.post('/api/local-transcribe', express.raw({ type: 'audio/*', limit: '25mb' }
     }
 });
 
+// Helper function to split text into chunks of maximum length while keeping words intact.
+function splitTextIntoChunks(text, maxLength = 180) {
+    const words = text.split(/\s+/);
+    const chunks = [];
+    let currentChunk = '';
+
+    for (const word of words) {
+        if ((currentChunk + ' ' + word).trim().length > maxLength) {
+            if (currentChunk.trim()) {
+                chunks.push(currentChunk.trim());
+            }
+            currentChunk = word;
+        } else {
+            currentChunk = (currentChunk + ' ' + word).trim();
+        }
+    }
+    if (currentChunk.trim()) {
+        chunks.push(currentChunk.trim());
+    }
+    return chunks;
+}
+
 // ------------------------------------------------------------
 // [10-1] TTS External API — CORS-free proxy
 // ------------------------------------------------------------
@@ -94,13 +116,40 @@ app.post('/api/local-transcribe', express.raw({ type: 'audio/*', limit: '25mb' }
 app.post('/api/tts-proxy', async (req, res) => {
     try {
         const { provider, apiKey, voice, text } = req.body || {};
-        if (!apiKey || !text) {
-            return res.status(400).json({ error: 'apiKey and text are required' });
+        if (!text) {
+            return res.status(400).json({ error: 'Text is required' });
+        }
+
+        if (provider !== 'free-google' && !apiKey) {
+            return res.status(400).json({ error: 'apiKey is required for this provider' });
         }
 
         let upstreamUrl, headers, body;
 
-        if (provider === 'openai') {
+        if (provider === 'free-google') {
+            const lang = voice || 'bn-BD';
+            const chunks = splitTextIntoChunks(text, 180);
+            const buffers = [];
+
+            for (const chunk of chunks) {
+                const url = `https://translate.google.com/translate_tts?ie=UTF-8&tl=${encodeURIComponent(lang)}&client=tw-ob&q=${encodeURIComponent(chunk)}`;
+                const response = await fetch(url, {
+                    headers: {
+                        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+                    }
+                });
+                if (!response.ok) {
+                    const detail = await response.text();
+                    throw new Error(`Google Translate TTS failed: ${detail.slice(0, 100)}`);
+                }
+                buffers.push(Buffer.from(await response.arrayBuffer()));
+            }
+
+            const buf = Buffer.concat(buffers);
+            res.setHeader('Content-Type', 'audio/mpeg');
+            res.setHeader('Access-Control-Allow-Origin', '*');
+            return res.send(buf);
+        } else if (provider === 'openai') {
             upstreamUrl = 'https://api.openai.com/v1/audio/speech';
             headers = {
                 'Authorization': 'Bearer ' + apiKey,
@@ -128,11 +177,13 @@ app.post('/api/tts-proxy', async (req, res) => {
             return res.status(400).json({ error: 'Unknown provider' });
         }
 
-        const upstream = await fetch(upstreamUrl, {
-            method: 'POST',
-            headers,
-            body
-        });
+        const fetchOptions = {
+            method: body ? 'POST' : 'GET',
+            headers
+        };
+        if (body) fetchOptions.body = body;
+
+        const upstream = await fetch(upstreamUrl, fetchOptions);
 
         if (!upstream.ok) {
             const detail = await upstream.text();

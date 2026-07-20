@@ -1637,62 +1637,36 @@ document.addEventListener('DOMContentLoaded', () => {
 
     if (ttsRecordBtn) {
         ttsRecordBtn.addEventListener('click', async () => {
-            if (!('speechSynthesis' in window)) {
-                showTtsStatus('⚠️ এই ব্রাউজারে Text-to-Speech সাপোর্ট করে না।');
+            const text = (ttsText && ttsText.value || '').trim();
+            if (!text) {
+                showTtsStatus('দয়া করে ভয়েসওভারের জন্য কিছু টেক্সট লিখুন।');
                 return;
             }
-            const u = buildTtsUtterance();
-            if (!u) { showTtsStatus('দয়া করে ভয়েসওভারের জন্য কিছু টেক্সট লিখুন।'); return; }
-            if (!audioCtx) { showTtsStatus('⚠️ অডিও ইঞ্জিন প্রস্তুত নয়, অনুগ্রহ করে পেজ রিফ্রেশ করুন।'); return; }
+
+            if (ttsRecordBtn) ttsRecordBtn.disabled = true;
+            showTtsStatus('🎙️ ভয়েসওভার তৈরি হচ্ছে...');
 
             try {
-                await audioCtx.resume();
-                // Capture the AudioContext output (where TTS is routed in Chromium).
-                const destStream = audioCtx.createMediaStreamDestination();
-                const recorder = new MediaRecorder(destStream.stream);
-                const chunks = [];
-                recorder.ondataavailable = (e) => { if (e.data && e.data.size) chunks.push(e.data); };
-
-                const done = new Promise((resolve) => {
-                    recorder.onstop = () => resolve(new Blob(chunks, { type: recorder.mimeType || 'audio/webm' }));
+                const response = await fetch('/api/tts-proxy', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        provider: 'free-google',
+                        voice: (ttsLang && ttsLang.value) || 'bn-BD',
+                        text: text
+                    })
                 });
 
-                // Re-route the destination so TTS is captured (Chromium routes the
-                // speech output through the active audio output, captured here).
-                audioCtx.destination.connect(destStream);
+                if (!response.ok) {
+                    const errData = await response.json();
+                    throw new Error(errData.error || `HTTP error! status: ${response.status}`);
+                }
 
-                let stopped = false;
-                u.onend = () => {
-                    if (stopped) return;
-                    stopped = true;
-                    try { recorder.stop(); } catch (e) {}
-                    try { audioCtx.destination.disconnect(destStream); } catch (e) {}
-                    if (ttsRecordBtn) ttsRecordBtn.disabled = false;
-                    if (ttsPlayBtn) ttsPlayBtn.style.display = 'inline-flex';
-                    if (ttsStopBtn) ttsStopBtn.style.display = 'none';
-                };
-                u.onerror = () => {
-                    if (stopped) return;
-                    stopped = true;
-                    try { recorder.stop(); } catch (e) {}
-                    try { audioCtx.destination.disconnect(destStream); } catch (e) {}
-                    if (ttsRecordBtn) ttsRecordBtn.disabled = false;
-                    showTtsStatus('⚠️ টেক্সট বাজানো যায়নি।');
-                };
-
-                recorder.start();
-                if (ttsRecordBtn) ttsRecordBtn.disabled = true;
-                if (ttsPlayBtn) ttsPlayBtn.style.display = 'none';
-                if (ttsStopBtn) ttsStopBtn.style.display = 'inline-flex';
-                showTtsStatus('🎙️ ভয়েসওভার তৈরি হচ্ছে... (স্পিক করা হচ্ছে)');
-
-                window.speechSynthesis.cancel();
-                window.speechSynthesis.speak(u);
-
-                const blob = await done;
+                const blob = await response.blob();
                 if (!blob || blob.size === 0) {
-                    showTtsStatus('⚠️ অডিও ক্যাপচার করা যায়নি (এই ব্রাউজার এই পদ্ধতি সাপোর্ট করে না)। টেক্সট প্লে করে মাইক্রোফোন দিয়ে রেকর্ড করতে পারেন।');
-                    return;
+                    throw new Error('অডিও ফাইল খালি (Empty audio returned)');
                 }
 
                 // Feed the captured TTS audio into the existing voiceover pipeline.
@@ -1702,10 +1676,12 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (voiceoverAudioPreview) voiceoverAudioPreview.src = state.voiceoverUrl;
                 if (voiceoverPreviewBox) voiceoverPreviewBox.style.display = 'block';
                 if (voiceoverVolumeContainer) voiceoverVolumeContainer.style.display = 'block';
+                
                 showTtsStatus('✅ ভয়েসওভার তৈরি হয়েছে! এক্সপোর্ট করার আগে প্রিভিউ শুনুন।');
             } catch (err) {
                 console.error('TTS voiceover generation failed:', err);
                 showTtsStatus('⚠️ ভয়েসওভার তৈরি করতে সমস্যা হয়েছে: ' + (err && err.message ? err.message : err));
+            } finally {
                 if (ttsRecordBtn) ttsRecordBtn.disabled = false;
             }
         });
@@ -1750,6 +1726,84 @@ document.addEventListener('DOMContentLoaded', () => {
                 // When ON, mirror whatever profile is currently selected.
                 // When OFF, force back to 'none' so the video's own audio is untouched.
                 window.videoVoiceChanger.setProfile(state.applyVoiceChangerToVideo ? (state.voiceoverProfile || 'none') : 'none');
+            }
+        });
+    }
+
+    // ============================================================
+    // [10-1] TTS External API (OpenAI / ElevenLabs) Implementation
+    // ============================================================
+    const extTtsProvider = document.getElementById('ext-tts-provider');
+    const extTtsKey = document.getElementById('ext-tts-key');
+    const extTtsVoice = document.getElementById('ext-tts-voice');
+    const extTtsText = document.getElementById('ext-tts-text');
+    const extTtsGenerateBtn = document.getElementById('ext-tts-generate-btn');
+    const extTtsSaveKeyBtn = document.getElementById('ext-tts-save-key-btn');
+    const extTtsStatus = document.getElementById('ext-tts-status');
+
+    // Load saved API key from localStorage
+    if (extTtsKey) {
+        const savedKey = localStorage.getItem('ext_tts_api_key');
+        if (savedKey) {
+            extTtsKey.value = savedKey;
+        }
+    }
+
+    if (extTtsSaveKeyBtn) {
+        extTtsSaveKeyBtn.addEventListener('click', () => {
+            const key = extTtsKey.value.trim();
+            localStorage.setItem('ext_tts_api_key', key);
+            alert('API Key সফলভাবে সেভ করা হয়েছে!');
+        });
+    }
+
+    if (extTtsGenerateBtn) {
+        extTtsGenerateBtn.addEventListener('click', async () => {
+            const provider = extTtsProvider.value;
+            const apiKey = extTtsKey.value.trim();
+            const voice = extTtsVoice.value.trim();
+            const text = extTtsText.value.trim();
+
+            if (!text) {
+                alert('অনুগ্রহ করে টেক্সট লিখুন।');
+                return;
+            }
+            if (!apiKey) {
+                alert('অনুগ্রহ করে API Key প্রদান করুন।');
+                return;
+            }
+
+            extTtsStatus.style.display = 'block';
+            extTtsStatus.innerText = '⏳ ক্লাউড থেকে ভয়েস জেনারেট হচ্ছে...';
+            extTtsGenerateBtn.disabled = true;
+
+            try {
+                const response = await fetch('/api/tts-proxy', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ provider, apiKey, voice, text })
+                });
+
+                if (!response.ok) {
+                    const errData = await response.json();
+                    throw new Error(errData.error || `HTTP error! status: ${response.status}`);
+                }
+
+                const blob = await response.blob();
+                state.voiceoverBlob = blob;
+                state.voiceoverUrl = URL.createObjectURL(blob);
+                state.voiceoverRecorded = true;
+
+                if (voiceoverAudioPreview) voiceoverAudioPreview.src = state.voiceoverUrl;
+                if (voiceoverPreviewBox) voiceoverPreviewBox.style.display = 'block';
+                if (voiceoverVolumeContainer) voiceoverVolumeContainer.style.display = 'block';
+
+                extTtsStatus.innerText = '✅ ভয়েসওভার সফলভাবে তৈরি হয়েছে এবং ভিডিওতে যুক্ত করা হয়েছে!';
+            } catch (err) {
+                console.error(err);
+                extTtsStatus.innerText = '⚠️ ভুল হয়েছে: ' + err.message;
+            } finally {
+                extTtsGenerateBtn.disabled = false;
             }
         });
     }
