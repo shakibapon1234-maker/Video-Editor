@@ -1,0 +1,21 @@
+<!doctype html>
+<html lang="bn">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="theme-color" content="#5b4ce3"><link rel="manifest" href="manifest.webmanifest">
+  <link rel="apple-touch-icon" href="icon.svg"><title>Voice Typing</title>
+  <style>
+    :root{color-scheme:dark}*{box-sizing:border-box}body{margin:0;min-height:100dvh;font:16px system-ui,sans-serif;background:#101626;color:#f7f8ff}.app{max-width:680px;margin:auto;padding:28px 18px calc(28px + env(safe-area-inset-bottom))}h1{margin:0;font-size:28px}.hint{color:#b9c2dc;line-height:1.5}.toolbar{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:22px 0 12px}select,button,textarea{font:inherit;border-radius:14px;border:1px solid #39435f}select,textarea{background:#192238;color:#fff;padding:14px}button{border:0;background:#5b4ce3;color:#fff;padding:15px;font-weight:700;cursor:pointer}button.recording{background:#d94256}button:disabled{opacity:.5;cursor:not-allowed}textarea{width:100%;height:42dvh;min-height:250px;resize:vertical;line-height:1.55}.actions{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:12px}.actions button{background:#273553}.status{min-height:24px;color:#b9c2dc;text-align:center;margin:12px}.install{width:100%;background:#1e9a67;margin-top:12px;display:none}@media(max-width:390px){.toolbar,.actions{grid-template-columns:1fr}}
+  </style>
+</head>
+<body><main class="app"><h1>🎙️ Voice Typing</h1><p class="hint">বাংলা বা English নির্বাচন করুন। Start চাপুন, কথা বলুন, তারপর Stop চাপুন। লেখা Copy করে যেকোনো জায়গায় paste করতে পারবেন।</p>
+  <div class="toolbar"><select id="language" aria-label="Language"><option value="bn-BD">বাংলা</option><option value="en-US">English</option></select><button id="record">🎤 Start Voice Typing</button></div>
+  <div id="status" class="status">Microphone permission Allow করুন।</div><textarea id="text" placeholder="আপনার কথা এখানে লেখা হবে..."></textarea>
+  <div class="actions"><button id="copy">Copy Text</button><button id="clear">Clear Text</button></div><button class="install" id="install">Install this app</button>
+</main><script>
+const Speech=window.SpeechRecognition||window.webkitSpeechRecognition,record=document.querySelector('#record'),language=document.querySelector('#language'),text=document.querySelector('#text'),status=document.querySelector('#status');let recognition=null;
+if(!Speech){record.disabled=true;status.textContent='এই browser-এ Speech Recognition নেই। Android Chrome ব্যবহার করুন।'}
+record.onclick=()=>{if(recognition){recognition.stop();return}recognition=new Speech();recognition.lang=language.value;recognition.continuous=true;recognition.interimResults=false;recognition.onstart=()=>{status.textContent='শুনছি… কথা বলুন';record.textContent='■ Stop & Convert';record.classList.add('recording')};recognition.onresult=e=>{let words='';for(let i=e.resultIndex;i<e.results.length;i++)if(e.results[i].isFinal)words+=e.results[i][0].transcript+' ';if(words)text.value+=(text.value&&!/\s$/.test(text.value)?' ':'')+words.trim()};recognition.onerror=e=>status.textContent='Voice typing error: '+e.error;recognition.onend=()=>{recognition=null;record.textContent='🎤 Start Voice Typing';record.classList.remove('recording');status.textContent='বন্ধ হয়েছে। আবার Start চাপলে নতুন কথা যোগ হবে।'};recognition.start()};
+document.querySelector('#copy').onclick=async()=>{await navigator.clipboard.writeText(text.value);status.textContent='Text copied হয়েছে।'};document.querySelector('#clear').onclick=()=>{text.value='';status.textContent='Text clear করা হয়েছে।'};
+let deferred;const install=document.querySelector('#install');window.addEventListener('beforeinstallprompt',e=>{e.preventDefault();deferred=e;install.style.display='block'});install.onclick=async()=>{deferred.prompt();await deferred.userChoice;install.style.display='none'};if('serviceWorker'in navigator)navigator.serviceWorker.register('sw.js');
+</script></body></html>

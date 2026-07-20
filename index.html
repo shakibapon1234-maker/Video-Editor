@@ -423,6 +423,58 @@
                             </div>
                         </div>
 
+                        <!-- Letterbox Background Card -->
+                        <div class="card mt-4">
+                            <div class="card-header">
+                                <i class="fa-solid fa-image card-icon"></i>
+                                <h3>Background (ব্যাকগ্রাউন্ড)</h3>
+                            </div>
+                            <div class="card-body">
+                                <p class="help-text">"Fit" মোডে ভিডিওর চারপাশে যে ফাঁকা জায়গা থাকে, সেখানে ডিফল্ট কালোর বদলে ব্লার ভিডিও, নিজের ছবি বা রঙ বসাতে পারবেন।</p>
+                                <div class="aspect-ratio-selector" id="bg-mode-selector">
+                                    <button class="aspect-btn active" data-bgmode="none" data-tooltip="ডিফল্ট কালো ব্যাকগ্রাউন্ড (আগের মতো)">
+                                        <i class="fa-solid fa-ban"></i>
+                                        <span>None (কালো)</span>
+                                    </button>
+                                    <button class="aspect-btn" data-bgmode="blur" data-tooltip="একই ভিডিওর ব্লার করা জুম-করা ভার্সন ব্যাকগ্রাউন্ডে বসবে">
+                                        <i class="fa-solid fa-water"></i>
+                                        <span>Blur (ব্লার ভিডিও)</span>
+                                    </button>
+                                    <button class="aspect-btn" data-bgmode="image" data-tooltip="নিজের একটা ছবি ব্যাকগ্রাউন্ড হিসেবে আপলোড করুন">
+                                        <i class="fa-solid fa-image"></i>
+                                        <span>Image (ছবি)</span>
+                                    </button>
+                                    <button class="aspect-btn" data-bgmode="color" data-tooltip="একটা সলিড রঙ ব্যাকগ্রাউন্ড হিসেবে বেছে নিন">
+                                        <i class="fa-solid fa-fill-drip"></i>
+                                        <span>Color (রঙ)</span>
+                                    </button>
+                                </div>
+
+                                <div class="control-group mt-3" id="bg-color-control" style="display:none;">
+                                    <label for="bg-color-input">Background Color</label>
+                                    <div class="color-picker-wrapper">
+                                        <input type="color" id="bg-color-input" value="#000000">
+                                        <span class="color-value-text" id="bg-color-val">#000000</span>
+                                    </div>
+                                </div>
+
+                                <div class="logo-upload-container mt-3" id="bg-image-control" style="display:none;">
+                                    <div class="upload-placeholder-sm" id="bg-image-dropzone">
+                                        <i class="fa-solid fa-image"></i>
+                                        <p>Click to add background image</p>
+                                        <input type="file" id="bg-image-input" accept="image/*" style="display: none;">
+                                    </div>
+                                    <div class="logo-preview-box" id="bg-image-preview-box" style="display: none;">
+                                        <img id="bg-image-preview" src="" alt="background">
+                                        <div class="logo-meta">
+                                            <span id="bg-image-filename">background.jpg</span>
+                                            <button id="remove-bg-image-btn" class="btn-text-danger"><i class="fa-solid fa-trash"></i> Remove</button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
                         <!-- Video Crop Tool Card -->
                         <div class="card mt-4">
                             <div class="card-header">
@@ -2272,11 +2324,19 @@
                                     <i class="fa-solid fa-camera"></i> Generate Thumbnail (এই ফ্রেম থেকে)
                                 </button>
 
+                                <div class="file-selector-box mt-3" id="custom-thumbnail-dropzone">
+                                    <i class="fa-solid fa-upload"></i>
+                                    <span id="custom-thumbnail-label">নিজের Thumbnail Image আপলোড করুন</span>
+                                    <input type="file" id="custom-thumbnail-input" accept="image/png,image/jpeg,image/webp" style="display:none;">
+                                </div>
+                                <p class="help-text mt-1">এই ছবিটি পরের exported MP4-তে cover হিসেবে থাকবে এবং আলাদা PNG/JPG হিসেবেও download করতে পারবেন।</p>
+
                                 <div class="thumbnail-preview-box mt-4" id="thumbnail-preview-box" style="display: none;">
                                     <img id="thumbnail-preview-img" alt="Generated thumbnail preview" style="max-width: 100%; border-radius: var(--radius-sm); border: 1px solid var(--border-color);">
                                     <a id="thumbnail-download-link" href="#" download="thumbnail.png" class="btn btn-success btn-block mt-3">
                                         <i class="fa-solid fa-download"></i> Download Thumbnail (PNG)
                                     </a>
+                                    <button id="remove-custom-thumbnail-btn" class="btn btn-outline btn-block mt-2" type="button" style="display:none;"><i class="fa-solid fa-xmark"></i> Custom Thumbnail Remove</button>
                                 </div>
                             </div>
                         </div>
@@ -2765,7 +2825,7 @@
     <div id="gif-host" style="position:fixed; left:0; top:0; width:1px; height:1px; overflow:hidden; opacity:0.01; pointer-events:none;"></div>
 
     <script src="audio.js?v=4"></script>
-    <script src="editor.js?v=5"></script>
+    <script src="editor.js?v=8"></script>
     <script src="exporter.js?v=4"></script>
     <script src="phase9.js?v=2"></script>
 </body>

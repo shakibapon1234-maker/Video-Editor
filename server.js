@@ -15,8 +15,74 @@ const wss = new WebSocket.Server({ server });
 
 const PORT = 4000;
 
+// Local, offline speech-to-text. The Whisper model is downloaded once on its
+// first use and is then kept in Electron's application-data directory.
+const WHISPER_TEMP_DIR = path.join(process.env.SF_DATA_DIR || __dirname, 'temp_whisper');
+let whisperTranscriberPromise = null;
+
 // Parse JSON bodies for the TTS proxy route.
 app.use(express.json({ limit: '2mb' }));
+
+async function getWhisperTranscriber() {
+    if (!whisperTranscriberPromise) {
+        whisperTranscriberPromise = (async () => {
+            const { pipeline, env } = await import('@huggingface/transformers');
+            env.cacheDir = path.join(process.env.SF_DATA_DIR || __dirname, 'whisper-model-cache');
+            console.log('Loading local Whisper model (first use may take a few minutes)...');
+            return pipeline('automatic-speech-recognition', 'Xenova/whisper-base', { dtype: 'q8' });
+        })().catch((error) => {
+            whisperTranscriberPromise = null;
+            throw error;
+        });
+    }
+    return whisperTranscriberPromise;
+}
+
+function convertRecordingToWhisperAudio(inputPath, outputPath) {
+    return new Promise((resolve, reject) => {
+        ffmpeg(inputPath)
+            .noVideo()
+            .audioChannels(1)
+            .audioFrequency(16000)
+            .format('f32le')
+            .on('end', resolve)
+            .on('error', reject)
+            .save(outputPath);
+    });
+}
+
+app.post('/api/local-transcribe', express.raw({ type: 'audio/*', limit: '25mb' }), async (req, res) => {
+    if (!req.body || !req.body.length) {
+        return res.status(400).json({ error: 'No audio data received.' });
+    }
+
+    if (!fs.existsSync(WHISPER_TEMP_DIR)) fs.mkdirSync(WHISPER_TEMP_DIR, { recursive: true });
+    const recordingId = `voice_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+    const inputPath = path.join(WHISPER_TEMP_DIR, `${recordingId}.webm`);
+    const audioPath = path.join(WHISPER_TEMP_DIR, `${recordingId}.f32`);
+
+    try {
+        await fs.promises.writeFile(inputPath, req.body);
+        await convertRecordingToWhisperAudio(inputPath, audioPath);
+        const buffer = await fs.promises.readFile(audioPath);
+        const samples = new Float32Array(buffer.buffer, buffer.byteOffset, Math.floor(buffer.byteLength / 4));
+        const transcriber = await getWhisperTranscriber();
+        const result = await transcriber(samples, {
+            language: req.query.language === 'en-US' ? 'english' : 'bengali',
+            task: 'transcribe',
+            sampling_rate: 16000,
+            chunk_length_s: 30,
+            stride_length_s: 5
+        });
+        res.json({ text: String(result.text || '').trim() });
+    } catch (error) {
+        console.error('Local Whisper transcription error:', error);
+        res.status(500).json({ error: 'Voice typing failed: ' + String(error && error.message ? error.message : error) });
+    } finally {
+        fs.promises.unlink(inputPath).catch(() => {});
+        fs.promises.unlink(audioPath).catch(() => {});
+    }
+});
 
 // ------------------------------------------------------------
 // [10-1] TTS External API — CORS-free proxy
@@ -120,6 +186,10 @@ wss.on('connection', (ws) => {
                     frameCount = 0;
                     totalFrames = data.totalFrames;
                     expectedFilename = data.filename || 'output.mp4';
+                    if (data.customThumbnailData) {
+                        const imageData = data.customThumbnailData.replace(/^data:image\/[a-zA-Z+]+;base64,/, '');
+                        fs.writeFileSync(path.join(tempDir, 'custom-thumbnail.jpg'), Buffer.from(imageData, 'base64'));
+                    }
                     mode = 'frames';
 
                     console.log(`Starting render session ${renderId}. Expecting ${totalFrames} frames.`);
@@ -187,6 +257,7 @@ function cleanupDir(dirPath) {
 
 function compileVideo(ws, tempDir, filename, totalFrames) {
     const audioPath = path.join(tempDir, 'audio.wav');
+    const customThumbnailPath = path.join(tempDir, 'custom-thumbnail.jpg');
     const finalOutputPath = path.join(OUTPUT_DIR, filename);
 
     // If file already exists, generate unique name
@@ -226,9 +297,17 @@ function compileVideo(ws, tempDir, filename, totalFrames) {
         .input(inputPattern)
         .inputOptions(['-framerate 30'])
         .fps(30)
-        // H.264 with yuv420p requires even dimensions.  Cropping to the nearest
-        // even pixel prevents exports such as 1080x585 from failing at frame 0.
-        .videoFilters('scale=trunc(iw/2)*2:trunc(ih/2)*2');
+        // H.264 encodes internally in 16x16 macroblocks. Rounding only to an
+        // even number (old: trunc(iw/2)*2) still leaves dimensions like 410
+        // that aren't a multiple of 16 -- the encoder then pads the coded
+        // frame up to 416 and relies on an SPS "conformance window" to crop
+        // the extra pixels back off on playback. Not every decoder/renderer
+        // honors that crop consistently (notably plain Windows Media Player,
+        // and PotPlayer once it switches to hardware/DXVA decoding on loop),
+        // so the padding shows up as a visible black/garbage strip. Rounding
+        // to the nearest multiple of 16 removes the need for that crop
+        // rectangle entirely, so every player decodes the same pixels.
+        .videoFilters('scale=trunc(iw/16)*16:trunc(ih/16)*16,setsar=1');
 
     if (hasAudio) {
         command = command.input(audioPath.replace(/\\/g, '/'));
@@ -262,13 +341,19 @@ function compileVideo(ws, tempDir, filename, totalFrames) {
         })
         .on('end', () => {
             console.log('Compilation complete!');
-            const downloadUrl = `/exports/${path.basename(compiledPath)}`;
-            ws.send(JSON.stringify({ type: 'complete', downloadUrl, filename: path.basename(compiledPath) }));
-            
-            // Clean up temp frames and audio
-            setTimeout(() => {
-                cleanupDir(tempDir);
-            }, 5000);
+            const finish = () => {
+                const downloadUrl = `/exports/${path.basename(compiledPath)}`;
+                ws.send(JSON.stringify({ type: 'complete', downloadUrl, filename: path.basename(compiledPath) }));
+                setTimeout(() => cleanupDir(tempDir), 5000);
+            };
+            if (!fs.existsSync(customThumbnailPath)) return finish();
+            const coveredPath = compiledPath + '.cover.mp4';
+            ffmpeg(compiledPath).input(customThumbnailPath)
+                .outputOptions(['-map 0', '-map 1:v:0', '-c copy', '-c:v:1 mjpeg', '-disposition:v:1 attached_pic'])
+                .output(coveredPath)
+                .on('end', () => fs.rename(coveredPath, compiledPath, (error) => error ? finish() : finish()))
+                .on('error', (error) => { console.warn('Could not attach MP4 cover:', error.message); finish(); })
+                .run();
         })
         .on('error', (err, stdout, stderr) => {
             console.error('FFmpeg compile error:', err);

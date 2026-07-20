@@ -110,6 +110,13 @@ window.VideoEditor = {
     // Video layout mode
     layoutMode: 'fit',
 
+    // Letterbox background fill (used when layoutMode is 'fit' and there's
+    // empty space around the video). 'none' keeps the old solid black area.
+    backgroundMode: 'none', // 'none' | 'blur' | 'image' | 'color'
+    backgroundColor: '#000000',
+    backgroundImg: null,
+    backgroundImgFile: null,
+
     // Text Overlays (Phase 2C)
     textOverlays: [],
     selectedTextOverlayId: null,
@@ -637,7 +644,7 @@ document.addEventListener('DOMContentLoaded', () => {
     });
     
     // --- Canvas Dimensions & Aspect Ratios ---
-    const aspectButtons = document.querySelectorAll('.aspect-btn');
+    const aspectButtons = document.querySelectorAll('.aspect-btn[data-ratio]');
     aspectButtons.forEach(btn => {
         btn.addEventListener('click', (e) => {
             aspectButtons.forEach(b => b.classList.remove('active'));
@@ -1088,6 +1095,100 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     });
     
+    // --- Letterbox Background (None / Blur / Image / Color) ---
+    const bgModeBtns = document.querySelectorAll('#bg-mode-selector .aspect-btn');
+    const bgColorControl = document.getElementById('bg-color-control');
+    const bgImageControl = document.getElementById('bg-image-control');
+    const bgColorInput = document.getElementById('bg-color-input');
+    const bgColorVal = document.getElementById('bg-color-val');
+    const bgImageDropzone = document.getElementById('bg-image-dropzone');
+    const bgImageInput = document.getElementById('bg-image-input');
+    const bgImagePreviewBox = document.getElementById('bg-image-preview-box');
+    const bgImagePreview = document.getElementById('bg-image-preview');
+    const bgImageFilename = document.getElementById('bg-image-filename');
+    const removeBgImageBtn = document.getElementById('remove-bg-image-btn');
+
+    function updateBgModeUI() {
+        if (bgColorControl) bgColorControl.style.display = (state.backgroundMode === 'color') ? 'block' : 'none';
+        if (bgImageControl) bgImageControl.style.display = (state.backgroundMode === 'image') ? 'block' : 'none';
+    }
+
+    if (bgModeBtns.length) {
+        bgModeBtns.forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                const targetBtn = e.currentTarget;
+                bgModeBtns.forEach(b => b.classList.remove('active'));
+                targetBtn.classList.add('active');
+                state.backgroundMode = targetBtn.dataset.bgmode;
+                if (state.backgroundMode !== 'none' && state.layoutMode !== 'fit') {
+                    state.layoutMode = 'fit';
+                    document.querySelectorAll('.layout-mode-btn').forEach(b => {
+                        b.classList.toggle('active', b.dataset.mode === 'fit');
+                    });
+                }
+                updateBgModeUI();
+                drawFrame();
+                if (window.captureUndoCheckpoint) window.captureUndoCheckpoint();
+                if (window.recordEditorHistory) {
+                    window.recordEditorHistory('Background mode changed to ' + state.backgroundMode);
+                }
+            });
+        });
+    }
+
+    if (bgColorInput) {
+        bgColorInput.addEventListener('input', (e) => {
+            state.backgroundColor = e.target.value;
+            if (bgColorVal) bgColorVal.innerText = e.target.value.toUpperCase();
+            drawFrame();
+        });
+        bgColorInput.addEventListener('change', () => {
+            if (window.captureUndoCheckpoint) window.captureUndoCheckpoint();
+        });
+    }
+
+    function handleBgImageFile(file) {
+        if (!file) return;
+        state.backgroundImgFile = file;
+        const fileURL = URL.createObjectURL(file);
+        const img = new Image();
+        img.src = fileURL;
+        img.onload = () => {
+            state.backgroundImg = img;
+            if (bgImagePreview) bgImagePreview.src = fileURL;
+            if (bgImageFilename) bgImageFilename.innerText = file.name;
+            if (bgImagePreviewBox) bgImagePreviewBox.style.display = 'flex';
+            if (bgImageDropzone) bgImageDropzone.style.display = 'none';
+            drawFrame();
+            if (window.captureUndoCheckpoint) window.captureUndoCheckpoint();
+            if (window.recordEditorHistory) window.recordEditorHistory('Background image added');
+        };
+    }
+
+    if (bgImageDropzone && bgImageInput) {
+        bgImageDropzone.addEventListener('click', () => bgImageInput.click());
+        bgImageInput.addEventListener('change', (e) => handleBgImageFile(e.target.files[0]));
+        bgImageDropzone.addEventListener('dragover', (e) => { e.preventDefault(); bgImageDropzone.classList.add('hover'); });
+        bgImageDropzone.addEventListener('dragleave', () => bgImageDropzone.classList.remove('hover'));
+        bgImageDropzone.addEventListener('drop', (e) => {
+            e.preventDefault();
+            bgImageDropzone.classList.remove('hover');
+            if (e.dataTransfer.files && e.dataTransfer.files[0]) handleBgImageFile(e.dataTransfer.files[0]);
+        });
+    }
+
+    if (removeBgImageBtn) {
+        removeBgImageBtn.addEventListener('click', () => {
+            state.backgroundImg = null;
+            state.backgroundImgFile = null;
+            if (bgImagePreviewBox) bgImagePreviewBox.style.display = 'none';
+            if (bgImageDropzone) bgImageDropzone.style.display = 'flex';
+            if (bgImageInput) bgImageInput.value = '';
+            drawFrame();
+            if (window.captureUndoCheckpoint) window.captureUndoCheckpoint();
+        });
+    }
+
     // Returns the numeric width/height ratio that the crop box should be locked
     // to while drawing/resizing, based on the currently selected export Aspect
     // Ratio preset. Returns null for 'original', meaning the crop is freeform.
@@ -1160,11 +1261,18 @@ document.addEventListener('DOMContentLoaded', () => {
         state.canvas.width = Math.round(targetWidth);
         state.canvas.height = Math.round(targetHeight);
         
-        // Update container height dynamically to respect aspect ratio in CSS
         const container = document.getElementById('canvas-container');
-        const containerWidth = container.offsetWidth || container.clientWidth || 640;
-        if (containerWidth > 0) {
-            container.style.height = Math.round(containerWidth * (targetHeight / targetWidth)) + 'px';
+        const previewPanel = container ? container.parentElement : null;
+        const availableWidth = previewPanel
+            ? Math.max(1, previewPanel.clientWidth - 80)
+            : (container.offsetWidth || container.clientWidth || 640);
+        const maxPreviewHeight = Math.min(window.innerHeight * 0.7, 640);
+        const targetAspect = targetWidth / targetHeight;
+        const previewWidth = Math.min(960, availableWidth, maxPreviewHeight * targetAspect);
+
+        if (container && previewWidth > 0) {
+            container.style.width = Math.round(previewWidth) + 'px';
+            container.style.height = Math.round(previewWidth / targetAspect) + 'px';
         }
     }
     
@@ -2264,6 +2372,73 @@ document.addEventListener('DOMContentLoaded', () => {
         return `rgba(${(value >> 16) & 255}, ${(value >> 8) & 255}, ${value & 255}, ${alpha})`;
     }
 
+    // Fills the full canvas behind the video -- this is what shows through
+    // in the empty letterbox space when layoutMode is 'fit' and the video's
+    // aspect ratio doesn't match the canvas. Runs identically during live
+    // preview and export (exporter.js calls drawFrame() for every rendered
+    // frame), so whatever mode is picked here is baked into the exported file.
+    function drawCanvasBackground(canvasW, canvasH, mediaSource, videoW, videoH) {
+        const activeBgButton = document.querySelector('#bg-mode-selector .aspect-btn.active');
+        const mode = activeBgButton?.dataset.bgmode || state.backgroundMode || 'none';
+        state.ctx.save();
+        state.ctx.filter = 'none';
+        state.ctx.globalAlpha = 1;
+
+        if (mode === 'color') {
+            state.ctx.fillStyle = bgColorInput?.value || state.backgroundColor || '#000000';
+            state.ctx.fillRect(0, 0, canvasW, canvasH);
+        } else if (mode === 'image' && state.backgroundImg) {
+            state.ctx.fillStyle = '#000000';
+            state.ctx.fillRect(0, 0, canvasW, canvasH);
+            const imgW = state.backgroundImg.naturalWidth || 1;
+            const imgH = state.backgroundImg.naturalHeight || 1;
+            const imgAspect = imgW / imgH;
+            const canvasAspect = canvasW / canvasH;
+            let dw = canvasW, dh = canvasH, dx = 0, dy = 0;
+            if (imgAspect > canvasAspect) {
+                dh = canvasH;
+                dw = canvasH * imgAspect;
+                dx = (canvasW - dw) / 2;
+            } else {
+                dw = canvasW;
+                dh = canvasW / imgAspect;
+                dy = (canvasH - dh) / 2;
+            }
+            state.ctx.drawImage(state.backgroundImg, dx, dy, dw, dh);
+        } else if (mode === 'blur' && mediaSource && videoW && videoH) {
+            const videoAspect = videoW / videoH;
+            const canvasAspect = canvasW / canvasH;
+            let dw = canvasW, dh = canvasH, dx = 0, dy = 0;
+            if (videoAspect > canvasAspect) {
+                dh = canvasH;
+                dw = canvasH * videoAspect;
+                dx = (canvasW - dw) / 2;
+            } else {
+                dw = canvasW;
+                dh = canvasW / videoAspect;
+                dy = (canvasH - dh) / 2;
+            }
+            // Slightly oversize the draw so the heavy blur's soft edges don't
+            // leave a lighter fringe visible at the canvas border.
+            const pad = Math.max(canvasW, canvasH) * 0.08;
+            try {
+                state.ctx.filter = 'blur(70px) brightness(0.55) saturate(1.1)';
+                state.ctx.drawImage(mediaSource, dx - pad, dy - pad, dw + pad * 2, dh + pad * 2);
+            } catch (e) {
+                // drawImage can throw if the video/image isn't decodable yet;
+                // fall back to plain black rather than breaking the frame.
+                state.ctx.filter = 'none';
+                state.ctx.fillStyle = '#000000';
+                state.ctx.fillRect(0, 0, canvasW, canvasH);
+            }
+        } else {
+            state.ctx.fillStyle = '#000000';
+            state.ctx.fillRect(0, 0, canvasW, canvasH);
+        }
+
+        state.ctx.restore();
+    }
+
     function drawFrame() {
         if (!state.duration) return;
         
@@ -2278,10 +2453,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
         const mediaSource = isImageClip ? activeClip.imageImg : state.video;
         
-        // Clear Canvas with black
-        state.ctx.fillStyle = '#000000';
-        state.ctx.fillRect(0, 0, canvasW, canvasH);
-        
+        // Clear canvas / paint letterbox background (solid black by default,
+        // or blur/image/color if the user picked one under the Background card)
+        drawCanvasBackground(canvasW, canvasH, mediaSource, videoW, videoH);
+
         // Draw video frame according to Fit or Fill/Crop layout mode
         const videoAspect = videoW / videoH;
         const canvasAspect = canvasW / canvasH;
@@ -2438,6 +2613,8 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         }
         state.ctx.restore();
+
+
 
         // --- Step A3: Advanced Color Grading (Custom RGB Curves, Phase 4C) ---
         // Applied pixel-level (getImageData/putImageData) only over the drawn video
@@ -9005,6 +9182,18 @@ document.addEventListener('DOMContentLoaded', () => {
     const thumbnailPreviewBox = document.getElementById('thumbnail-preview-box');
     const thumbnailPreviewImg = document.getElementById('thumbnail-preview-img');
     const thumbnailDownloadLink = document.getElementById('thumbnail-download-link');
+    const customThumbnailDropzone = document.getElementById('custom-thumbnail-dropzone');
+    const customThumbnailInput = document.getElementById('custom-thumbnail-input');
+    const customThumbnailLabel = document.getElementById('custom-thumbnail-label');
+    const removeCustomThumbnailBtn = document.getElementById('remove-custom-thumbnail-btn');
+
+    function showThumbnailPreview(url, filename, isCustom) {
+        thumbnailPreviewImg.src = url;
+        thumbnailDownloadLink.href = url;
+        thumbnailDownloadLink.download = filename;
+        thumbnailPreviewBox.style.display = 'block';
+        if (removeCustomThumbnailBtn) removeCustomThumbnailBtn.style.display = isCustom ? 'block' : 'none';
+    }
 
     if (generateThumbnailBtn) {
         generateThumbnailBtn.addEventListener('click', () => {
@@ -9012,13 +9201,27 @@ document.addEventListener('DOMContentLoaded', () => {
             state.canvas.toBlob((blob) => {
                 if (!blob) return;
                 const url = URL.createObjectURL(blob);
-                thumbnailPreviewImg.src = url;
-                thumbnailDownloadLink.href = url;
-                thumbnailDownloadLink.download = `thumbnail-${Date.now()}.png`;
-                thumbnailPreviewBox.style.display = 'block';
+                showThumbnailPreview(url, `thumbnail-${Date.now()}.png`, false);
             }, 'image/png');
         });
     }
+
+    if (customThumbnailDropzone && customThumbnailInput) {
+        customThumbnailDropzone.addEventListener('click', () => customThumbnailInput.click());
+        customThumbnailInput.addEventListener('change', () => {
+            const file = customThumbnailInput.files[0];
+            if (!file) return;
+            state.customThumbnailFile = file;
+            if (customThumbnailLabel) customThumbnailLabel.innerText = file.name;
+            showThumbnailPreview(URL.createObjectURL(file), file.name, true);
+        });
+    }
+    if (removeCustomThumbnailBtn) removeCustomThumbnailBtn.addEventListener('click', () => {
+        state.customThumbnailFile = null;
+        customThumbnailInput.value = '';
+        if (customThumbnailLabel) customThumbnailLabel.innerText = 'নিজের Thumbnail Image আপলোড করুন';
+        removeCustomThumbnailBtn.style.display = 'none';
+    });
 
     // --- Intro / Outro Templates (Phase 5C) ---
     const introEnabledToggle = document.getElementById('intro-enabled-toggle');
@@ -9276,7 +9479,7 @@ document.addEventListener('DOMContentLoaded', () => {
         // Navigation & Layout format buttons
         updateNavigation();
 
-        const aspectButtons = document.querySelectorAll('.aspect-btn');
+        const aspectButtons = document.querySelectorAll('.aspect-btn[data-ratio]');
         aspectButtons.forEach(btn => {
             if (btn.dataset.ratio === state.aspectRatio) {
                 btn.classList.add('active');
@@ -9514,6 +9717,30 @@ document.addEventListener('DOMContentLoaded', () => {
         if (window.syncAudioUIFromStateGlobal) {
             window.syncAudioUIFromStateGlobal();
         }
+
+        // --- Letterbox Background UI Sync ---
+        const bgModeBtnsLocal = document.querySelectorAll('#bg-mode-selector .aspect-btn');
+        if (bgModeBtnsLocal.length) {
+            bgModeBtnsLocal.forEach(btn => {
+                btn.classList.toggle('active', btn.dataset.bgmode === (state.backgroundMode || 'none'));
+            });
+        }
+        if (bgColorControl) bgColorControl.style.display = (state.backgroundMode === 'color') ? 'block' : 'none';
+        if (bgImageControl) bgImageControl.style.display = (state.backgroundMode === 'image') ? 'block' : 'none';
+        if (bgColorInput) {
+            bgColorInput.value = state.backgroundColor || '#000000';
+            if (bgColorVal) bgColorVal.innerText = (state.backgroundColor || '#000000').toUpperCase();
+        }
+        if (state.backgroundImg) {
+            if (bgImagePreviewBox) bgImagePreviewBox.style.display = 'flex';
+            if (bgImageDropzone) bgImageDropzone.style.display = 'none';
+            if (bgImagePreview) bgImagePreview.src = state.backgroundImg.src;
+            if (bgImageFilename) bgImageFilename.innerText = state.backgroundImgFile ? state.backgroundImgFile.name : 'background.jpg';
+        } else {
+            if (bgImagePreviewBox) bgImagePreviewBox.style.display = 'none';
+            if (bgImageDropzone) bgImageDropzone.style.display = 'flex';
+            if (bgImageInput) bgImageInput.value = '';
+        }
     }
 
     // --- Save project to download file (Settings vs Full) ---
@@ -9602,7 +9829,9 @@ document.addEventListener('DOMContentLoaded', () => {
                     subtitlesEnabled: state.subtitlesEnabled,
                     subtitleStyle: state.subtitleStyle,
                     activeClipId: state.activeClipId,
-                    voiceoverRecorded: state.voiceoverRecorded
+                    voiceoverRecorded: state.voiceoverRecorded,
+                    backgroundMode: state.backgroundMode || 'none',
+                    backgroundColor: state.backgroundColor || '#000000'
                 },
                 textOverlays: state.textOverlays,
                 highlights: state.highlights,
@@ -9623,6 +9852,12 @@ document.addEventListener('DOMContentLoaded', () => {
             // Convert voiceover to Base64 (always, since it's small)
             if (state.voiceoverBlob) {
                 data.voiceoverBase64 = await blobToBase64(state.voiceoverBlob);
+            }
+
+            // Convert background image to Base64 (always, since it is a static picture)
+            if (state.backgroundImgFile) {
+                data.backgroundImgBase64 = await blobToBase64(state.backgroundImgFile);
+                data.backgroundImgName = state.backgroundImgFile.name;
             }
 
             // Convert B-roll images to Base64 (always, since they are static pictures)
@@ -9888,6 +10123,19 @@ document.addEventListener('DOMContentLoaded', () => {
                 state.logoImg = null;
             }
 
+            // Restore Background Image
+            if (data.backgroundImgBase64) {
+                const bgBlob = dataURLtoBlob(data.backgroundImgBase64);
+                state.backgroundImgFile = new File([bgBlob], data.backgroundImgName || 'background.jpg', { type: bgBlob.type });
+                state.backgroundImg = new Image();
+                state.backgroundImg.src = URL.createObjectURL(state.backgroundImgFile);
+                await new Promise(r => state.backgroundImg.onload = r);
+                await storeFileInDB('backgroundImg', state.backgroundImgFile);
+            } else {
+                state.backgroundImg = null;
+                state.backgroundImgFile = null;
+            }
+
             // Restore Voiceover
             if (data.voiceoverBase64) {
                 state.voiceoverBlob = dataURLtoBlob(data.voiceoverBase64);
@@ -10086,7 +10334,9 @@ document.addEventListener('DOMContentLoaded', () => {
                     subtitlesEnabled: state.subtitlesEnabled,
                     subtitleStyle: state.subtitleStyle,
                     activeClipId: state.activeClipId,
-                    voiceoverRecorded: state.voiceoverRecorded
+                    voiceoverRecorded: state.voiceoverRecorded,
+                    backgroundMode: state.backgroundMode || 'none',
+                    backgroundColor: state.backgroundColor || '#000000'
                 },
                 textOverlays: state.textOverlays,
                 highlights: state.highlights,
@@ -10131,6 +10381,12 @@ document.addEventListener('DOMContentLoaded', () => {
                 store.put(state.voiceoverBlob, 'voiceover');
             } else {
                 store.delete('voiceover');
+            }
+
+            if (state.backgroundImgFile) {
+                store.put(state.backgroundImgFile, 'backgroundImg');
+            } else {
+                store.delete('backgroundImg');
             }
 
             state.bgMusicTracks.forEach(t => {
@@ -10249,6 +10505,15 @@ document.addEventListener('DOMContentLoaded', () => {
                 state.logoImg = new Image();
                 state.logoImg.src = URL.createObjectURL(logoFile);
                 await new Promise(r => state.logoImg.onload = r);
+            }
+
+            // Background Image
+            const backgroundImgFile = await getFileFromDB('backgroundImg');
+            if (backgroundImgFile) {
+                state.backgroundImgFile = backgroundImgFile;
+                state.backgroundImg = new Image();
+                state.backgroundImg.src = URL.createObjectURL(backgroundImgFile);
+                await new Promise(r => state.backgroundImg.onload = r);
             }
 
             // Voiceover
@@ -11066,16 +11331,94 @@ document.addEventListener('DOMContentLoaded', () => {
     // Chrome/Edge provide this Web Speech API; each field receives its own
     // language selector so Bangla and English dictation can both be used.
     const VoiceRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-    const activeVoiceInput = { recognition: null, button: null };
+    // Chrome and Edge provide reliable built-in dictation. Electron uses the
+    // local recorder because its bundled Chromium speech service is incomplete.
+    const useLocalVoiceTyping = /Electron/i.test(navigator.userAgent) || !VoiceRecognition;
+    const activeVoiceInput = { recognition: null, recorder: null, stream: null, button: null };
+
+    function resetVoiceTypingButton(button) {
+        button.classList.remove('is-listening');
+        button.innerHTML = '<i class="fa-solid fa-microphone"></i>';
+        button.title = 'মাইক্রোফোন চাপুন, তারপর কথা বলুন';
+        button.setAttribute('aria-label', 'Start voice typing');
+    }
 
     function stopVoiceTyping() {
         if (activeVoiceInput.recognition) {
             try { activeVoiceInput.recognition.stop(); } catch (err) { /* already stopped */ }
         }
+        if (activeVoiceInput.recorder && activeVoiceInput.recorder.state !== 'inactive') {
+            activeVoiceInput.recorder.stop();
+        }
+    }
+
+    function insertVoiceText(input, text) {
+        const cleanText = text.trim();
+        if (!cleanText) return;
+        const start = input.selectionStart == null ? input.value.length : input.selectionStart;
+        const end = input.selectionEnd == null ? input.value.length : input.selectionEnd;
+        const spacer = start > 0 && input.value[start - 1] && !/\s$/.test(input.value.slice(0, start)) ? ' ' : '';
+        input.value = input.value.slice(0, start) + spacer + cleanText + input.value.slice(end);
+        const caret = start + spacer.length + cleanText.length;
+        input.setSelectionRange(caret, caret);
+        input.dispatchEvent(new Event('input', { bubbles: true }));
+        input.dispatchEvent(new Event('change', { bubbles: true }));
+        input.focus();
+    }
+
+    async function startLocalVoiceTyping(input, language, button) {
+        try {
+            const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+            const recorder = new MediaRecorder(stream, { mimeType: MediaRecorder.isTypeSupported('audio/webm;codecs=opus') ? 'audio/webm;codecs=opus' : 'audio/webm' });
+            const chunks = [];
+            recorder.addEventListener('dataavailable', (event) => {
+                if (event.data.size) chunks.push(event.data);
+            });
+            recorder.addEventListener('stop', async () => {
+                stream.getTracks().forEach((track) => track.stop());
+                if (activeVoiceInput.recorder !== recorder) return;
+                button.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i>';
+                button.title = 'কথা text-এ পরিবর্তন হচ্ছে...';
+                try {
+                    const audio = new Blob(chunks, { type: recorder.mimeType || 'audio/webm' });
+                    const response = await fetch('/api/local-transcribe?language=' + encodeURIComponent(language.value), {
+                        method: 'POST',
+                        headers: { 'Content-Type': audio.type },
+                        body: audio
+                    });
+                    const data = await response.json();
+                    if (!response.ok) throw new Error(data.error || 'Voice typing failed.');
+                    insertVoiceText(input, data.text || '');
+                    if (!data.text) alert('কোনো কথা শনাক্ত করা যায়নি। আবার একটু পরিষ্কারভাবে বলুন।');
+                } catch (error) {
+                    console.error('Local voice typing failed:', error);
+                    alert('Voice typing করা যায়নি। প্রথমবার Whisper model download হতে internet লাগবে।\n' + error.message);
+                } finally {
+                    if (activeVoiceInput.recorder === recorder) {
+                        activeVoiceInput.recorder = null;
+                        activeVoiceInput.stream = null;
+                        activeVoiceInput.button = null;
+                        resetVoiceTypingButton(button);
+                    }
+                }
+            });
+            activeVoiceInput.recorder = recorder;
+            activeVoiceInput.stream = stream;
+            activeVoiceInput.button = button;
+            button.classList.add('is-listening');
+            button.innerHTML = '<i class="fa-solid fa-stop"></i>';
+            button.title = 'কথা শেষ হলে আবার চাপুন';
+            button.setAttribute('aria-label', 'Stop voice typing');
+            recorder.start();
+        } catch (error) {
+            console.error('Unable to start local voice typing:', error);
+            alert('Voice typing ব্যবহার করতে Microphone permission Allow করুন।');
+            resetVoiceTypingButton(button);
+        }
     }
 
     function addVoiceTypingControl(input) {
-        if (!VoiceRecognition || input.dataset.voiceTypingReady) return;
+        if ((useLocalVoiceTyping && !navigator.mediaDevices?.getUserMedia) || input.dataset.voiceTypingReady) return;
         input.dataset.voiceTypingReady = 'true';
 
         const wrapper = document.createElement('div');
@@ -11103,6 +11446,11 @@ document.addEventListener('DOMContentLoaded', () => {
             }
 
             stopVoiceTyping();
+            if (useLocalVoiceTyping) {
+                startLocalVoiceTyping(input, language, button);
+                return;
+            }
+
             const recognition = new VoiceRecognition();
             recognition.lang = language.value;
             recognition.continuous = true;
@@ -11115,15 +11463,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
                 if (!text) return;
 
-                const start = input.selectionStart == null ? input.value.length : input.selectionStart;
-                const end = input.selectionEnd == null ? input.value.length : input.selectionEnd;
-                const spacer = start > 0 && input.value[start - 1] && !/\s$/.test(input.value.slice(0, start)) ? ' ' : '';
-                input.value = input.value.slice(0, start) + spacer + text.trim() + input.value.slice(end);
-                const caret = start + spacer.length + text.trim().length;
-                input.setSelectionRange(caret, caret);
-                input.dispatchEvent(new Event('input', { bubbles: true }));
-                input.dispatchEvent(new Event('change', { bubbles: true }));
-                input.focus();
+                insertVoiceText(input, text);
             };
 
             recognition.onerror = (event) => {
@@ -11134,10 +11474,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
             recognition.onend = () => {
                 if (activeVoiceInput.recognition === recognition) {
-                    button.classList.remove('is-listening');
-                    button.innerHTML = '<i class="fa-solid fa-microphone"></i>';
-                    button.title = 'মাইক্রোফোন চাপুন, তারপর কথা বলুন';
-                    button.setAttribute('aria-label', 'Start voice typing');
+                    resetVoiceTypingButton(button);
                     activeVoiceInput.recognition = null;
                     activeVoiceInput.button = null;
                 }

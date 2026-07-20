@@ -328,10 +328,20 @@ document.addEventListener('DOMContentLoaded', () => {
             filename = `facebook-video-${timestamp}.mp4`;
         }
 
+        let customThumbnailData = null;
+        if (state.customThumbnailFile) {
+            customThumbnailData = await new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onload = () => resolve(reader.result);
+                reader.onerror = reject;
+                reader.readAsDataURL(state.customThumbnailFile);
+            });
+        }
         ws.send(JSON.stringify({
             type: 'init',
             totalFrames: grandTotalFrames,
-            filename: filename
+            filename: filename,
+            customThumbnailData
         }));
 
         await new Promise((resolve) => {
