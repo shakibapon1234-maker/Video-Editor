@@ -151,10 +151,17 @@ document.addEventListener('DOMContentLoaded', () => {
                     if (existing.type === 'video') {
                         restored.videoEl = existing.videoEl;
                     }
-                } else if (b.type === 'image' && b.imageUrl) {
+                } else if ((b.type === 'image' || b.type === 'gif') && b.imageUrl) {
                     const img = new Image();
                     img.onload = () => { restored.imageImg = img; if (window.drawEditorFrame) window.drawEditorFrame(); };
                     img.src = b.imageUrl;
+                    // Animated GIFs must stay in the DOM to keep decoding.
+                    if (b.type === 'gif') {
+                        const host = document.getElementById('gif-host');
+                        if (host) host.appendChild(img);
+                        if (window.ensureAnimatedGifPreview) window.ensureAnimatedGifPreview();
+                    }
+                    restored.imageImg = img;
                 } else if (b.type === 'video' && b.videoUrl) {
                     const vid = document.createElement('video');
                     vid.muted = true;

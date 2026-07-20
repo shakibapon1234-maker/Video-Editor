@@ -2,14 +2,42 @@
   "name": "studio-flow-video-editor",
   "version": "1.0.0",
   "description": "Studio Flow Video Editor with Server-Side Rendering support",
-  "main": "server.js",
+  "main": "main.js",
   "scripts": {
-    "start": "node server.js"
+    "start": "node server.js",
+    "electron": "set ELECTRON_RUN_AS_NODE=&& electron .",
+    "dist": "electron-builder"
   },
   "dependencies": {
     "express": "^4.19.2",
     "ws": "^8.16.0",
     "fluent-ffmpeg": "^2.1.2",
     "ffmpeg-static": "^5.2.0"
+  },
+  "devDependencies": {
+    "electron": "^31.0.0",
+    "electron-builder": "^24.13.3"
+  },
+  "build": {
+    "appId": "com.studioflow.videoeditor",
+    "productName": "Studio Flow Video Editor",
+    "asar": true,
+    "asarUnpack": [
+      "node_modules/ffmpeg-static/**"
+    ],
+    "files": [
+      "**/*",
+      "!temp_render/**",
+      "!temp_mute/**",
+      "!temp_addaudio/**",
+      "!exports/**"
+    ],
+    "win": {
+      "target": "nsis"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true
+    }
   }
 }

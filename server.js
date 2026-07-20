@@ -88,8 +88,9 @@ app.post('/api/tts-proxy', async (req, res) => {
 app.use(express.static(__dirname));
 
 // Ensure output and temp directories exist
-const OUTPUT_DIR = path.join(__dirname, 'exports');
-const TEMP_BASE_DIR = path.join(__dirname, 'temp_render');
+const DATA_DIR = process.env.SF_DATA_DIR || __dirname;
+const OUTPUT_DIR = path.join(DATA_DIR, 'exports');
+const TEMP_BASE_DIR = path.join(DATA_DIR, 'temp_render');
 
 if (!fs.existsSync(OUTPUT_DIR)) fs.mkdirSync(OUTPUT_DIR);
 if (!fs.existsSync(TEMP_BASE_DIR)) fs.mkdirSync(TEMP_BASE_DIR);
@@ -273,7 +274,7 @@ function compileVideo(ws, tempDir, filename, totalFrames) {
             console.error('FFmpeg compile error:', err);
             console.error('FFmpeg stderr:', stderr);
             try {
-                fs.writeFileSync(path.join(__dirname, 'ffmpeg_error.log'), `Error: ${err.message}\nStdout:\n${stdout}\nStderr:\n${stderr}`);
+                fs.writeFileSync(path.join(DATA_DIR, 'ffmpeg_error.log'), `Error: ${err.message}\nStdout:\n${stdout}\nStderr:\n${stderr}`);
             } catch (writeErr) {
                 console.error('Failed to write ffmpeg_error.log:', writeErr);
             }
@@ -288,7 +289,7 @@ function compileVideo(ws, tempDir, filename, totalFrames) {
 // remux (-c:v copy -an), not a re-encode -- we never touch the video pixels,
 // so it doesn't need the frame-by-frame WebSocket render pipeline the main
 // exporter uses. It's just a raw file upload -> ffmpeg -> download link.
-const MUTE_TEMP_DIR = path.join(__dirname, 'temp_mute');
+const MUTE_TEMP_DIR = path.join(DATA_DIR, 'temp_mute');
 if (!fs.existsSync(MUTE_TEMP_DIR)) fs.mkdirSync(MUTE_TEMP_DIR);
 
 app.post('/api/remove-audio', express.raw({ type: '*/*', limit: '2gb' }), (req, res) => {
@@ -351,7 +352,7 @@ app.post('/api/remove-audio', express.raw({ type: '*/*', limit: '2gb' }), (req, 
 //   3. POST /api/add-audio/upload-audio    -> raw audio bytes, saved to session dir
 //   4. POST /api/add-audio/compile         -> runs ffmpeg, returns download link
 // Kept as raw uploads (no multer) to match the rest of this file's style.
-const ADDAUDIO_TEMP_DIR = path.join(__dirname, 'temp_addaudio');
+const ADDAUDIO_TEMP_DIR = path.join(DATA_DIR, 'temp_addaudio');
 if (!fs.existsSync(ADDAUDIO_TEMP_DIR)) fs.mkdirSync(ADDAUDIO_TEMP_DIR);
 
 // In-memory session registry: sessionId -> { tempDir, videoPath, audioPath, videoOriginalName }
@@ -501,3 +502,5 @@ app.use('/exports', express.static(OUTPUT_DIR));
 server.listen(PORT, () => {
     console.log(`Studio Flow Video Editor is running on http://localhost:${PORT}`);
 });
+
+module.exports = { app, server, PORT };

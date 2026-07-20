@@ -2396,8 +2396,12 @@
                                     <i class="fa-solid fa-file-audio"></i>
                                     <span id="acrop-dropzone-label">Drag & Drop Audio here or Click to Select</span>
                                     <button class="btn btn-sm btn-outline" type="button">Select Audio</button>
+                                    <button id="acrop-remove-btn" class="btn btn-sm btn-outline" type="button" style="display: none; border-color: #f87171; color: #f87171;">
+                                        <i class="fa-solid fa-xmark"></i> Remove (সরান)
+                                    </button>
                                     <input type="file" id="acrop-file-input" accept="audio/*" style="display: none;">
                                 </div>
+                                <p class="help-text mt-1" id="acrop-remove-hint" style="display: none;">নতুন ফাইল আপলোড করলে আগেরটা এমনিতেই বদলে যাবে — অথবা উপরের <strong>Remove</strong> বাটনে চেপে পুরোপুরি খালি করে দিন (ক্রপ করা রেজাল্টসহ)।</p>
 
                                 <div id="acrop-editor-box" style="display: none;">
                                     <audio id="acrop-preview-player" controls style="width: 100%; margin-top: 14px;"></audio>
@@ -2442,6 +2446,9 @@
                                             <i class="fa-solid fa-file-audio"></i>
                                             <span id="acropadd-dropzone-label">Drag & Drop 2nd Audio here or Click to Select</span>
                                             <button class="btn btn-sm btn-outline" type="button">Select 2nd Audio</button>
+                                            <button id="acropadd-remove-btn" class="btn btn-sm btn-outline" type="button" style="display: none; border-color: #f87171; color: #f87171;">
+                                                <i class="fa-solid fa-xmark"></i> Remove (সরান)
+                                            </button>
                                             <input type="file" id="acropadd-file-input" accept="audio/*" style="display: none;">
                                         </div>
 
@@ -2505,6 +2512,9 @@
                                             <a id="acropadd-download-link" href="#" download="combined_audio.wav" class="btn btn-success btn-block mt-3">
                                                 <i class="fa-solid fa-download"></i> Download Audio
                                             </a>
+                                            <button id="acropadd-remove-result-btn" class="btn btn-sm btn-outline mt-2" type="button" style="border-color: #f87171; color: #f87171;">
+                                                <i class="fa-solid fa-xmark"></i> রেজাল্ট সরান (Remove Result)
+                                            </button>
                                         </div>
 
                                         <!-- Combine Error -->
@@ -2535,6 +2545,9 @@
                                     <a id="acrop-download-link" href="#" download="cropped_audio.wav" class="btn btn-success btn-block mt-3">
                                         <i class="fa-solid fa-download"></i> Download Audio
                                     </a>
+                                    <button id="acrop-remove-result-btn" class="btn btn-sm btn-outline mt-2" type="button" style="border-color: #f87171; color: #f87171;">
+                                        <i class="fa-solid fa-xmark"></i> রেজাল্ট সরান (Remove Result)
+                                    </button>
                                 </div>
                             </div>
                         </div>
@@ -2746,9 +2759,14 @@
     <video id="hidden-video" style="display: none;" crossOrigin="anonymous"></video>
 
     <!-- JS Scripts -->
+    <!-- Hidden host for animated GIF <img> elements. Browsers only keep a
+         GIF decoding/animating while the element is in the DOM, so we park
+         them here (off-screen) and draw the current frame to the canvas. -->
+    <div id="gif-host" style="position:fixed; left:0; top:0; width:1px; height:1px; overflow:hidden; opacity:0.01; pointer-events:none;"></div>
+
     <script src="audio.js?v=4"></script>
-    <script src="editor.js?v=4"></script>
+    <script src="editor.js?v=5"></script>
     <script src="exporter.js?v=4"></script>
-    <script src="phase9.js?v=1"></script>
+    <script src="phase9.js?v=2"></script>
 </body>
 </html>

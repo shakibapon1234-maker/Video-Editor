@@ -1510,6 +1510,33 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     window.redrawPausedFrame = redrawPausedFrame;
     window.redrawPausedFrameGlobal = redrawPausedFrame;
+
+    let gifPreviewRefreshActive = false;
+
+    function refreshAnimatedGifPreview() {
+        const hasVisibleGif = state.brollOverlays.some((item) => (
+            item.type === 'gif'
+            && item.imageImg
+            && state.currentTime >= item.startSec
+            && state.currentTime <= item.endSec
+        ));
+
+        if (!hasVisibleGif || state.isPlaying) {
+            gifPreviewRefreshActive = false;
+            return;
+        }
+
+        drawFrame();
+        requestAnimationFrame(refreshAnimatedGifPreview);
+    }
+
+    function ensureAnimatedGifPreview() {
+        if (gifPreviewRefreshActive || state.isPlaying) return;
+        gifPreviewRefreshActive = true;
+        requestAnimationFrame(refreshAnimatedGifPreview);
+    }
+
+    window.ensureAnimatedGifPreview = ensureAnimatedGifPreview;
     
     // Redraw canvas whenever the video's current frame changes while paused (e.g. after seek)
     state.video.addEventListener('seeked', () => {
@@ -7412,9 +7439,18 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function loadBrollImage(file) {
         console.log("Loading B-roll image file:", file.name, "type:", file.type, "size:", file.size);
+        const isGif = (file.type === 'image/gif') || /\.gif$/i.test(file.name || '');
         const img = new Image();
         const url = URL.createObjectURL(file);
-        
+
+        // Animated GIFs only keep decoding while their <img> element is in the
+        // DOM. We host it in the hidden #gif-host so drawImage() keeps pulling
+        // the current animation frame onto the canvas.
+        if (isGif) {
+            const host = document.getElementById('gif-host');
+            if (host) host.appendChild(img);
+        }
+
         img.onload = () => {
             console.log("B-roll image loaded successfully. Dimensions:", img.naturalWidth, "x", img.naturalHeight);
             if (img.naturalWidth === 0 || img.naturalHeight === 0) {
@@ -7424,7 +7460,7 @@ document.addEventListener('DOMContentLoaded', () => {
             }
             const newItem = {
                 id: brollIdCounter++,
-                type: 'image',
+                type: isGif ? 'gif' : 'image',
                 imageImg: img,
                 imageUrl: url,
                 originalImageUrl: url,
@@ -7463,6 +7499,7 @@ document.addEventListener('DOMContentLoaded', () => {
             renderBrollList();
             showBrollTimingFor(newItem.id);
             drawFrame();
+            if (isGif) ensureAnimatedGifPreview();
             if (window.recordEditorHistory) {
                 window.recordEditorHistory('B-roll image added');
             }
@@ -7471,7 +7508,7 @@ document.addEventListener('DOMContentLoaded', () => {
         
         img.onerror = (err) => {
             console.error("Failed to load B-roll image:", err);
-            alert("ত্রুটি: ছবিটি লোড করা যায়নি। অনুগ্রহ করে নিশ্চিত করুন যে এটি একটি সঠিক ইমেজ ফাইল (যেমন PNG, JPG, বা WEBP)।");
+            alert("ত্রুটি: ছবিটি লোড করা যায়নি। অনুগ্রহ করে নিশ্চিত করুন যে এটি একটি সঠিক ইমেজ ফাইল (যেমন PNG, JPG, WEBP, বা GIF)।");
             if (brollInput) brollInput.value = '';
         };
         
@@ -8215,6 +8252,10 @@ document.addEventListener('DOMContentLoaded', () => {
                     removed.videoEl.src = '';
                     removed.videoEl.remove();
                 }
+            }
+            if (removed && removed.type === 'gif' && removed.imageImg) {
+                // Remove the hosted <img> so the GIF stops decoding.
+                if (removed.imageImg.parentNode) removed.imageImg.parentNode.removeChild(removed.imageImg);
             }
             state.brollOverlays = state.brollOverlays.filter(b => b.id !== state.selectedBrollId);
             state.selectedBrollId = null;
@@ -9511,7 +9552,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 delete brollCopy.imageImg;
                 delete brollCopy.file;
 
-                if (broll.type === 'image') {
+                if (broll.type === 'image' || broll.type === 'gif') {
                     if (broll.imageUrl && broll.imageUrl.startsWith('data:image/')) {
                         brollCopy.imageBase64 = broll.imageUrl;
                     } else if (broll.file) {
@@ -9779,13 +9820,18 @@ document.addEventListener('DOMContentLoaded', () => {
             // Restore B-roll images
             for (let i = 0; i < data.brollOverlays.length; i++) {
                 const broll = data.brollOverlays[i];
-                if (broll.type === 'image' && broll.imageBase64) {
+                if ((broll.type === 'image' || broll.type === 'gif') && broll.imageBase64) {
                     const bBlob = dataURLtoBlob(broll.imageBase64);
                     broll.file = new File([bBlob], broll.name || 'broll_image.png', { type: bBlob.type });
                     broll.imageUrl = URL.createObjectURL(broll.file);
                     broll.imageImg = new Image();
                     broll.imageImg.src = broll.imageUrl;
                     await new Promise(r => broll.imageImg.onload = r);
+                    if (broll.type === 'gif') {
+                        const host = document.getElementById('gif-host');
+                        if (host) host.appendChild(broll.imageImg);
+                        ensureAnimatedGifPreview();
+                    }
                     await storeFileInDB(`broll_${broll.id}`, broll.file);
                 }
             }
@@ -10019,7 +10065,7 @@ document.addEventListener('DOMContentLoaded', () => {
             });
 
             state.brollOverlays.forEach(b => {
-                if (b.type === 'image' && b.file) {
+                if ((b.type === 'image' || b.type === 'gif') && b.file) {
                     store.put(b.file, `broll_${b.id}`);
                 }
             });
@@ -10172,7 +10218,7 @@ document.addEventListener('DOMContentLoaded', () => {
             // B-roll images
             for (let i = 0; i < savedData.brollOverlays.length; i++) {
                 const broll = savedData.brollOverlays[i];
-                if (broll.type === 'image') {
+                if (broll.type === 'image' || broll.type === 'gif') {
                     const file = await getFileFromDB(`broll_${broll.id}`);
                     if (file) {
                         broll.file = file;
@@ -10180,6 +10226,11 @@ document.addEventListener('DOMContentLoaded', () => {
                         broll.imageImg = new Image();
                         broll.imageImg.src = broll.imageUrl;
                         await new Promise(r => broll.imageImg.onload = r);
+                        if (broll.type === 'gif') {
+                            const host = document.getElementById('gif-host');
+                            if (host) host.appendChild(broll.imageImg);
+                            ensureAnimatedGifPreview();
+                        }
                     }
                 }
             }

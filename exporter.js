@@ -1409,6 +1409,9 @@ document.addEventListener('DOMContentLoaded', () => {
     const acropDropzone = document.getElementById('acrop-dropzone');
     const acropFileInput = document.getElementById('acrop-file-input');
     const acropDropzoneLabel = document.getElementById('acrop-dropzone-label');
+    const acropRemoveBtn = document.getElementById('acrop-remove-btn');
+    const acropRemoveHint = document.getElementById('acrop-remove-hint');
+    const acropRemoveResultBtn = document.getElementById('acrop-remove-result-btn');
     const acropEditorBox = document.getElementById('acrop-editor-box');
     const acropPreviewPlayer = document.getElementById('acrop-preview-player');
     const acropStartSlider = document.getElementById('acrop-start');
@@ -1481,6 +1484,8 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         acropSelectedFile = file;
         if (acropDropzoneLabel) acropDropzoneLabel.innerText = file.name;
+        if (acropRemoveBtn) acropRemoveBtn.style.display = 'inline-flex';
+        if (acropRemoveHint) acropRemoveHint.style.display = 'block';
         if (acropObjectURL) URL.revokeObjectURL(acropObjectURL);
         acropObjectURL = URL.createObjectURL(file);
         acropPreviewPlayer.src = acropObjectURL;
@@ -1509,6 +1514,41 @@ document.addEventListener('DOMContentLoaded', () => {
             }
             acropSetupSliders();
         };
+    }
+
+    // Fully clears the primary audio (and, since Add Audio depends on it,
+    // whatever second file/result was staged there too) back to the empty
+    // dropzone state — for when the person wants to discard everything and
+    // start over without reloading the page.
+    function resetAcropAll() {
+        acropSelectedFile = null;
+        acropDuration = 0;
+        if (acropObjectURL) { URL.revokeObjectURL(acropObjectURL); acropObjectURL = null; }
+        if (acropLastDownloadURL) { URL.revokeObjectURL(acropLastDownloadURL); acropLastDownloadURL = null; }
+        if (acropPreviewPlayer) { acropPreviewPlayer.pause(); acropPreviewPlayer.src = ''; }
+        if (acropDropzoneLabel) acropDropzoneLabel.innerText = 'Drag & Drop Audio here or Click to Select';
+        if (acropRemoveBtn) acropRemoveBtn.style.display = 'none';
+        if (acropRemoveHint) acropRemoveHint.style.display = 'none';
+        if (acropEditorBox) acropEditorBox.style.display = 'none';
+        if (acropProgressBox) acropProgressBox.style.display = 'none';
+        if (acropSuccessBox) acropSuccessBox.style.display = 'none';
+        // The 2nd-audio (Add Audio) section only makes sense with a primary
+        // file loaded, so clear it too.
+        if (typeof resetAcropaddAll === 'function') resetAcropaddAll();
+    }
+
+    if (acropRemoveBtn) {
+        acropRemoveBtn.addEventListener('click', (e) => {
+            e.stopPropagation(); // don't let the click bubble to the dropzone and reopen the file picker
+            resetAcropAll();
+        });
+    }
+
+    if (acropRemoveResultBtn) {
+        acropRemoveResultBtn.addEventListener('click', () => {
+            if (acropLastDownloadURL) { URL.revokeObjectURL(acropLastDownloadURL); acropLastDownloadURL = null; }
+            if (acropSuccessBox) acropSuccessBox.style.display = 'none';
+        });
     }
 
     function acropSetupSliders() {
@@ -1720,6 +1760,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const acropaddDropzone = document.getElementById('acropadd-dropzone');
     const acropaddFileInput = document.getElementById('acropadd-file-input');
     const acropaddDropzoneLabel = document.getElementById('acropadd-dropzone-label');
+    const acropaddRemoveBtn = document.getElementById('acropadd-remove-btn');
+    const acropaddRemoveResultBtn = document.getElementById('acropadd-remove-result-btn');
     const acropaddOptionsBox = document.getElementById('acropadd-options-box');
     const acropaddModeSelect = document.getElementById('acropadd-mode-select');
     const acropaddOrderBox = document.getElementById('acropadd-order-box');
@@ -1774,9 +1816,38 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         acropaddSelectedFile = file;
         if (acropaddDropzoneLabel) acropaddDropzoneLabel.innerText = file.name;
+        if (acropaddRemoveBtn) acropaddRemoveBtn.style.display = 'inline-flex';
         if (acropaddSuccessBox) acropaddSuccessBox.style.display = 'none';
         if (acropaddErrorBox) acropaddErrorBox.style.display = 'none';
         if (acropaddOptionsBox) acropaddOptionsBox.style.display = 'block';
+    }
+
+    // Clears just the 2nd-audio side of the Add Audio section (the primary
+    // file loaded above stays untouched). Also called by resetAcropAll()
+    // above when the primary file itself is removed.
+    function resetAcropaddAll() {
+        acropaddSelectedFile = null;
+        if (acropaddLastDownloadURL) { URL.revokeObjectURL(acropaddLastDownloadURL); acropaddLastDownloadURL = null; }
+        if (acropaddDropzoneLabel) acropaddDropzoneLabel.innerText = 'Drag & Drop 2nd Audio here or Click to Select';
+        if (acropaddRemoveBtn) acropaddRemoveBtn.style.display = 'none';
+        if (acropaddOptionsBox) acropaddOptionsBox.style.display = 'none';
+        if (acropaddProgressBox) acropaddProgressBox.style.display = 'none';
+        if (acropaddSuccessBox) acropaddSuccessBox.style.display = 'none';
+        if (acropaddErrorBox) acropaddErrorBox.style.display = 'none';
+    }
+
+    if (acropaddRemoveBtn) {
+        acropaddRemoveBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            resetAcropaddAll();
+        });
+    }
+
+    if (acropaddRemoveResultBtn) {
+        acropaddRemoveResultBtn.addEventListener('click', () => {
+            if (acropaddLastDownloadURL) { URL.revokeObjectURL(acropaddLastDownloadURL); acropaddLastDownloadURL = null; }
+            if (acropaddSuccessBox) acropaddSuccessBox.style.display = 'none';
+        });
     }
 
     if (acropaddModeSelect) {
