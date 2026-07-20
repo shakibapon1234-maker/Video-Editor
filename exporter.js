@@ -168,6 +168,23 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
 
+        // Stop the live preview loop before export begins. Export drives its
+        // own frame-by-frame mutation of state.activeClipId/state.clips/video.src,
+        // and at each await boundary the browser can still run a queued
+        // requestAnimationFrame callback. If updateLoop() (the preview playback
+        // loop) is still ticking because the video was mid-playback when Render
+        // was clicked, it reads/writes that same shared state concurrently with
+        // the export loop, which can leave state.activeClipId pointing at a clip
+        // that momentarily isn't in state.clips -- producing an undefined
+        // activeClip in drawFrame() and crashing deeper in the transform code.
+        if (window.pauseVideoForExport) {
+            window.pauseVideoForExport();
+        } else if (state.isPlaying) {
+            state.isPlaying = false;
+            state.video.pause();
+            if (window.playPauseBtn) window.playPauseBtn.innerHTML = '<i class="fa-solid fa-play"></i>';
+        }
+
         // Show progress box
         exportCancelled = false;
         exportStartTimestamp = performance.now();

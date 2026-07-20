@@ -644,11 +644,27 @@ document.addEventListener('DOMContentLoaded', () => {
             const targetBtn = e.currentTarget;
             targetBtn.classList.add('active');
             state.aspectRatio = targetBtn.dataset.ratio;
+
+            // Switching to a fixed aspect ratio (anything other than "original")
+            // almost always means the current crop no longer matches the target
+            // canvas shape exactly. In "Fit" mode that mismatch renders as black
+            // letterbox/pillarbox bars around the video. Default to "Fill" here,
+            // the same way Platform Presets already do (see applyPlatformPreset
+            // above), so the frame is always covered edge-to-edge. The user can
+            // still switch back to "Fit" manually via the Layout Mode toggle if
+            // they want bars intentionally.
+            state.layoutMode = (state.aspectRatio === 'original') ? state.layoutMode : 'fill';
+            const layoutBtns = document.querySelectorAll('.layout-mode-btn');
+            layoutBtns.forEach(b => {
+                b.classList.toggle('active', b.dataset.mode === state.layoutMode);
+            });
+
             updateCanvasDimensions();
             drawFrame();
             if (window.captureUndoCheckpoint) window.captureUndoCheckpoint();
             if (window.recordEditorHistory) {
-                window.recordEditorHistory('Format changed');
+                const ratioLabel = (targetBtn.textContent || '').trim() || state.aspectRatio;
+                window.recordEditorHistory('Format changed to ' + ratioLabel);
             }
         });
     });
@@ -757,7 +773,7 @@ document.addEventListener('DOMContentLoaded', () => {
         triggerAutoSave();
         if (window.captureUndoCheckpoint) window.captureUndoCheckpoint();
         if (window.recordEditorHistory) {
-            window.recordEditorHistory('Platform preset changed');
+            window.recordEditorHistory('Platform preset changed to ' + preset.name);
         }
     }
 
@@ -1066,11 +1082,28 @@ document.addEventListener('DOMContentLoaded', () => {
             drawFrame();
             if (window.captureUndoCheckpoint) window.captureUndoCheckpoint();
             if (window.recordEditorHistory) {
-                window.recordEditorHistory('Layout mode changed');
+                const modeLabel = state.layoutMode === 'fill' ? 'Fill' : 'Fit';
+                window.recordEditorHistory('Layout mode changed to ' + modeLabel);
             }
         });
     });
     
+    // Returns the numeric width/height ratio that the crop box should be locked
+    // to while drawing/resizing, based on the currently selected export Aspect
+    // Ratio preset. Returns null for 'original', meaning the crop is freeform.
+    // Without this, a freeform crop that doesn't exactly match the export
+    // preset's ratio gets letterboxed (black bars) at render time, because
+    // drawFrame() has to "Fit" the mismatched shape inside the export canvas.
+    function getCropLockAspectRatio() {
+        switch (state.aspectRatio) {
+            case '1-1': return 1;
+            case '4-5': return 4 / 5;
+            case '9-16': return 9 / 16;
+            case '16-9': return 16 / 9;
+            default: return null;
+        }
+    }
+
     function updateCanvasDimensions() {
         if (!state.duration) return;
         
@@ -5753,10 +5786,32 @@ document.addEventListener('DOMContentLoaded', () => {
                     y2 = clientY;
                 }
                 
-                const newPixelX = Math.min(x1, x2);
-                const newPixelY = Math.min(y1, y2);
-                const newPixelW = Math.abs(x2 - x1);
-                const newPixelH = Math.abs(y2 - y1);
+                let newPixelX = Math.min(x1, x2);
+                let newPixelY = Math.min(y1, y2);
+                let newPixelW = Math.abs(x2 - x1);
+                let newPixelH = Math.abs(y2 - y1);
+                
+                const resizeLockRatio = getCropLockAspectRatio();
+                if (resizeLockRatio) {
+                    // Anchor is the corner opposite the handle being dragged.
+                    const anchorX = (state.cropResizeHandle === 'top-left' || state.cropResizeHandle === 'bottom-left') ? x2 : x1;
+                    const anchorY = (state.cropResizeHandle === 'top-left' || state.cropResizeHandle === 'top-right') ? y2 : y1;
+                    const dirX = (clientX >= anchorX) ? 1 : -1;
+                    const dirY = (clientY >= anchorY) ? 1 : -1;
+                    if (newPixelW / newPixelH > resizeLockRatio) {
+                        newPixelH = newPixelW / resizeLockRatio;
+                    } else {
+                        newPixelW = newPixelH * resizeLockRatio;
+                    }
+                    newPixelW = (dirX === 1) ? Math.min(newPixelW, drawX + drawW - anchorX)
+                                              : Math.min(newPixelW, anchorX - drawX);
+                    newPixelH = newPixelW / resizeLockRatio;
+                    newPixelH = (dirY === 1) ? Math.min(newPixelH, drawY + drawH - anchorY)
+                                              : Math.min(newPixelH, anchorY - drawY);
+                    newPixelW = newPixelH * resizeLockRatio;
+                    newPixelX = (dirX === 1) ? anchorX : anchorX - newPixelW;
+                    newPixelY = (dirY === 1) ? anchorY : anchorY - newPixelH;
+                }
                 
                 state.cropX = (newPixelX - drawX) / drawW;
                 state.cropY = (newPixelY - drawY) / drawH;
@@ -5781,10 +5836,31 @@ document.addEventListener('DOMContentLoaded', () => {
                 const clientX = Math.max(drawX, Math.min(drawX + drawW, coords.x));
                 const clientY = Math.max(drawY, Math.min(drawY + drawH, coords.y));
                 
-                const x1 = Math.min(state.cropStartCanvasX, clientX);
-                const y1 = Math.min(state.cropStartCanvasY, clientY);
-                const w = Math.abs(clientX - state.cropStartCanvasX);
-                const h = Math.abs(clientY - state.cropStartCanvasY);
+                let x1 = Math.min(state.cropStartCanvasX, clientX);
+                let y1 = Math.min(state.cropStartCanvasY, clientY);
+                let w = Math.abs(clientX - state.cropStartCanvasX);
+                let h = Math.abs(clientY - state.cropStartCanvasY);
+                
+                const lockRatio = getCropLockAspectRatio();
+                if (lockRatio) {
+                    const dirX = (clientX >= state.cropStartCanvasX) ? 1 : -1;
+                    const dirY = (clientY >= state.cropStartCanvasY) ? 1 : -1;
+                    if (w / h > lockRatio) {
+                        h = w / lockRatio;
+                    } else {
+                        w = h * lockRatio;
+                    }
+                    // Clamp to the visible video area, then re-derive the other
+                    // side so the locked ratio still holds after clamping.
+                    w = (dirX === 1) ? Math.min(w, drawX + drawW - state.cropStartCanvasX)
+                                      : Math.min(w, state.cropStartCanvasX - drawX);
+                    h = w / lockRatio;
+                    h = (dirY === 1) ? Math.min(h, drawY + drawH - state.cropStartCanvasY)
+                                      : Math.min(h, state.cropStartCanvasY - drawY);
+                    w = h * lockRatio;
+                    x1 = (dirX === 1) ? state.cropStartCanvasX : state.cropStartCanvasX - w;
+                    y1 = (dirY === 1) ? state.cropStartCanvasY : state.cropStartCanvasY - h;
+                }
                 
                 state.cropX = (x1 - drawX) / drawW;
                 state.cropY = (y1 - drawY) / drawH;
@@ -9027,6 +9103,11 @@ document.addEventListener('DOMContentLoaded', () => {
     
     // Export standard frame drawing
     window.drawEditorFrame = drawFrame;
+    // Exposed so exporter.js can stop the live preview loop before export
+    // starts, instead of letting requestAnimationFrame's updateLoop() keep
+    // mutating shared editor state (activeClipId/clips/currentTime) at the
+    // same time the export pipeline is driving those same fields.
+    window.pauseVideoForExport = pauseVideo;
     // Export intro/outro segment drawing so exporter.js can render it straight
     // onto the same canvas/stream MediaRecorder is capturing (Phase 5C)
     window.drawIntroOutroSegment = drawIntroOutroSegment;

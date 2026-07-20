@@ -357,7 +357,8 @@ document.addEventListener('DOMContentLoaded', () => {
             li.style.marginBottom = '4px';
             li.style.borderRadius = '6px';
             li.style.cursor = 'pointer';
-            li.style.background = 'rgba(255,255,255,0.04)';
+            li.style.background = 'var(--bg-surface-elevated, #273449)';
+            li.style.position = 'relative';
             li.title = 'Jump back to this point (undo ' + (i + 1) + ' step(s))';
             li.addEventListener('click', () => {
                 for (let j = 0; j <= i; j++) undoEditor();
@@ -621,6 +622,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // --- Static Zoom/Position and Ken Burns combined helper ---
     function applyStaticAndDynamicTransform(baseDrawX, baseDrawY, baseDrawW, baseDrawH, clip, effectiveTime) {
+        // clip can be undefined for a stray frame if state.activeClipId momentarily
+        // doesn't match anything in state.clips (e.g. a race with the preview loop
+        // during export). Fall back to the un-transformed rect instead of crashing.
+        if (!clip) return { drawX: baseDrawX, drawY: baseDrawY, drawW: baseDrawW, drawH: baseDrawH };
         ensureClipDefaults(clip);
         let drawX = baseDrawX, drawY = baseDrawY, drawW = baseDrawW, drawH = baseDrawH;
 
@@ -1018,7 +1023,7 @@ document.addEventListener('DOMContentLoaded', () => {
             'subtitle-enabled-toggle': 'Subtitle toggled',
             'intro-enabled-toggle': 'Intro toggled',
             'outro-enabled-toggle': 'Outro toggled',
-            
+
             // Sliders
             'video-volume-slider': 'Video volume changed',
             'video-volume-slider-step2': 'Video volume changed',
@@ -1026,12 +1031,38 @@ document.addEventListener('DOMContentLoaded', () => {
             'logo-opacity-slider': 'Logo opacity changed',
             'brightness-slider': 'Brightness changed',
             'contrast-slider': 'Contrast changed',
-            'saturation-slider': 'Saturation changed'
+            'saturation-slider': 'Saturation changed',
+
+            // Toggle switches (previously fell through to the generic
+            // 'Change' label because their <label> wrapper has no text,
+            // just the visual slider — that's why the history list showed
+            // duplicate unlabeled "Change" rows).
+            'crop-tool-toggle': 'Crop tool toggled',
+            'preview-transitions-toggle': 'Preview transitions toggled',
+            'blur-tool-toggle': 'Blur tool toggled',
+            'ticker-enable-toggle': 'News ticker toggled',
+            'highlight-tool-toggle': 'Highlight tool toggled',
+            'fill-tool-toggle': 'Background fill tool toggled',
+            'broll-text-bg-enabled': 'B-roll text background toggled',
+            'broll-text-highlight-enabled': 'B-roll text highlight toggled',
+            'broll-transparent-bg': 'B-roll transparent background toggled',
+            'broll-edit-text-bg-enabled': 'B-roll text background toggled',
+            'broll-edit-text-highlight-enabled': 'B-roll text highlight toggled',
+            'noise-cancel-toggle': 'Noise cancellation toggled',
+            'ai-denoise-toggle': 'AI denoise toggled',
+            'bgmusic-ducking-toggle': 'Music ducking toggled',
+            'voice-changer-apply-video-toggle': 'Voice changer apply-to-video toggled',
+            'subtitle-highlight-toggle': 'Subtitle word highlight toggled',
+            'subtitle-bgpill-toggle': 'Subtitle background pill toggled',
+            'addaudio-shortest-toggle': 'Match shortest track toggled'
         };
         if (labelMap[id]) return labelMap[id];
         const lbl = el.closest('label');
-        if (lbl && lbl.textContent) return lbl.textContent.trim().slice(0, 40);
-        return 'Change';
+        if (lbl && lbl.textContent && lbl.textContent.trim()) return lbl.textContent.trim().slice(0, 40);
+        // Last-resort fallback: never show a bare, indistinguishable "Change".
+        // Include the element's id (or type) so different unmapped controls
+        // are still told apart in the history list.
+        return id ? ('Setting changed (' + id + ')') : ((el.type || el.tagName || 'Setting') + ' changed');
     }
 
     document.addEventListener('change', (e) => {
