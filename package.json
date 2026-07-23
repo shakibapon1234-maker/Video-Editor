@@ -6,9 +6,17 @@
   "scripts": {
     "start": "node server.js",
     "electron": "set ELECTRON_RUN_AS_NODE=&& electron .",
-    "dist": "electron-builder"
+    "dist": "electron-builder",
+    "postinstall": "node copy-wasm.js"
   },
   "dependencies": {
+    "@capacitor/android": "^7.0.0",
+    "@capacitor/core": "^7.0.0",
+    "@capacitor/filesystem": "^7.0.0",
+    "@capacitor/share": "^7.0.0",
+    "@ffmpeg/core": "0.12.10",
+    "@ffmpeg/ffmpeg": "0.12.15",
+    "@ffmpeg/util": "0.12.2",
     "@huggingface/transformers": "^4.2.0",
     "express": "^4.19.2",
     "ffmpeg-static": "^5.2.0",
@@ -16,6 +24,7 @@
     "ws": "^8.16.0"
   },
   "devDependencies": {
+    "@capacitor/cli": "^7.0.0",
     "electron": "^31.0.0",
     "electron-builder": "^24.13.3"
   },

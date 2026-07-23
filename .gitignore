@@ -1,3 +1,8 @@
 node_modules/
 temp_render/
 exports/
+www/
+apk-out/
+temp_addaudio/
+temp_mute/
+temp_whisper/

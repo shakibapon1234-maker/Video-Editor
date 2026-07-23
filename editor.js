@@ -371,6 +371,12 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         }
         
+        // Update sidebar step attribute for mobile pseudo-elements
+        const sidebar = document.querySelector('.sidebar');
+        if (sidebar) {
+            sidebar.setAttribute('data-current-step', state.currentStep);
+        }
+        
         // Update Title & Subtitle
         const titles = {
             1: ["Media Import", "Start by uploading your video/photo clips and branding logo"],
@@ -420,6 +426,13 @@ document.addEventListener('DOMContentLoaded', () => {
     
     // --- Video Source Loading ---
     // --- Video/Image Source Loading ---
+    function isCapacitorApp() {
+        return typeof window !== 'undefined' &&
+            window.Capacitor &&
+            window.Capacitor.isNativePlatform &&
+            window.Capacitor.isNativePlatform();
+    }
+
     function handleVideoFile(file) {
         if (!file) return;
         
@@ -427,9 +440,10 @@ document.addEventListener('DOMContentLoaded', () => {
         const originalText = videoDropzone.querySelector('h3').innerText;
         videoDropzone.querySelector('h3').innerText = "Loading File...";
         
-        const fileURL = URL.createObjectURL(file);
+        const isCapacitor = isCapacitorApp();
         
         if (file.type.startsWith('image/')) {
+            const fileURL = URL.createObjectURL(file);
             const img = new Image();
             img.onload = () => {
                 state.duration = 5.0;
@@ -494,68 +508,99 @@ document.addEventListener('DOMContentLoaded', () => {
             };
             img.src = fileURL;
         } else {
-            state.video.src = fileURL;
-            state.video.load();
-            
-            state.video.onloadedmetadata = () => {
-                state.duration = state.video.duration;
-                state.startTime = 0;
-                state.endTime = state.duration;
-
-                const firstClip = {
-                    id: Date.now(),
-                    file: file,
-                    url: fileURL,
-                    name: file.name,
-                    duration: state.duration,
-                    start: 0,
-                    end: state.duration,
-                    cropX: 0,
-                    cropY: 0,
-                    cropW: 1,
-                    cropH: 1
-                };
-                state.clips = [firstClip];
-                state.activeClipId = firstClip.id;
-                if (window.renderClipTimeline) window.renderClipTimeline();
-                
-                state.cropX = 0;
-                state.cropY = 0;
-                state.cropW = 1;
-                state.cropH = 1;
-                state.isAdjustingCrop = false;
-                if (cropToolToggle) cropToolToggle.checked = false;
-                if (cropActionsContainer) cropActionsContainer.style.display = 'none';
-                
-                trimStart.max = state.duration;
-                trimStart.value = 0;
-                trimEnd.max = state.duration;
-                trimEnd.value = state.duration;
-                
-                startVal.value = formatTime(0);
-                endVal.value = formatTime(state.duration);
-                
-                updateCanvasDimensions();
-                
-                document.getElementById('timeline-controls').style.display = 'flex';
-                document.querySelector('.canvas-overlay-controls').style.display = 'block';
-                videoDropzone.style.display = 'none';
-                
-                document.getElementById('selected-video-name').innerText = file.name;
-                nextBtn.disabled = false;
-                updateNavigation();
-                
-                if (window.initializeAudioSource) {
-                    window.initializeAudioSource();
-                }
-                
-                state.currentTime = 0;
-                updatePlayhead();
-                drawFrame();
-                if (window.recordEditorHistory) {
-                    window.recordEditorHistory('Video added');
-                }
+            // Error handling for native WebView media player failure
+            state.video.onerror = (err) => {
+                console.error("Video load error: ", err);
+                const code = state.video.error ? state.video.error.code : 'unknown';
+                const msg = state.video.error ? state.video.error.message : '';
+                videoDropzone.querySelector('h3').innerText = originalText;
+                alert(`ভিডিও লোড হতে পারেনি (Error Code: ${code}, Message: ${msg})। অনুগ্রহ করে MP4 ফরম্যাটের ফাইল ব্যবহার করুন।`);
             };
+
+            const setupVideoAndMetadata = (urlToLoad) => {
+                state.video.src = urlToLoad;
+                state.video.load();
+                
+                state.video.onloadedmetadata = () => {
+                    // Clear error handler
+                    state.video.onerror = null;
+                    state.duration = state.video.duration;
+                    state.startTime = 0;
+                    state.endTime = state.duration;
+
+                    const firstClip = {
+                        id: Date.now(),
+                        file: file,
+                        url: urlToLoad,
+                        name: file.name,
+                        duration: state.duration,
+                        start: 0,
+                        end: state.duration,
+                        cropX: 0,
+                        cropY: 0,
+                        cropW: 1,
+                        cropH: 1
+                    };
+                    state.clips = [firstClip];
+                    state.activeClipId = firstClip.id;
+                    if (window.renderClipTimeline) window.renderClipTimeline();
+                    
+                    state.cropX = 0;
+                    state.cropY = 0;
+                    state.cropW = 1;
+                    state.cropH = 1;
+                    state.isAdjustingCrop = false;
+                    if (cropToolToggle) cropToolToggle.checked = false;
+                    if (cropActionsContainer) cropActionsContainer.style.display = 'none';
+                    
+                    trimStart.max = state.duration;
+                    trimStart.value = 0;
+                    trimEnd.max = state.duration;
+                    trimEnd.value = state.duration;
+                    
+                    startVal.value = formatTime(0);
+                    endVal.value = formatTime(state.duration);
+                    
+                    updateCanvasDimensions();
+                    
+                    document.getElementById('timeline-controls').style.display = 'flex';
+                    document.querySelector('.canvas-overlay-controls').style.display = 'block';
+                    videoDropzone.style.display = 'none';
+                    
+                    document.getElementById('selected-video-name').innerText = file.name;
+                    nextBtn.disabled = false;
+                    updateNavigation();
+                    
+                    if (window.initializeAudioSource) {
+                        window.initializeAudioSource();
+                    }
+                    
+                    state.currentTime = 0;
+                    updatePlayhead();
+                    drawFrame();
+                    if (window.recordEditorHistory) {
+                        window.recordEditorHistory('Video added');
+                    }
+                };
+            };
+
+            if (isCapacitor) {
+                // Use Base64 Data URL to bypass WebView blob restrictions for video tags
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    setupVideoAndMetadata(e.target.result);
+                };
+                reader.onerror = (err) => {
+                    console.error("FileReader error: ", err);
+                    videoDropzone.querySelector('h3').innerText = originalText;
+                    alert("ফাইলটি পড়তে সমস্যা হয়েছে।");
+                };
+                reader.readAsDataURL(file);
+            } else {
+                // PC: Use efficient object URL
+                const fileURL = URL.createObjectURL(file);
+                setupVideoAndMetadata(fileURL);
+            }
         }
     }
     

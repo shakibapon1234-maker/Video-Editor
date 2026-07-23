@@ -275,21 +275,225 @@ document.addEventListener('DOMContentLoaded', () => {
         const originalCropY = state.cropY;
         const originalCropW = state.cropW;
         const originalCropH = state.cropH;
-        // Establish WebSocket connection to the local render server
-        renderStatusText.innerText = 'সার্ভারের সাথে কানেক্ট করা হচ্ছে... (Connecting to render server...)';
-        setProgress(2);
+    function isCapacitorApp() {
+        return typeof window !== 'undefined' &&
+            window.Capacitor &&
+            window.Capacitor.isNativePlatform &&
+            window.Capacitor.isNativePlatform();
+    }
 
-        const wsUrl = `ws://${window.location.hostname || 'localhost'}:4000`;
-        const ws = new WebSocket(wsUrl);
+    function blobToBase64(blob) {
+        return new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onloadend = () => {
+                const result = reader.result || '';
+                resolve(result.split(',')[1] || '');
+            };
+            reader.onerror = reject;
+            reader.readAsDataURL(blob);
+        });
+    }
 
-        try {
-            await new Promise((resolve, reject) => {
-                ws.onopen = resolve;
-                ws.onerror = () => reject(new Error('Render server connection failed. Please run start-video-editor.bat.'));
-            });
-        } catch (err) {
-            throw err;
+    async function saveVideo(compileOutput, filename) {
+        if (isCapacitorApp()) {
+            try {
+                const cap = window.Capacitor;
+                const Filesystem = cap.Plugins && cap.Plugins.Filesystem;
+                if (!Filesystem) throw new Error('Filesystem plugin not available');
+                
+                let videoBlob;
+                if (compileOutput instanceof Blob) {
+                    videoBlob = compileOutput;
+                } else {
+                    const response = await fetch(compileOutput.downloadUrl);
+                    videoBlob = await response.blob();
+                }
+
+                const base64 = await blobToBase64(videoBlob);
+                await Filesystem.writeFile({
+                    path: filename,
+                    data: base64,
+                    directory: 'DOCUMENTS',
+                    recursive: true,
+                });
+                
+                try {
+                    const Share = cap.Plugins && cap.Plugins.Share;
+                    if (Share) {
+                        const uriResult = await Filesystem.getUri({
+                            path: filename,
+                            directory: 'DOCUMENTS',
+                        });
+                        await Share.share({
+                            title: 'Your exported video',
+                            text: 'Video exported from Video Editor',
+                            url: uriResult.uri,
+                            dialogTitle: 'Share or save your video',
+                        });
+                    }
+                } catch (shareErr) {
+                    console.warn('Share skipped:', shareErr);
+                }
+                return true;
+            } catch (err) {
+                console.error('Capacitor save failed, falling back to download:', err);
+            }
         }
+
+        if (compileOutput instanceof Blob) {
+            const url = URL.createObjectURL(compileOutput);
+            downloadLink.href = url;
+        } else {
+            downloadLink.href = compileOutput.downloadUrl;
+        }
+        downloadLink.download = filename;
+        downloadLink.click();
+        return false;
+    }
+
+
+
+        const renderTarget = {
+            type: 'ws',
+            ws: null,
+            wasmEngine: null,
+            async init(totalFrames, filename, customThumbnailData, onStatus) {
+                if (this.type === 'wasm') {
+                    this.wasmEngine = new window.MobileRenderEngine();
+                    await this.wasmEngine.init(totalFrames, filename, onStatus);
+                } else {
+                    await serverLog(`Sending init control message, totalFrames: ${totalFrames}, filename: ${filename}`);
+                    this.ws.send(JSON.stringify({
+                        type: 'init',
+                        totalFrames: totalFrames,
+                        filename: filename,
+                        customThumbnailData
+                    }));
+                    await new Promise((resolve) => {
+                        const onMsg = async (event) => {
+                            const data = JSON.parse(event.data);
+                            if (data.type === 'init_ok') {
+                                await serverLog(`Received init_ok: renderId=${data.renderId}`);
+                                this.ws.removeEventListener('message', onMsg);
+                                resolve();
+                            }
+                        };
+                        this.ws.addEventListener('message', onMsg);
+                    });
+                }
+            },
+            async sendFrame(blob) {
+                if (this.type === 'wasm') {
+                    await this.wasmEngine.sendFrame(blob);
+                } else {
+                    this.ws.send(blob);
+                }
+            },
+            async sendAudio(blob) {
+                if (this.type === 'wasm') {
+                    await this.wasmEngine.sendAudio(blob);
+                } else {
+                    await serverLog(`Sending audio_start, blob size: ${blob.size}`);
+                    this.ws.send(JSON.stringify({ type: 'audio_start' }));
+                    await new Promise((resolve) => {
+                        const onMsg = async (event) => {
+                            const data = JSON.parse(event.data);
+                            if (data.type === 'audio_ready') {
+                                await serverLog('Received audio_ready. Sending audioBlob.');
+                                this.ws.removeEventListener('message', onMsg);
+                                resolve();
+                            }
+                        };
+                        this.ws.addEventListener('message', onMsg);
+                    });
+                    this.ws.send(blob);
+                    await new Promise((resolve) => {
+                        const onMsg = async (event) => {
+                            const data = JSON.parse(event.data);
+                            if (data.type === 'audio_ok') {
+                                await serverLog('Received audio_ok.');
+                                this.ws.removeEventListener('message', onMsg);
+                                resolve();
+                            }
+                        };
+                        this.ws.addEventListener('message', onMsg);
+                    });
+                }
+            },
+            async compile(onProgress) {
+                if (this.type === 'wasm') {
+                    const videoBlob = await this.wasmEngine.compile(onProgress);
+                    return { type: 'wasm', blob: videoBlob };
+                } else {
+                    await serverLog('Sending compile control message...');
+                    this.ws.send(JSON.stringify({ type: 'compile' }));
+                    const compileResult = await new Promise((resolve, reject) => {
+                        const onMsg = async (event) => {
+                            const data = JSON.parse(event.data);
+                            if (data.type === 'progress' && data.step === 'compiling') {
+                                onProgress(data.current / 100);
+                            }
+                            else if (data.type === 'complete') {
+                                await serverLog(`Compilation successful! downloadUrl=${data.downloadUrl}`);
+                                this.ws.removeEventListener('message', onMsg);
+                                resolve(data);
+                            }
+                            else if (data.type === 'error') {
+                                await serverLog(`Compilation failed: ${data.message}`);
+                                this.ws.removeEventListener('message', onMsg);
+                                reject(new Error(data.message));
+                            }
+                        };
+                        this.ws.addEventListener('message', onMsg);
+                    });
+                    return { type: 'ws', result: compileResult };
+                }
+            },
+            async cleanup() {
+                if (this.type === 'wasm' && this.wasmEngine) {
+                    await this.wasmEngine.cleanup();
+                } else if (this.ws) {
+                    try { this.ws.close(); } catch (e) {}
+                }
+            }
+        };
+
+        // Determine whether to use local WASM renderer or server-based WebSocket renderer
+        let mode = 'ws';
+        if (isCapacitorApp()) {
+            mode = 'wasm';
+        } else {
+            renderStatusText.innerText = 'সার্ভারের সাথে কানেক্ট করা হচ্ছে... (Connecting to render server...)';
+            setProgress(2);
+            const wsUrl = `ws://${window.location.hostname || 'localhost'}:4000`;
+            const wsTemp = new WebSocket(wsUrl);
+            try {
+                await new Promise((resolve, reject) => {
+                    const timeout = setTimeout(() => {
+                        wsTemp.close();
+                        reject(new Error('Timeout'));
+                    }, 2000);
+                    wsTemp.onopen = () => {
+                        clearTimeout(timeout);
+                        resolve();
+                    };
+                    wsTemp.onerror = () => {
+                        clearTimeout(timeout);
+                        reject(new Error('Connection refused'));
+                    };
+                });
+                renderTarget.ws = wsTemp;
+                mode = 'ws';
+            } catch (err) {
+                if (window.MobileRenderEngine) {
+                    console.log('Local server connection failed, falling back to In-Browser WASM Render Engine.');
+                    mode = 'wasm';
+                } else {
+                    throw new Error('Render server connection failed. Please run start-video-editor.bat.');
+                }
+            }
+        }
+        renderTarget.type = mode;
 
         // Cancellation handler
         async function finishCancelled() {
@@ -345,9 +549,9 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         }
 
-        if (exportCancelled) { ws.close(); await finishCancelled(); return; }
+        if (exportCancelled) { await renderTarget.cleanup(); await finishCancelled(); return; }
 
-        // --- Step B: Initialize WebSocket Session ---
+        // --- Step B: Initialize Render Session ---
         let filename;
         if (isBatch && batchFilename) {
             const baseName = batchFilename.substring(0, batchFilename.lastIndexOf('.')) || batchFilename;
@@ -366,56 +570,17 @@ document.addEventListener('DOMContentLoaded', () => {
                 reader.readAsDataURL(state.customThumbnailFile);
             });
         }
-        await serverLog(`Sending init control message, totalFrames: ${grandTotalFrames}, filename: ${filename}`);
-        ws.send(JSON.stringify({
-            type: 'init',
-            totalFrames: grandTotalFrames,
-            filename: filename,
-            customThumbnailData
-        }));
-
-        await new Promise((resolve) => {
-            const onMsg = async (event) => {
-                const data = JSON.parse(event.data);
-                if (data.type === 'init_ok') {
-                    await serverLog(`Received init_ok: renderId=${data.renderId}`);
-                    ws.removeEventListener('message', onMsg);
-                    resolve();
-                }
-            };
-            ws.addEventListener('message', onMsg);
+        
+        await renderTarget.init(grandTotalFrames, filename, customThumbnailData, (msg) => {
+            renderStatusText.innerText = msg;
         });
 
         // Send audio file if we rendered one
         if (audioBlob && !exportCancelled) {
-            await serverLog(`Sending audio_start, blob size: ${audioBlob.size}`);
-            ws.send(JSON.stringify({ type: 'audio_start' }));
-            await new Promise((resolve) => {
-                const onMsg = async (event) => {
-                    const data = JSON.parse(event.data);
-                    if (data.type === 'audio_ready') {
-                        await serverLog('Received audio_ready. Sending audioBlob.');
-                        ws.removeEventListener('message', onMsg);
-                        resolve();
-                    }
-                };
-                ws.addEventListener('message', onMsg);
-            });
-            ws.send(audioBlob);
-            await new Promise((resolve) => {
-                const onMsg = async (event) => {
-                    const data = JSON.parse(event.data);
-                    if (data.type === 'audio_ok') {
-                        await serverLog('Received audio_ok.');
-                        ws.removeEventListener('message', onMsg);
-                        resolve();
-                    }
-                };
-                ws.addEventListener('message', onMsg);
-            });
+            await renderTarget.sendAudio(audioBlob);
         }
 
-        if (exportCancelled) { ws.close(); await finishCancelled(); return; }
+        if (exportCancelled) { await renderTarget.cleanup(); await finishCancelled(); return; }
 
         // --- Step C: Frame-by-Frame Canvas Drawing & Streaming ---
         renderStatusText.innerText = 'ফ্রেম প্রসেস করা হচ্ছে... (Processing frames...)';
@@ -439,7 +604,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
 
                 const frameBlob = await new Promise(resolve => canvas.toBlob(resolve, 'image/jpeg', 0.85));
-                ws.send(frameBlob);
+                await renderTarget.sendFrame(frameBlob);
 
                 frameIndex++;
                 const uiProgress = 10 + Math.round((frameIndex / grandTotalFrames) * 80);
@@ -547,7 +712,7 @@ document.addEventListener('DOMContentLoaded', () => {
                                 // were still mid-encode when the clip's target frame count was
                                 // reached, which is exactly what caused the exported video to
                                 // consistently come out ~1s short.
-                                if (blob && !exportCancelled) ws.send(blob);
+                                if (blob && !exportCancelled) await renderTarget.sendFrame(blob);
                                 r();
                             });
                             activeBlobPromises.push(p);
@@ -580,7 +745,7 @@ document.addEventListener('DOMContentLoaded', () => {
                             // See note above in the overshoot loop — must not check
                             // `!finished` here, or the frame that triggers finish()
                             // (almost always the clip's LAST frame) gets dropped.
-                            if (blob && !exportCancelled) ws.send(blob);
+                            if (blob && !exportCancelled) await renderTarget.sendFrame(blob);
                             r();
                         });
                         activeBlobPromises.push(p);
@@ -725,7 +890,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     }
 
                     const frameBlob = await new Promise(resolve => canvas.toBlob(resolve, 'image/jpeg', 0.85));
-                    ws.send(frameBlob);
+                    await renderTarget.sendFrame(frameBlob);
 
                     frameIndex++;
                     const uiProgress = 10 + Math.round((frameIndex / grandTotalFrames) * 80);
@@ -766,7 +931,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
 
                 const frameBlob = await new Promise(resolve => canvas.toBlob(resolve, 'image/jpeg', 0.85));
-                ws.send(frameBlob);
+                await renderTarget.sendFrame(frameBlob);
 
                 frameIndex++;
                 const uiProgress = 10 + Math.round((frameIndex / grandTotalFrames) * 80);
@@ -775,35 +940,25 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         }
 
-        if (exportCancelled) { ws.close(); await finishCancelled(); return; }
+        if (exportCancelled) { await renderTarget.cleanup(); await finishCancelled(); return; }
 
-        // --- Step D: Server Compilation ---
-        renderStatusText.innerText = 'সার্ভারে ভিডিও তৈরি হচ্ছে... (Compiling video on server...)';
-        setProgress(90);
-
-        await serverLog('Sending compile control message...');
-        ws.send(JSON.stringify({ type: 'compile' }));
-
-        const compileResult = await new Promise((resolve, reject) => {
-            const onMsg = async (event) => {
-                const data = JSON.parse(event.data);
-                if (data.type === 'progress' && data.step === 'compiling') {
-                    const percent = 90 + Math.round(data.current * 0.08); // 90% to 98%
-                    setProgress(percent);
-                }
-                else if (data.type === 'complete') {
-                    await serverLog(`Compilation successful! downloadUrl=${data.downloadUrl}`);
-                    ws.removeEventListener('message', onMsg);
-                    resolve(data);
-                }
-                else if (data.type === 'error') {
-                    await serverLog(`Compilation failed: ${data.message}`);
-                    ws.removeEventListener('message', onMsg);
-                    reject(new Error(data.message));
-                }
-            };
-            ws.addEventListener('message', onMsg);
-        });
+        // --- Step D: Compilation ---
+        let compileOutput;
+        if (renderTarget.type === 'wasm') {
+            renderStatusText.innerText = 'ভিডিও তৈরি হচ্ছে... (Compiling video...)';
+            setProgress(90);
+            const videoBlob = await renderTarget.compile((percent) => {
+                setProgress(90 + Math.round(percent * 0.08)); // 90% to 98%
+            });
+            compileOutput = videoBlob.blob;
+        } else {
+            renderStatusText.innerText = 'সার্ভারে ভিডিও তৈরি হচ্ছে... (Compiling video on server...)';
+            setProgress(90);
+            const wsCompile = await renderTarget.compile((percent) => {
+                setProgress(90 + Math.round(percent * 0.08)); // 90% to 98%
+            });
+            compileOutput = wsCompile.result;
+        }
 
         // Restore editor settings.
         // Always force-reload the video — after thousands of frame-level seeks
@@ -834,29 +989,30 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         if (window.drawEditorFrame) window.drawEditorFrame();
 
-        // Finalize Download
+        // Finalize Download / Save
         setProgress(98);
-        renderStatusText.innerText = 'ডাউনলোড প্রস্তুত করা হচ্ছে... (Preparing download...)';
+        renderStatusText.innerText = 'ভিডিও সংরক্ষণ করা হচ্ছে... (Saving video...)';
 
-        const downloadURL = compileResult.downloadUrl;
-        const finalFilename = compileResult.filename;
+        const finalFilename = filename;
 
-        downloadLink.href = downloadURL;
-        downloadLink.download = finalFilename;
+        // Free the ffmpeg.wasm virtual filesystem/close websocket
+        await renderTarget.cleanup();
+
+        const savedNatively = await saveVideo(compileOutput, finalFilename);
 
         if (isBatch) {
-            downloadLink.click();
             setProgress(100);
-            renderStatusText.innerText = `Saved ${finalFilename}! Proceeding...`;
+            renderStatusText.innerText = savedNatively
+                ? `সংরক্ষিত ${finalFilename}! (পরবর্তী...)`
+                : `Saved ${finalFilename}! Proceeding...`;
             await new Promise(resolve => setTimeout(resolve, 1000));
-            ws.close();
             return;
         }
 
-        ws.close();
-
         setProgress(100);
-        renderStatusText.innerText = 'সম্পন্ন! (Complete!)';
+        renderStatusText.innerText = savedNatively
+            ? 'সম্পন্ন! (ফোনে সংরক্ষিত — শেয়ার করুন)'
+            : 'সম্পন্ন! (Complete!)';
 
         setTimeout(() => {
             renderProgressBox.style.display = 'none';

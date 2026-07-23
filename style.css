@@ -52,6 +52,8 @@ body {
     width: 100vw;
     height: 100vh;
     overflow: hidden;
+    padding-top: env(safe-area-inset-top, 0px);
+    padding-bottom: env(safe-area-inset-bottom, 0px);
 }
 
 /* --- Sidebar Styling --- */
@@ -1520,12 +1522,13 @@ input:checked + .slider:before {
     }
 }
 
-/* Mobile landscape / small tablet */
+/* Mobile landscape / small tablet / mobile portrait */
 @media (max-width: 860px) {
     .app-container {
         flex-direction: column;
-        height: auto;
-        min-height: 100vh;
+        height: 100vh !important;
+        height: 100dvh !important;
+        overflow: hidden !important;
     }
 
     .sidebar {
@@ -1537,6 +1540,8 @@ input:checked + .slider:before {
         border-bottom: 1px solid var(--border-color);
         flex-wrap: wrap;
         gap: 8px;
+        height: 60px !important;
+        flex-shrink: 0;
     }
 
     .brand {
@@ -1547,53 +1552,12 @@ input:checked + .slider:before {
     .brand-text span { display: none; }
 
     .nav-steps {
-        flex-direction: row;
-        flex-grow: 0;
-        gap: 6px;
+        display: none;
     }
-
-    .step-item {
-        padding: 8px 12px;
-        gap: 8px;
-    }
-
-    .step-info p { display: none; }
-    .step-info h3 { font-size: 12px; }
-
-    .sidebar-footer { display: none; }
-
-    .workspace {
-        height: auto;
-    }
-
-    .workspace-body {
-        grid-template-columns: 1fr;
-        grid-template-rows: auto auto;
-        height: auto;
-    }
-
-    .preview-panel {
-        padding: 20px;
-        border-right: none;
-        border-bottom: 1px solid var(--border-color);
-    }
-
-    .workspace-header {
-        padding: 0 16px;
-        height: 60px;
-    }
-
-    .header-title h1 { font-size: 16px; }
-    .header-title p { display: none; }
-}
-
-/* Mobile portrait */
-@media (max-width: 520px) {
-    .nav-steps { display: none; }
 
     /* Show a compact step pill instead */
     .sidebar::after {
-        content: 'Step ' attr(data-current-step) ' / 4';
+        content: 'Step ' attr(data-current-step) ' / 5';
         font-size: 12px;
         font-weight: 600;
         color: var(--text-secondary);
@@ -1601,38 +1565,135 @@ input:checked + .slider:before {
         background: var(--bg-surface-elevated);
         border-radius: var(--radius-sm);
         border: 1px solid var(--border-color);
+        margin-left: auto;
     }
 
+    .sidebar-footer { display: none; }
+
+    .workspace {
+        height: calc(100vh - 60px) !important;
+        height: calc(100dvh - 60px) !important;
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+    }
+
+    /* Make the workspace header fit on a single line */
     .workspace-header {
-        padding: 0 12px;
+        display: flex !important;
+        flex-direction: row !important;
+        align-items: center !important;
+        justify-content: space-between !important;
+        height: 50px !important;
+        padding: 0 12px !important;
+        border-bottom: 1px solid var(--border-color);
+        flex-shrink: 0;
     }
 
-    .header-actions .btn span { display: none; }
+    .header-title h1 {
+        font-size: 15px !important;
+        margin: 0;
+    }
+    
+    .header-title p {
+        display: none !important;
+    }
 
+    .header-actions {
+        display: flex !important;
+        flex-direction: row !important;
+        gap: 6px !important;
+        align-items: center !important;
+        margin-left: auto;
+    }
+
+    /* Convert buttons inside header-actions to compact icon-only buttons */
+    .header-actions .btn {
+        width: 32px !important;
+        height: 32px !important;
+        padding: 0 !important;
+        display: inline-flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+        border-radius: 6px;
+        font-size: 0 !important; /* Hide text label */
+        margin: 0 !important;
+    }
+    
+    .header-actions .btn i {
+        font-size: 14px !important; /* Show icon only */
+        margin: 0 !important;
+    }
+
+    .history-controls {
+        display: flex !important;
+        margin-right: 0 !important;
+        gap: 4px !important;
+    }
+
+    .history-controls .btn {
+        width: 32px !important;
+        height: 32px !important;
+        padding: 0 !important;
+        display: inline-flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+        border-radius: 6px;
+    }
+
+    .workspace-body {
+        display: flex !important;
+        flex-direction: column !important;
+        height: calc(100% - 50px) !important;
+        overflow: hidden !important;
+        grid-template-columns: unset !important;
+        grid-template-rows: unset !important;
+    }
+
+    /* Preview Panel takes remaining height, and centers the video canvas */
     .preview-panel {
-        padding: 12px;
+        flex: 1 1 auto !important;
+        padding: 8px !important;
+        background-color: rgba(0, 0, 0, 0.4) !important;
+        display: flex !important;
+        flex-direction: column !important;
+        justify-content: center !important;
+        align-items: center !important;
+        min-height: 180px !important;
+        height: auto !important;
+        border-bottom: 1px solid var(--border-color) !important;
+        border-right: none !important;
+        overflow: hidden !important;
     }
 
     .canvas-container {
-        width: 100% !important;
+        width: auto !important;
+        height: auto !important;
+        max-width: 100% !important;
+        max-height: 100% !important;
+        aspect-ratio: 16/9 !important;
+        display: flex !important;
+        justify-content: center !important;
+        align-items: center !important;
     }
 
-    .control-panel {
-        padding: 16px;
-    }
-}
-
-/* Fix canvas scaling on mobile so it fills available width */
-@media (max-width: 860px) {
     #editor-canvas {
-        max-width: 100%;
+        max-width: 100% !important;
+        max-height: 100% !important;
+        width: auto !important;
         height: auto !important;
+        object-fit: contain !important;
     }
 
-    .canvas-container {
-        width: 100%;
+    /* Control Panel sits at the bottom, scrolls internally if it overflows */
+    .control-panel {
+        flex: 0 0 auto !important;
         height: auto !important;
-        aspect-ratio: unset;
+        max-height: 45vh !important;
+        overflow-y: auto !important;
+        padding: 12px !important;
+        width: 100% !important;
+        border-left: none !important;
     }
 }
 
