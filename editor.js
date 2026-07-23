@@ -537,75 +537,112 @@ document.addEventListener('DOMContentLoaded', () => {
                 alert(`ভিডিও লোড হতে পারেনি (Error Code: ${code}, Message: ${msg})। অনুগ্রহ করে MP4 ফরম্যাটের ফাইল ব্যবহার করুন।`);
             };
 
-            const setupVideoAndMetadata = (urlToLoad) => {
+            const setupVideoAndMetadata = async (urlToLoad) => {
                 state.video.src = urlToLoad;
                 state.video.load();
                 
-                state.video.onloadedmetadata = () => {
-                    // Clear error handler
-                    state.video.onerror = null;
-                    state.duration = state.video.duration;
-                    state.startTime = 0;
-                    state.endTime = state.duration;
-
-                    const firstClip = {
-                        id: Date.now(),
-                        file: file,
-                        url: urlToLoad,
-                        name: file.name,
-                        size: file.size || 0,
-                        lastModified: file.lastModified || 0,
-                        duration: state.duration,
-                        start: 0,
-                        end: state.duration,
-                        cropX: 0,
-                        cropY: 0,
-                        cropW: 1,
-                        cropH: 1
+                // Wait for video metadata AND valid videoWidth & videoHeight
+                await new Promise((resolve) => {
+                    if (state.video.readyState >= 1 && state.video.videoWidth > 0 && state.video.videoHeight > 0) {
+                        return resolve();
+                    }
+                    let settled = false;
+                    const finish = () => {
+                        if (!settled) {
+                            settled = true;
+                            state.video.removeEventListener('loadedmetadata', check);
+                            state.video.removeEventListener('loadeddata', check);
+                            state.video.removeEventListener('canplay', check);
+                            resolve();
+                        }
                     };
-                    state.clips = [firstClip];
-                    state.activeClipId = firstClip.id;
-                    if (window.renderClipTimeline) window.renderClipTimeline();
-                    
-                    state.cropX = 0;
-                    state.cropY = 0;
-                    state.cropW = 1;
-                    state.cropH = 1;
-                    state.isAdjustingCrop = false;
-                    if (cropToolToggle) cropToolToggle.checked = false;
-                    if (cropActionsContainer) cropActionsContainer.style.display = 'none';
-                    
-                    trimStart.max = state.duration;
-                    trimStart.value = 0;
-                    trimEnd.max = state.duration;
-                    trimEnd.value = state.duration;
-                    
-                    startVal.value = formatTime(0);
-                    endVal.value = formatTime(state.duration);
-                    
-                    updateCanvasDimensions();
-                    
-                    document.getElementById('timeline-controls').style.display = 'flex';
-                    document.querySelector('.canvas-overlay-controls').style.display = 'block';
-                    videoDropzone.style.display = 'none';
-                    
-                    document.getElementById('selected-video-name').innerText = file.name;
-                    nextBtn.disabled = false;
-                    updateNavigation();
-                    
-                    if (window.initializeAudioSource) {
-                        window.initializeAudioSource();
-                    }
-                    
-                    state.currentTime = 0;
-                    updatePlayhead();
-                    drawFrame();
-                    if (window.recordEditorHistory) {
-                        window.recordEditorHistory('Video added');
-                    }
-                    isVideoLoading = false;
-                    triggerAutoSave();
+                    const check = () => {
+                        if (state.video.videoWidth > 0 && state.video.videoHeight > 0) {
+                            finish();
+                        }
+                    };
+                    state.video.addEventListener('loadedmetadata', check);
+                    state.video.addEventListener('loadeddata', check);
+                    state.video.addEventListener('canplay', check);
+                    const poll = setInterval(() => {
+                        if (settled) {
+                            clearInterval(poll);
+                        } else if (state.video.videoWidth > 0 && state.video.videoHeight > 0) {
+                            clearInterval(poll);
+                            finish();
+                        }
+                    }, 25);
+                    setTimeout(() => {
+                        clearInterval(poll);
+                        finish();
+                    }, 2500);
+                });
+
+                // Clear error handler
+                state.video.onerror = null;
+                state.duration = state.video.duration || 10;
+                state.startTime = 0;
+                state.endTime = state.duration;
+
+                const firstClip = {
+                    id: Date.now(),
+                    file: file,
+                    url: urlToLoad,
+                    name: file.name,
+                    size: file.size || 0,
+                    lastModified: file.lastModified || 0,
+                    videoWidth: state.video.videoWidth || 0,
+                    videoHeight: state.video.videoHeight || 0,
+                    duration: state.duration,
+                    start: 0,
+                    end: state.duration,
+                    cropX: 0,
+                    cropY: 0,
+                    cropW: 1,
+                    cropH: 1
                 };
+                state.clips = [firstClip];
+                state.activeClipId = firstClip.id;
+                if (window.renderClipTimeline) window.renderClipTimeline();
+                
+                state.cropX = 0;
+                state.cropY = 0;
+                state.cropW = 1;
+                state.cropH = 1;
+                state.isAdjustingCrop = false;
+                if (cropToolToggle) cropToolToggle.checked = false;
+                if (cropActionsContainer) cropActionsContainer.style.display = 'none';
+                
+                trimStart.max = state.duration;
+                trimStart.value = 0;
+                trimEnd.max = state.duration;
+                trimEnd.value = state.duration;
+                
+                startVal.value = formatTime(0);
+                endVal.value = formatTime(state.duration);
+                
+                updateCanvasDimensions();
+                
+                document.getElementById('timeline-controls').style.display = 'flex';
+                document.querySelector('.canvas-overlay-controls').style.display = 'block';
+                videoDropzone.style.display = 'none';
+                
+                document.getElementById('selected-video-name').innerText = file.name;
+                nextBtn.disabled = false;
+                updateNavigation();
+                
+                if (window.initializeAudioSource) {
+                    window.initializeAudioSource();
+                }
+                
+                state.currentTime = 0;
+                updatePlayhead();
+                drawFrame();
+                if (window.recordEditorHistory) {
+                    window.recordEditorHistory('Video added');
+                }
+                isVideoLoading = false;
+                triggerAutoSave();
             };
 
             if (isCapacitor) {
@@ -1280,12 +1317,15 @@ document.addEventListener('DOMContentLoaded', () => {
         const activeClip = state.clips.find(c => c.id === state.activeClipId);
         const isImage = activeClip && activeClip.type === 'image';
         
-        const videoWidth = isImage ? (activeClip.imageImg?.naturalWidth || 640) : state.video.videoWidth;
-        const videoHeight = isImage ? (activeClip.imageImg?.naturalHeight || 360) : state.video.videoHeight;
+        const videoWidth = isImage ? (activeClip.imageImg?.naturalWidth || 640) : (state.video.videoWidth || activeClip?.videoWidth || 1280);
+        const videoHeight = isImage ? (activeClip.imageImg?.naturalHeight || 360) : (state.video.videoHeight || activeClip?.videoHeight || 720);
         
+        const cropWVal = (state.cropW && state.cropW > 0 && !isNaN(state.cropW)) ? state.cropW : 1;
+        const cropHVal = (state.cropH && state.cropH > 0 && !isNaN(state.cropH)) ? state.cropH : 1;
+
         // Use cropped dimensions if not currently adjusting crop
-        const currentVideoW = (state.isAdjustingCrop) ? videoWidth : ((state.cropW || 1) * videoWidth);
-        const currentVideoH = (state.isAdjustingCrop) ? videoHeight : ((state.cropH || 1) * videoHeight);
+        const currentVideoW = (state.isAdjustingCrop) ? videoWidth : (cropWVal * videoWidth);
+        const currentVideoH = (state.isAdjustingCrop) ? videoHeight : (cropHVal * videoHeight);
         
         let targetWidth = 640;
         let targetHeight = 480;
@@ -1643,7 +1683,11 @@ document.addEventListener('DOMContentLoaded', () => {
             state.isPlaying = true;
             state.lastImageTickTime = performance.now();
         } else {
-            state.video.play();
+            if (activeClip && activeClip.url && (!state.video.src || state.video.src === 'about:blank' || state.video.src === location.href)) {
+                state.video.src = activeClip.url;
+                state.video.load();
+            }
+            state.video.play().catch(err => console.warn('Video play interrupted:', err));
             state.isPlaying = true;
         }
         playPauseBtn.innerHTML = '<i class="fa-solid fa-pause"></i>';
@@ -2516,14 +2560,28 @@ document.addEventListener('DOMContentLoaded', () => {
     function drawFrame() {
         if (!state.duration) return;
         
-        const canvasW = state.canvas.width;
-        const canvasH = state.canvas.height;
+        let canvasW = state.canvas.width;
+        let canvasH = state.canvas.height;
 
         const activeClip = state.clips.find(c => c.id === state.activeClipId);
         const isImageClip = activeClip && activeClip.type === 'image';
 
-        const videoW = isImageClip ? (activeClip.imageImg?.naturalWidth || 640) : state.video.videoWidth;
-        const videoH = isImageClip ? (activeClip.imageImg?.naturalHeight || 360) : state.video.videoHeight;
+        const rawW = isImageClip ? activeClip?.imageImg?.naturalWidth : state.video?.videoWidth;
+        const rawH = isImageClip ? activeClip?.imageImg?.naturalHeight : state.video?.videoHeight;
+
+        // Auto-correct canvas aspect ratio if media dimensions settled after initial load
+        if (state.aspectRatio === 'original' && rawW && rawH && rawW > 0 && rawH > 0) {
+            const currentCanvasAspect = (canvasW && canvasH) ? (canvasW / canvasH) : 0;
+            const realMediaAspect = rawW / rawH;
+            if (Math.abs(currentCanvasAspect - realMediaAspect) > 0.015) {
+                updateCanvasDimensions();
+                canvasW = state.canvas.width;
+                canvasH = state.canvas.height;
+            }
+        }
+
+        const videoW = (rawW && rawW > 0) ? rawW : (activeClip?.videoWidth || 1280);
+        const videoH = (rawH && rawH > 0) ? rawH : (activeClip?.videoHeight || 720);
 
         const mediaSource = isImageClip ? activeClip.imageImg : state.video;
         
@@ -2532,9 +2590,11 @@ document.addEventListener('DOMContentLoaded', () => {
         drawCanvasBackground(canvasW, canvasH, mediaSource, videoW, videoH);
 
         // Draw video frame according to Fit or Fill/Crop layout mode
-        const videoAspect = videoW / videoH;
-        const canvasAspect = canvasW / canvasH;
-        const currentAspect = (state.isAdjustingCrop) ? videoAspect : (((state.cropW || 1) * videoW) / ((state.cropH || 1) * videoH));
+        const cropWVal = (state.cropW && state.cropW > 0 && !isNaN(state.cropW)) ? state.cropW : 1;
+        const cropHVal = (state.cropH && state.cropH > 0 && !isNaN(state.cropH)) ? state.cropH : 1;
+        const videoAspect = (videoW && videoH) ? (videoW / videoH) : (16 / 9);
+        const canvasAspect = (canvasW && canvasH) ? (canvasW / canvasH) : videoAspect;
+        const currentAspect = (state.isAdjustingCrop) ? videoAspect : ((cropWVal * videoW) / (cropHVal * videoH));
         
         let drawW = canvasW;
         let drawH = canvasH;
@@ -11432,9 +11492,13 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function clearWorkspaceState(fullReset = true) {
         state.isPlaying = false;
-        state.video.pause();
-        state.video.removeAttribute('src');
-        state.video.load();
+        if (state.video) {
+            state.video.pause();
+            if (fullReset) {
+                state.video.removeAttribute('src');
+                state.video.load();
+            }
+        }
         state.aspectRatio = 'original';
         state.cropX = 0;
         state.cropY = 0;
@@ -12266,6 +12330,121 @@ document.addEventListener('DOMContentLoaded', () => {
     // Fix: cancel the pending timer and set editorIsResetting=true *before*
     // doing any of the async clearing, so nothing can resurrect the project
     // in between.
+    // --- Clear All Edits for Current Video (Keep Video Loaded, Reset Edits) ---
+    async function clearAllEditsForCurrentVideo() {
+        if (!state.clips || state.clips.length === 0) {
+            if (typeof showToast === 'function') showToast('বর্তমানে কোনো ভিডিও লোড করা নেই।', 'warning');
+            return;
+        }
+
+        const activeClip = state.clips.find(c => c.id === state.activeClipId) || state.clips[0];
+        const clipName = activeClip ? activeClip.name : 'ভিডিও';
+        const confirmMsg = `আপনি কি নিশ্চিত যে "${clipName}"-এর সমস্ত এডিটিং (সাবটাইটেল, বি-রোল, ওভারলে, ফিল্টার ইত্যাদি) মুছে দিয়ে ভিডিওটি ফ্রেশ করতে চান?\n\nভিডিওটি লোড থাকবে, কিন্তু সব এডিট মুছে নতুন অবস্থা হবে।`;
+
+        if (!confirm(confirmMsg)) return;
+
+        const preservedClips = state.clips;
+        const preservedActiveClipId = state.activeClipId;
+        const preservedProjId = state.activeProjectId;
+        const preservedFingerprint = state.projectVideoFingerprint;
+
+        editorIsResetting = true;
+        if (autoSaveTimeout) {
+            clearTimeout(autoSaveTimeout);
+            autoSaveTimeout = null;
+        }
+
+        try {
+            if (preservedProjId) {
+                localStorage.removeItem(`studio_flow_project_${preservedProjId}`);
+            }
+
+            clearWorkspaceState(false);
+
+            state.clips = preservedClips;
+            state.activeClipId = preservedActiveClipId;
+            state.activeProjectId = preservedProjId;
+            state.projectVideoFingerprint = preservedFingerprint;
+
+            state.cropX = 0;
+            state.cropY = 0;
+            state.cropW = 1;
+            state.cropH = 1;
+            state.aspectRatio = 'original';
+            state.layoutMode = 'fit';
+
+            if (activeClip) {
+                activeClip.start = 0;
+                activeClip.cropX = 0;
+                activeClip.cropY = 0;
+                activeClip.cropW = 1;
+                activeClip.cropH = 1;
+                activeClip.zoom = 100;
+                activeClip.offsetX = 0;
+                activeClip.offsetY = 0;
+                if (activeClip.type !== 'image' && state.video && state.video.duration && !isNaN(state.video.duration)) {
+                    state.duration = state.video.duration;
+                    activeClip.duration = state.video.duration;
+                    activeClip.end = state.video.duration;
+                } else if (activeClip.type === 'image') {
+                    state.duration = activeClip.duration || 5.0;
+                    activeClip.end = state.duration;
+                }
+                state.startTime = 0;
+                state.endTime = state.duration;
+            }
+
+            state.currentTime = 0;
+            if (state.video) {
+                if (activeClip && activeClip.type !== 'image' && activeClip.url) {
+                    if (state.video.src !== activeClip.url) {
+                        state.video.src = activeClip.url;
+                        state.video.load();
+                    }
+                }
+                state.video.currentTime = 0;
+                state.video.pause();
+            }
+            state.isPlaying = false;
+            const playPauseBtnEl = document.getElementById('play-pause-btn');
+            if (playPauseBtnEl) playPauseBtnEl.innerHTML = '<i class="fa-solid fa-play"></i>';
+
+            state.undoStack = [];
+            state.historyLabels = [];
+            state.redoStack = [];
+            state.redoLabels = [];
+            if (typeof updateHistoryUI === 'function') updateHistoryUI();
+
+            updateCanvasDimensions();
+            syncUIFromState();
+            if (typeof renderClipTimeline === 'function') renderClipTimeline();
+            if (typeof renderSubtitlesList === 'function') renderSubtitlesList();
+            if (typeof renderBrollList === 'function') renderBrollList();
+            if (typeof renderTextOverlaysList === 'function') renderTextOverlaysList();
+            if (typeof renderStickerList === 'function') renderStickerList();
+            if (typeof renderSymbolList === 'function') renderSymbolList();
+            if (typeof renderShapeList === 'function') renderShapeList();
+            if (typeof renderHighlightList === 'function') renderHighlightList();
+            if (typeof renderBlurRegionList === 'function') renderBlurRegionList();
+            if (typeof renderFillList === 'function') renderFillList();
+            drawFrame();
+        } finally {
+            editorIsResetting = false;
+        }
+
+        await saveProjectToBrowserStorage(preservedProjId);
+
+        if (typeof showToast === 'function') {
+            showToast(`"${clipName}"-এর সমস্ত এডিট ক্লিয়ার করা হয়েছে। ফ্রেশ প্রজেক্ট শুরু হলো!`, 'success');
+        }
+    }
+    window.clearAllEditsForCurrentVideo = clearAllEditsForCurrentVideo;
+
+    const clearAllEditsBtn = document.getElementById('clear-all-edits-btn');
+    if (clearAllEditsBtn) {
+        clearAllEditsBtn.addEventListener('click', clearAllEditsForCurrentVideo);
+    }
+
     const resetEditorBtn = document.getElementById('reset-editor-btn');
     if (resetEditorBtn) {
         resetEditorBtn.addEventListener('click', async () => {
