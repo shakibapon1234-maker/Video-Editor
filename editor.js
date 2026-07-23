@@ -1493,6 +1493,12 @@ document.addEventListener('DOMContentLoaded', () => {
             // Switch focus to the first half
             switchActiveClip(activeClip.id);
             
+            if (window.recordEditorHistory) {
+                window.recordEditorHistory(`Clip split at ${formatTime(currentTime)}`);
+            } else if (window.triggerAutoSave) {
+                window.triggerAutoSave();
+            }
+
             console.log("Split clip at:", currentTime);
         });
     }
@@ -1575,6 +1581,12 @@ document.addEventListener('DOMContentLoaded', () => {
                     renderClipTimeline();
                     state.currentTime = splitPoint;
                     switchActiveClip(activeClip.id);
+
+                    if (window.recordEditorHistory) {
+                        window.recordEditorHistory(`Freeze frame added (${freezeDur}s)`);
+                    } else if (window.triggerAutoSave) {
+                        window.triggerAutoSave();
+                    }
 
                     console.log(`Inserted ${freezeDur}s freeze frame at:`, splitPoint);
                 };
@@ -1667,6 +1679,12 @@ document.addEventListener('DOMContentLoaded', () => {
 
             // Switch to the first of the new clips
             switchActiveClip(newClips[0].id);
+
+            if (window.recordEditorHistory) {
+                window.recordEditorHistory(`Cut out section (${formatTime(startCut)} - ${formatTime(endCut)})`);
+            } else if (window.triggerAutoSave) {
+                window.triggerAutoSave();
+            }
         });
     }
     

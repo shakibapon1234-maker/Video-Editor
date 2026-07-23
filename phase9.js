@@ -1008,6 +1008,8 @@ document.addEventListener('DOMContentLoaded', () => {
     function historyLabelFor(el) {
         const id = el.id || '';
         const labelMap = {
+            'video-input': 'Video added',
+            'project-file-input': 'Project loaded',
             'filter-preset': 'Filter changed',
             'intro-transition-type': 'Intro transition changed',
             'banner-style': 'Banner changed',
