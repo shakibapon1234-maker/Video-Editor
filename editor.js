@@ -9607,7 +9607,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         if (!state.takaImage) {
             state.takaImage = new Image();
-            state.takaImage.src = 'public/taka_1000.png?v=2';
+            state.takaImage.src = 'public/taka_1000.png?v=3';
             state.takaImage.onload = () => {
                 state.takaImageTransparent = state.takaImage;
                 if (typeof drawFrame === 'function') drawFrame();
