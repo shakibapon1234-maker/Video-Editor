@@ -1304,6 +1304,14 @@
                                         <i class="fa-solid fa-plus"></i> Add Text B-roll
                                     </button>
                                 </div>
+                                <div class="control-group mt-3">
+                                    <label>Built-in Cash Animation</label>
+                                    <div style="display:flex; gap:8px;">
+                                        <button type="button" id="add-cash-spin-btn" class="btn btn-outline" style="flex:1;"><i class="fa-solid fa-money-bill-wave"></i> Cash Spin</button>
+                                        <button type="button" id="add-cash-stack-btn" class="btn btn-outline" style="flex:1;"><i class="fa-solid fa-layer-group"></i> Cash Stack</button>
+                                    </div>
+                                    <p class="help-text mt-1">কোনো ছবি আপলোড ছাড়াই ঘুরতে থাকা বা একে একে বসা টাকার বান্ডিল যোগ করুন।</p>
+                                </div>
 
                                 <div class="control-group mt-3">
                                     <label>Display Mode</label>
@@ -1444,6 +1452,17 @@
                                     <div class="control-group mt-3">
                                         <label>Animation Style (এন্ট্রি/এক্সিট স্টাইল)</label>
                                         <select id="broll-anim-style" class="form-select"></select>
+                                    </div>
+                                    <div class="control-group mt-3">
+                                        <label>Visual Template (ডিভাইস/CTA স্টাইল)</label>
+                                        <select id="broll-visual-template" class="form-select">
+                                            <option value="standard">Standard B-roll</option>
+                                            <option value="phone">Phone Mockup (মোবাইলের ভিতরে দেখান)</option>
+                                            <option value="laptop">Laptop Mockup (ল্যাপটপের ভিতরে দেখান)</option>
+                                            <option value="glass-caption">Glass Caption (কাঁচের মতো টেক্সট ব্যানার)</option>
+                                            <option value="social-cta">Social CTA (Like + WhatsApp বাটন)</option>
+                                        </select>
+                                        <p class="help-text mt-1">ছবি বা ভিডিওকে ফোন/ল্যাপটপ ফ্রেমে, আর টেক্সটকে glass caption-এ দেখাতে পারবেন। CTA-তে Like ও WhatsApp বাটন যুক্ত হবে।</p>
                                     </div>
                                     
                                     <!-- After Image Uploader for Comparison Slide -->
@@ -2822,7 +2841,7 @@
     <!-- Hidden host for animated GIF <img> elements. Browsers only keep a
          GIF decoding/animating while the element is in the DOM, so we park
          them here (off-screen) and draw the current frame to the canvas. -->
-    <div id="gif-host" style="position:fixed; left:0; top:0; width:1px; height:1px; overflow:hidden; opacity:0.01; pointer-events:none;"></div>
+    <div id="gif-host" aria-hidden="true" style="position:fixed; left:0; top:0; width:2px; height:2px; overflow:hidden; opacity:0.001; pointer-events:none; z-index:-1;"></div>
 
     <!-- Capacitor core (local UMD build). Inside the native Android WebView the
          bridge is injected automatically; on a plain browser this just defines

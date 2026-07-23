@@ -1710,7 +1710,7 @@ document.addEventListener('DOMContentLoaded', () => {
             && state.currentTime <= item.endSec
         ));
 
-        if (!hasVisibleGif || state.isPlaying) {
+        if (!hasVisibleGif || state.isPlaying || state.customExportTime !== undefined) {
             gifPreviewRefreshActive = false;
             return;
         }
@@ -2942,7 +2942,7 @@ document.addEventListener('DOMContentLoaded', () => {
             };
 
             state.brollOverlays.forEach((item) => {
-                if (item.type !== 'text' && !item.imageImg) return;
+                if (item.type !== 'text' && item.type !== 'cash' && !item.imageImg) return;
 
                 // Reset one-shot sound-effect flags whenever playback is well before
                 // this item's start, so re-playing/looping over it triggers the
@@ -3062,6 +3062,9 @@ document.addEventListener('DOMContentLoaded', () => {
                         const metrics = state.ctx.measureText(item.text);
                         boxW = metrics.width + 32;
                         boxH = item.fontSize + 24;
+                    } else if (item.type === 'cash') {
+                        boxW = canvasW * (item.size / 100);
+                        boxH = boxW * 0.62;
                     } else {
                         if (item.pipW !== undefined && item.pipH !== undefined) {
                             // Free-form resize set by dragging corner/edge handles
@@ -3072,6 +3075,8 @@ document.addEventListener('DOMContentLoaded', () => {
                             boxH = boxW * (item.imageImg.naturalHeight / item.imageImg.naturalWidth);
                         }
                     }
+                    if (item.visualTemplate === 'phone') boxH = boxW * 2.06;
+                    if (item.visualTemplate === 'laptop') boxH = boxW * 0.70;
                     boxX = item.x * canvasW;
                     boxY = item.y * canvasH;
                 }
@@ -3185,7 +3190,7 @@ document.addEventListener('DOMContentLoaded', () => {
                             scaleAmt = 0.75 + 0.25 * eased;
                             alpha = Math.max(0.15, eased);
                         }
-                    } else if (style === 'zoom-pop' || style === 'confetti-pop' || style === 'heart-burst') {
+                    } else if (style === 'zoom-pop' || style === 'confetti-pop' || style === 'heart-burst' || style === 'cash-spin' || style === 'cash-stack') {
                         // Quick pop-in scale from 70% with a bouncy overshoot — distinct
                         // from the slow continuous Ken Burns 'zoom' below. 'confetti-pop'
                         // and 'heart-burst' reuse this exact box pop and additionally burst
@@ -3194,10 +3199,12 @@ document.addEventListener('DOMContentLoaded', () => {
                             const eased = easeOutBackOvershoot(Math.max(0, tIn / animDur));
                             scaleAmt = 0.7 + 0.3 * eased;
                             alpha = Math.max(0.15, eased);
+                            if (style === 'cash-spin') rotateAmt = (1 - eased) * Math.PI * 2;
                         } else if (tOut < animDur) {
                             const eased = easeOutBackOvershoot(Math.max(0, tOut / animDur));
                             scaleAmt = 0.7 + 0.3 * eased;
                             alpha = Math.max(0.15, eased);
+                            if (style === 'cash-spin') rotateAmt = -(1 - eased) * Math.PI * 2;
                         }
                     } else if (style === 'blur-pop') {
                         // Starts heavily blurred and small, sharpens and scales up to settle.
@@ -3316,6 +3323,17 @@ document.addEventListener('DOMContentLoaded', () => {
                     state.ctx.clip();
                 }
 
+                const hasPhoneScreenClip = item.visualTemplate === 'phone';
+                if (hasPhoneScreenClip) {
+                    const bezel = Math.max(7, Math.min(boxW, boxH) * 0.055);
+                    const radius = Math.max(16, Math.min(boxW, boxH) * 0.12);
+                    state.ctx.save();
+                    state.ctx.beginPath();
+                    if (state.ctx.roundRect) state.ctx.roundRect(drawBoxX + bezel, drawBoxY + bezel, boxW - bezel * 2, boxH - bezel * 2, radius);
+                    else state.ctx.rect(drawBoxX + bezel, drawBoxY + bezel, boxW - bezel * 2, boxH - bezel * 2);
+                    state.ctx.clip();
+                }
+
                 if (style === 'highlight-sweep') {
                     // Translucent marker-color bar painted behind the content. It's
                     // drawn at full box size but the clip rect above (driven by the
@@ -3326,6 +3344,22 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
 
                 if (item.type === 'text') {
+                    if (item.visualTemplate === 'glass-caption') {
+                        const glassRadius = Math.min(boxH * 0.48, 28);
+                        state.ctx.save();
+                        state.ctx.fillStyle = 'rgba(255,255,255,0.20)';
+                        state.ctx.strokeStyle = 'rgba(255,255,255,0.58)';
+                        state.ctx.lineWidth = Math.max(1.5, boxH * 0.035);
+                        state.ctx.shadowColor = 'rgba(0,0,0,0.28)';
+                        state.ctx.shadowBlur = Math.max(8, boxH * 0.22);
+                        state.ctx.beginPath();
+                        if (state.ctx.roundRect) state.ctx.roundRect(drawBoxX - 12, drawBoxY - 8, boxW + 24, boxH + 16, glassRadius);
+                        else state.ctx.rect(drawBoxX - 12, drawBoxY - 8, boxW + 24, boxH + 16);
+                        state.ctx.fill();
+                        state.ctx.shadowBlur = 0;
+                        state.ctx.stroke();
+                        state.ctx.restore();
+                    }
                     // "Normal" mode (transparentBg explicitly off) paints a solid dark
                     // scrim/pill behind the text so it reads clearly over busy video.
                     // Default is transparent — text sits directly on the footage with
@@ -3420,6 +3454,8 @@ document.addEventListener('DOMContentLoaded', () => {
                         state.ctx.stroke();
                         state.ctx.restore();
                     }
+                } else if (item.type === 'cash') {
+                    drawCashBroll(state.ctx, item, drawBoxX, drawBoxY, boxW, boxH, tIn, animDur);
                 } else {
                     // Source rect: cover-crop to fill the box (PiP and fullscreen@100%).
                     // Exception 1: fullscreen at < 100% size shows the FULL image (contain)
@@ -3571,6 +3607,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 // Pop the wipe-reveal clip (pushed above with its own save()) before any
                 // annotation drawing — annotations like the flying plane are positioned
                 // above/outside the box rect and must not be clipped away by it.
+                if (hasPhoneScreenClip) state.ctx.restore();
                 if (wipeFrac < 0.999) state.ctx.restore();
 
                 // Hand-drawn-style annotation markers (v2.5) — layered on top of the
@@ -3877,6 +3914,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
 
                 state.ctx.restore();
+
+                drawBrollVisualTemplate(state.ctx, item, drawBoxX, drawBoxY, boxW, boxH, alpha);
 
                 // Comparison Slide (Before/After) divider handle — drawn unclipped
                 // (after the box's own restore above) so the handle circle isn't cut
@@ -5272,7 +5311,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const currentTime = state.currentTime || 0;
         for (let i = state.brollOverlays.length - 1; i >= 0; i--) {
             const item = state.brollOverlays[i];
-            if (item.type !== 'text' && !item.imageImg) continue;
+            if (item.type !== 'text' && item.type !== 'cash' && !item.imageImg) continue;
 
             // Only let the user click-select an overlay that's actually visible on
             // screen right now — same rule the render loop uses. Without this, an
@@ -5325,7 +5364,11 @@ document.addEventListener('DOMContentLoaded', () => {
                     pipH = item.fontSize + 24;
                 } else {
                     pipW = canvasW * (item.size / 100);
-                    pipH = pipW * (item.imageImg.naturalHeight / item.imageImg.naturalWidth);
+                    pipH = item.type === 'cash'
+                        ? pipW * 0.62
+                        : pipW * (item.imageImg.naturalHeight / item.imageImg.naturalWidth);
+                    if (item.visualTemplate === 'phone') pipH = pipW * 2.06;
+                    if (item.visualTemplate === 'laptop') pipH = pipW * 0.70;
                 }
                 px = item.x * canvasW;
                 py = item.y * canvasH;
@@ -5387,7 +5430,11 @@ document.addEventListener('DOMContentLoaded', () => {
                     pipH = item.pipH * canvasH;
                 } else {
                     pipW = canvasW * (item.size / 100);
-                    pipH = item.imageImg ? pipW * (item.imageImg.naturalHeight / item.imageImg.naturalWidth) : pipW;
+                    pipH = item.type === 'cash'
+                        ? pipW * 0.62
+                        : (item.imageImg ? pipW * (item.imageImg.naturalHeight / item.imageImg.naturalWidth) : pipW);
+                    if (item.visualTemplate === 'phone') pipH = pipW * 2.06;
+                    if (item.visualTemplate === 'laptop') pipH = pipW * 0.70;
                 }
             }
             px = item.x * canvasW;
@@ -7542,6 +7589,9 @@ document.addEventListener('DOMContentLoaded', () => {
     const brollEndInput = document.getElementById('broll-end');
     const deleteBrollBtn = document.getElementById('delete-broll-btn');
     const brollAnimStyleSelect = document.getElementById('broll-anim-style');
+    const brollVisualTemplateSelect = document.getElementById('broll-visual-template');
+    const addCashSpinBtn = document.getElementById('add-cash-spin-btn');
+    const addCashStackBtn = document.getElementById('add-cash-stack-btn');
 
     const brollEditTextSection = document.getElementById('broll-edit-text-section');
     const brollEditTextInput = document.getElementById('broll-edit-text-input');
@@ -7664,7 +7714,11 @@ document.addEventListener('DOMContentLoaded', () => {
         { value: 'preset-zoom-chime', label: 'Zoom Pop + Chime (জুম পপ ও চমক শব্দ)' },
         { value: 'preset-rotate-whoosh', label: 'Rotate In + Whoosh (ঘুরে আসা ও সুইশ শব্দ)' },
         { value: 'preset-highlight-chime', label: 'Highlight Sweep + Chime (মার্কার হাইলাইট ও চমক শব্দ)' },
-        { value: 'preset-arrow-whoosh', label: 'Arrow Point + Whoosh (তীর চিহ্ন ও সুইশ শব্দ)' }
+        { value: 'preset-arrow-whoosh', label: 'Arrow Point + Whoosh (তীর চিহ্ন ও সুইশ শব্দ)' },
+        { value: 'preset-phone-app', label: '📱 Phone App Reveal (মোবাইল মকআপে অ্যাপ/ওয়েবসাইট)' },
+        { value: 'preset-laptop-course', label: '💻 Laptop Course Reveal (ল্যাপটপে কোর্স/প্রেজেন্টেশন)' },
+        { value: 'preset-glass-caption', label: '🫧 Glass Caption Pop (কাঁচের টেক্সট ব্যানার)' },
+        { value: 'preset-social-cta', label: '👍 WhatsApp + Like CTA (সোশ্যাল কল-টু-অ্যাকশন)' }
     ];
 
     function populateBrollAnimStyleOptions(itemType) {
@@ -7749,6 +7803,10 @@ document.addEventListener('DOMContentLoaded', () => {
         // the current animation frame onto the canvas.
         if (isGif) {
             const host = document.getElementById('gif-host');
+            img.decoding = 'sync';
+            img.style.display = 'block';
+            img.style.width = '2px';
+            img.style.height = '2px';
             if (host) host.appendChild(img);
         }
 
@@ -8013,6 +8071,37 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
+    function addCashBroll(animationStyle) {
+        const newItem = {
+            id: brollIdCounter++,
+            type: 'cash',
+            name: animationStyle === 'cash-stack' ? 'Cash Stack' : 'Cash Spin',
+            mode: 'pip',
+            size: 34,
+            x: 0.33,
+            y: 0.20,
+            rotation: 0,
+            startSec: Math.min(state.endTime || state.duration || 5, state.currentTime || 0),
+            endSec: Math.min(state.endTime || state.duration || 5, (state.currentTime || 0) + 3),
+            entryDirection: 'bottom',
+            exitDirection: 'same',
+            animationStyle,
+            animationSpeedSec: 0.55,
+            soundEffect: animationStyle === 'cash-stack' ? 'thud' : 'whoosh',
+            transparentBg: true,
+            visualTemplate: 'standard'
+        };
+        state.brollOverlays.push(newItem);
+        state.selectedBrollId = newItem.id;
+        renderBrollList();
+        showBrollTimingFor(newItem.id);
+        drawFrame();
+        if (window.recordEditorHistory) window.recordEditorHistory(`${newItem.name} added`);
+    }
+
+    if (addCashSpinBtn) addCashSpinBtn.addEventListener('click', () => addCashBroll('cash-spin'));
+    if (addCashStackBtn) addCashStackBtn.addEventListener('click', () => addCashBroll('cash-stack'));
+
     // --- Wings Fly B-roll Presets Helpers ---
     function getBrollPresetValue(item) {
         if (item.animationStyle === 'slide-pop' && item.entryDirection === 'left' && item.soundEffect === 'whoosh') return 'preset-wings-intro';
@@ -8023,6 +8112,10 @@ document.addEventListener('DOMContentLoaded', () => {
         if (item.animationStyle === 'rotate-in' && item.entryDirection === 'top' && item.soundEffect === 'whoosh') return 'preset-rotate-whoosh';
         if (item.animationStyle === 'highlight-sweep' && item.entryDirection === 'bottom' && item.soundEffect === 'chime') return 'preset-highlight-chime';
         if (item.animationStyle === 'arrow-point' && item.entryDirection === 'left' && item.soundEffect === 'whoosh') return 'preset-arrow-whoosh';
+        if (item.visualTemplate === 'phone' && item.animationStyle === 'zoom-pop') return 'preset-phone-app';
+        if (item.visualTemplate === 'laptop' && item.animationStyle === 'slide-pop') return 'preset-laptop-course';
+        if (item.visualTemplate === 'glass-caption' && item.animationStyle === 'zoom-pop') return 'preset-glass-caption';
+        if (item.visualTemplate === 'social-cta' && item.animationStyle === 'slide-pop') return 'preset-social-cta';
         return item.animationStyle;
     }
 
@@ -8068,12 +8161,37 @@ document.addEventListener('DOMContentLoaded', () => {
                 item.entryDirection = 'left';
                 item.soundEffect = 'whoosh';
                 break;
+            case 'preset-phone-app':
+                item.visualTemplate = 'phone';
+                item.animationStyle = 'zoom-pop';
+                item.entryDirection = 'bottom';
+                item.soundEffect = 'pop';
+                break;
+            case 'preset-laptop-course':
+                item.visualTemplate = 'laptop';
+                item.animationStyle = 'slide-pop';
+                item.entryDirection = 'bottom';
+                item.soundEffect = 'whoosh';
+                break;
+            case 'preset-glass-caption':
+                item.visualTemplate = 'glass-caption';
+                item.animationStyle = 'zoom-pop';
+                item.entryDirection = 'bottom';
+                item.soundEffect = 'pop';
+                break;
+            case 'preset-social-cta':
+                item.visualTemplate = 'social-cta';
+                item.animationStyle = 'slide-pop';
+                item.entryDirection = 'bottom';
+                item.soundEffect = 'click';
+                break;
         }
         
         // Sync the form controls to these loaded values
         if (brollEntryDirSelect) brollEntryDirSelect.value = item.entryDirection;
         if (brollExitDirSelect) brollExitDirSelect.value = item.exitDirection || 'same';
         if (brollSoundEffectSelect) brollSoundEffectSelect.value = item.soundEffect;
+        if (brollVisualTemplateSelect) brollVisualTemplateSelect.value = item.visualTemplate || 'standard';
     }
 
     // Computes this item's on-screen box size as a fraction of the canvas, used both for
@@ -8120,6 +8238,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 label.innerText = `🔤 ${modeLabel}: "${preview}"`;
             } else if (item.type === 'video') {
                 label.innerText = `🎬 ${modeLabel} Video B-roll`;
+            } else if (item.type === 'cash') {
+                label.innerText = `💵 ${modeLabel} ${item.name || 'Cash Animation'}`;
             } else {
                 label.innerText = `🖼 ${modeLabel} B-roll`;
             }
@@ -8235,6 +8355,7 @@ document.addEventListener('DOMContentLoaded', () => {
         populateBrollAnimStyleOptions(item.type);
         const defaultStyle = item.mode === 'pip' ? 'slide-pop' : 'zoom';
         if (brollAnimStyleSelect) brollAnimStyleSelect.value = getBrollPresetValue(item) || defaultStyle;
+        if (brollVisualTemplateSelect) brollVisualTemplateSelect.value = item.visualTemplate || 'standard';
         if (brollEntryDirSelect) brollEntryDirSelect.value = item.entryDirection || 'bottom';
         if (brollExitDirSelect) brollExitDirSelect.value = item.exitDirection || 'same';
         if (brollAnimSpeedSlider) {
@@ -8303,6 +8424,23 @@ document.addEventListener('DOMContentLoaded', () => {
                 
                 drawFrame();
             }
+        });
+    }
+
+    if (brollVisualTemplateSelect) {
+        brollVisualTemplateSelect.addEventListener('change', (e) => {
+            const item = state.brollOverlays.find(b => b.id === state.selectedBrollId);
+            if (!item) return;
+            item.visualTemplate = e.target.value;
+            if (item.visualTemplate === 'phone' && item.animationStyle === 'zoom') {
+                item.animationStyle = 'zoom-pop';
+                if (brollAnimStyleSelect) brollAnimStyleSelect.value = 'zoom-pop';
+            } else if ((item.visualTemplate === 'laptop' || item.visualTemplate === 'social-cta') && item.animationStyle === 'zoom') {
+                item.animationStyle = 'slide-pop';
+                item.entryDirection = 'bottom';
+                if (brollAnimStyleSelect) brollAnimStyleSelect.value = 'slide-pop';
+            }
+            drawFrame();
         });
     }
 
@@ -9362,6 +9500,126 @@ document.addEventListener('DOMContentLoaded', () => {
     // Export intro/outro segment drawing so exporter.js can render it straight
     // onto the same canvas/stream MediaRecorder is capturing (Phase 5C)
     window.drawIntroOutroSegment = drawIntroOutroSegment;
+
+    function drawCashBroll(ctx, item, x, y, width, height, elapsed, animDuration) {
+        const stackMode = item.animationStyle === 'cash-stack';
+        const progress = Math.max(0, Math.min(1, elapsed / Math.max(0.1, animDuration)));
+        const count = stackMode ? 4 : 7;
+        const billW = width * 0.68;
+        const billH = height * 0.46;
+        const centerX = x + width / 2;
+        const centerY = y + height / 2;
+
+        ctx.save();
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        for (let index = 0; index < count; index++) {
+            const delay = stackMode ? index * 0.13 : index * 0.045;
+            const localProgress = Math.max(0, Math.min(1, (progress - delay) / Math.max(0.01, 1 - delay)));
+            if (localProgress <= 0) continue;
+            const eased = easeOutBackOvershoot(localProgress);
+            const angle = stackMode ? 0 : ((index / count) * Math.PI * 2 + elapsed * 2.2);
+            const radius = stackMode ? 0 : width * 0.24 * (1 - eased);
+            const bx = centerX + Math.cos(angle) * radius - billW / 2;
+            const by = centerY + Math.sin(angle) * radius * 0.55 - billH / 2 - (stackMode ? index * height * 0.055 * (1 - eased) : 0);
+            ctx.save();
+            ctx.translate(bx + billW / 2, by + billH / 2);
+            ctx.rotate(stackMode ? 0 : (1 - eased) * (index % 2 ? -0.7 : 0.7));
+            ctx.scale(0.55 + 0.45 * eased, 0.55 + 0.45 * eased);
+            ctx.translate(-billW / 2, -billH / 2);
+            ctx.fillStyle = index % 2 ? '#7acb86' : '#98dc9d';
+            ctx.strokeStyle = '#276749';
+            ctx.lineWidth = Math.max(1.5, billH * 0.045);
+            ctx.beginPath();
+            if (ctx.roundRect) ctx.roundRect(0, 0, billW, billH, billH * 0.12);
+            else ctx.rect(0, 0, billW, billH);
+            ctx.fill();
+            ctx.stroke();
+            ctx.fillStyle = '#e4f7df';
+            ctx.fillRect(billW * 0.43, 0, billW * 0.14, billH);
+            ctx.fillStyle = '#17623a';
+            ctx.beginPath();
+            ctx.arc(billW / 2, billH / 2, billH * 0.22, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.fillStyle = '#ffffff';
+            ctx.font = `bold ${Math.max(13, billH * 0.4)}px "Segoe UI", sans-serif`;
+            ctx.fillText('$', billW / 2, billH / 2 + 1);
+            ctx.restore();
+        }
+        ctx.restore();
+    }
+
+    function drawBrollVisualTemplate(ctx, item, x, y, width, height, alpha) {
+        const template = item.visualTemplate || 'standard';
+        if (template === 'standard' || template === 'glass-caption') return;
+
+        ctx.save();
+        ctx.globalAlpha = Math.max(0, Math.min(1, alpha));
+        const minSide = Math.max(1, Math.min(width, height));
+
+        if (template === 'phone') {
+            const bezel = Math.max(7, minSide * 0.055);
+            const radius = Math.max(18, minSide * 0.14);
+            ctx.strokeStyle = '#101114';
+            ctx.lineWidth = bezel;
+            ctx.shadowColor = 'rgba(0,0,0,0.5)';
+            ctx.shadowBlur = bezel * 1.8;
+            ctx.beginPath();
+            if (ctx.roundRect) ctx.roundRect(x + bezel / 2, y + bezel / 2, width - bezel, height - bezel, radius);
+            else ctx.rect(x + bezel / 2, y + bezel / 2, width - bezel, height - bezel);
+            ctx.stroke();
+            ctx.shadowBlur = 0;
+            const islandW = Math.min(width * 0.34, height * 0.7);
+            const islandH = Math.max(9, bezel * 1.1);
+            ctx.fillStyle = '#08090a';
+            ctx.beginPath();
+            if (ctx.roundRect) ctx.roundRect(x + (width - islandW) / 2, y + bezel * 0.45, islandW, islandH, islandH / 2);
+            else ctx.rect(x + (width - islandW) / 2, y + bezel * 0.45, islandW, islandH);
+            ctx.fill();
+        } else if (template === 'laptop') {
+            const bezel = Math.max(6, minSide * 0.042);
+            const screenH = height * 0.84;
+            ctx.strokeStyle = '#17181c';
+            ctx.lineWidth = bezel;
+            ctx.shadowColor = 'rgba(0,0,0,0.48)';
+            ctx.shadowBlur = bezel * 1.6;
+            ctx.strokeRect(x + bezel / 2, y + bezel / 2, width - bezel, screenH - bezel / 2);
+            ctx.shadowBlur = 0;
+            ctx.fillStyle = '#2c2d32';
+            ctx.beginPath();
+            ctx.moveTo(x - width * 0.08, y + screenH);
+            ctx.lineTo(x + width * 1.08, y + screenH);
+            ctx.lineTo(x + width * 0.96, y + height);
+            ctx.lineTo(x + width * 0.04, y + height);
+            ctx.closePath();
+            ctx.fill();
+            ctx.fillStyle = 'rgba(0,0,0,0.38)';
+            ctx.fillRect(x + width * 0.37, y + screenH + height * 0.04, width * 0.26, height * 0.035);
+        } else if (template === 'social-cta') {
+            const buttonH = Math.max(28, height * 0.2);
+            const gap = Math.max(8, width * 0.035);
+            const buttonW = (width - gap) / 2;
+            const by = y + height - buttonH * 0.72;
+            const drawButton = (bx, color, icon, label) => {
+                ctx.fillStyle = color;
+                ctx.shadowColor = 'rgba(0,0,0,0.3)';
+                ctx.shadowBlur = 8;
+                ctx.beginPath();
+                if (ctx.roundRect) ctx.roundRect(bx, by, buttonW, buttonH, buttonH / 2);
+                else ctx.rect(bx, by, buttonW, buttonH);
+                ctx.fill();
+                ctx.shadowBlur = 0;
+                ctx.fillStyle = '#ffffff';
+                ctx.font = `bold ${Math.max(12, buttonH * 0.42)}px "Segoe UI", sans-serif`;
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                ctx.fillText(`${icon}  ${label}`, bx + buttonW / 2, by + buttonH / 2 + 1);
+            };
+            drawButton(x, '#1877f2', '👍', 'Like');
+            drawButton(x + buttonW + gap, '#25d366', '◔', 'WhatsApp');
+        }
+        ctx.restore();
+    }
     
     // --- Helper Utilities ---
     function formatTime(seconds) {
