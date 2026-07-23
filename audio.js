@@ -3088,7 +3088,8 @@ document.addEventListener('DOMContentLoaded', () => {
         makeup.connect(offlineCtx.destination);
 
         // --- 1. Video Clips Audio ---
-        let timelineTime = 0;
+        const introDur = state.introEnabled ? Math.max(0.3, parseFloat(state.introDuration) || 3) : 0;
+        let timelineTime = introDur;
         const decodedVideoBuffers = [];
 
         // Pre-decode all video clips
@@ -3096,6 +3097,9 @@ document.addEventListener('DOMContentLoaded', () => {
             const clip = state.clips[i];
             const clipTrimDuration = Math.max(0, clip.end - clip.start);
             if (clipTrimDuration <= 0) continue;
+
+            const clipSpeed = Math.max(0.5, Math.min(2, Number(clip.speed) || 1));
+            const clipOutputDuration = clipTrimDuration / clipSpeed;
 
             if (clip.type !== 'image' && clip.file) {
                 try {
@@ -3108,19 +3112,21 @@ document.addEventListener('DOMContentLoaded', () => {
                         buffer: audioBuffer,
                         clip,
                         timelineStart: timelineTime,
-                        clipTrimDuration
+                        clipTrimDuration,
+                        clipSpeed
                     });
                 } catch (err) {
                     console.error(`Error decoding audio for clip ${clip.name}:`, err);
                 }
             }
-            timelineTime += clipTrimDuration;
+            timelineTime += clipOutputDuration;
         }
 
         // Add Video clips to offlineCtx
-        decodedVideoBuffers.forEach(({ buffer, clip, timelineStart, clipTrimDuration }) => {
+        decodedVideoBuffers.forEach(({ buffer, clip, timelineStart, clipTrimDuration, clipSpeed }) => {
             const source = offlineCtx.createBufferSource();
             source.buffer = buffer;
+            source.playbackRate.setValueAtTime(clipSpeed, 0);
 
             const clipGain = offlineCtx.createGain();
             clipGain.gain.setValueAtTime(state.videoVolume, 0);
@@ -3166,7 +3172,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
 
                 voGain.connect(hp);
-                source.start(0);
+                source.start(introDur);
             } catch (err) {
                 console.error('Error decoding voiceover audio:', err);
             }
@@ -3204,14 +3210,14 @@ document.addEventListener('DOMContentLoaded', () => {
                         g.gain.setValueAtTime(0.9, 0);
                         src.connect(g);
                         g.connect(makeup);
-                        src.start(startSec);
+                        src.start(introDur + startSec);
                     }
                 } else {
                     const animDur = item.animationSpeedSec || 0.4;
-                    synthBrollSfx(offlineCtx, makeup, item.soundEffect, startSec);
+                    synthBrollSfx(offlineCtx, makeup, item.soundEffect, introDur + startSec);
                     const exitSec = Math.max(0, Math.min(totalDuration, (item.endSec || startSec) - animDur));
                     if (exitSec - startSec > 0.05) {
-                        synthBrollSfx(offlineCtx, makeup, item.soundEffect, exitSec);
+                        synthBrollSfx(offlineCtx, makeup, item.soundEffect, introDur + exitSec);
                     }
                 }
             }
@@ -3241,9 +3247,10 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
                 
                 // Check video clips
-                decodedVideoBuffers.forEach(({ buffer, clip, timelineStart, clipTrimDuration }) => {
-                    if (t >= timelineStart && t < timelineStart + clipTrimDuration) {
-                        const clipTime = clip.start + (t - timelineStart);
+                decodedVideoBuffers.forEach(({ buffer, clip, timelineStart, clipTrimDuration, clipSpeed }) => {
+                    const clipOutputDuration = clipTrimDuration / clipSpeed;
+                    if (t >= timelineStart && t < timelineStart + clipOutputDuration) {
+                        const clipTime = clip.start + (t - timelineStart) * clipSpeed;
                         const sampleOffset = Math.floor(clipTime * buffer.sampleRate);
                         if (sampleOffset < buffer.length) {
                             const len = Math.min(buffer.length - sampleOffset, Math.floor(interval * buffer.sampleRate));

@@ -23,6 +23,16 @@ let whisperTranscriberPromise = null;
 // Parse JSON bodies for the TTS proxy route.
 app.use(express.json({ limit: '2mb' }));
 
+app.post('/api/log', (req, res) => {
+    try {
+        const logPath = path.join(process.env.SF_DATA_DIR || __dirname, 'client_debug.log');
+        fs.appendFileSync(logPath, `[${new Date().toISOString()}] ${req.body.message}\n`);
+        res.sendStatus(200);
+    } catch (e) {
+        res.status(500).send(e.message);
+    }
+});
+
 async function getWhisperTranscriber() {
     if (!whisperTranscriberPromise) {
         whisperTranscriberPromise = (async () => {
@@ -224,6 +234,17 @@ wss.on('connection', (ws) => {
 
     ws.on('message', async (message, isBinary) => {
         try {
+            try {
+                const logPath = path.join(DATA_DIR, 'ws_debug.log');
+                if (!isBinary) {
+                    fs.appendFileSync(logPath, `[${new Date().toISOString()}] TEXT: ${message.toString()}\n`);
+                } else {
+                    fs.appendFileSync(logPath, `[${new Date().toISOString()}] BINARY: len=${message.length}, mode=${mode}, nextFrameIndex=${frameCount + 1}\n`);
+                }
+            } catch (logErr) {
+                console.error('Failed to write ws_debug.log:', logErr);
+            }
+
             if (!isBinary) {
                 // Handle JSON control messages
                 const data = JSON.parse(message.toString());
@@ -410,7 +431,16 @@ function compileVideo(ws, tempDir, filename, totalFrames) {
             console.error('FFmpeg compile error:', err);
             console.error('FFmpeg stderr:', stderr);
             try {
-                fs.writeFileSync(path.join(DATA_DIR, 'ffmpeg_error.log'), `Error: ${err.message}\nStdout:\n${stdout}\nStderr:\n${stderr}`);
+                const files = fs.existsSync(tempDir) ? fs.readdirSync(tempDir) : [];
+                fs.writeFileSync(
+                    path.join(DATA_DIR, 'ffmpeg_error.log'),
+                    `Error: ${err.message}\n` +
+                    `TempDir exists: ${fs.existsSync(tempDir)}\n` +
+                    `TempDir path: ${tempDir}\n` +
+                    `TempDir files count: ${files.length}\n` +
+                    `Files snippet: ${files.slice(0, 50).join(', ')}\n` +
+                    `Stdout:\n${stdout}\nStderr:\n${stderr}`
+                );
             } catch (writeErr) {
                 console.error('Failed to write ffmpeg_error.log:', writeErr);
             }

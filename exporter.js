@@ -2,6 +2,19 @@
 document.addEventListener('DOMContentLoaded', () => {
     const state = window.VideoEditor;
 
+    async function serverLog(message) {
+        console.log(message);
+        try {
+            await fetch('/api/log', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ message })
+            });
+        } catch (e) {
+            console.error('Failed to send log to server:', e);
+        }
+    }
+
     // requestAnimationFrame is throttled/paused by the browser when the tab is
     // backgrounded (minimized, switched away from) to save power. That silently
     // breaks export in two ways at once: the canvas stops getting redrawn (so
@@ -236,6 +249,22 @@ document.addEventListener('DOMContentLoaded', () => {
         const canvas = state.canvas;
         const video = state.video;
 
+        await serverLog(`=== Export Pipeline Started ===`);
+        await serverLog(`totalDuration: ${totalDuration}, isBatch: ${isBatch}, clips: ${JSON.stringify((state.clips || []).map(c => ({ id: c.id, type: c.type, url: c.url, start: c.start, end: c.end, speed: c.speed })))}`);
+
+        if (!canvas.width || !canvas.height) {
+            await serverLog(`Canvas dimensions are invalid (${canvas.width}x${canvas.height}). Resetting via updateCanvasDimensions.`);
+            if (window.updateCanvasDimensions) {
+                window.updateCanvasDimensions();
+            }
+            if (!canvas.width || !canvas.height) {
+                // Hard fallback to standard HD
+                canvas.width = 1280;
+                canvas.height = 720;
+            }
+            await serverLog(`Reset canvas dimensions to: ${canvas.width}x${canvas.height}`);
+        }
+
         // Remember which clip was active in the editor so we can restore it after export finishes
         const originalActiveClipId = state.activeClipId;
         const originalSrc = video.src;
@@ -337,6 +366,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 reader.readAsDataURL(state.customThumbnailFile);
             });
         }
+        await serverLog(`Sending init control message, totalFrames: ${grandTotalFrames}, filename: ${filename}`);
         ws.send(JSON.stringify({
             type: 'init',
             totalFrames: grandTotalFrames,
@@ -345,9 +375,10 @@ document.addEventListener('DOMContentLoaded', () => {
         }));
 
         await new Promise((resolve) => {
-            const onMsg = (event) => {
+            const onMsg = async (event) => {
                 const data = JSON.parse(event.data);
                 if (data.type === 'init_ok') {
+                    await serverLog(`Received init_ok: renderId=${data.renderId}`);
                     ws.removeEventListener('message', onMsg);
                     resolve();
                 }
@@ -357,11 +388,13 @@ document.addEventListener('DOMContentLoaded', () => {
 
         // Send audio file if we rendered one
         if (audioBlob && !exportCancelled) {
+            await serverLog(`Sending audio_start, blob size: ${audioBlob.size}`);
             ws.send(JSON.stringify({ type: 'audio_start' }));
             await new Promise((resolve) => {
-                const onMsg = (event) => {
+                const onMsg = async (event) => {
                     const data = JSON.parse(event.data);
                     if (data.type === 'audio_ready') {
+                        await serverLog('Received audio_ready. Sending audioBlob.');
                         ws.removeEventListener('message', onMsg);
                         resolve();
                     }
@@ -370,9 +403,10 @@ document.addEventListener('DOMContentLoaded', () => {
             });
             ws.send(audioBlob);
             await new Promise((resolve) => {
-                const onMsg = (event) => {
+                const onMsg = async (event) => {
                     const data = JSON.parse(event.data);
                     if (data.type === 'audio_ok') {
+                        await serverLog('Received audio_ok.');
                         ws.removeEventListener('message', onMsg);
                         resolve();
                     }
@@ -438,11 +472,14 @@ document.addEventListener('DOMContentLoaded', () => {
         // Runs at a controlled rate (0.4x) to decode smoothly without seeking.
         // Automatically pauses/resumes if canvas compression lags behind.
         async function captureVideoClipSequential(clip, clipTrimStart, clipTrimEnd, clipFrames, clipIndex) {
+            await serverLog(`captureVideoClipSequential start: clipTrimStart=${clipTrimStart}, clipTrimEnd=${clipTrimEnd}, clipFrames=${clipFrames}, clipIndex=${clipIndex}`);
             const clipSpeed = Math.max(0.5, Math.min(2, Number(clip.speed) || 1));
             const sourceTimeForFrame = (frame) => clipTrimStart + ((frame / 30) * clipSpeed);
             video.pause();
             video.playbackRate = 0.4 * clipSpeed; // Stable decoding while preserving the selected timeline speed.
+            await serverLog(`Seeking to start of clip: ${clipTrimStart}`);
             await waitForSeek(video, clipTrimStart);
+            await serverLog(`Seeked to ${clipTrimStart}. Beginning frame processing.`);
 
             let clipFrameIndex = 0;
             let finished = false;
@@ -456,6 +493,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 const finish = async () => {
                     if (finished) return;
                     finished = true;
+                    await serverLog(`finish() called. clipFrameIndex: ${clipFrameIndex}, activeBlobPromises: ${activeBlobPromises.length}`);
                     if (safetyTimer) { clearTimeout(safetyTimer); safetyTimer = null; }
                     if (frameCallbackId !== null && video.cancelVideoFrameCallback) {
                         video.cancelVideoFrameCallback(frameCallbackId);
@@ -464,6 +502,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     video.pause();
                     // Wait for all remaining canvas compression/uploads to finish
                     await Promise.all(activeBlobPromises);
+                    await serverLog('All activeBlobPromises resolved. Resolving sequential clip promise.');
                     resolve();
                 };
 
@@ -622,18 +661,24 @@ document.addEventListener('DOMContentLoaded', () => {
 
             // Load clip
             if (clip.type === 'image') {
+                await serverLog(`Clip ${clipIndex + 1}/${state.clips.length} [image]: id=${clip.id}`);
                 video.src = '';
                 state.duration = clip.duration;
                 state.startTime = clipTrimStart;
                 state.endTime = clipTrimEnd;
                 state.activeClipId = clip.id;
             } else {
+                await serverLog(`Clip ${clipIndex + 1}/${state.clips.length} [video]: id=${clip.id}, url=${clip.url}`);
                 if (video.src !== clip.url) {
+                    await serverLog(`Changing video src to ${clip.url} and calling load()`);
                     await new Promise((resolve) => {
                         video.onloadedmetadata = () => resolve();
                         video.src = clip.url;
                         video.load();
                     });
+                    await serverLog(`Video onloadedmetadata fired.`);
+                } else {
+                    await serverLog(`Video src already matches ${clip.url}. Skipping reload.`);
                 }
                 state.duration = clip.duration;
                 state.startTime = clipTrimStart;
@@ -736,20 +781,23 @@ document.addEventListener('DOMContentLoaded', () => {
         renderStatusText.innerText = 'সার্ভারে ভিডিও তৈরি হচ্ছে... (Compiling video on server...)';
         setProgress(90);
 
+        await serverLog('Sending compile control message...');
         ws.send(JSON.stringify({ type: 'compile' }));
 
         const compileResult = await new Promise((resolve, reject) => {
-            const onMsg = (event) => {
+            const onMsg = async (event) => {
                 const data = JSON.parse(event.data);
                 if (data.type === 'progress' && data.step === 'compiling') {
                     const percent = 90 + Math.round(data.current * 0.08); // 90% to 98%
                     setProgress(percent);
                 }
                 else if (data.type === 'complete') {
+                    await serverLog(`Compilation successful! downloadUrl=${data.downloadUrl}`);
                     ws.removeEventListener('message', onMsg);
                     resolve(data);
                 }
                 else if (data.type === 'error') {
+                    await serverLog(`Compilation failed: ${data.message}`);
                     ws.removeEventListener('message', onMsg);
                     reject(new Error(data.message));
                 }

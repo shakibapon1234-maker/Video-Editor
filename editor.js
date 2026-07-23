@@ -1208,8 +1208,11 @@ document.addEventListener('DOMContentLoaded', () => {
     function updateCanvasDimensions() {
         if (!state.duration) return;
         
-        const videoWidth = state.video.videoWidth;
-        const videoHeight = state.video.videoHeight;
+        const activeClip = state.clips.find(c => c.id === state.activeClipId);
+        const isImage = activeClip && activeClip.type === 'image';
+        
+        const videoWidth = isImage ? (activeClip.imageImg?.naturalWidth || 640) : state.video.videoWidth;
+        const videoHeight = isImage ? (activeClip.imageImg?.naturalHeight || 360) : state.video.videoHeight;
         
         // Use cropped dimensions if not currently adjusting crop
         const currentVideoW = (state.isAdjustingCrop) ? videoWidth : ((state.cropW || 1) * videoWidth);
