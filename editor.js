@@ -1645,6 +1645,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (window.onPlaybackStop) {
             window.onPlaybackStop();
         }
+        ensureAnimatedGifPreview();
     }
     
     function updateLoop() {
@@ -1695,6 +1696,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!state.isPlaying && state.duration) {
             updatePlayhead();
             drawFrame();
+            ensureAnimatedGifPreview();
         }
     }
     window.redrawPausedFrame = redrawPausedFrame;
@@ -1703,12 +1705,11 @@ document.addEventListener('DOMContentLoaded', () => {
     let gifPreviewRefreshActive = false;
 
     function refreshAnimatedGifPreview() {
-        const hasVisibleGif = state.brollOverlays.some((item) => (
-            item.type === 'gif'
-            && item.imageImg
-            && state.currentTime >= item.startSec
-            && state.currentTime <= item.endSec
-        ));
+        const hasVisibleGif = state.brollOverlays.some((item) => {
+            if (item.type !== 'gif' || !item.imageImg) return false;
+            const isBeingEdited = state.currentStep === 3 && !state.isPlaying && item.id === state.selectedBrollId;
+            return isBeingEdited || (state.currentTime >= item.startSec && state.currentTime <= item.endSec);
+        });
 
         if (!hasVisibleGif || state.isPlaying || state.customExportTime !== undefined) {
             gifPreviewRefreshActive = false;
@@ -1732,6 +1733,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!state.isPlaying) {
             updatePlayhead();
             drawFrame();
+            ensureAnimatedGifPreview();
         }
     });
     
@@ -2942,7 +2944,7 @@ document.addEventListener('DOMContentLoaded', () => {
             };
 
             state.brollOverlays.forEach((item) => {
-                if (item.type !== 'text' && item.type !== 'cash' && !item.imageImg) return;
+                if (item.type !== 'text' && item.type !== 'cash' && item.type !== 'built-in' && !item.imageImg) return;
 
                 // Reset one-shot sound-effect flags whenever playback is well before
                 // this item's start, so re-playing/looping over it triggers the
@@ -3062,9 +3064,22 @@ document.addEventListener('DOMContentLoaded', () => {
                         const metrics = state.ctx.measureText(item.text);
                         boxW = metrics.width + 32;
                         boxH = item.fontSize + 24;
-                    } else if (item.type === 'cash') {
-                        boxW = canvasW * (item.size / 100);
-                        boxH = boxW * 0.62;
+                    } else if (item.type === 'cash' || item.type === 'built-in') {
+                        if (item.pipW !== undefined && item.pipH !== undefined) {
+                            boxW = item.pipW * canvasW;
+                            boxH = item.pipH * canvasH;
+                        } else {
+                            boxW = canvasW * (item.size / 100);
+                            if (item.type === 'built-in' && item.builtInType !== 'cash') {
+                                boxH = boxW;
+                            } else {
+                                let imgAspect = 0.62;
+                                if (state.takaImage && state.takaImage.complete && state.takaImage.naturalWidth > 0) {
+                                    imgAspect = state.takaImage.naturalHeight / state.takaImage.naturalWidth;
+                                }
+                                boxH = boxW * imgAspect;
+                            }
+                        }
                     } else {
                         if (item.pipW !== undefined && item.pipH !== undefined) {
                             // Free-form resize set by dragging corner/edge handles
@@ -3190,7 +3205,7 @@ document.addEventListener('DOMContentLoaded', () => {
                             scaleAmt = 0.75 + 0.25 * eased;
                             alpha = Math.max(0.15, eased);
                         }
-                    } else if (style === 'zoom-pop' || style === 'confetti-pop' || style === 'heart-burst' || style === 'cash-spin' || style === 'cash-stack') {
+                    } else if (style === 'zoom-pop' || style === 'confetti-pop' || style === 'heart-burst' || style === 'cash-spin' || style === 'cash-stack' || style === 'question-bounce' || style === 'checkmark-pop' || style === 'magnifier-zoom') {
                         // Quick pop-in scale from 70% with a bouncy overshoot — distinct
                         // from the slow continuous Ken Burns 'zoom' below. 'confetti-pop'
                         // and 'heart-burst' reuse this exact box pop and additionally burst
@@ -3454,8 +3469,8 @@ document.addEventListener('DOMContentLoaded', () => {
                         state.ctx.stroke();
                         state.ctx.restore();
                     }
-                } else if (item.type === 'cash') {
-                    drawCashBroll(state.ctx, item, drawBoxX, drawBoxY, boxW, boxH, tIn, animDur);
+                } else if (item.type === 'cash' || item.type === 'built-in') {
+                    drawBuiltInBroll(state.ctx, item, drawBoxX, drawBoxY, boxW, boxH, tIn, animDur);
                 } else {
                     // Source rect: cover-crop to fill the box (PiP and fullscreen@100%).
                     // Exception 1: fullscreen at < 100% size shows the FULL image (contain)
@@ -5311,7 +5326,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const currentTime = state.currentTime || 0;
         for (let i = state.brollOverlays.length - 1; i >= 0; i--) {
             const item = state.brollOverlays[i];
-            if (item.type !== 'text' && item.type !== 'cash' && !item.imageImg) continue;
+            if (item.type !== 'text' && item.type !== 'cash' && item.type !== 'built-in' && !item.imageImg) continue;
 
             // Only let the user click-select an overlay that's actually visible on
             // screen right now — same rule the render loop uses. Without this, an
@@ -5363,10 +5378,15 @@ document.addEventListener('DOMContentLoaded', () => {
                     pipW = metrics.width + 32;
                     pipH = item.fontSize + 24;
                 } else {
-                    pipW = canvasW * (item.size / 100);
-                    pipH = item.type === 'cash'
-                        ? pipW * 0.62
-                        : pipW * (item.imageImg.naturalHeight / item.imageImg.naturalWidth);
+                    if (item.pipW !== undefined && item.pipH !== undefined) {
+                        pipW = item.pipW * canvasW;
+                        pipH = item.pipH * canvasH;
+                    } else {
+                        pipW = canvasW * (item.size / 100);
+                        pipH = (item.type === 'cash' || item.type === 'built-in')
+                            ? (item.type === 'built-in' && item.builtInType !== 'cash' ? pipW : (state.takaImage && state.takaImage.complete && state.takaImage.naturalWidth > 0 ? pipW * (state.takaImage.naturalHeight / state.takaImage.naturalWidth) : pipW * 0.62))
+                            : pipW * (item.imageImg.naturalHeight / item.imageImg.naturalWidth);
+                    }
                     if (item.visualTemplate === 'phone') pipH = pipW * 2.06;
                     if (item.visualTemplate === 'laptop') pipH = pipW * 0.70;
                 }
@@ -5430,8 +5450,8 @@ document.addEventListener('DOMContentLoaded', () => {
                     pipH = item.pipH * canvasH;
                 } else {
                     pipW = canvasW * (item.size / 100);
-                    pipH = item.type === 'cash'
-                        ? pipW * 0.62
+                    pipH = (item.type === 'cash' || item.type === 'built-in')
+                        ? (item.type === 'built-in' && item.builtInType !== 'cash' ? pipW : (state.takaImage && state.takaImage.complete && state.takaImage.naturalWidth > 0 ? pipW * (state.takaImage.naturalHeight / state.takaImage.naturalWidth) : pipW * 0.62))
                         : (item.imageImg ? pipW * (item.imageImg.naturalHeight / item.imageImg.naturalWidth) : pipW);
                     if (item.visualTemplate === 'phone') pipH = pipW * 2.06;
                     if (item.visualTemplate === 'laptop') pipH = pipW * 0.70;
@@ -6787,6 +6807,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (recordedAction && window.recordEditorHistory) {
             window.recordEditorHistory(recordedAction);
         }
+        ensureAnimatedGifPreview();
     }
 
     // --- Video Crop Tool Bindings ---
@@ -7592,6 +7613,10 @@ document.addEventListener('DOMContentLoaded', () => {
     const brollVisualTemplateSelect = document.getElementById('broll-visual-template');
     const addCashSpinBtn = document.getElementById('add-cash-spin-btn');
     const addCashStackBtn = document.getElementById('add-cash-stack-btn');
+    const addBuiltQuestionBtn = document.getElementById('add-built-question-btn');
+    const addBuiltCheckmarkBtn = document.getElementById('add-built-checkmark-btn');
+    const addBuiltCrossmarkBtn = document.getElementById('add-built-crossmark-btn');
+    const addBuiltMagnifierBtn = document.getElementById('add-built-magnifier-btn');
 
     const brollEditTextSection = document.getElementById('broll-edit-text-section');
     const brollEditTextInput = document.getElementById('broll-edit-text-input');
@@ -7805,8 +7830,8 @@ document.addEventListener('DOMContentLoaded', () => {
             const host = document.getElementById('gif-host');
             img.decoding = 'sync';
             img.style.display = 'block';
-            img.style.width = '2px';
-            img.style.height = '2px';
+            img.style.width = '1px';
+            img.style.height = '1px';
             if (host) host.appendChild(img);
         }
 
@@ -8099,8 +8124,48 @@ document.addEventListener('DOMContentLoaded', () => {
         if (window.recordEditorHistory) window.recordEditorHistory(`${newItem.name} added`);
     }
 
+    function addBuiltInBroll(builtInType, animationStyle) {
+        let name = 'Built-in';
+        let sound = 'pop';
+        if (builtInType === 'question') { name = 'Question Mark'; sound = 'pop'; }
+        else if (builtInType === 'checkmark') { name = 'Checkmark'; sound = 'chime'; }
+        else if (builtInType === 'cross') { name = 'Cross Mark'; sound = 'thud'; }
+        else if (builtInType === 'magnifier') { name = 'Magnifier'; sound = 'whoosh'; }
+
+        const newItem = {
+            id: brollIdCounter++,
+            type: 'built-in',
+            builtInType: builtInType,
+            name: name,
+            mode: 'pip',
+            size: 20, // default square badge size
+            x: 0.40,
+            y: 0.40,
+            rotation: 0,
+            startSec: Math.max(0, state.currentTime || 0),
+            endSec: Math.min(state.endTime || state.duration || 5, (state.currentTime || 0) + 3),
+            entryDirection: 'bottom',
+            exitDirection: 'same',
+            animationStyle: animationStyle,
+            animationSpeedSec: 0.55,
+            soundEffect: sound,
+            transparentBg: true,
+            visualTemplate: 'standard'
+        };
+        state.brollOverlays.push(newItem);
+        state.selectedBrollId = newItem.id;
+        renderBrollList();
+        showBrollTimingFor(newItem.id);
+        drawFrame();
+        if (window.recordEditorHistory) window.recordEditorHistory(`${newItem.name} added`);
+    }
+
     if (addCashSpinBtn) addCashSpinBtn.addEventListener('click', () => addCashBroll('cash-spin'));
     if (addCashStackBtn) addCashStackBtn.addEventListener('click', () => addCashBroll('cash-stack'));
+    if (addBuiltQuestionBtn) addBuiltQuestionBtn.addEventListener('click', () => addBuiltInBroll('question', 'zoom-pop'));
+    if (addBuiltCheckmarkBtn) addBuiltCheckmarkBtn.addEventListener('click', () => addBuiltInBroll('checkmark', 'zoom-pop'));
+    if (addBuiltCrossmarkBtn) addBuiltCrossmarkBtn.addEventListener('click', () => addBuiltInBroll('cross', 'zoom-pop'));
+    if (addBuiltMagnifierBtn) addBuiltMagnifierBtn.addEventListener('click', () => addBuiltInBroll('magnifier', 'zoom-pop'));
 
     // --- Wings Fly B-roll Presets Helpers ---
     function getBrollPresetValue(item) {
@@ -8238,8 +8303,15 @@ document.addEventListener('DOMContentLoaded', () => {
                 label.innerText = `🔤 ${modeLabel}: "${preview}"`;
             } else if (item.type === 'video') {
                 label.innerText = `🎬 ${modeLabel} Video B-roll`;
-            } else if (item.type === 'cash') {
-                label.innerText = `💵 ${modeLabel} ${item.name || 'Cash Animation'}`;
+            } else if (item.type === 'cash' || item.type === 'built-in') {
+                let emoji = '💵';
+                let typeName = item.name || 'Cash Animation';
+                if (item.builtInType === 'question') { emoji = '❓'; typeName = 'প্রশ্ন চিহ্ন (Question Mark)'; }
+                else if (item.builtInType === 'checkmark') { emoji = '✔️'; typeName = 'টিক চিহ্ন (Checkmark)'; }
+                else if (item.builtInType === 'cross') { emoji = '❌'; typeName = 'ক্রস চিহ্ন (Cross Mark)'; }
+                else if (item.builtInType === 'magnifier') { emoji = '🔍'; typeName = 'ম্যাগনিফায়ার (Magnifier)'; }
+                else if (item.builtInType === 'cash' || item.type === 'cash') { emoji = '💵'; typeName = item.name || 'টাকা অ্যানিমেশন'; }
+                label.innerText = `${emoji} ${modeLabel}: ${typeName}`;
             } else {
                 label.innerText = `🖼 ${modeLabel} B-roll`;
             }
@@ -8258,6 +8330,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 renderBrollList();
                 showBrollTimingFor(item.id);
                 drawFrame();
+                ensureAnimatedGifPreview();
             });
 
             brollListEl.appendChild(row);
@@ -9501,12 +9574,51 @@ document.addEventListener('DOMContentLoaded', () => {
     // onto the same canvas/stream MediaRecorder is capturing (Phase 5C)
     window.drawIntroOutroSegment = drawIntroOutroSegment;
 
+    function makeImageTransparent(img) {
+        try {
+            const canvas = document.createElement('canvas');
+            canvas.width = img.naturalWidth;
+            canvas.height = img.naturalHeight;
+            const tempCtx = canvas.getContext('2d');
+            tempCtx.drawImage(img, 0, 0);
+            const imgData = tempCtx.getImageData(0, 0, canvas.width, canvas.height);
+            const data = imgData.data;
+            for (let i = 0; i < data.length; i += 4) {
+                const r = data[i];
+                const g = data[i+1];
+                const b = data[i+2];
+                // Make near-white background pixels fully transparent
+                if (r > 240 && g > 240 && b > 240) {
+                    data[i+3] = 0;
+                }
+            }
+            tempCtx.putImageData(imgData, 0, 0);
+            return canvas;
+        } catch (err) {
+            console.error("Error making image transparent:", err);
+            return img;
+        }
+    }
+
     function drawCashBroll(ctx, item, x, y, width, height, elapsed, animDuration) {
         const stackMode = item.animationStyle === 'cash-stack';
         const progress = Math.max(0, Math.min(1, elapsed / Math.max(0.1, animDuration)));
         const count = stackMode ? 4 : 7;
+
+        if (!state.takaImage) {
+            state.takaImage = new Image();
+            state.takaImage.src = 'public/taka_1000.png?v=2';
+            state.takaImage.onload = () => {
+                state.takaImageTransparent = state.takaImage;
+                if (typeof drawFrame === 'function') drawFrame();
+            };
+        }
+
+        const drawable = state.takaImageTransparent || state.takaImage;
+        const imgAspect = (drawable && drawable.width > 0) ? (drawable.height / drawable.width) : 0.62;
+
         const billW = width * 0.68;
-        const billH = height * 0.46;
+        const billH = billW * imgAspect;
         const centerX = x + width / 2;
         const centerY = y + height / 2;
 
@@ -9527,24 +9639,201 @@ document.addEventListener('DOMContentLoaded', () => {
             ctx.rotate(stackMode ? 0 : (1 - eased) * (index % 2 ? -0.7 : 0.7));
             ctx.scale(0.55 + 0.45 * eased, 0.55 + 0.45 * eased);
             ctx.translate(-billW / 2, -billH / 2);
-            ctx.fillStyle = index % 2 ? '#7acb86' : '#98dc9d';
-            ctx.strokeStyle = '#276749';
-            ctx.lineWidth = Math.max(1.5, billH * 0.045);
-            ctx.beginPath();
-            if (ctx.roundRect) ctx.roundRect(0, 0, billW, billH, billH * 0.12);
-            else ctx.rect(0, 0, billW, billH);
-            ctx.fill();
-            ctx.stroke();
-            ctx.fillStyle = '#e4f7df';
-            ctx.fillRect(billW * 0.43, 0, billW * 0.14, billH);
-            ctx.fillStyle = '#17623a';
-            ctx.beginPath();
-            ctx.arc(billW / 2, billH / 2, billH * 0.22, 0, Math.PI * 2);
-            ctx.fill();
-            ctx.fillStyle = '#ffffff';
-            ctx.font = `bold ${Math.max(13, billH * 0.4)}px "Segoe UI", sans-serif`;
-            ctx.fillText('$', billW / 2, billH / 2 + 1);
+
+            const drawable = state.takaImageTransparent || state.takaImage;
+            if (drawable && (drawable.complete || (drawable.width && drawable.width > 0))) {
+                ctx.drawImage(drawable, 0, 0, billW, billH);
+            } else {
+                ctx.fillStyle = index % 2 ? '#7acb86' : '#98dc9d';
+                ctx.strokeStyle = '#276749';
+                ctx.lineWidth = Math.max(1.5, billH * 0.045);
+                ctx.beginPath();
+                if (ctx.roundRect) ctx.roundRect(0, 0, billW, billH, billH * 0.12);
+                else ctx.rect(0, 0, billW, billH);
+                ctx.fill();
+                ctx.stroke();
+                ctx.fillStyle = '#e4f7df';
+                ctx.fillRect(billW * 0.43, 0, billW * 0.14, billH);
+                ctx.fillStyle = '#17623a';
+                ctx.beginPath();
+                ctx.arc(billW / 2, billH / 2, billH * 0.22, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.fillStyle = '#ffffff';
+                ctx.font = `bold ${Math.max(13, billH * 0.4)}px "Segoe UI", sans-serif`;
+                ctx.fillText('$', billW / 2, billH / 2 + 1);
+            }
             ctx.restore();
+        }
+        ctx.restore();
+    }
+
+    function drawBuiltInBroll(ctx, item, x, y, width, height, elapsed, animDuration) {
+        if (item.builtInType === 'cash' || item.type === 'cash') {
+            drawCashBroll(ctx, item, x, y, width, height, elapsed, animDuration);
+            return;
+        }
+
+        const size = Math.min(width, height);
+        const cx = x + width / 2;
+        const cy = y + height / 2;
+        const duration = Math.max(0.1, animDuration || 0.55);
+        const drawProgress = Math.max(0, Math.min(1, elapsed / duration));
+
+        ctx.save();
+        ctx.translate(cx, cy);
+
+        // Shadow
+        ctx.shadowColor = 'rgba(0, 0, 0, 0.3)';
+        ctx.shadowBlur = size * 0.14;
+        ctx.shadowOffsetY = size * 0.05;
+
+        // Background circle with sleek gradient
+        const grad = ctx.createLinearGradient(0, -size / 2, 0, size / 2);
+        if (item.builtInType === 'question') {
+            grad.addColorStop(0, '#5b21b6');
+            grad.addColorStop(1, '#7c3aed');
+        } else if (item.builtInType === 'checkmark') {
+            grad.addColorStop(0, '#047857');
+            grad.addColorStop(1, '#10b981');
+        } else if (item.builtInType === 'cross') {
+            grad.addColorStop(0, '#b91c1c');
+            grad.addColorStop(1, '#ef4444');
+        } else if (item.builtInType === 'magnifier') {
+            grad.addColorStop(0, '#0369a1');
+            grad.addColorStop(1, '#0ea5e9');
+        } else {
+            grad.addColorStop(0, '#374151');
+            grad.addColorStop(1, '#1f2937');
+        }
+
+        ctx.fillStyle = grad;
+        ctx.beginPath();
+        ctx.arc(0, 0, size * 0.44, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Subtle white border
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.85)';
+        ctx.lineWidth = Math.max(2, size * 0.035);
+        ctx.shadowColor = 'transparent';
+        ctx.stroke();
+
+        // Stroke settings for live vector animation
+        ctx.strokeStyle = '#ffffff';
+        ctx.fillStyle = '#ffffff';
+        ctx.lineWidth = Math.max(3, size * 0.075);
+        ctx.lineCap = 'round';
+        ctx.lineJoin = 'round';
+
+        if (item.builtInType === 'checkmark') {
+            // Live 2-segment checkmark stroke: down-stroke (0..0.3) then up-stroke (0.3..1.0)
+            const p1 = { x: -size * 0.20, y:  size * 0.02 };
+            const p2 = { x: -size * 0.06, y:  size * 0.17 };
+            const p3 = { x:  size * 0.20, y: -size * 0.17 };
+
+            ctx.beginPath();
+            ctx.moveTo(p1.x, p1.y);
+
+            if (drawProgress <= 0.3) {
+                const subP = drawProgress / 0.3;
+                const curX = p1.x + (p2.x - p1.x) * subP;
+                const curY = p1.y + (p2.y - p1.y) * subP;
+                ctx.lineTo(curX, curY);
+            } else {
+                ctx.lineTo(p2.x, p2.y);
+                const subP = Math.min(1, (drawProgress - 0.3) / 0.7);
+                const curX = p2.x + (p3.x - p2.x) * subP;
+                const curY = p2.y + (p3.y - p2.y) * subP;
+                ctx.lineTo(curX, curY);
+            }
+            ctx.stroke();
+
+        } else if (item.builtInType === 'cross') {
+            // Live 2-line cross stroke: line 1 TopLeft -> BottomRight (0..0.5), line 2 TopRight -> BottomLeft (0.5..1.0)
+            const l1_start = { x: -size * 0.17, y: -size * 0.17 };
+            const l1_end   = { x:  size * 0.17, y:  size * 0.17 };
+            const l2_start = { x:  size * 0.17, y: -size * 0.17 };
+            const l2_end   = { x: -size * 0.17, y:  size * 0.17 };
+
+            // Line 1 stroke
+            const subP1 = Math.min(1, drawProgress / 0.5);
+            if (subP1 > 0) {
+                ctx.beginPath();
+                ctx.moveTo(l1_start.x, l1_start.y);
+                const curX1 = l1_start.x + (l1_end.x - l1_start.x) * subP1;
+                const curY1 = l1_start.y + (l1_end.y - l1_start.y) * subP1;
+                ctx.lineTo(curX1, curY1);
+                ctx.stroke();
+            }
+
+            // Line 2 stroke (starts after Line 1 finishes)
+            if (drawProgress > 0.5) {
+                const subP2 = Math.min(1, (drawProgress - 0.5) / 0.5);
+                ctx.beginPath();
+                ctx.moveTo(l2_start.x, l2_start.y);
+                const curX2 = l2_start.x + (l2_end.x - l2_start.x) * subP2;
+                const curY2 = l2_start.y + (l2_end.y - l2_start.y) * subP2;
+                ctx.lineTo(curX2, curY2);
+                ctx.stroke();
+            }
+
+        } else if (item.builtInType === 'question') {
+            // Live question mark hook stroke (0..0.8) + dot pop (0.8..1.0)
+            const hookProgress = Math.min(1, drawProgress / 0.8);
+            if (hookProgress > 0) {
+                ctx.beginPath();
+                const radius = size * 0.11;
+                const topY = -size * 0.11;
+                const arcMax = Math.PI * 1.25;
+                const arcLen = radius * arcMax;
+                const stemLen = size * 0.16;
+                const totalLen = arcLen + stemLen;
+                const curLen = totalLen * hookProgress;
+
+                if (curLen <= arcLen) {
+                    const frac = curLen / arcLen;
+                    ctx.arc(0, topY, radius, Math.PI * 0.9, Math.PI * 0.9 + arcMax * frac);
+                } else {
+                    ctx.arc(0, topY, radius, Math.PI * 0.9, Math.PI * 0.9 + arcMax);
+                    const stemFrac = (curLen - arcLen) / stemLen;
+                    ctx.lineTo(0, topY + radius + stemLen * stemFrac);
+                }
+                ctx.stroke();
+            }
+
+            if (drawProgress > 0.8) {
+                const dotP = Math.min(1, (drawProgress - 0.8) / 0.2);
+                const dotRadius = (size * 0.04) * dotP;
+                ctx.beginPath();
+                ctx.arc(0, size * 0.21, dotRadius, 0, Math.PI * 2);
+                ctx.fill();
+            }
+
+        } else if (item.builtInType === 'magnifier') {
+            // Live magnifier glass circle (0..0.65) + handle stroke (0.65..1.0)
+            const circleP = Math.min(1, drawProgress / 0.65);
+            const glassR = size * 0.15;
+            const glassCX = -size * 0.05;
+            const glassCY = -size * 0.05;
+
+            if (circleP > 0) {
+                ctx.beginPath();
+                ctx.arc(glassCX, glassCY, glassR, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * circleP);
+                ctx.stroke();
+            }
+
+            if (drawProgress > 0.65) {
+                const handleP = Math.min(1, (drawProgress - 0.65) / 0.35);
+                const hStart = { x: glassCX + glassR * 0.70, y: glassCY + glassR * 0.70 };
+                const hEnd   = { x: size * 0.22, y: size * 0.22 };
+
+                ctx.lineWidth = Math.max(4, size * 0.09);
+                ctx.beginPath();
+                ctx.moveTo(hStart.x, hStart.y);
+                const curX = hStart.x + (hEnd.x - hStart.x) * handleP;
+                const curY = hStart.y + (hEnd.y - hStart.y) * handleP;
+                ctx.lineTo(curX, curY);
+                ctx.stroke();
+            }
         }
         ctx.restore();
     }
@@ -10464,6 +10753,10 @@ document.addEventListener('DOMContentLoaded', () => {
                     await new Promise(r => broll.imageImg.onload = r);
                     if (broll.type === 'gif') {
                         const host = document.getElementById('gif-host');
+                        broll.imageImg.decoding = 'sync';
+                        broll.imageImg.style.display = 'block';
+                        broll.imageImg.style.width = '1px';
+                        broll.imageImg.style.height = '1px';
                         if (host) host.appendChild(broll.imageImg);
                         ensureAnimatedGifPreview();
                     }
@@ -10880,6 +11173,10 @@ document.addEventListener('DOMContentLoaded', () => {
                         await new Promise(r => broll.imageImg.onload = r);
                         if (broll.type === 'gif') {
                             const host = document.getElementById('gif-host');
+                            broll.imageImg.decoding = 'sync';
+                            broll.imageImg.style.display = 'block';
+                            broll.imageImg.style.width = '1px';
+                            broll.imageImg.style.height = '1px';
                             if (host) host.appendChild(broll.imageImg);
                             ensureAnimatedGifPreview();
                         }

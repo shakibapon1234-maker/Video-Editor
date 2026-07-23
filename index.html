@@ -1305,12 +1305,16 @@
                                     </button>
                                 </div>
                                 <div class="control-group mt-3">
-                                    <label>Built-in Cash Animation</label>
-                                    <div style="display:flex; gap:8px;">
-                                        <button type="button" id="add-cash-spin-btn" class="btn btn-outline" style="flex:1;"><i class="fa-solid fa-money-bill-wave"></i> Cash Spin</button>
-                                        <button type="button" id="add-cash-stack-btn" class="btn btn-outline" style="flex:1;"><i class="fa-solid fa-layer-group"></i> Cash Stack</button>
+                                    <label>Built-in Animations (বিল্ট-ইন অ্যানিমেশন)</label>
+                                    <div class="built-in-anims-grid" style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px;">
+                                        <button type="button" id="add-cash-spin-btn" class="btn btn-outline" title="Taka Spin"><i class="fa-solid fa-money-bill-wave"></i> Taka Spin (টাকা স্পিন)</button>
+                                        <button type="button" id="add-cash-stack-btn" class="btn btn-outline" title="Taka Stack"><i class="fa-solid fa-layer-group"></i> Taka Stack (টাকা স্ট্যাক)</button>
+                                        <button type="button" id="add-built-question-btn" class="btn btn-outline" title="Question Mark"><i class="fa-solid fa-question"></i> Question Mark (❓)</button>
+                                        <button type="button" id="add-built-checkmark-btn" class="btn btn-outline" title="Checkmark"><i class="fa-solid fa-check"></i> Checkmark (✔️)</button>
+                                        <button type="button" id="add-built-crossmark-btn" class="btn btn-outline" title="Cross Mark"><i class="fa-solid fa-xmark"></i> Cross Mark (❌)</button>
+                                        <button type="button" id="add-built-magnifier-btn" class="btn btn-outline" title="Magnifying Glass"><i class="fa-solid fa-magnifying-glass"></i> Magnifier (🔍)</button>
                                     </div>
-                                    <p class="help-text mt-1">কোনো ছবি আপলোড ছাড়াই ঘুরতে থাকা বা একে একে বসা টাকার বান্ডিল যোগ করুন।</p>
+                                    <p class="help-text mt-1">চিহ্নগুলো স্ক্রিনে আসবে, যা আপনি নিজের মতো পজিশনে বসাতে ও রিসাইজ করতে পারবেন। টাকার অ্যানিমেশনে বাংলাদেশি ১০০০ টাকার নোটের ছবি ব্যবহার করা হবে।</p>
                                 </div>
 
                                 <div class="control-group mt-3">
@@ -2838,10 +2842,7 @@
     <video id="hidden-video" style="display: none;" crossOrigin="anonymous"></video>
 
     <!-- JS Scripts -->
-    <!-- Hidden host for animated GIF <img> elements. Browsers only keep a
-         GIF decoding/animating while the element is in the DOM, so we park
-         them here (off-screen) and draw the current frame to the canvas. -->
-    <div id="gif-host" aria-hidden="true" style="position:fixed; left:0; top:0; width:2px; height:2px; overflow:hidden; opacity:0.001; pointer-events:none; z-index:-1;"></div>
+    <div id="gif-host" aria-hidden="true" style="position:fixed; left:0; top:0; width:1px; height:1px; overflow:hidden; opacity:1; pointer-events:none; z-index:999999; isolation:isolate;"></div>
 
     <!-- Capacitor core (local UMD build). Inside the native Android WebView the
          bridge is injected automatically; on a plain browser this just defines
