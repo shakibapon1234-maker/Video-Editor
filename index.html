@@ -1222,6 +1222,7 @@
                                     <label>Content Type</label>
                                     <div class="segmented-toggle" id="broll-type-toggle">
                                         <button type="button" class="segmented-btn active" data-type="image"><i class="fa-solid fa-image"></i> Image</button>
+                                        <button type="button" class="segmented-btn" data-type="gif"><i class="fa-solid fa-film"></i> GIF</button>
                                         <button type="button" class="segmented-btn" data-type="video"><i class="fa-solid fa-video"></i> Video</button>
                                         <button type="button" class="segmented-btn" data-type="text"><i class="fa-solid fa-font"></i> Text</button>
                                     </div>
@@ -1233,6 +1234,15 @@
                                         <span>Add Topic Image</span>
                                         <button class="btn btn-sm btn-outline">Browse</button>
                                         <input type="file" id="broll-input" accept="image/*" style="display: none;">
+                                    </div>
+                                </div>
+
+                                <div id="broll-gif-input-section" style="display: none;">
+                                    <div class="file-selector-box mt-3" id="broll-gif-dropzone">
+                                        <i class="fa-solid fa-film"></i>
+                                        <span>Add Animated GIF (অ্যানিমেটেড জিআইএফ যোগ করুন)</span>
+                                        <button class="btn btn-sm btn-outline">Browse</button>
+                                        <input type="file" id="broll-gif-input" accept="image/gif,.gif" style="display: none;">
                                     </div>
                                 </div>
 
@@ -2842,7 +2852,7 @@
     <video id="hidden-video" style="display: none;" crossOrigin="anonymous"></video>
 
     <!-- JS Scripts -->
-    <div id="gif-host" aria-hidden="true" style="position:fixed; left:0; top:0; width:1px; height:1px; overflow:hidden; opacity:1; pointer-events:none; z-index:999999; isolation:isolate;"></div>
+    <div id="gif-host" aria-hidden="true" style="position:fixed; left:-9999px; top:-9999px; width:500px; height:500px; overflow:hidden; opacity:0.01; pointer-events:none; z-index:-9999; isolation:isolate;"></div>
 
     <!-- Capacitor core (local UMD build). Inside the native Android WebView the
          bridge is injected automatically; on a plain browser this just defines

@@ -3087,7 +3087,8 @@ document.addEventListener('DOMContentLoaded', () => {
                             boxH = item.pipH * canvasH;
                         } else {
                             boxW = canvasW * (item.size / 100);
-                            boxH = boxW * (item.imageImg.naturalHeight / item.imageImg.naturalWidth);
+                            const dims = getItemImageDimensions(item);
+                            boxH = boxW * (dims.height / dims.width);
                         }
                     }
                     if (item.visualTemplate === 'phone') boxH = boxW * 2.06;
@@ -3479,22 +3480,24 @@ document.addEventListener('DOMContentLoaded', () => {
                     // fullscreen image whose aspect ratio doesn't match the canvas, so
                     // nothing gets cropped off — letterbox bars fill the rest instead.
                     const fsSmall = item.mode === 'fullscreen' && (((item.size !== undefined ? item.size : 100) < 99.9) || item.fitMode === 'contain');
-                    const imgAspect = item.imageImg.naturalWidth / item.imageImg.naturalHeight;
+                    const imgDrawable = getItemImageDrawable(item, currentTime) || item.imageImg;
+                    const imgDims = getItemImageDimensions(item);
+                    const imgAspect = imgDims.width / imgDims.height;
                     const boxAspect = boxW / boxH;
                     let sx, sy, sw, sh;
                     if (fsSmall) {
                         // Contain mode — show the whole image, adjust destination rect
-                        sx = 0; sy = 0; sw = item.imageImg.naturalWidth; sh = item.imageImg.naturalHeight;
+                        sx = 0; sy = 0; sw = imgDims.width; sh = imgDims.height;
                     } else if (imgAspect > boxAspect) {
-                        sh = item.imageImg.naturalHeight;
+                        sh = imgDims.height;
                         sw = sh * boxAspect;
-                        sx = (item.imageImg.naturalWidth - sw) / 2;
+                        sx = (imgDims.width - sw) / 2;
                         sy = 0;
                     } else {
-                        sw = item.imageImg.naturalWidth;
+                        sw = imgDims.width;
                         sh = sw / boxAspect;
                         sx = 0;
-                        sy = (item.imageImg.naturalHeight - sh) / 2;
+                        sy = (imgDims.height - sh) / 2;
                     }
                     if (brollAnimActive && (style === 'zoom' || style === 'zoom-out')) {
                         // 'zoom' grows to 18% zoomed-in by the end; 'zoom-out' starts
@@ -3517,8 +3520,8 @@ document.addEventListener('DOMContentLoaded', () => {
                         const totalDur = Math.max(0.01, item.endSec - item.startSec);
                         const panProgress = Math.max(0, Math.min(1, tIn / totalDur));
                         const dirSign = (item.entryDirection === 'right' || item.entryDirection === 'bottom') ? -1 : 1;
-                        const slackW = item.imageImg.naturalWidth - sw;
-                        const slackH = item.imageImg.naturalHeight - sh;
+                        const slackW = imgDims.width - sw;
+                        const slackH = imgDims.height - sh;
                         if (slackW > 1) {
                             sx = Math.max(0, Math.min(slackW, (slackW / 2) + dirSign * (slackW / 2) * (panProgress * 2 - 1)));
                         } else if (slackH > 1) {
@@ -3542,7 +3545,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         state.ctx.beginPath();
                         state.ctx.rect(drawBoxX, drawBoxY, boxW * divFrac, boxH);
                         state.ctx.clip();
-                        state.ctx.drawImage(item.imageImg, sx, sy, sw, sh, drawBoxX, drawBoxY, boxW, boxH);
+                        state.ctx.drawImage(imgDrawable, sx, sy, sw, sh, drawBoxX, drawBoxY, boxW, boxH);
                         state.ctx.restore();
                         
                         // 2. Draw After Image (Right portion)
@@ -3612,9 +3615,9 @@ document.addEventListener('DOMContentLoaded', () => {
                                     }
                                 }
                             }
-                            state.ctx.drawImage(item.imageImg, 0, 0, item.imageImg.naturalWidth, item.imageImg.naturalHeight, dX, dY, dW, dH);
+                            state.ctx.drawImage(imgDrawable, 0, 0, imgDims.width, imgDims.height, dX, dY, dW, dH);
                         } else {
-                            state.ctx.drawImage(item.imageImg, sx, sy, sw, sh, drawBoxX, drawBoxY, boxW, boxH);
+                            state.ctx.drawImage(imgDrawable, sx, sy, sw, sh, drawBoxX, drawBoxY, boxW, boxH);
                         }
                     }
                 }
@@ -5385,7 +5388,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         pipW = canvasW * (item.size / 100);
                         pipH = (item.type === 'cash' || item.type === 'built-in')
                             ? (item.type === 'built-in' && item.builtInType !== 'cash' ? pipW : (state.takaImage && state.takaImage.complete && state.takaImage.naturalWidth > 0 ? pipW * (state.takaImage.naturalHeight / state.takaImage.naturalWidth) : pipW * 0.62))
-                            : pipW * (item.imageImg.naturalHeight / item.imageImg.naturalWidth);
+                            : pipW * (getItemImageDimensions(item).height / getItemImageDimensions(item).width);
                     }
                     if (item.visualTemplate === 'phone') pipH = pipW * 2.06;
                     if (item.visualTemplate === 'laptop') pipH = pipW * 0.70;
@@ -5452,7 +5455,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     pipW = canvasW * (item.size / 100);
                     pipH = (item.type === 'cash' || item.type === 'built-in')
                         ? (item.type === 'built-in' && item.builtInType !== 'cash' ? pipW : (state.takaImage && state.takaImage.complete && state.takaImage.naturalWidth > 0 ? pipW * (state.takaImage.naturalHeight / state.takaImage.naturalWidth) : pipW * 0.62))
-                        : (item.imageImg ? pipW * (item.imageImg.naturalHeight / item.imageImg.naturalWidth) : pipW);
+                        : (item.imageImg || item.gifParsed ? pipW * (getItemImageDimensions(item).height / getItemImageDimensions(item).width) : pipW);
                     if (item.visualTemplate === 'phone') pipH = pipW * 2.06;
                     if (item.visualTemplate === 'laptop') pipH = pipW * 0.70;
                 }
@@ -7481,6 +7484,9 @@ document.addEventListener('DOMContentLoaded', () => {
     // --- B-roll / Topic Image Overlay Bindings (Phase 5D) ---
     const brollTypeToggle = document.getElementById('broll-type-toggle');
     const brollImageInputSection = document.getElementById('broll-image-input-section');
+    const brollGifInputSection = document.getElementById('broll-gif-input-section');
+    const brollGifDropzone = document.getElementById('broll-gif-dropzone');
+    const brollGifInput = document.getElementById('broll-gif-input');
     const brollVideoInputSection = document.getElementById('broll-video-input-section');
     const brollVideoDropzone = document.getElementById('broll-video-dropzone');
     const brollVideoInput = document.getElementById('broll-video-input');
@@ -7581,8 +7587,30 @@ document.addEventListener('DOMContentLoaded', () => {
             brollAddType = btn.dataset.type;
             brollTypeToggle.querySelectorAll('.segmented-btn').forEach(b => b.classList.toggle('active', b === btn));
             if (brollImageInputSection) brollImageInputSection.style.display = brollAddType === 'image' ? 'block' : 'none';
+            if (brollGifInputSection) brollGifInputSection.style.display = brollAddType === 'gif' ? 'block' : 'none';
             if (brollVideoInputSection) brollVideoInputSection.style.display = brollAddType === 'video' ? 'block' : 'none';
             if (brollTextInputSection) brollTextInputSection.style.display = brollAddType === 'text' ? 'block' : 'none';
+        });
+    }
+
+    if (brollGifDropzone && brollGifInput) {
+        brollGifDropzone.addEventListener('click', () => brollGifInput.click());
+        brollGifInput.addEventListener('change', (e) => {
+            const file = e.target.files[0];
+            if (file) loadBrollImage(file);
+        });
+        brollGifDropzone.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            brollGifDropzone.classList.add('drag-over');
+        });
+        brollGifDropzone.addEventListener('dragleave', () => {
+            brollGifDropzone.classList.remove('drag-over');
+        });
+        brollGifDropzone.addEventListener('drop', (e) => {
+            e.preventDefault();
+            brollGifDropzone.classList.remove('drag-over');
+            const file = e.dataTransfer.files[0];
+            if (file) loadBrollImage(file);
         });
     }
 
@@ -7817,21 +7845,321 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    function loadBrollImage(file) {
+    function lzwDecode(minCodeSize, compressedBytes, pixelCount) {
+        const clearCode = 1 << minCodeSize;
+        const eofCode = clearCode + 1;
+        let codeSize = minCodeSize + 1;
+        let codeMask = (1 << codeSize) - 1;
+
+        let dictionary = [];
+        function resetDict() {
+            dictionary = [];
+            for (let i = 0; i < clearCode; i++) dictionary[i] = [i];
+            dictionary[clearCode] = [];
+            dictionary[eofCode] = [];
+        }
+        resetDict();
+
+        const pixels = new Uint8Array(pixelCount);
+        let pixelPos = 0;
+        let bitPos = 0;
+
+        function readCode() {
+            const bytePos = bitPos >> 3;
+            const bitOffset = bitPos & 7;
+            if (bytePos >= compressedBytes.length) return eofCode;
+            let val = compressedBytes[bytePos] | ((compressedBytes[bytePos + 1] || 0) << 8) | ((compressedBytes[bytePos + 2] || 0) << 16);
+            val = (val >> bitOffset) & codeMask;
+            bitPos += codeSize;
+            return val;
+        }
+
+        let prevCode = -1;
+        while (pixelPos < pixelCount) {
+            const code = readCode();
+            if (code === eofCode) break;
+            if (code === clearCode) {
+                codeSize = minCodeSize + 1;
+                codeMask = (1 << codeSize) - 1;
+                resetDict();
+                prevCode = -1;
+                continue;
+            }
+
+            let entry;
+            if (code < dictionary.length) {
+                entry = dictionary[code];
+            } else if (code === dictionary.length) {
+                if (prevCode === -1) break;
+                const prevEntry = dictionary[prevCode];
+                entry = prevEntry.concat(prevEntry[0]);
+            } else {
+                break;
+            }
+
+            for (let i = 0; i < entry.length && pixelPos < pixelCount; i++) {
+                pixels[pixelPos++] = entry[i];
+            }
+
+            if (prevCode !== -1 && dictionary.length < 4096) {
+                const prevEntry = dictionary[prevCode];
+                dictionary.push(prevEntry.concat(entry[0]));
+                if (dictionary.length === (codeMask + 1) && codeSize < 12) {
+                    codeSize++;
+                    codeMask = (1 << codeSize) - 1;
+                }
+            }
+            prevCode = code;
+        }
+        return pixels;
+    }
+
+    function parseGifFrames(buffer) {
+        const bytes = new Uint8Array(buffer);
+        if (bytes[0] !== 0x47 || bytes[1] !== 0x49 || bytes[2] !== 0x46) {
+            throw new Error("Not a valid GIF file");
+        }
+
+        const gifWidth = bytes[6] | (bytes[7] << 8);
+        const gifHeight = bytes[8] | (bytes[9] << 8);
+        const globalPacked = bytes[10];
+        const hasGCT = (globalPacked & 0x80) !== 0;
+        const gctSize = hasGCT ? (1 << ((globalPacked & 0x07) + 1)) : 0;
+        let pos = 13;
+
+        let globalPalette = null;
+        if (hasGCT) {
+            globalPalette = new Array(gctSize);
+            for (let i = 0; i < gctSize; i++) {
+                globalPalette[i] = [bytes[pos], bytes[pos + 1], bytes[pos + 2]];
+                pos += 3;
+            }
+        }
+
+        const frames = [];
+        let graphicControl = { delay: 10, transIndex: -1, disposal: 0 };
+
+        const masterCanvas = document.createElement('canvas');
+        masterCanvas.width = gifWidth;
+        masterCanvas.height = gifHeight;
+        const masterCtx = masterCanvas.getContext('2d', { willReadFrequently: true });
+        let prevCanvasState = null;
+
+        while (pos < bytes.length) {
+            const blockType = bytes[pos++];
+            if (blockType === 0x3B) break; // Trailer
+
+            if (blockType === 0x21) {
+                const extType = bytes[pos++];
+                if (extType === 0xF9) {
+                    const blockSize = bytes[pos++];
+                    const packed = bytes[pos++];
+                    const disposal = (packed >> 2) & 7;
+                    const hasTrans = (packed & 1) !== 0;
+                    const delay = (bytes[pos] | (bytes[pos + 1] << 8)) || 10;
+                    pos += 2;
+                    const transIndex = bytes[pos++];
+                    graphicControl = {
+                        delay: Math.max(2, delay) * 10,
+                        transIndex: hasTrans ? transIndex : -1,
+                        disposal: disposal
+                    };
+                    while (pos < bytes.length && bytes[pos] !== 0) {
+                        pos += 1 + bytes[pos];
+                    }
+                    pos++;
+                } else {
+                    while (pos < bytes.length && bytes[pos] !== 0) {
+                        pos += 1 + bytes[pos];
+                    }
+                    pos++;
+                }
+            } else if (blockType === 0x2C) {
+                const left = bytes[pos] | (bytes[pos + 1] << 8); pos += 2;
+                const top = bytes[pos] | (bytes[pos + 1] << 8); pos += 2;
+                const width = bytes[pos] | (bytes[pos + 1] << 8); pos += 2;
+                const height = bytes[pos] | (bytes[pos + 1] << 8); pos += 2;
+                const packed = bytes[pos++];
+                const interlaced = (packed & 0x40) !== 0;
+                const hasLCT = (packed & 0x80) !== 0;
+                const lctSize = hasLCT ? (1 << ((packed & 0x07) + 1)) : 0;
+
+                let palette = globalPalette;
+                if (hasLCT) {
+                    palette = new Array(lctSize);
+                    for (let i = 0; i < lctSize; i++) {
+                        palette[i] = [bytes[pos], bytes[pos + 1], bytes[pos + 2]];
+                        pos += 3;
+                    }
+                }
+
+                const minCodeSize = bytes[pos++];
+                const lzwBlocks = [];
+                while (pos < bytes.length) {
+                    const subLen = bytes[pos++];
+                    if (subLen === 0) break;
+                    lzwBlocks.push(bytes.subarray(pos, pos + subLen));
+                    pos += subLen;
+                }
+
+                let totalLen = 0;
+                for (let b of lzwBlocks) totalLen += b.length;
+                const compressed = new Uint8Array(totalLen);
+                let cOff = 0;
+                for (let b of lzwBlocks) {
+                    compressed.set(b, cOff);
+                    cOff += b.length;
+                }
+
+                const indexedPixels = lzwDecode(minCodeSize, compressed, width * height);
+
+                if (graphicControl.disposal === 3 && prevCanvasState) {
+                    masterCtx.putImageData(prevCanvasState, 0, 0);
+                } else if (graphicControl.disposal === 2) {
+                    masterCtx.clearRect(left, top, width, height);
+                }
+                if (graphicControl.disposal === 1 || graphicControl.disposal === 0) {
+                    prevCanvasState = masterCtx.getImageData(0, 0, gifWidth, gifHeight);
+                }
+
+                const frameImgData = masterCtx.createImageData(width, height);
+                const data = frameImgData.data;
+
+                const passOffsets = [0, 4, 2, 1];
+                const passSteps   = [8, 8, 4, 2];
+
+                let srcIdx = 0;
+                if (interlaced) {
+                    for (let pass = 0; pass < 4; pass++) {
+                        for (let y = passOffsets[pass]; y < height; y += passSteps[pass]) {
+                            for (let x = 0; x < width; x++) {
+                                const idx = indexedPixels[srcIdx++];
+                                if (idx !== graphicControl.transIndex && palette && palette[idx]) {
+                                    const pIdx = (y * width + x) * 4;
+                                    const rgb = palette[idx];
+                                    data[pIdx]     = rgb[0];
+                                    data[pIdx + 1] = rgb[1];
+                                    data[pIdx + 2] = rgb[2];
+                                    data[pIdx + 3] = 255;
+                                }
+                            }
+                        }
+                    }
+                } else {
+                    for (let i = 0; i < indexedPixels.length; i++) {
+                        const idx = indexedPixels[i];
+                        if (idx !== graphicControl.transIndex && palette && palette[idx]) {
+                            const pIdx = i * 4;
+                            const rgb = palette[idx];
+                            data[pIdx]     = rgb[0];
+                            data[pIdx + 1] = rgb[1];
+                            data[pIdx + 2] = rgb[2];
+                            data[pIdx + 3] = 255;
+                        }
+                    }
+                }
+
+                const patchCanvas = document.createElement('canvas');
+                patchCanvas.width = width;
+                patchCanvas.height = height;
+                patchCanvas.getContext('2d').putImageData(frameImgData, 0, 0);
+                masterCtx.drawImage(patchCanvas, left, top);
+
+                const snapCanvas = document.createElement('canvas');
+                snapCanvas.width = gifWidth;
+                snapCanvas.height = gifHeight;
+                snapCanvas.getContext('2d').drawImage(masterCanvas, 0, 0);
+
+                frames.push({
+                    canvas: snapCanvas,
+                    delayMs: graphicControl.delay
+                });
+            }
+        }
+
+        const totalDurationMs = frames.reduce((acc, f) => acc + f.delayMs, 0);
+
+        return {
+            width: gifWidth,
+            height: gifHeight,
+            frames: frames,
+            totalDurationMs: totalDurationMs
+        };
+    }
+
+    function getItemImageDrawable(item, currentTime) {
+        if (item && item.gifParsed && item.gifParsed.frames && item.gifParsed.frames.length > 0) {
+            const frames = item.gifParsed.frames;
+            if (frames.length === 1) return frames[0].canvas;
+            const totalDurationMs = item.gifParsed.totalDurationMs || 1000;
+            if (totalDurationMs <= 0) return frames[0].canvas;
+
+            let elapsedMs;
+            if (state && state.isPlaying) {
+                const t = (currentTime !== undefined) ? currentTime : state.currentTime;
+                elapsedMs = Math.max(0, (t - (item.startSec || 0))) * 1000;
+            } else if (state && state.customExportTime !== undefined) {
+                elapsedMs = Math.max(0, (state.customExportTime - (item.startSec || 0))) * 1000;
+            } else {
+                // While paused, use wall-clock performance.now() so preview keeps animating continuously
+                elapsedMs = performance.now();
+            }
+
+            let relMs = Math.abs(elapsedMs) % totalDurationMs;
+
+            let accum = 0;
+            for (let i = 0; i < frames.length; i++) {
+                accum += frames[i].delayMs;
+                if (relMs < accum) return frames[i].canvas;
+            }
+            return frames[frames.length - 1].canvas;
+        }
+        return item ? item.imageImg : null;
+    }
+
+    function getItemImageDimensions(item) {
+        if (item && item.gifParsed) {
+            return {
+                width: item.gifParsed.width || 640,
+                height: item.gifParsed.height || 360
+            };
+        }
+        return {
+            width: (item && item.imageImg) ? (item.imageImg.naturalWidth || item.imageImg.width || 640) : 640,
+            height: (item && item.imageImg) ? (item.imageImg.naturalHeight || item.imageImg.height || 360) : 360
+        };
+    }
+
+    async function detectIsGifFile(file) {
+        if (!file) return false;
+        if (brollAddType === 'gif') return true;
+        if (file.type === 'image/gif') return true;
+        if (/\.gif$/i.test(file.name || '')) return true;
+        if (file.name && file.name.toLowerCase().includes('gif')) return true;
+        try {
+            const slice = file.slice(0, 3);
+            const buf = await slice.arrayBuffer();
+            const header = new Uint8Array(buf);
+            if (header[0] === 0x47 && header[1] === 0x49 && header[2] === 0x46) {
+                return true; // GIF87a / GIF89a magic header 'G' 'I' 'F'
+            }
+        } catch (e) {}
+        return false;
+    }
+
+    async function loadBrollImage(file) {
         console.log("Loading B-roll image file:", file.name, "type:", file.type, "size:", file.size);
-        const isGif = (file.type === 'image/gif') || /\.gif$/i.test(file.name || '');
+        const isGif = await detectIsGifFile(file);
         const img = new Image();
         const url = URL.createObjectURL(file);
 
-        // Animated GIFs only keep decoding while their <img> element is in the
-        // DOM. We host it in the hidden #gif-host so drawImage() keeps pulling
-        // the current animation frame onto the canvas.
         if (isGif) {
             const host = document.getElementById('gif-host');
-            img.decoding = 'sync';
             img.style.display = 'block';
-            img.style.width = '1px';
-            img.style.height = '1px';
+            img.style.width = '200px';
+            img.style.height = '200px';
+            img.style.opacity = '0.01';
+            img.style.pointerEvents = 'none';
             if (host) host.appendChild(img);
         }
 
@@ -7883,7 +8211,25 @@ document.addEventListener('DOMContentLoaded', () => {
             renderBrollList();
             showBrollTimingFor(newItem.id);
             drawFrame();
-            if (isGif) ensureAnimatedGifPreview();
+
+            if (isGif && file) {
+                file.arrayBuffer().then(buf => {
+                    try {
+                        const parsed = parseGifFrames(buf);
+                        if (parsed && parsed.frames.length > 0) {
+                            newItem.gifParsed = parsed;
+                            console.log("GIF successfully parsed frame-by-frame! Total frames:", parsed.frames.length);
+                        }
+                    } catch (e) {
+                        console.warn("GIF parser fallback:", e);
+                    }
+                    drawFrame();
+                    ensureAnimatedGifPreview();
+                }).catch(() => {});
+            } else if (isGif) {
+                ensureAnimatedGifPreview();
+            }
+
             if (window.recordEditorHistory) {
                 window.recordEditorHistory('B-roll image added');
             }
@@ -9603,13 +9949,13 @@ document.addEventListener('DOMContentLoaded', () => {
     function drawCashBroll(ctx, item, x, y, width, height, elapsed, animDuration) {
         const stackMode = item.animationStyle === 'cash-stack';
         const progress = Math.max(0, Math.min(1, elapsed / Math.max(0.1, animDuration)));
-        const count = stackMode ? 4 : 7;
+        const count = stackMode ? 8 : 14;
 
         if (!state.takaImage) {
             state.takaImage = new Image();
             state.takaImage.src = 'public/taka_1000.png?v=3';
             state.takaImage.onload = () => {
-                state.takaImageTransparent = state.takaImage;
+                state.takaImageTransparent = makeImageWhiteTransparent(state.takaImage);
                 if (typeof drawFrame === 'function') drawFrame();
             };
         }
@@ -9617,7 +9963,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const drawable = state.takaImageTransparent || state.takaImage;
         const imgAspect = (drawable && drawable.width > 0) ? (drawable.height / drawable.width) : 0.62;
 
-        const billW = width * 0.68;
+        const billW = stackMode ? width * 0.58 : width * 0.46;
         const billH = billW * imgAspect;
         const centerX = x + width / 2;
         const centerY = y + height / 2;
@@ -9626,18 +9972,41 @@ document.addEventListener('DOMContentLoaded', () => {
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
         for (let index = 0; index < count; index++) {
-            const delay = stackMode ? index * 0.13 : index * 0.045;
+            const delay = stackMode ? index * 0.05 : index * 0.03;
             const localProgress = Math.max(0, Math.min(1, (progress - delay) / Math.max(0.01, 1 - delay)));
             if (localProgress <= 0) continue;
             const eased = easeOutBackOvershoot(localProgress);
-            const angle = stackMode ? 0 : ((index / count) * Math.PI * 2 + elapsed * 2.2);
-            const radius = stackMode ? 0 : width * 0.24 * (1 - eased);
-            const bx = centerX + Math.cos(angle) * radius - billW / 2;
-            const by = centerY + Math.sin(angle) * radius * 0.55 - billH / 2 - (stackMode ? index * height * 0.055 * (1 - eased) : 0);
+
+            let bx, by, angle;
+
+            if (stackMode) {
+                // Taka Stack: Fan out in a layered cascade stack so all notes remain visible when closed
+                const offsetStep = (index - (count - 1) / 2);
+                const spreadX = offsetStep * (width * 0.038) * eased;
+                const spreadY = offsetStep * (-height * 0.055) * eased;
+                const dropY = (1 - eased) * (-height * 0.4);
+                angle = offsetStep * 0.075 * eased; // Subtle fan angle rotation (~4.3 degrees per bill)
+                
+                bx = centerX + spreadX - billW / 2;
+                by = centerY + spreadY + dropY - billH / 2;
+            } else {
+                // Taka Spin: Form a stunning 360-degree circular fan / wheel of bills like screenshot 2
+                const baseAngle = (index / count) * Math.PI * 2;
+                const spinRot = (1 - eased) * Math.PI * 2.5; // Spins into place
+                const finalRadius = width * 0.28;
+                const radius = finalRadius * (0.2 + 0.8 * eased);
+                
+                // Oval perspective ratio for rich depth
+                bx = centerX + Math.cos(baseAngle) * radius - billW / 2;
+                by = centerY + Math.sin(baseAngle) * radius * 0.6 - billH / 2;
+                angle = baseAngle + Math.PI / 2 + spinRot;
+            }
+
             ctx.save();
             ctx.translate(bx + billW / 2, by + billH / 2);
-            ctx.rotate(stackMode ? 0 : (1 - eased) * (index % 2 ? -0.7 : 0.7));
-            ctx.scale(0.55 + 0.45 * eased, 0.55 + 0.45 * eased);
+            ctx.rotate(angle);
+            const baseScale = stackMode ? (0.7 + 0.3 * eased) : (0.55 + 0.45 * eased);
+            ctx.scale(baseScale, baseScale);
             ctx.translate(-billW / 2, -billH / 2);
 
             const drawable = state.takaImageTransparent || state.takaImage;
@@ -10753,10 +11122,11 @@ document.addEventListener('DOMContentLoaded', () => {
                     await new Promise(r => broll.imageImg.onload = r);
                     if (broll.type === 'gif') {
                         const host = document.getElementById('gif-host');
-                        broll.imageImg.decoding = 'sync';
                         broll.imageImg.style.display = 'block';
-                        broll.imageImg.style.width = '1px';
-                        broll.imageImg.style.height = '1px';
+                        broll.imageImg.style.width = '200px';
+                        broll.imageImg.style.height = '200px';
+                        broll.imageImg.style.opacity = '0.01';
+                        broll.imageImg.style.pointerEvents = 'none';
                         if (host) host.appendChild(broll.imageImg);
                         ensureAnimatedGifPreview();
                     }
@@ -11173,10 +11543,11 @@ document.addEventListener('DOMContentLoaded', () => {
                         await new Promise(r => broll.imageImg.onload = r);
                         if (broll.type === 'gif') {
                             const host = document.getElementById('gif-host');
-                            broll.imageImg.decoding = 'sync';
                             broll.imageImg.style.display = 'block';
-                            broll.imageImg.style.width = '1px';
-                            broll.imageImg.style.height = '1px';
+                            broll.imageImg.style.width = '200px';
+                            broll.imageImg.style.height = '200px';
+                            broll.imageImg.style.opacity = '0.01';
+                            broll.imageImg.style.pointerEvents = 'none';
                             if (host) host.appendChild(broll.imageImg);
                             ensureAnimatedGifPreview();
                         }

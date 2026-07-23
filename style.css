@@ -1838,25 +1838,32 @@ input:checked + .slider:before {
     fill: currentColor;
 }
 
-/* Segmented Toggle (e.g. B-roll Content Type: Image / Text) */
+/* Segmented Toggle (e.g. B-roll Content Type: Image / GIF / Video / Text) */
 .segmented-toggle {
     display: flex;
     border: 1px solid var(--border-color);
     border-radius: var(--radius-sm);
     overflow: hidden;
-    width: fit-content;
+    width: 100%;
+    box-sizing: border-box;
 }
 .segmented-toggle .segmented-btn {
-    padding: 8px 16px;
+    flex: 1 1 0;
+    min-width: 0;
+    justify-content: center;
+    padding: 8px 4px;
     background: transparent;
     border: none;
     color: var(--text-secondary);
-    font-size: 13px;
+    font-size: 12px;
     font-weight: 600;
     cursor: pointer;
     display: flex;
     align-items: center;
-    gap: 6px;
+    gap: 4px;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+    overflow: hidden;
     transition: background 0.15s ease, color 0.15s ease;
 }
 .segmented-toggle .segmented-btn:not(:last-child) {
