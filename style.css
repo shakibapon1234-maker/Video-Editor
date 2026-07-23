@@ -19,6 +19,11 @@
     --text-primary: #f8fafc;
     --text-secondary: #94a3b8;
     --text-muted: #64748b;
+
+    --card-bg: var(--bg-surface-elevated);
+    --scrollbar-track: rgba(255, 255, 255, 0.03);
+    --scrollbar-thumb: rgba(255, 255, 255, 0.15);
+    --shadow-color: rgba(0, 0, 0, 0.35);
     
     --radius-sm: 8px;
     --radius-md: 14px;
@@ -27,6 +32,170 @@
     --font-heading: 'Outfit', sans-serif;
     --font-body: 'Plus Jakarta Sans', sans-serif;
     --transition-smooth: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* ==========================================================================
+   THEME SYSTEM
+   Default (no attribute) = Dark Indigo (original theme, unchanged)
+   Switch themes by setting data-theme="..." on <html>. Handled by theme.js
+   ========================================================================== */
+
+/* --- Light Theme --- */
+html[data-theme="light"] {
+    --bg-base: #f4f5f9;
+    --bg-surface: #ffffff;
+    --bg-surface-elevated: #ffffff;
+    --bg-surface-glass: rgba(255, 255, 255, 0.75);
+    --border-color: rgba(15, 23, 42, 0.09);
+    --border-hover: rgba(15, 23, 42, 0.18);
+
+    --primary: #4f46e5;
+    --primary-hover: #4338ca;
+    --primary-glow: rgba(79, 70, 229, 0.22);
+
+    --success: #059669;
+    --success-hover: #047857;
+    --danger: #dc2626;
+    --danger-hover: #b91c1c;
+
+    --text-primary: #0f172a;
+    --text-secondary: #475569;
+    --text-muted: #94a3b8;
+
+    --card-bg: #ffffff;
+    --scrollbar-track: rgba(15, 23, 42, 0.04);
+    --scrollbar-thumb: rgba(15, 23, 42, 0.18);
+    --shadow-color: rgba(15, 23, 42, 0.12);
+}
+
+/* --- Midnight Theme (near-black, OLED friendly, violet accent) --- */
+html[data-theme="midnight"] {
+    --bg-base: #000000;
+    --bg-surface: #0a0a0d;
+    --bg-surface-elevated: #131318;
+    --bg-surface-glass: rgba(10, 10, 13, 0.75);
+    --border-color: rgba(255, 255, 255, 0.07);
+    --border-hover: rgba(255, 255, 255, 0.15);
+
+    --primary: #8b5cf6;
+    --primary-hover: #a78bfa;
+    --primary-glow: rgba(139, 92, 246, 0.35);
+
+    --success: #10b981;
+    --success-hover: #059669;
+    --danger: #f43f5e;
+    --danger-hover: #e11d48;
+
+    --text-primary: #f4f4f5;
+    --text-secondary: #a1a1aa;
+    --text-muted: #6b7280;
+
+    --card-bg: #131318;
+    --scrollbar-track: rgba(255, 255, 255, 0.02);
+    --scrollbar-thumb: rgba(255, 255, 255, 0.14);
+    --shadow-color: rgba(0, 0, 0, 0.6);
+}
+
+/* --- Ocean Theme (deep navy / teal accent) --- */
+html[data-theme="ocean"] {
+    --bg-base: #071019;
+    --bg-surface: #0c1a26;
+    --bg-surface-elevated: #122232;
+    --bg-surface-glass: rgba(12, 26, 38, 0.75);
+    --border-color: rgba(148, 210, 255, 0.08);
+    --border-hover: rgba(148, 210, 255, 0.18);
+
+    --primary: #0ea5a5;
+    --primary-hover: #14b8b8;
+    --primary-glow: rgba(14, 165, 165, 0.35);
+
+    --success: #22c55e;
+    --success-hover: #16a34a;
+    --danger: #f87171;
+    --danger-hover: #ef4444;
+
+    --text-primary: #ecfeff;
+    --text-secondary: #8fb4c9;
+    --text-muted: #5c7d90;
+
+    --card-bg: #122232;
+    --scrollbar-track: rgba(148, 210, 255, 0.03);
+    --scrollbar-thumb: rgba(148, 210, 255, 0.16);
+    --shadow-color: rgba(0, 0, 0, 0.45);
+}
+
+/* --- Global smooth transition when switching themes --- */
+body, .sidebar, .workspace-header, .btn, .form-input,
+.history-panel-dropdown, .modal-card {
+    transition: background-color 0.2s ease, border-color 0.2s ease, color 0.2s ease;
+}
+
+/* --- Theme Switcher UI --- */
+.theme-switcher {
+    position: relative;
+}
+
+.theme-switcher-panel {
+    display: none;
+    position: fixed;
+    top: 64px;
+    min-width: 200px;
+    background: var(--card-bg);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+    padding: 8px;
+    z-index: 1000;
+    box-shadow: 0 12px 30px var(--shadow-color);
+}
+
+.theme-switcher-panel.open {
+    display: block;
+}
+
+.theme-option {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 9px 10px;
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    font-size: 13px;
+    color: var(--text-primary);
+    transition: var(--transition-smooth);
+}
+
+.theme-option:hover {
+    background: var(--bg-surface);
+}
+
+.theme-option.active {
+    background: var(--primary-glow);
+    color: var(--primary-hover);
+    font-weight: 600;
+}
+
+.theme-swatch {
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    border: 1px solid var(--border-hover);
+    flex-shrink: 0;
+}
+
+.theme-swatch.swatch-dark { background: linear-gradient(135deg, #0f1624, #4f46e5); }
+.theme-swatch.swatch-light { background: linear-gradient(135deg, #ffffff, #4f46e5); }
+.theme-swatch.swatch-midnight { background: linear-gradient(135deg, #000000, #8b5cf6); }
+.theme-swatch.swatch-ocean { background: linear-gradient(135deg, #071019, #0ea5a5); }
+
+.theme-option .theme-check {
+    margin-left: auto;
+    font-size: 12px;
+    color: var(--primary-hover);
+    visibility: hidden;
+}
+
+.theme-option.active .theme-check {
+    visibility: visible;
 }
 
 /* --- Base Reset --- */
@@ -2348,4 +2517,4 @@ input:checked + .slider:before {
 .silence-item.playing {
     background-color: rgba(79, 70, 229, 0.08);
     border-color: rgba(79, 70, 229, 0.3);
-
+}

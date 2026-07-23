@@ -11,6 +11,15 @@
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=Hind+Siliguri:wght@400;500;600;700&family=Galada&display=swap" rel="stylesheet">
     <!-- FontAwesome for Icons -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Apply saved theme immediately to prevent a flash of the wrong theme -->
+    <script>
+        (function () {
+            try {
+                var t = localStorage.getItem('studioflow-theme') || 'dark';
+                if (t !== 'dark') document.documentElement.setAttribute('data-theme', t);
+            } catch (e) {}
+        })();
+    </script>
 </head>
 <body>
     <div class="app-container">
@@ -76,6 +85,7 @@
                     <p id="current-step-subtitle">Start by uploading your video clip and branding logo</p>
                 </div>
                 <div class="header-actions">
+                    <div id="theme-switcher-mount" style="margin-right: 8px;"></div>
                     <div class="history-controls" style="display: flex; align-items: center; gap: 4px; margin-right: 8px;">
                         <button id="undo-btn" class="btn btn-outline btn-sm" type="button" title="Undo (Ctrl+Z)" disabled>
                             <i class="fa-solid fa-rotate-left"></i>
@@ -2877,6 +2887,7 @@
     <!-- Capacitor core (local UMD build). Inside the native Android WebView the
          bridge is injected automatically; on a plain browser this just defines
          window.Capacitor safely so our plugin calls no-op until shipped. -->
+    <script src="theme.js?v=1"></script>
     <script src="public/capacitor/capacitor.js"></script>
     <script src="audio.js?v=4"></script>
     <script src="editor.js?v=8"></script>
