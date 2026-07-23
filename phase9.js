@@ -304,6 +304,7 @@ document.addEventListener('DOMContentLoaded', () => {
         state.redoStack = [];
         state.redoLabels = [];
         updateHistoryUI();
+        if (typeof window.triggerAutoSave === 'function') window.triggerAutoSave();
     }
     window.recordEditorHistory = recordEditorHistory;
 
@@ -315,6 +316,7 @@ document.addEventListener('DOMContentLoaded', () => {
         state.redoLabels.push(label || 'Change');
         applyHistorySnapshot(snap);
         updateHistoryUI();
+        if (typeof window.triggerAutoSave === 'function') window.triggerAutoSave();
         console.log('Undo:', label);
     }
 
@@ -325,6 +327,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const snap = state.redoStack.pop();
         applyHistorySnapshot(snap);
         updateHistoryUI();
+        if (typeof window.triggerAutoSave === 'function') window.triggerAutoSave();
     }
 
     const undoBtn = document.getElementById('undo-btn');

@@ -90,6 +90,9 @@
                             <ul id="history-panel-list" class="history-panel-dropdown" style="display: none; position: fixed; top: 92px; right: 24px; min-width: 340px; max-width: calc(100vw - 32px); max-height: calc(100vh - 116px); overflow-y: auto; background: var(--card-bg, #1e293b); border: 1px solid var(--border-color, #334155); border-radius: 10px; padding: 10px; z-index: 1000; isolation: isolate; list-style: none; font-size: 14px; box-shadow: 0 12px 30px rgba(0,0,0,0.35);"></ul>
                         </div>
                     </div>
+                    <button id="saved-projects-btn" class="btn btn-outline" data-tooltip="আপনার সংরক্ষিত প্রজেক্টসমূহের তালিকা দেখুন (Saved Video Projects)">
+                        <i class="fa-solid fa-list-check"></i> Projects (প্রজেক্টসমূহ)
+                    </button>
                     <button id="save-project-btn" class="btn btn-outline" data-tooltip="প্রজেক্ট ফাইল সংরক্ষণ করুন (Save Project)">
                         <i class="fa-solid fa-floppy-disk"></i> Save Project
                     </button>
@@ -2844,6 +2847,20 @@
             <div class="modal-footer">
                 <button class="btn btn-secondary" id="relink-modal-cancel">Cancel Load</button>
                 <button class="btn btn-success" id="relink-modal-confirm" disabled><i class="fa-solid fa-circle-check"></i> Restore Project</button>
+    <!-- Saved Projects Manager Modal -->
+    <div id="projects-modal" class="modal-overlay" style="display: none; position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(0,0,0,0.75); z-index: 99999; align-items: center; justify-content: center; backdrop-filter: blur(4px);">
+        <div class="modal-card" style="background: var(--card-bg, #1e293b); border: 1px solid var(--border-color, #334155); border-radius: 12px; padding: 24px; max-width: 680px; width: 92%; box-shadow: 0 20px 40px rgba(0,0,0,0.5);">
+            <div class="modal-header" style="display: flex; align-items: center; justify-content: space-between; padding-bottom: 12px; border-bottom: 1px solid var(--border-color, #334155);">
+                <h3 style="margin: 0; font-size: 18px; display: flex; align-items: center; gap: 8px; color: #ffffff;"><i class="fa-solid fa-film" style="color: var(--primary);"></i> সংরক্ষিত প্রজেক্টসমূহ (Saved Video Projects)</h3>
+                <button id="close-projects-modal" type="button" style="background: transparent; border: none; color: #94a3b8; font-size: 22px; cursor: pointer;">&times;</button>
+            </div>
+            <div class="modal-body" style="margin-top: 16px; max-height: 420px; overflow-y: auto;">
+                <p class="help-text" style="color: #94a3b8; font-size: 13px; margin-bottom: 16px;">প্রতিটি ভিডিওর সাথে সম্পর্কিত B-roll, টেক্সট, সাবটাইটেল ও কাট-ছাঁটের কাজ আলাদাভাবে ট্র্যাকিং করে সেভ হয়ে থাকে। আপনার পছন্দের ভিডিও সিলেক্ট করে প্রজেক্ট খুলতে পারবেন:</p>
+                <div id="projects-list-container" style="display: flex; flex-direction: column; gap: 10px;"></div>
+            </div>
+            <div class="modal-footer" style="display: flex; justify-content: space-between; align-items: center; margin-top: 20px; padding-top: 14px; border-top: 1px solid var(--border-color, #334155);">
+                <button id="modal-start-fresh-btn" class="btn btn-outline" type="button" style="color: #ef4444; border-color: rgba(239,68,68,0.4);"><i class="fa-solid fa-plus"></i> নতুন ফ্রেশ প্রজেক্ট শুরু করুন</button>
+                <button id="modal-close-btn" class="btn btn-secondary" type="button">বন্ধ করুন</button>
             </div>
         </div>
     </div>

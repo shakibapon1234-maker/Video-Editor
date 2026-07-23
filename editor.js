@@ -433,12 +433,27 @@ document.addEventListener('DOMContentLoaded', () => {
             window.Capacitor.isNativePlatform();
     }
 
-    function handleVideoFile(file) {
+    async function handleVideoFile(file) {
         if (!file) return;
         
         // Show loading state
         const originalText = videoDropzone.querySelector('h3').innerText;
         videoDropzone.querySelector('h3').innerText = "Loading File...";
+        
+        const isRestoredProj = await switchProjectForVideo(file);
+        if (isRestoredProj) {
+            videoDropzone.querySelector('h3').innerText = originalText;
+            document.getElementById('timeline-controls').style.display = 'flex';
+            document.querySelector('.canvas-overlay-controls').style.display = 'block';
+            videoDropzone.style.display = 'none';
+            document.getElementById('selected-video-name').innerText = file.name;
+            nextBtn.disabled = false;
+            updateNavigation();
+            drawFrame();
+            return;
+        }
+
+        isVideoLoading = true;
         
         const isCapacitor = isCapacitorApp();
         
@@ -455,6 +470,8 @@ document.addEventListener('DOMContentLoaded', () => {
                     file: file,
                     url: fileURL,
                     name: file.name,
+                    size: file.size || 0,
+                    lastModified: file.lastModified || 0,
                     duration: 5.0,
                     start: 0,
                     end: 5.0,
@@ -505,6 +522,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (window.recordEditorHistory) {
                     window.recordEditorHistory('Video added');
                 }
+                isVideoLoading = false;
+                triggerAutoSave();
             };
             img.src = fileURL;
         } else {
@@ -514,6 +533,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 const code = state.video.error ? state.video.error.code : 'unknown';
                 const msg = state.video.error ? state.video.error.message : '';
                 videoDropzone.querySelector('h3').innerText = originalText;
+                isVideoLoading = false;
                 alert(`ভিডিও লোড হতে পারেনি (Error Code: ${code}, Message: ${msg})। অনুগ্রহ করে MP4 ফরম্যাটের ফাইল ব্যবহার করুন।`);
             };
 
@@ -533,6 +553,8 @@ document.addEventListener('DOMContentLoaded', () => {
                         file: file,
                         url: urlToLoad,
                         name: file.name,
+                        size: file.size || 0,
+                        lastModified: file.lastModified || 0,
                         duration: state.duration,
                         start: 0,
                         end: state.duration,
@@ -581,6 +603,8 @@ document.addEventListener('DOMContentLoaded', () => {
                     if (window.recordEditorHistory) {
                         window.recordEditorHistory('Video added');
                     }
+                    isVideoLoading = false;
+                    triggerAutoSave();
                 };
             };
 
@@ -8211,6 +8235,7 @@ document.addEventListener('DOMContentLoaded', () => {
             renderBrollList();
             showBrollTimingFor(newItem.id);
             drawFrame();
+            if (typeof triggerAutoSave === 'function') triggerAutoSave();
 
             if (isGif && file) {
                 file.arrayBuffer().then(buf => {
@@ -8436,6 +8461,7 @@ document.addEventListener('DOMContentLoaded', () => {
             renderBrollList();
             showBrollTimingFor(newItem.id);
             drawFrame();
+            if (typeof triggerAutoSave === 'function') triggerAutoSave();
             if (window.recordEditorHistory) {
                 window.recordEditorHistory('B-roll text added');
             }
@@ -8629,47 +8655,145 @@ document.addEventListener('DOMContentLoaded', () => {
     function renderBrollList() {
         if (!brollListEl) return;
         brollListEl.innerHTML = '';
+
+        if (!state.brollOverlays || state.brollOverlays.length === 0) {
+            brollListEl.innerHTML = `
+                <div style="text-align: center; color: #94a3b8; padding: 14px 10px; font-size: 12px; border: 1px dashed rgba(255,255,255,0.12); border-radius: 8px; background: rgba(0,0,0,0.15);">
+                    <i class="fa-regular fa-image" style="font-size: 18px; margin-bottom: 4px; display: block; opacity: 0.5;"></i>
+                    কোনো B-roll ইমেজ বা অ্যানিমেশন যোগ করা হয়নি।
+                </div>
+            `;
+            if (brollTimingContainer) brollTimingContainer.style.display = 'none';
+            return;
+        }
+
         state.brollOverlays.forEach((item) => {
+            const isSelected = (item.id === state.selectedBrollId);
             const row = document.createElement('div');
-            row.className = 'broll-list-item' + (item.id === state.selectedBrollId ? ' active' : '');
+            row.className = 'broll-list-item' + (isSelected ? ' active' : '');
             row.style.display = 'flex';
             row.style.alignItems = 'center';
             row.style.justifyContent = 'space-between';
-            row.style.padding = '8px 12px';
-            row.style.borderRadius = '6px';
+            row.style.padding = '8px 10px';
+            row.style.borderRadius = '8px';
             row.style.marginBottom = '6px';
             row.style.cursor = 'pointer';
-            row.style.background = item.id === state.selectedBrollId ? 'rgba(79, 70, 229, 0.12)' : 'rgba(255,255,255,0.04)';
-            row.style.border = item.id === state.selectedBrollId ? '1px solid var(--primary)' : '1px solid transparent';
+            row.style.background = isSelected ? 'rgba(99, 102, 241, 0.16)' : 'rgba(255,255,255,0.04)';
+            row.style.border = isSelected ? '1px solid var(--primary, #6366f1)' : '1px solid rgba(255,255,255,0.08)';
+            row.style.transition = 'all 0.15s ease';
 
-            const label = document.createElement('span');
+            const leftContent = document.createElement('div');
+            leftContent.style.display = 'flex';
+            leftContent.style.alignItems = 'center';
+            leftContent.style.gap = '8px';
+            leftContent.style.overflow = 'hidden';
+
             const modeLabel = item.mode === 'fullscreen' ? 'Fullscreen' : 'PiP';
-            if (item.type === 'text') {
-                const preview = item.text.length > 18 ? item.text.slice(0, 18) + '…' : item.text;
-                label.innerText = `🔤 ${modeLabel}: "${preview}"`;
-            } else if (item.type === 'video') {
-                label.innerText = `🎬 ${modeLabel} Video B-roll`;
-            } else if (item.type === 'cash' || item.type === 'built-in') {
-                let emoji = '💵';
-                let typeName = item.name || 'Cash Animation';
-                if (item.builtInType === 'question') { emoji = '❓'; typeName = 'প্রশ্ন চিহ্ন (Question Mark)'; }
-                else if (item.builtInType === 'checkmark') { emoji = '✔️'; typeName = 'টিক চিহ্ন (Checkmark)'; }
-                else if (item.builtInType === 'cross') { emoji = '❌'; typeName = 'ক্রস চিহ্ন (Cross Mark)'; }
-                else if (item.builtInType === 'magnifier') { emoji = '🔍'; typeName = 'ম্যাগনিফায়ার (Magnifier)'; }
-                else if (item.builtInType === 'cash' || item.type === 'cash') { emoji = '💵'; typeName = item.name || 'টাকা অ্যানিমেশন'; }
-                label.innerText = `${emoji} ${modeLabel}: ${typeName}`;
+
+            // Thumbnail or icon element
+            if ((item.type === 'image' || item.type === 'gif') && (item.imageUrl || (item.imageImg && item.imageImg.src))) {
+                const thumb = document.createElement('img');
+                thumb.src = item.imageUrl || item.imageImg.src;
+                thumb.style.width = '32px';
+                thumb.style.height = '32px';
+                thumb.style.objectFit = 'cover';
+                thumb.style.borderRadius = '4px';
+                thumb.style.flexShrink = '0';
+                leftContent.appendChild(thumb);
             } else {
-                label.innerText = `🖼 ${modeLabel} B-roll`;
+                const iconSpan = document.createElement('span');
+                iconSpan.style.fontSize = '16px';
+                iconSpan.style.width = '32px';
+                iconSpan.style.textAlign = 'center';
+                let emoji = '🖼';
+                if (item.type === 'text') emoji = '🔤';
+                else if (item.type === 'video') emoji = '🎬';
+                else if (item.builtInType === 'question') emoji = '❓';
+                else if (item.builtInType === 'checkmark') emoji = '✔️';
+                else if (item.builtInType === 'cross') emoji = '❌';
+                else if (item.builtInType === 'magnifier') emoji = '🔍';
+                else if (item.builtInType === 'cash' || item.type === 'cash') emoji = '💵';
+                iconSpan.innerText = emoji;
+                leftContent.appendChild(iconSpan);
             }
-            label.style.fontSize = '13px';
+
+            const labelInfo = document.createElement('div');
+            labelInfo.style.display = 'flex';
+            labelInfo.style.flexDirection = 'column';
+            labelInfo.style.overflow = 'hidden';
+
+            const title = document.createElement('span');
+            title.style.fontSize = '12px';
+            title.style.fontWeight = '600';
+            title.style.color = '#f8fafc';
+            title.style.whiteSpace = 'nowrap';
+            title.style.overflow = 'hidden';
+            title.style.textOverflow = 'ellipsis';
+
+            if (item.type === 'text') {
+                const preview = item.text.length > 15 ? item.text.slice(0, 15) + '…' : item.text;
+                title.innerText = `${modeLabel}: "${preview}"`;
+            } else if (item.type === 'video') {
+                title.innerText = `${modeLabel} Video`;
+            } else if (item.type === 'cash' || item.type === 'built-in') {
+                let typeName = item.name || 'Cash Animation';
+                if (item.builtInType === 'question') typeName = 'প্রশ্ন চিহ্ন';
+                else if (item.builtInType === 'checkmark') typeName = 'টিক চিহ্ন';
+                else if (item.builtInType === 'cross') typeName = 'ক্রস চিহ্ন';
+                else if (item.builtInType === 'magnifier') typeName = 'ম্যাগনিফায়ার';
+                else if (item.builtInType === 'cash' || item.type === 'cash') typeName = 'টাকা অ্যানিমেশন';
+                title.innerText = `${modeLabel}: ${typeName}`;
+            } else {
+                title.innerText = `${modeLabel}: ${item.name || 'Image B-roll'}`;
+            }
 
             const timeLabel = document.createElement('span');
-            timeLabel.innerText = `${item.startSec.toFixed(1)}s–${item.endSec.toFixed(1)}s`;
-            timeLabel.style.fontSize = '11px';
-            timeLabel.style.opacity = '0.6';
+            timeLabel.innerText = `${item.startSec.toFixed(1)}s – ${item.endSec.toFixed(1)}s`;
+            timeLabel.style.fontSize = '10.5px';
+            timeLabel.style.color = '#94a3b8';
 
-            row.appendChild(label);
-            row.appendChild(timeLabel);
+            labelInfo.appendChild(title);
+            labelInfo.appendChild(timeLabel);
+            leftContent.appendChild(labelInfo);
+
+            const rightActions = document.createElement('div');
+            rightActions.style.display = 'flex';
+            rightActions.style.alignItems = 'center';
+            rightActions.style.gap = '6px';
+            rightActions.style.flexShrink = '0';
+
+            const deleteBtn = document.createElement('button');
+            deleteBtn.type = 'button';
+            deleteBtn.className = 'btn btn-outline btn-sm';
+            deleteBtn.style.padding = '2px 6px';
+            deleteBtn.style.color = '#ef4444';
+            deleteBtn.style.borderColor = 'rgba(239,68,68,0.3)';
+            deleteBtn.style.fontSize = '11px';
+            deleteBtn.title = 'B-roll আইটেমটি মুছুন (Delete B-roll)';
+            deleteBtn.innerHTML = '<i class="fa-solid fa-trash-can"></i>';
+
+            deleteBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                state.brollOverlays = state.brollOverlays.filter(b => b.id !== item.id);
+                if (state.selectedBrollId === item.id) {
+                    state.selectedBrollId = state.brollOverlays.length > 0 ? state.brollOverlays[0].id : null;
+                }
+                renderBrollList();
+                if (state.selectedBrollId) {
+                    showBrollTimingFor(state.selectedBrollId);
+                } else if (brollTimingContainer) {
+                    brollTimingContainer.style.display = 'none';
+                }
+                drawFrame();
+                if (window.recordEditorHistory) {
+                    window.recordEditorHistory('B-roll deleted');
+                }
+            });
+
+            rightActions.appendChild(deleteBtn);
+
+            row.appendChild(leftContent);
+            row.appendChild(rightActions);
 
             row.addEventListener('click', () => {
                 state.selectedBrollId = item.id;
@@ -10670,12 +10794,15 @@ document.addEventListener('DOMContentLoaded', () => {
 
         // Render dynamic timelines and overlays
         if (typeof renderClipTimeline === 'function') renderClipTimeline();
+        if (typeof renderSubtitlesList === 'function') renderSubtitlesList();
         if (typeof renderBlurRegionList === 'function') renderBlurRegionList();
         if (typeof renderHighlightList === 'function') renderHighlightList();
+        if (typeof renderFillList === 'function') renderFillList();
         if (typeof renderTextOverlayList === 'function') renderTextOverlayList();
         if (typeof renderBrollList === 'function') renderBrollList();
         if (typeof renderStickerList === 'function') renderStickerList();
         if (typeof renderSymbolList === 'function') renderSymbolList();
+        if (typeof renderShapeList === 'function') renderShapeList();
         
         // Sync Audio engine UI
         if (window.syncAudioUIFromStateGlobal) {
@@ -11212,26 +11339,452 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    // --- Save project state into IndexedDB and LocalStorage ---
-    // Guard flag: while a "New Project" reset is in progress, no autosave
-    // (already scheduled, or newly triggered by the reset button's own click
-    // events) is allowed to write the old project back to storage. See the
-    // reset-editor-btn handler further down for why this is needed.
-    let editorIsResetting = false;
+    // --- Sanitize IDs on loaded project data ---
+    // Ensures overlays/stickers/symbols etc. have valid numeric IDs
+    // that won't conflict with new items created in this session.
+    function sanitizeLoadedProjectIds() {
+        let maxId = 0;
+        const collectMax = (arr) => {
+            if (!arr) return;
+            arr.forEach(item => {
+                if (item && typeof item.id === 'number' && item.id > maxId) maxId = item.id;
+            });
+        };
+        collectMax(state.clips);
+        collectMax(state.brollOverlays);
+        collectMax(state.textOverlays);
+        collectMax(state.stickers);
+        collectMax(state.symbolOverlays);
+        collectMax(state.shapeOverlays);
+        collectMax(state.highlights);
+        collectMax(state.fillRegions);
+        collectMax(state.blurRegions);
+        collectMax(state.subtitles);
+        collectMax(state.bgMusicTracks);
+        // Bump global counters so new items get unique IDs
+        const safeNext = maxId + 1;
+        if (typeof stickerIdCounter !== 'undefined' && stickerIdCounter <= maxId) {
+            stickerIdCounter = safeNext;
+        }
+    }
 
-    async function saveProjectToBrowserStorage() {
+    // --- Per-Video Multi-Project Tracking & Manager ---
+    function getVideoProjectId(file) {
+        const cleanName = (file.name || 'untitled').replace(/[^a-zA-Z0-9]/g, '_').toLowerCase();
+        const size = file.size || 0;
+        const lastMod = file.lastModified || 0;
+        return `proj_${cleanName}_${size}_${lastMod}`;
+    }
+
+    function getVideoFingerprint(file) {
+        return `${(file.name || 'untitled').trim().toLowerCase()}::${file.size || 0}`;
+    }
+
+    function getCurrentProjectId() {
+        if (state.activeProjectId) return state.activeProjectId;
+        const primaryClip = state.clips && state.clips[0];
+        if (primaryClip && primaryClip.name) {
+            const cleanName = primaryClip.name.replace(/[^a-zA-Z0-9]/g, '_').toLowerCase();
+            const size = primaryClip.size || (primaryClip.file ? primaryClip.file.size : 0);
+            const lastMod = primaryClip.lastModified || (primaryClip.file ? primaryClip.file.lastModified : 0);
+            return `proj_${cleanName}_${size}_${lastMod}`;
+        }
+        return 'proj_default';
+    }
+
+    function getProjectsRegistry() {
+        try {
+            const raw = localStorage.getItem('studio_flow_projects_registry');
+            return raw ? JSON.parse(raw) : [];
+        } catch (e) {
+            return [];
+        }
+    }
+
+    function saveProjectsRegistry(list) {
+        try {
+            localStorage.setItem('studio_flow_projects_registry', JSON.stringify(list));
+        } catch (e) {}
+    }
+
+    function registerProjectMetadata(projId, projName) {
+        let list = getProjectsRegistry();
+        const primaryClip = state.clips && state.clips[0];
+        const name = projName || (primaryClip ? primaryClip.name : 'Untitled Project');
+        const existingIndex = list.findIndex(p => p.id === projId);
+        const meta = {
+            id: projId,
+            name: name,
+            videoFingerprint: state.projectVideoFingerprint || '',
+            lastModified: Date.now(),
+            clipCount: state.clips ? state.clips.length : 0,
+            brollCount: state.brollOverlays ? state.brollOverlays.length : 0,
+            subtitleCount: state.subtitles ? state.subtitles.length : 0,
+            duration: state.duration || 0
+        };
+        if (existingIndex >= 0) {
+            list[existingIndex] = meta;
+        } else {
+            list.unshift(meta);
+        }
+        saveProjectsRegistry(list);
+    }
+
+    function clearWorkspaceState(fullReset = true) {
+        state.isPlaying = false;
+        state.video.pause();
+        state.video.removeAttribute('src');
+        state.video.load();
+        state.aspectRatio = 'original';
+        state.cropX = 0;
+        state.cropY = 0;
+        state.cropW = 1;
+        state.cropH = 1;
+        state.isAdjustingCrop = false;
+        state.logoImg = null;
+        state.logoFile = null;
+        state.logoX = 0.8;
+        state.logoY = 0.1;
+        state.logoSize = 15;
+        state.logoOpacity = 1;
+        state.videoVolume = 1;
+        state.voiceoverVolume = 1;
+        state.voiceoverProfile = 'none';
+        state.applyVoiceChangerToVideo = false;
+        state.isNoiseCancelActive = false;
+        state.noiseGateThreshold = -38;
+        state.isAiDenoiseActive = false;
+        state.bgMusicTracks = [];
+        state.selectedBgMusicTrackId = null;
+        state.bgMusicDuckingEnabled = true;
+        state.introTransitionType = 'none';
+        state.introTransitionDuration = 1;
+        state.bannerStyle = 'none';
+        state.headerText = '';
+        state.footerText = '';
+        state.bannerFontFamily = 'Hind Siliguri';
+        state.bannerFontSize = 28;
+        state.bannerTextColor = '#ffffff';
+        state.bannerBgColor = '#4f46e5';
+        state.bannerHeightPercent = 12;
+        state.tickerEnabled = false;
+        state.tickerText = '';
+        state.tickerLabel = '';
+        state.tickerPosition = 'bottom';
+        state.tickerSpeed = 90;
+        state.tickerFontSize = 24;
+        state.tickerTextColor = '#ffffff';
+        state.tickerBgColor = '#dc2626';
+        state.tickerHeightPercent = 8;
+        state.enableProgressBar = false;
+        state.progressBarColor = '#10b981';
+        state.progressBarHeight = 4;
+        state.progressBarPosition = 'bottom-canvas';
+        state.filterPreset = 'normal';
+        state.brightness = 100;
+        state.contrast = 100;
+        state.saturation = 100;
+        state.colorGradeEnabled = false;
+        state.gradeRShadow = state.gradeRMid = state.gradeRHigh = 0;
+        state.gradeGShadow = state.gradeGMid = state.gradeGHigh = 0;
+        state.gradeBShadow = state.gradeBMid = state.gradeBHigh = 0;
+        state.layoutMode = 'fit';
+        state.backgroundMode = 'none';
+        state.backgroundColor = '#000000';
+        state.backgroundImg = null;
+        state.backgroundImgFile = null;
+        state.introEnabled = false;
+        state.introTemplate = 'classic';
+        state.introTitle = '';
+        state.introSubtitle = '';
+        state.introDuration = 3;
+        state.outroEnabled = false;
+        state.outroTemplate = 'classic';
+        state.outroTitle = '';
+        state.outroSubtitle = '';
+        state.outroDuration = 3;
+        state.subtitlesEnabled = true;
+        state.subtitleStyle = {
+            fontFamily: '"Hind Siliguri", "Plus Jakarta Sans", sans-serif', fontSizePct: 0.045,
+            fontWeight: 600, color: '#ffffff', outlineColor: '#000000', outlineWidth: 3,
+            bgPillEnabled: true, bgPillColor: 'rgba(0, 0, 0, 0.6)', bgPillRadius: 8,
+            position: 'bottom', positionPct: 0.1, highlightEnabled: false,
+            highlightColor: '#ffe600', lineHighlightColor: '#ffe600'
+        };
+        state.brollOverlays = [];
+        state.subtitles = [];
+        state.textOverlays = [];
+        state.stickers = [];
+        state.highlights = [];
+        state.fillRegions = [];
+        state.symbolOverlays = [];
+        state.shapeOverlays = [];
+        state.blurRegions = [];
+        state.selectedBrollId = null;
+        state.selectedTextOverlayId = null;
+        state.selectedStickerId = null;
+        state.selectedHighlightId = null;
+        state.selectedSymbolId = null;
+        state.selectedShapeOverlayId = null;
+        state.selectedFillId = null;
+        state.voiceoverBlob = null;
+
+        // Hide overlay controls containers that may have been left visible
+        const stickerCtrl = document.getElementById('sticker-controls-container');
+        if (stickerCtrl) stickerCtrl.style.display = 'none';
+        const symbolCtrl = document.getElementById('symbol-controls-container');
+        if (symbolCtrl) symbolCtrl.style.display = 'none';
+        const shapeCtrl = document.getElementById('shape-controls-container');
+        if (shapeCtrl) shapeCtrl.style.display = 'none';
+        state.voiceoverUrl = null;
+        state.voiceoverRecorded = false;
+        
+        if (fullReset) {
+            state.clips = [];
+            state.activeClipId = null;
+            state.duration = 0;
+            state.startTime = 0;
+            state.endTime = 0;
+            state.currentTime = 0;
+            state.activeProjectId = null;
+        }
+        
+        if (typeof renderBrollList === 'function') renderBrollList();
+        if (typeof renderTextOverlaysList === 'function') renderTextOverlaysList();
+        if (typeof renderStickerList === 'function') renderStickerList();
+        if (typeof renderSymbolList === 'function') renderSymbolList();
+        if (typeof renderShapeList === 'function') renderShapeList();
+        if (typeof renderSubtitlesList === 'function') renderSubtitlesList();
+        if (typeof renderClipTimeline === 'function') renderClipTimeline();
+        if (typeof drawFrame === 'function') drawFrame();
+    }
+
+    function loadSafeImagePromise(img, src, timeoutMs = 2500) {
+        return new Promise((resolve) => {
+            let done = false;
+            const timer = setTimeout(() => {
+                if (!done) { done = true; resolve(false); }
+            }, timeoutMs);
+            img.onload = () => {
+                if (!done) { done = true; clearTimeout(timer); resolve(true); }
+            };
+            img.onerror = () => {
+                if (!done) { done = true; clearTimeout(timer); resolve(false); }
+            };
+            img.src = src;
+        });
+    }
+
+    function loadSafeVideoMetadataPromise(video, timeoutMs = 3000) {
+        return new Promise((resolve) => {
+            if (video && video.readyState >= 1) return resolve(true);
+            let done = false;
+            const timer = setTimeout(() => {
+                if (!done) { done = true; resolve(false); }
+            }, timeoutMs);
+            const onLoaded = () => {
+                if (!done) {
+                    done = true;
+                    clearTimeout(timer);
+                    video.removeEventListener('loadedmetadata', onLoaded);
+                    video.removeEventListener('error', onError);
+                    resolve(true);
+                }
+            };
+            const onError = () => {
+                if (!done) {
+                    done = true;
+                    clearTimeout(timer);
+                    video.removeEventListener('loadedmetadata', onLoaded);
+                    video.removeEventListener('error', onError);
+                    resolve(false);
+                }
+            };
+            if (video) {
+                video.addEventListener('loadedmetadata', onLoaded);
+                video.addEventListener('error', onError);
+            } else {
+                resolve(false);
+            }
+        });
+    }
+
+    async function switchProjectForVideo(file) {
+        if (!file) return false;
+        isProjectSwitching = true;
+        if (autoSaveTimeout) {
+            clearTimeout(autoSaveTimeout);
+            autoSaveTimeout = null;
+        }
+        const targetProjId = getVideoProjectId(file);
+        const legacyProjId = `proj_${file.name.replace(/[^a-zA-Z0-9]/g, '_').toLowerCase()}_${file.size || 0}`;
+        const videoFingerprint = getVideoFingerprint(file);
+
+        try {
+            if (state.clips && state.clips.length > 0 && state.activeProjectId && state.activeProjectId !== targetProjId) {
+                console.log(`Auto-saving previous project ${state.activeProjectId} before switching to ${targetProjId}...`);
+                await saveProjectToBrowserStorage(state.activeProjectId);
+            }
+
+            state.activeProjectId = targetProjId;
+            const matchedProject = getProjectsRegistry()
+                .filter(project => project.videoFingerprint === videoFingerprint && localStorage.getItem(`studio_flow_project_${project.id}`))
+                .sort((a, b) => b.lastModified - a.lastModified)[0];
+            const savedProjectId = localStorage.getItem(`studio_flow_project_${targetProjId}`)
+                ? targetProjId
+                : (matchedProject ? matchedProject.id : (localStorage.getItem(`studio_flow_project_${legacyProjId}`) ? legacyProjId : null));
+
+            if (savedProjectId) {
+                console.log(`Existing saved project found for video ${file.name}! Restoring project ${savedProjectId}...`);
+                clearWorkspaceState();
+                state.activeProjectId = savedProjectId;
+                const restored = await restoreProjectFromBrowserStorage(savedProjectId, file);
+                if (restored) {
+                    state.projectVideoFingerprint = videoFingerprint;
+                    if (savedProjectId !== targetProjId) {
+                        state.activeProjectId = targetProjId;
+                        await saveProjectToBrowserStorage(targetProjId);
+                    }
+                    if (typeof showToast === 'function') showToast(`"${file.name}"-এর পূর্বের সংরক্ষিত প্রজেক্ট লোড করা হলো!`, 'success');
+                    return true;
+                }
+            }
+
+            console.log(`New video uploaded (${file.name}). Starting clean project workspace for ${targetProjId}...`);
+            clearWorkspaceState();
+            state.activeProjectId = targetProjId;
+            state.projectVideoFingerprint = videoFingerprint;
+            if (typeof showToast === 'function') showToast(`"${file.name}"-এর জন্য নতুন ফ্রেশ প্রজেক্ট শুরু করা হলো।`, 'info');
+            return false;
+        } finally {
+            isProjectSwitching = false;
+        }
+    }
+
+    // Projects Modal & Registry UI
+    const savedProjectsBtn = document.getElementById('saved-projects-btn');
+    const projectsModal = document.getElementById('projects-modal');
+    const closeProjectsModalBtn = document.getElementById('close-projects-modal');
+    const modalCloseBtn = document.getElementById('modal-close-btn');
+    const modalStartFreshBtn = document.getElementById('modal-start-fresh-btn');
+    const projectsListContainer = document.getElementById('projects-list-container');
+
+    if (savedProjectsBtn && projectsModal) {
+        savedProjectsBtn.addEventListener('click', () => {
+            renderSavedProjectsList();
+            projectsModal.style.display = 'flex';
+        });
+    }
+    if (closeProjectsModalBtn) closeProjectsModalBtn.addEventListener('click', () => projectsModal.style.display = 'none');
+    if (modalCloseBtn) modalCloseBtn.addEventListener('click', () => projectsModal.style.display = 'none');
+    if (modalStartFreshBtn) {
+        modalStartFreshBtn.addEventListener('click', () => {
+            projectsModal.style.display = 'none';
+            const resetBtn = document.getElementById('reset-editor-btn');
+            if (resetBtn) resetBtn.click();
+        });
+    }
+
+    function renderSavedProjectsList() {
+        if (!projectsListContainer) return;
+        const list = getProjectsRegistry();
+        if (list.length === 0) {
+            projectsListContainer.innerHTML = '<div style="text-align:center; padding:30px; color:#94a3b8;"><i class="fa-solid fa-folder-open" style="font-size:32px; margin-bottom:8px; opacity:0.5;"></i><p>কোনো সংরক্ষিত প্রজেক্ট পাওয়া যায়নি।</p></div>';
+            return;
+        }
+
+        const currentId = getCurrentProjectId();
+
+        projectsListContainer.innerHTML = list.map(p => {
+            const dateStr = new Date(p.lastModified).toLocaleString('bn-BD', { dateStyle: 'medium', timeStyle: 'short' });
+            const isActive = (p.id === currentId);
+            return `
+                <div class="project-card-item ${isActive ? 'active-project' : ''}">
+                    <div>
+                        <div class="project-card-title">
+                            <i class="fa-solid fa-file-video" style="color:var(--primary);"></i>
+                            ${escapeHtml(p.name)}
+                            ${isActive ? '<span class="project-card-badge">বর্তমানে সক্রিয় (Active)</span>' : ''}
+                        </div>
+                        <div class="project-card-meta">
+                            <span><i class="fa-solid fa-clock"></i> ${dateStr}</span>
+                            <span><i class="fa-solid fa-layer-group"></i> B-rolls: ${p.brollCount || 0}</span>
+                            <span><i class="fa-solid fa-closed-captioning"></i> Captions: ${p.subtitleCount || 0}</span>
+                        </div>
+                    </div>
+                    <div style="display:flex; align-items:center; gap:6px;">
+                        <button type="button" class="btn btn-sm btn-outline open-proj-btn" data-id="${p.id}" ${isActive ? 'disabled' : ''}>
+                            <i class="fa-solid fa-folder-open"></i> খুলুন (Open)
+                        </button>
+                        <button type="button" class="btn btn-sm btn-outline delete-proj-btn" data-id="${p.id}" style="color:#ef4444; border-color:rgba(239,68,68,0.3);">
+                            <i class="fa-solid fa-trash"></i>
+                        </button>
+                    </div>
+                </div>
+            `;
+        }).join('');
+
+        projectsListContainer.querySelectorAll('.open-proj-btn').forEach(btn => {
+            btn.addEventListener('click', async (e) => {
+                const id = e.currentTarget.dataset.id;
+                if (!id) return;
+                projectsModal.style.display = 'none';
+                await saveProjectToBrowserStorage(); // auto-save current project before switching
+                const restored = await restoreProjectFromBrowserStorage(id);
+                if (restored && typeof showToast === 'function') {
+                    showToast('প্রজেক্টটি সফলভাবে লোড করা হয়েছে!', 'success');
+                }
+            });
+        });
+
+        projectsListContainer.querySelectorAll('.delete-proj-btn').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                const id = e.currentTarget.dataset.id;
+                if (!id) return;
+                if (confirm("আপনি কি নিশ্চিত যে এই সেভ হওয়া প্রজেক্টটি মুছে ফেলতে চান?")) {
+                    deleteProjectFromStorage(id);
+                    renderSavedProjectsList();
+                }
+            });
+        });
+    }
+
+    function deleteProjectFromStorage(projId) {
+        try {
+            localStorage.removeItem(`studio_flow_project_${projId}`);
+            let list = getProjectsRegistry().filter(p => p.id !== projId);
+            saveProjectsRegistry(list);
+        } catch (e) {}
+    }
+
+    // --- Save project state into IndexedDB and LocalStorage ---
+    let editorIsResetting = false;
+    let isProjectSwitching = false;
+    let isVideoLoading = false;
+
+    async function saveProjectToBrowserStorage(forcedId) {
         if (editorIsResetting) return;
         try {
+            const projId = forcedId || getCurrentProjectId();
+            state.activeProjectId = projId;
+            const primaryClip = state.clips && state.clips[0];
+            const projName = primaryClip ? primaryClip.name : 'Untitled Project';
+
             const db = await getDB();
             
             // Prepare clean JSON metadata
             const settingsToSave = {
                 version: "1.0",
                 appName: "Studio Flow",
+                projectId: projId,
+                projectName: projName,
+                videoFingerprint: state.projectVideoFingerprint || '',
                 timestamp: Date.now(),
                 settings: {
-                    startTime: state.startTime,
-                    endTime: state.endTime,
+                    duration: state.duration || 0,
+                    currentTime: state.currentTime || 0,
+                    startTime: state.startTime || 0,
+                    endTime: state.endTime || state.duration || 0,
                     aspectRatio: state.aspectRatio,
                     cropX: state.cropX,
                     cropY: state.cropY,
@@ -11317,12 +11870,15 @@ document.addEventListener('DOMContentLoaded', () => {
                     const copy = {...b};
                     delete copy.imageImg;
                     delete copy.file;
+                    delete copy.gifParsed;
                     return copy;
                 }),
                 blurRegions: state.blurRegions,
                 subtitles: state.subtitles,
                 clips: state.clips.map(c => {
                     const copy = {...c};
+                    copy.size = c.size || (c.file ? c.file.size : 0);
+                    copy.lastModified = c.lastModified || (c.file ? c.file.lastModified : 0);
                     delete copy.imageImg;
                     delete copy.file;
                     return copy;
@@ -11334,159 +11890,99 @@ document.addEventListener('DOMContentLoaded', () => {
                 })
             };
 
-            localStorage.setItem('studio_flow_project_settings', JSON.stringify(settingsToSave));
+            localStorage.setItem(`studio_flow_project_${projId}`, JSON.stringify(settingsToSave));
+            localStorage.setItem('studio_flow_active_project_id', projId);
+            registerProjectMetadata(projId, projName);
 
             // Write files to IndexedDB
             const tx = db.transaction(STORE_NAME, 'readwrite');
             const store = tx.objectStore(STORE_NAME);
 
             if (state.logoFile) {
-                store.put(state.logoFile, 'logo');
-            } else {
-                store.delete('logo');
+                store.put(state.logoFile, `${projId}_logo`);
             }
 
             if (state.voiceoverBlob) {
-                store.put(state.voiceoverBlob, 'voiceover');
-            } else {
-                store.delete('voiceover');
+                store.put(state.voiceoverBlob, `${projId}_voiceover`);
             }
 
             if (state.backgroundImgFile) {
-                store.put(state.backgroundImgFile, 'backgroundImg');
-            } else {
-                store.delete('backgroundImg');
+                store.put(state.backgroundImgFile, `${projId}_backgroundImg`);
             }
 
             state.bgMusicTracks.forEach(t => {
                 if (t.blob) {
-                    store.put(t.blob, `bgmusic_${t.id}`);
+                    store.put(t.blob, `${projId}_bgmusic_${t.id}`);
                 }
             });
 
             state.clips.forEach(c => {
                 if (c.file) {
-                    store.put(c.file, `clip_${c.id}`);
+                    store.put(c.file, `${projId}_clip_${c.id}`);
                 }
             });
 
             state.brollOverlays.forEach(b => {
                 if ((b.type === 'image' || b.type === 'gif') && b.file) {
-                    store.put(b.file, `broll_${b.id}`);
+                    store.put(b.file, `${projId}_broll_${b.id}`);
                 }
             });
             
-            console.log("IndexedDB Auto-save completed.");
+            await new Promise((res, rej) => {
+                tx.oncomplete = () => res();
+                tx.onerror = () => rej(tx.error);
+            });
+
+            console.log(`IndexedDB Auto-save completed for project ${projId}.`);
         } catch (e) {
             console.error("Auto-save storage failed:", e);
         }
     }
 
-    function sanitizeLoadedProjectIds() {
-        // 1. Sanitize textOverlays
-        const textIds = new Set();
-        let maxTextId = 0;
-        state.textOverlays.forEach(item => {
-            if (item.id > maxTextId) maxTextId = item.id;
-        });
-        let nextTextId = maxTextId + 1;
-        state.textOverlays.forEach(item => {
-            if (textIds.has(item.id)) {
-                item.id = nextTextId++;
-            } else {
-                textIds.add(item.id);
-            }
-        });
-        textOverlayIdCounter = nextTextId;
-
-        // 2. Sanitize stickers
-        const stickerIds = new Set();
-        let maxStickerId = 0;
-        state.stickers.forEach(item => {
-            if (item.id > maxStickerId) maxStickerId = item.id;
-        });
-        let nextStickerId = maxStickerId + 1;
-        state.stickers.forEach(item => {
-            if (stickerIds.has(item.id)) {
-                item.id = nextStickerId++;
-            } else {
-                stickerIds.add(item.id);
-            }
-        });
-        stickerIdCounter = nextStickerId;
-
-        // 2b. Sanitize symbolOverlays
-        if (!state.symbolOverlays) state.symbolOverlays = [];
-        const symbolIds = new Set();
-        let maxSymbolId = 0;
-        state.symbolOverlays.forEach(item => {
-            if (item.id > maxSymbolId) maxSymbolId = item.id;
-        });
-        let nextSymbolId = maxSymbolId + 1;
-        state.symbolOverlays.forEach(item => {
-            if (symbolIds.has(item.id)) {
-                item.id = nextSymbolId++;
-            } else {
-                symbolIds.add(item.id);
-            }
-        });
-        symbolIdCounter = nextSymbolId;
-
-        // 3. Sanitize brollOverlays
-        const brollIds = new Set();
-        let maxBrollId = 0;
-        state.brollOverlays.forEach(item => {
-            if (item.id > maxBrollId) maxBrollId = item.id;
-        });
-        let nextBrollId = maxBrollId + 1;
-        state.brollOverlays.forEach(item => {
-            if (brollIds.has(item.id)) {
-                const oldId = item.id;
-                const newId = nextBrollId++;
-                item.id = newId;
-                if (item.type === 'image' && item.file) {
-                    storeFileInDB(`broll_${newId}`, item.file);
-                }
-            } else {
-                brollIds.add(item.id);
-            }
-        });
-        brollIdCounter = nextBrollId;
-        saveProjectToBrowserStorage();
+    async function getFileFromDBWithFallback(key, projId) {
+        if (projId) {
+            return await getFileFromDB(`${projId}_${key}`);
+        }
+        return await getFileFromDB(key);
     }
 
-    // --- Restore state on application startup ---
-    async function restoreProjectFromBrowserStorage() {
+    // --- Restore state on application startup or project switch ---
+    async function restoreProjectFromBrowserStorage(targetProjectId, activeVideoFile) {
         try {
-            const savedSettingsRaw = localStorage.getItem('studio_flow_project_settings');
+            const projId = targetProjectId || localStorage.getItem('studio_flow_active_project_id') || getCurrentProjectId();
+            let savedSettingsRaw = localStorage.getItem(`studio_flow_project_${projId}`);
+            if (!savedSettingsRaw && !targetProjectId) {
+                savedSettingsRaw = localStorage.getItem('studio_flow_project_settings');
+            }
             if (!savedSettingsRaw) return false;
 
             const savedData = JSON.parse(savedSettingsRaw);
-            console.log("Auto-save project found. Re-establishing settings...", savedData);
+            const activeProjId = savedData.projectId || projId;
+            state.activeProjectId = activeProjId;
+            state.projectVideoFingerprint = savedData.videoFingerprint || '';
+            console.log(`Restoring project ${activeProjId}...`, savedData);
 
             // Restore files from database
             const db = await getDB();
 
             // Logo
-            const logoFile = await getFileFromDB('logo');
+            const logoFile = await getFileFromDBWithFallback('logo', activeProjId);
             if (logoFile) {
                 state.logoFile = logoFile;
                 state.logoImg = new Image();
-                state.logoImg.src = URL.createObjectURL(logoFile);
-                await new Promise(r => state.logoImg.onload = r);
+                await loadSafeImagePromise(state.logoImg, URL.createObjectURL(logoFile));
             }
 
             // Background Image
-            const backgroundImgFile = await getFileFromDB('backgroundImg');
+            const backgroundImgFile = await getFileFromDBWithFallback('backgroundImg', activeProjId);
             if (backgroundImgFile) {
                 state.backgroundImgFile = backgroundImgFile;
                 state.backgroundImg = new Image();
-                state.backgroundImg.src = URL.createObjectURL(backgroundImgFile);
-                await new Promise(r => state.backgroundImg.onload = r);
+                await loadSafeImagePromise(state.backgroundImg, URL.createObjectURL(backgroundImgFile));
             }
 
             // Voiceover
-            const voiceoverBlob = await getFileFromDB('voiceover');
+            const voiceoverBlob = await getFileFromDBWithFallback('voiceover', activeProjId);
             if (voiceoverBlob) {
                 state.voiceoverBlob = voiceoverBlob;
                 state.voiceoverUrl = URL.createObjectURL(voiceoverBlob);
@@ -11495,14 +11991,13 @@ document.addEventListener('DOMContentLoaded', () => {
             // Clips
             for (let i = 0; i < savedData.clips.length; i++) {
                 const clipMeta = savedData.clips[i];
-                const file = await getFileFromDB(`clip_${clipMeta.id}`);
+                const file = (i === 0 && activeVideoFile) ? activeVideoFile : await getFileFromDBWithFallback(`clip_${clipMeta.id}`, activeProjId);
                 if (file) {
                     clipMeta.file = file;
                     clipMeta.url = URL.createObjectURL(file);
                     if (clipMeta.type === 'image') {
                         clipMeta.imageImg = new Image();
-                        clipMeta.imageImg.src = clipMeta.url;
-                        await new Promise(r => clipMeta.imageImg.onload = r);
+                        await loadSafeImagePromise(clipMeta.imageImg, clipMeta.url);
                     }
                 }
             }
@@ -11510,13 +12005,11 @@ document.addEventListener('DOMContentLoaded', () => {
             // BG Music tracks
             for (let i = 0; i < savedData.bgMusicTracks.length; i++) {
                 const trackMeta = savedData.bgMusicTracks[i];
-                const file = await getFileFromDB(`bgmusic_${trackMeta.id}`);
+                const file = await getFileFromDBWithFallback(`bgmusic_${trackMeta.id}`, activeProjId);
                 if (file) {
                     trackMeta.blob = file;
                     trackMeta.url = URL.createObjectURL(file);
                 } else if (trackMeta.libraryId && window.getLibraryDefById) {
-                    // [9-10] Built-in library track was not persisted as a file —
-                    // re-render its synth blob on restore.
                     try {
                         const def = window.getLibraryDefById(trackMeta.libraryId);
                         if (def) {
@@ -11534,13 +12027,12 @@ document.addEventListener('DOMContentLoaded', () => {
             for (let i = 0; i < savedData.brollOverlays.length; i++) {
                 const broll = savedData.brollOverlays[i];
                 if (broll.type === 'image' || broll.type === 'gif') {
-                    const file = await getFileFromDB(`broll_${broll.id}`);
+                    const file = await getFileFromDBWithFallback(`broll_${broll.id}`, activeProjId);
                     if (file) {
                         broll.file = file;
                         broll.imageUrl = URL.createObjectURL(file);
                         broll.imageImg = new Image();
-                        broll.imageImg.src = broll.imageUrl;
-                        await new Promise(r => broll.imageImg.onload = r);
+                        await loadSafeImagePromise(broll.imageImg, broll.imageUrl);
                         if (broll.type === 'gif') {
                             const host = document.getElementById('gif-host');
                             broll.imageImg.style.display = 'block';
@@ -11549,6 +12041,12 @@ document.addEventListener('DOMContentLoaded', () => {
                             broll.imageImg.style.opacity = '0.01';
                             broll.imageImg.style.pointerEvents = 'none';
                             if (host) host.appendChild(broll.imageImg);
+                            
+                            try {
+                                const buf = await file.arrayBuffer();
+                                const parsed = parseGifFrames(buf);
+                                if (parsed && parsed.frames.length > 0) broll.gifParsed = parsed;
+                            } catch (e) {}
                             ensureAnimatedGifPreview();
                         }
                     }
@@ -11569,23 +12067,58 @@ document.addEventListener('DOMContentLoaded', () => {
             state.clips = savedData.clips || [];
             state.bgMusicTracks = savedData.bgMusicTracks || [];
 
+            if (savedData.settings && typeof savedData.settings.duration !== 'undefined') {
+                state.duration = savedData.settings.duration;
+            } else if (state.clips.length > 0 && state.clips[0].duration) {
+                state.duration = state.clips[0].duration;
+            }
+
             sanitizeLoadedProjectIds();
 
             // Setup video element src
             if (state.clips.length > 0) {
-                const activeClip = state.clips.find(c => c.id === state.activeClipId);
-                if (activeClip && activeClip.type !== 'image') {
+                const activeClip = state.clips.find(c => c.id === state.activeClipId) || state.clips[0];
+                if (activeClip && activeClip.type !== 'image' && activeClip.url) {
                     state.video.src = activeClip.url;
                     state.video.load();
-                    await new Promise(r => state.video.onloadedmetadata = r);
+                    await loadSafeVideoMetadataPromise(state.video);
+                    if (state.video.duration && !isNaN(state.video.duration)) {
+                        state.duration = state.video.duration;
+                    }
+                } else if (activeClip && activeClip.type === 'image') {
+                    if (!state.duration) state.duration = activeClip.duration || 5.0;
                 }
+            }
+
+            if (!state.endTime || state.endTime > state.duration) {
+                state.endTime = state.duration || 0;
             }
 
             // Refresh UI
             syncUIFromState();
+            if (typeof renderBrollList === 'function') renderBrollList();
+            if (typeof renderTextOverlaysList === 'function') renderTextOverlaysList();
+            if (typeof renderStickerList === 'function') renderStickerList();
+            if (typeof renderSymbolList === 'function') renderSymbolList();
+            if (typeof renderShapeList === 'function') renderShapeList();
+            if (typeof renderSubtitlesList === 'function') renderSubtitlesList();
+            if (typeof renderClipTimeline === 'function') renderClipTimeline();
+            if (typeof renderHighlightList === 'function') renderHighlightList();
+            if (typeof renderBlurRegionList === 'function') renderBlurRegionList();
+            if (typeof renderFillList === 'function') renderFillList();
+            if (state.selectedBrollId) showBrollTimingFor(state.selectedBrollId);
+
+            // Properly sync overlay controls visibility after restore
+            const _stickerCtrl = document.getElementById('sticker-controls-container');
+            if (_stickerCtrl) _stickerCtrl.style.display = (state.selectedStickerId && state.stickers.find(s => s.id === state.selectedStickerId)) ? 'block' : 'none';
+            const _symbolCtrl = document.getElementById('symbol-controls-container');
+            if (_symbolCtrl) _symbolCtrl.style.display = (state.selectedSymbolId && (state.symbolOverlays || []).find(s => s.id === state.selectedSymbolId)) ? 'block' : 'none';
+            const _shapeCtrl = document.getElementById('shape-controls-container');
+            if (_shapeCtrl) _shapeCtrl.style.display = (state.selectedShapeOverlayId && (state.shapeOverlays || []).find(s => s.id === state.selectedShapeOverlayId)) ? 'block' : 'none';
+
             drawFrame();
             
-            console.log("Project auto-restore completed successfully.");
+            console.log(`Project ${activeProjId} restored successfully.`);
             return true;
         } catch (e) {
             console.error("Auto-restore process failed:", e);
@@ -11596,12 +12129,13 @@ document.addEventListener('DOMContentLoaded', () => {
     // --- Debounced Auto-Save trigger ---
     let autoSaveTimeout = null;
     function triggerAutoSave() {
-        if (state.isPlaying) return; // skip auto-saving while playing to avoid stutters
+        if (state.isPlaying || editorIsResetting || isProjectSwitching || isVideoLoading) return;
         if (autoSaveTimeout) clearTimeout(autoSaveTimeout);
         autoSaveTimeout = setTimeout(() => {
             saveProjectToBrowserStorage();
         }, 1200);
     }
+    window.triggerAutoSave = triggerAutoSave;
 
     // Bind triggerAutoSave on input changes
     document.addEventListener('input', (e) => {
@@ -11617,6 +12151,18 @@ document.addEventListener('DOMContentLoaded', () => {
     });
     window.addEventListener('touchend', () => {
         triggerAutoSave();
+    });
+
+    // Save project on page reload or navigation away
+    window.addEventListener('beforeunload', () => {
+        if (state.activeProjectId && !editorIsResetting) {
+            saveProjectToBrowserStorage(state.activeProjectId);
+        }
+    });
+    window.addEventListener('pagehide', () => {
+        if (state.activeProjectId && !editorIsResetting) {
+            saveProjectToBrowserStorage(state.activeProjectId);
+        }
     });
 
     // --- UI Button Event Bindings for Save/Load ---
