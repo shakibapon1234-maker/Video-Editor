@@ -3209,10 +3209,10 @@ document.addEventListener('DOMContentLoaded', () => {
                     }
                 } else {
                     if (item.type === 'text') {
-                        state.ctx.font = `bold ${item.fontSize}px "Hind Siliguri", "Plus Jakarta Sans", sans-serif`;
-                        const metrics = state.ctx.measureText(item.text);
-                        boxW = metrics.width + 32;
-                        boxH = item.fontSize + 24;
+                        const maxW = canvasW * 0.82;
+                        const layout = getBrollTextLayout(state.ctx, item, maxW);
+                        boxW = layout.totalW;
+                        boxH = layout.totalH;
                     } else if (item.type === 'cash' || item.type === 'built-in') {
                         if (item.pipW !== undefined && item.pipH !== undefined) {
                             boxW = item.pipW * canvasW;
@@ -3565,75 +3565,153 @@ document.addEventListener('DOMContentLoaded', () => {
                             state.ctx.fillRect(drawBoxX, drawBoxY, boxW, boxH);
                         }
                     }
-                    state.ctx.font = `bold ${item.fontSize}px "Hind Siliguri", "Plus Jakarta Sans", sans-serif`;
+                    const maxW = (item.mode === 'fullscreen') ? (canvasW * 0.82) : Math.max(100, boxW - 32);
+                    const layout = getBrollTextLayout(state.ctx, item, maxW);
+                    const sublines = layout.sublines;
+                    const lineHeight = layout.lineHeight;
+                    const numLines = sublines.length;
+                    const isBulletPage = sublines.length > 1 || (item.text && item.text.indexOf('\n') !== -1);
+
+                    state.ctx.font = `bold ${item.fontSize || 48}px "Hind Siliguri", "Plus Jakarta Sans", sans-serif`;
                     state.ctx.fillStyle = item.color;
                     state.ctx.textBaseline = 'middle';
 
-                    // Typewriter Reveal (v2.6): only ever reveals characters left-to-right
-                    // during entry, so it needs a fixed left anchor rather than the usual
-                    // center alignment (centering a growing substring would jitter/re-center
-                    // every frame instead of visually "typing" in place).
-                    let renderText = item.text;
-                    let typewriterActive = false;
-                    let cursorX = cx, cursorTop = cy, cursorBottom = cy;
                     const kineticTextStyles = ['letter-rotate-settle', 'letter-converge', 'letter-cascade-fade', 'word-pop-stagger'];
-                    if (style === 'typewriter' && brollAnimActive && tIn < animDur) {
-                        typewriterActive = true;
-                        const fullWidth = state.ctx.measureText(item.text).width;
-                        const leftX = cx - fullWidth / 2;
-                        const revealCount = Math.max(0, Math.min(item.text.length, Math.round(item.text.length * Math.max(0, Math.min(1, tIn / animDur)))));
-                        renderText = item.text.slice(0, revealCount);
-                        state.ctx.textAlign = 'left';
-                        if (item.mode === 'fullscreen' && item.transparentBg === false) {
-                            state.ctx.lineWidth = Math.max(2, item.fontSize * 0.08);
-                            state.ctx.strokeStyle = 'rgba(0,0,0,0.55)';
-                            state.ctx.strokeText(renderText, leftX, cy);
-                        }
-                        state.ctx.fillText(renderText, leftX, cy);
-                        cursorX = leftX + state.ctx.measureText(renderText).width + Math.max(2, item.fontSize * 0.04);
-                        cursorTop = cy - item.fontSize * 0.42;
-                        cursorBottom = cy + item.fontSize * 0.42;
-                    } else if (kineticTextStyles.includes(style) && brollAnimActive && (tIn < animDur || tOut < animDur)) {
-                        // Kinetic Typography: per-letter/word entrance & exit. Only takes
-                        // over while actually entering/exiting; once settled this falls
-                        // through to the plain centered draw below, same as every other style.
-                        if (item.mode === 'fullscreen' && item.transparentBg === false) {
-                            state.ctx.lineWidth = Math.max(2, item.fontSize * 0.08);
-                            state.ctx.strokeStyle = 'rgba(0,0,0,0.55)';
-                        }
-                        drawKineticText(state.ctx, item, style, item.text, cx, cy, tIn, tOut, animDur, item.mode === 'fullscreen' && item.transparentBg === false);
-                    } else {
-                        const textLines = String(renderText).split(/\r?\n/).filter(Boolean);
-                        const isBulletPage = textLines.length > 1;
-                        state.ctx.textAlign = isBulletPage ? 'left' : 'center';
-                        const lineHeight = item.fontSize * 1.42;
-                        const firstLineY = isBulletPage ? cy - ((textLines.length - 1) * lineHeight) / 2 : cy;
-                        const textX = isBulletPage ? drawBoxX + Math.max(34, boxW * 0.09) : cx;
-                        if (item.mode === 'fullscreen' && item.transparentBg === false) {
-                            state.ctx.lineWidth = Math.max(2, item.fontSize * 0.08);
-                            state.ctx.strokeStyle = 'rgba(0,0,0,0.55)';
-                        }
-                        textLines.forEach((line, index) => {
-                            const lineY = firstLineY + index * lineHeight;
-                            if (item.mode === 'fullscreen' && item.transparentBg === false) state.ctx.strokeText(line, textX, lineY);
-                            state.ctx.fillText(line, textX, lineY);
+                    const isKineticAnim = kineticTextStyles.includes(style) && brollAnimActive && (tIn < animDur || tOut < animDur);
+                    // Always use the sublines loop so multi-line / bulleted text
+                    // retains its layout during kinetic entry/exit animations.
+                    {
+                        const firstLineY = cy - ((numLines - 1) * lineHeight) / 2;
+                        const textX = isBulletPage ? (drawBoxX + Math.max(34, boxW * 0.09)) : cx;
+
+                        const perLineDur = Math.max(0.12, animDur * 0.55);
+                        const staggerSpan = Math.max(0, animDur - perLineDur);
+
+                        sublines.forEach((lineObj, k) => {
+                            const isEntry = tIn < animDur;
+                            const isExit = !isEntry;
+                            const order = isExit ? (numLines - 1 - k) : k;
+                            const delay = (numLines > 1 && brollAnimActive) ? (order / (numLines - 1)) * staggerSpan : 0;
+                            const localT = isEntry ? tIn : Math.max(0, tOut);
+                            const lineP = brollAnimActive ? Math.max(0, Math.min(1, (localT - delay) / perLineDur)) : 1;
+
+                            let lineEased = 1;
+                            if (brollAnimActive && (tIn < animDur || tOut < animDur)) {
+                                lineEased = (style === 'slide-pop' || style === 'word-pop-stagger' || style === 'bounce-in')
+                                    ? easeOutBackOvershoot(lineP)
+                                    : brollEaseOut(lineP);
+                            }
+
+                            const lineY = firstLineY + k * lineHeight;
+                            let lineX = isBulletPage ? (textX + lineObj.bulletWidth) : textX;
+                            let lineBulletX = textX;
+
+                            let lineOffX = 0, lineOffY = 0, lineAlpha = 1, lineScale = 1, lineRotate = 0;
+
+                            if (brollAnimActive && style !== 'none') {
+                                if (style === 'slide' || style === 'slide-pop') {
+                                    const dir = isEntry ? (item.entryDirection || 'bottom') : resolvedExitDir;
+                                    const d = brollSlideOffset(dir, boxX, boxY, boxW, boxH);
+                                    lineOffX = d.x * (1 - lineEased);
+                                    lineOffY = d.y * (1 - lineEased);
+                                    if (style === 'slide-pop') {
+                                        lineScale = 0.7 + 0.3 * lineEased;
+                                        lineAlpha = Math.max(0.05, lineEased);
+                                    }
+                                } else if (style === 'rotate-in' || style === 'spin-pop') {
+                                    lineRotate = (1 - lineEased) * (style === 'spin-pop' ? Math.PI / 3 : Math.PI / 10);
+                                    lineScale = 0.8 + 0.2 * lineEased;
+                                    lineAlpha = Math.max(0.05, lineEased);
+                                } else if (style === 'bounce-in') {
+                                    lineOffY = -(boxY + boxH) * (1 - lineEased);
+                                    lineAlpha = Math.max(0.05, lineEased);
+                                } else if (style === 'typewriter') {
+                                    lineAlpha = 1;
+                                } else {
+                                    lineAlpha = Math.max(0.01, lineEased);
+                                    if (style === 'zoom-pop' || style === 'word-pop-stagger') {
+                                        lineScale = 0.7 + 0.3 * lineEased;
+                                    }
+                                }
+                            }
+
+                            state.ctx.save();
+                            state.ctx.globalAlpha *= lineAlpha;
+                            state.ctx.textAlign = isBulletPage ? 'left' : 'center';
+
+                            const drawLineY = lineY + lineOffY;
+                            const drawLineX = lineX + lineOffX;
+                            const drawBulletX = lineBulletX + lineOffX;
+
+                            if (lineRotate !== 0 || lineScale !== 1) {
+                                state.ctx.translate(drawLineX, drawLineY);
+                                if (lineRotate !== 0) state.ctx.rotate(lineRotate);
+                                if (lineScale !== 1) state.ctx.scale(lineScale, lineScale);
+                                state.ctx.translate(-drawLineX, -drawLineY);
+                            }
+
+                            if (isKineticAnim) {
+                                // Kinetic typography: draw this subline's text animated
+                                // at its correct layout position instead of flattening all
+                                // lines to a single row at the box center.
+                                const strokeOnFill = item.mode === 'fullscreen' && item.transparentBg === false;
+                                if (strokeOnFill) {
+                                    state.ctx.lineWidth = Math.max(2, item.fontSize * 0.08);
+                                    state.ctx.strokeStyle = 'rgba(0,0,0,0.55)';
+                                }
+                                // Stagger each line's kinetic clock so they animate in
+                                // one-after-another rather than all at once.
+                                const kPerLineDur = Math.max(0.12, animDur * 0.55);
+                                const kStagger = (numLines > 1) ? (k / (numLines - 1)) * Math.max(0, animDur - kPerLineDur) : 0;
+                                const kIsEntry = tIn < animDur;
+                                const kLocalT = kIsEntry ? Math.max(0, tIn - kStagger) : Math.max(0, tOut - kStagger);
+                                if (lineObj.bullet) {
+                                    state.ctx.textAlign = 'left';
+                                    if (strokeOnFill) state.ctx.strokeText(lineObj.bullet, drawBulletX, drawLineY);
+                                    state.ctx.fillText(lineObj.bullet, drawBulletX, drawLineY);
+                                }
+                                // drawKineticText() renders around cx as the center point.
+                                // For bullet pages the text starts at drawLineX (left-aligned),
+                                // so shift cx to the midpoint of this line's text width.
+                                const lineTextW = state.ctx.measureText(lineObj.text).width;
+                                const kineticLineX = isBulletPage ? (drawLineX + lineTextW / 2) : drawLineX;
+                                drawKineticText(state.ctx, item, style, lineObj.text, kineticLineX, drawLineY, kIsEntry ? kLocalT : animDur, kIsEntry ? animDur : kLocalT, kPerLineDur, strokeOnFill);
+                            } else {
+                                let textToDraw = lineObj.text;
+                                let isTypingLine = false;
+                                if (style === 'typewriter' && brollAnimActive && tIn < animDur) {
+                                    const revealCount = Math.max(0, Math.min(lineObj.text.length, Math.round(lineObj.text.length * lineP)));
+                                    textToDraw = lineObj.text.slice(0, revealCount);
+                                    isTypingLine = revealCount < lineObj.text.length && lineP > 0;
+                                }
+
+                                if (item.mode === 'fullscreen' && item.transparentBg === false) {
+                                    state.ctx.lineWidth = Math.max(2, item.fontSize * 0.08);
+                                    state.ctx.strokeStyle = 'rgba(0,0,0,0.55)';
+                                    if (lineObj.bullet) state.ctx.strokeText(lineObj.bullet, drawBulletX, drawLineY);
+                                    state.ctx.strokeText(textToDraw, drawLineX, drawLineY);
+                                }
+
+                                if (lineObj.bullet) {
+                                    state.ctx.fillText(lineObj.bullet, drawBulletX, drawLineY);
+                                }
+                                state.ctx.fillText(textToDraw, drawLineX, drawLineY);
+
+                                if (isTypingLine && Math.floor(currentTime * 2.5) % 2 === 0) {
+                                    const curX = drawLineX + state.ctx.measureText(textToDraw).width + Math.max(2, item.fontSize * 0.04);
+                                    state.ctx.strokeStyle = item.color;
+                                    state.ctx.lineWidth = Math.max(2, item.fontSize * 0.07);
+                                    state.ctx.beginPath();
+                                    state.ctx.moveTo(curX, drawLineY - item.fontSize * 0.4);
+                                    state.ctx.lineTo(curX, drawLineY + item.fontSize * 0.4);
+                                    state.ctx.stroke();
+                                }
+                            }
+
+                            state.ctx.restore();
                         });
                     }
 
-                    // Blinking cursor while the text is still being "typed". Blink phase
-                    // is driven by the deterministic timeline clock (currentTime), not
-                    // wall-clock time, so exported video frames stay consistent.
-                    if (typewriterActive && renderText.length < item.text.length && Math.floor(currentTime * 2.5) % 2 === 0) {
-                        state.ctx.save();
-                        state.ctx.strokeStyle = item.color;
-                        state.ctx.lineWidth = Math.max(2, item.fontSize * 0.07);
-                        state.ctx.lineCap = 'round';
-                        state.ctx.beginPath();
-                        state.ctx.moveTo(cursorX, cursorTop);
-                        state.ctx.lineTo(cursorX, cursorBottom);
-                        state.ctx.stroke();
-                        state.ctx.restore();
-                    }
                 } else if (item.type === 'cash' || item.type === 'built-in') {
                     drawBuiltInBroll(state.ctx, item, drawBoxX, drawBoxY, boxW, boxH, tIn, animDur);
                 } else {
@@ -5533,11 +5611,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
             if (item.mode === 'fullscreen') {
                 if (item.type === 'text') {
-                    // Fullscreen text is centered
-                    state.ctx.font = `bold ${item.fontSize}px "Hind Siliguri", "Plus Jakarta Sans", sans-serif`;
-                    const metrics = state.ctx.measureText(item.text);
-                    pipW = metrics.width + 32;
-                    pipH = item.fontSize + 24;
+                    // Fullscreen or PiP text layout
+                    const maxW = canvasW * 0.82;
+                    const layout = getBrollTextLayout(state.ctx, item, maxW);
+                    pipW = layout.totalW;
+                    pipH = layout.totalH;
                     px = (canvasW - pipW) / 2;
                     py = (canvasH - pipH) / 2;
                 } else {
@@ -7861,14 +7939,16 @@ document.addEventListener('DOMContentLoaded', () => {
     const brollEditTextColor = document.getElementById('broll-edit-text-color');
     const brollEditTextColorVal = document.getElementById('broll-edit-text-color-val');
     if (brollEditTextInput) {
-        brollEditTextInput.addEventListener('input', (e) => {
+        const syncBrollTextEdit = (e) => {
             const item = state.brollOverlays.find(b => b.id === state.selectedBrollId);
             if (item && item.type === 'text') {
                 item.text = e.target.value;
                 renderBrollList();
                 drawFrame();
             }
-        });
+        };
+        brollEditTextInput.addEventListener('input', syncBrollTextEdit);
+        brollEditTextInput.addEventListener('change', syncBrollTextEdit);
     }
     if (brollEditTextFontsize) {
         brollEditTextFontsize.addEventListener('input', (e) => {
@@ -8006,6 +8086,9 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     let brollIdCounter = 1;
+    function generateBrollId() {
+        return 'broll_' + Date.now() + '_' + (brollIdCounter++) + '_' + Math.floor(Math.random() * 1000000);
+    }
 
     if (brollDropzone) {
         brollDropzone.addEventListener('click', () => brollInput.click());
@@ -8379,7 +8462,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 return;
             }
             const newItem = {
-                id: brollIdCounter++,
+                id: generateBrollId(),
                 type: isGif ? 'gif' : 'image',
                 imageImg: img,
                 imageUrl: url,
@@ -8537,7 +8620,7 @@ document.addEventListener('DOMContentLoaded', () => {
             Object.defineProperty(vid, 'naturalWidth', { get: () => vid.videoWidth });
             Object.defineProperty(vid, 'naturalHeight', { get: () => vid.videoHeight });
             const newItem = {
-                id: brollIdCounter++,
+                id: generateBrollId(),
                 type: 'video',
                 videoEl: vid,
                 // Every existing draw / hit-test / animation code path for B-roll
@@ -8618,7 +8701,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 .join('\n');
 
             const newItem = {
-                id: brollIdCounter++,
+                id: generateBrollId(),
                 type: 'text',
                 text: text,
                 fontSize: 48,
@@ -8660,7 +8743,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function addCashBroll(animationStyle) {
         const newItem = {
-            id: brollIdCounter++,
+            id: generateBrollId(),
             type: 'cash',
             name: animationStyle === 'cash-stack' ? 'Cash Stack' : 'Cash Spin',
             mode: 'pip',
@@ -8696,7 +8779,7 @@ document.addEventListener('DOMContentLoaded', () => {
         else if (builtInType === 'magnifier') { name = 'Magnifier'; sound = 'whoosh'; }
 
         const newItem = {
-            id: brollIdCounter++,
+            id: generateBrollId(),
             type: 'built-in',
             builtInType: builtInType,
             name: name,
@@ -8823,17 +8906,87 @@ document.addEventListener('DOMContentLoaded', () => {
         if (brollVisualTemplateSelect) brollVisualTemplateSelect.value = item.visualTemplate || 'standard';
     }
 
+    function getBrollTextLayout(ctx, item, maxW) {
+        const text = String(item.text || '');
+        const paragraphs = text.split(/\r?\n/);
+        const font = `bold ${item.fontSize || 48}px "Hind Siliguri", "Plus Jakarta Sans", sans-serif`;
+        ctx.font = font;
+
+        const bulletRegex = /^([•✔➤★▶►➕🔹❤️\*\-—–]|\d+[\.\)])\s*/;
+        const sublines = [];
+        let maxLineWidth = 0;
+
+        paragraphs.forEach((pText) => {
+            const trimmed = pText.trim();
+            if (!trimmed) return;
+            const match = pText.match(bulletRegex);
+            let bulletStr = '';
+            let contentStr = pText;
+            if (match) {
+                bulletStr = match[0];
+                contentStr = pText.slice(match[0].length);
+            }
+
+            const bulletWidth = bulletStr ? ctx.measureText(bulletStr).width : 0;
+            const availW = Math.max(80, maxW - bulletWidth);
+
+            const words = contentStr.split(/(\s+)/).filter(w => w.length > 0);
+            let currentLine = '';
+            let firstSublineInParagraph = true;
+
+            const addSubline = (str, isFirst) => {
+                const w = (isFirst ? bulletWidth : 0) + ctx.measureText(str).width;
+                if (w > maxLineWidth) maxLineWidth = w;
+                sublines.push({
+                    text: str,
+                    bullet: isFirst ? bulletStr : '',
+                    bulletWidth: bulletWidth,
+                    isFirstSubline: isFirst
+                });
+            };
+
+            words.forEach((word) => {
+                const testLine = currentLine + word;
+                const testW = ctx.measureText(testLine).width;
+                if (testW > availW && currentLine.trim().length > 0) {
+                    addSubline(currentLine.trimEnd(), firstSublineInParagraph);
+                    firstSublineInParagraph = false;
+                    currentLine = word.trimStart();
+                } else {
+                    currentLine = testLine;
+                }
+            });
+
+            if (currentLine.length > 0 || firstSublineInParagraph) {
+                addSubline(currentLine, firstSublineInParagraph);
+            }
+        });
+
+        if (sublines.length === 0) {
+            sublines.push({ text: text, bullet: '', bulletWidth: 0, isFirstSubline: true });
+        }
+
+        const lineHeight = (item.fontSize || 48) * 1.35;
+        const totalH = sublines.length * lineHeight + 24;
+        const totalW = maxLineWidth + 32;
+
+        return {
+            sublines,
+            lineHeight,
+            totalW,
+            totalH
+        };
+    }
+
     // Computes this item's on-screen box size as a fraction of the canvas, used both for
     // hit-testing drag/click and for placing it correctly via the position-preset grid.
     function computeBrollBoxFrac(item) {
         const canvasW = state.canvas.width;
         const canvasH = state.canvas.height;
         if (item.type === 'text') {
-            state.ctx.font = `bold ${item.fontSize}px "Hind Siliguri", "Plus Jakarta Sans", sans-serif`;
-            const metrics = state.ctx.measureText(item.text);
-            const boxW = metrics.width + 32;
-            const boxH = item.fontSize + 24;
-            return { wFrac: boxW / canvasW, hFrac: boxH / canvasH };
+            const maxW = canvasW * 0.82;
+            const layout = getBrollTextLayout(state.ctx, item, maxW);
+            return { wFrac: layout.totalW / canvasW, hFrac: layout.totalH / canvasH };
         } else if (item.imageImg) {
             const pipW = canvasW * (item.size / 100);
             const pipH = pipW * (item.imageImg.naturalHeight / item.imageImg.naturalWidth);
@@ -9038,7 +9191,14 @@ document.addEventListener('DOMContentLoaded', () => {
         if (brollEditTextSection) {
             if (item.type === 'text') {
                 brollEditTextSection.style.display = 'block';
-                if (brollEditTextInput) brollEditTextInput.value = item.text || '';
+                if (brollEditTextInput) {
+                    brollEditTextInput.value = item.text || '';
+                    // Give the browser one tick so the section is visible before focusing
+                    setTimeout(() => {
+                        brollEditTextInput.focus();
+                        brollEditTextInput.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+                    }, 0);
+                }
                 if (brollEditTextFontsize) {
                     brollEditTextFontsize.value = item.fontSize || 48;
                     if (brollEditTextFontsizeVal) brollEditTextFontsizeVal.innerText = (item.fontSize || 48) + 'px';
@@ -11747,7 +11907,27 @@ document.addEventListener('DOMContentLoaded', () => {
         if (typeof stickerIdCounter !== 'undefined' && stickerIdCounter <= maxId) {
             stickerIdCounter = safeNext;
         }
+
+        // De-duplicate B-roll overlay IDs. If two (or more) items share the same
+        // numeric id — which can happen when old projects are migrated or history
+        // snapshots are restored — every one of them will match a filter() and be
+        // deleted at once when the user tries to remove just one. Detect duplicates
+        // and assign a fresh unique id to any offending item so every B-roll is
+        // individually addressable.
+        if (state.brollOverlays && state.brollOverlays.length > 1) {
+            let runningMax = maxId;
+            const seenIds = new Set();
+            state.brollOverlays.forEach(item => {
+                if (!item) return;
+                if (typeof item.id !== 'number' || seenIds.has(item.id)) {
+                    runningMax += 1;
+                    item.id = runningMax;
+                }
+                seenIds.add(item.id);
+            });
+        }
     }
+
 
     // --- Per-Video Multi-Project Tracking & Manager ---
     function getVideoProjectId(file) {

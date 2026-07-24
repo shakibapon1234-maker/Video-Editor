@@ -224,6 +224,7 @@ document.addEventListener('DOMContentLoaded', () => {
         try {
             const data = JSON.parse(jsonStr);
             const oldClips = state.clips || []; // keep reference to current clips in memory
+            const oldBrolls = state.brollOverlays || [];
             Object.assign(state, data.settings);
             state.clips = (data.clips || []).map(c => {
                 const existing = oldClips.find(oc => oc.id === c.id);
@@ -246,10 +247,10 @@ document.addEventListener('DOMContentLoaded', () => {
             state.blurRegions = data.blurRegions || [];
             state.subtitles = data.subtitles || [];
 
-            const oldBrolls = state.brollOverlays || [];
-            state.brollOverlays = (data.brollOverlays || []).map(b => {
-                const existing = oldBrolls.find(ob => ob.id === b.id);
+            state.brollOverlays = (data.brollOverlays || []).map((b, idx) => {
                 const restored = { ...b };
+                if (!restored.id) restored.id = 'broll_' + Date.now() + '_' + idx + '_' + Math.floor(Math.random() * 10000);
+                const existing = oldBrolls.find(ob => ob.id === restored.id);
                 if (existing) {
                     restored.file = existing.file;
                     restored.imageImg = existing.imageImg;
