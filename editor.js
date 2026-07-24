@@ -124,6 +124,10 @@ window.VideoEditor = {
     dragTextOffsetX: 0,
     dragTextOffsetY: 0,
 
+    // Custom curve drawing for text overlays (Photoshop-style text on path)
+    isDrawingTextCurve: false,
+    textCurvePoints: [],
+
     // Sticker / Emoji Overlays (Phase 4A)
     stickers: [],
     selectedStickerId: null,
@@ -497,6 +501,10 @@ document.addEventListener('DOMContentLoaded', () => {
         document.getElementById(`step-btn-${i}`).addEventListener('click', () => {
             if (state.duration || i === 1) {
                 state.currentStep = i;
+                state.isDrawingTextCurve = false;
+                state.textCurvePoints = [];
+                state.canvas.style.cursor = 'default';
+                if (window.updateCurveButtonVisibility) window.updateCurveButtonVisibility();
                 updateNavigation();
             }
         });
@@ -598,7 +606,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 updatePlayhead();
                 drawFrame();
                 syncImageDurationUI();
-                if (window.refreshAudioWaveform) window.refreshAudioWaveform();
                 if (window.recordEditorHistory) {
                     window.recordEditorHistory('Video added');
                 }
@@ -1948,7 +1955,6 @@ document.addEventListener('DOMContentLoaded', () => {
         if (seekFill) seekFill.style.width = Math.max(0, Math.min(100, percent)) + '%';
         if (seekCurrentTimeEl) seekCurrentTimeEl.innerHTML = formatTimeDual(current);
         if (seekTotalTimeEl) seekTotalTimeEl.innerHTML = formatTimeDual(total);
-        if (window.updateWaveformPlayhead) window.updateWaveformPlayhead();
     }
     
     // Trim Slider Interaction
@@ -2108,7 +2114,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 renderClipTimeline();
                 if (window.syncPhase9ClipUI) window.syncPhase9ClipUI();
                 syncImageDurationUI();
-                if (window.refreshAudioWaveform) window.refreshAudioWaveform();
 
                 if (autoPlay) {
                     playVideo();
@@ -2147,7 +2152,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 renderClipTimeline();
                 if (window.syncPhase9ClipUI) window.syncPhase9ClipUI();
                 syncImageDurationUI();
-                if (window.refreshAudioWaveform) window.refreshAudioWaveform();
 
                 if (autoPlay) {
                     playVideo();
@@ -2743,6 +2747,104 @@ document.addEventListener('DOMContentLoaded', () => {
             ctx.restore();
             ctx.rotate(charAngle / 2);
         }
+        ctx.restore();
+    }
+
+    // Catmull-Rom spline sampler — returns a dense array of {x,y} points
+    // smoothly passing through all input `points`.
+    function sampleCatmullRom(points, segmentsPerSpan) {
+        if (!points || points.length < 2) return points ? points.slice() : [];
+        var result = [];
+        var segs = segmentsPerSpan || 24;
+        for (var i = 0; i < points.length - 1; i++) {
+            var p0 = points[Math.max(0, i - 1)];
+            var p1 = points[i];
+            var p2 = points[i + 1];
+            var p3 = points[Math.min(points.length - 1, i + 2)];
+            for (var s = 0; s < segs; s++) {
+                var t = s / segs;
+                var t2 = t * t;
+                var t3 = t2 * t;
+                var x = 0.5 * ((2 * p1.x) + (-p0.x + p2.x) * t + (2 * p0.x - 5 * p1.x + 4 * p2.x - p3.x) * t2 + (-p0.x + 3 * p1.x - 3 * p2.x + p3.x) * t3);
+                var y = 0.5 * ((2 * p1.y) + (-p0.y + p2.y) * t + (2 * p0.y - 5 * p1.y + 4 * p2.y - p3.y) * t2 + (-p0.y + 3 * p1.y - 3 * p2.y + p3.y) * t3);
+                result.push({ x: x, y: y });
+            }
+        }
+        result.push(points[points.length - 1]);
+        return result;
+    }
+
+    // Draws `text` along a custom user-drawn curve defined by normalized
+    // `curvePoints` [{x,y}, ...]. ctx.font/fillStyle/textAlign/textBaseline
+    // must already be set by the caller.
+    function drawCustomCurveTextOverlay(ctx, text, curvePoints, strokeColor, strokeWidth) {
+        if (!curvePoints || curvePoints.length < 2 || !text) {
+            if (strokeColor) { ctx.lineWidth = strokeWidth; ctx.strokeStyle = strokeColor; ctx.strokeText(text, 0, 0); }
+            ctx.fillText(text, 0, 0);
+            return;
+        }
+
+        var canvasW = ctx.canvas.width;
+        var canvasH = ctx.canvas.height;
+        var pts = curvePoints.map(function (p) { return { x: p.x * canvasW, y: p.y * canvasH }; });
+        var sampled = sampleCatmullRom(pts, 28);
+
+        if (!sampled || sampled.length < 2) {
+            if (strokeColor) { ctx.lineWidth = strokeWidth; ctx.strokeStyle = strokeColor; ctx.strokeText(text, 0, 0); }
+            ctx.fillText(text, 0, 0);
+            return;
+        }
+
+        var arcLengths = new Array(sampled.length);
+        arcLengths[0] = 0;
+        for (var i = 1; i < sampled.length; i++) {
+            var dx = sampled[i].x - sampled[i - 1].x;
+            var dy = sampled[i].y - sampled[i - 1].y;
+            arcLengths[i] = arcLengths[i - 1] + Math.sqrt(dx * dx + dy * dy);
+        }
+        var totalLength = arcLengths[sampled.length - 1];
+        if (totalLength < 0.001) {
+            if (strokeColor) { ctx.lineWidth = strokeWidth; ctx.strokeStyle = strokeColor; ctx.strokeText(text, 0, 0); }
+            ctx.fillText(text, 0, 0);
+            return;
+        }
+
+        var chars = text.split('');
+        var widths = chars.map(function (c) { return ctx.measureText(c).width || 1; });
+        var cursor = 0;
+
+        ctx.save();
+        if (strokeColor) { ctx.lineWidth = strokeWidth; ctx.strokeStyle = strokeColor; }
+
+        for (var ci = 0; ci < chars.length; ci++) {
+            var w = widths[ci];
+            var target = cursor + w / 2;
+            cursor += w;
+
+            var idx = 0;
+            for (var j = 1; j < arcLengths.length; j++) {
+                if (arcLengths[j] >= target) { idx = j; break; }
+                idx = j;
+            }
+
+            var prevIdx = Math.max(0, idx - 1);
+            var segLen = arcLengths[idx] - arcLengths[prevIdx];
+            var frac = segLen > 0 ? Math.max(0, Math.min(1, (target - arcLengths[prevIdx]) / segLen)) : 0;
+            var px = sampled[prevIdx].x + (sampled[idx].x - sampled[prevIdx].x) * frac;
+            var py = sampled[prevIdx].y + (sampled[idx].y - sampled[prevIdx].y) * frac;
+
+            var lookA = Math.max(0, idx - 2);
+            var lookB = Math.min(sampled.length - 1, idx + 2);
+            var angle = Math.atan2(sampled[lookB].y - sampled[lookA].y, sampled[lookB].x - sampled[lookA].x);
+
+            ctx.save();
+            ctx.translate(px, py);
+            ctx.rotate(angle);
+            if (strokeColor) ctx.strokeText(chars[ci], 0, 0);
+            ctx.fillText(chars[ci], 0, 0);
+            ctx.restore();
+        }
+
         ctx.restore();
     }
 
@@ -3837,7 +3939,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     const numLines = sublines.length;
                     const isBulletPage = sublines.length > 1 || (item.text && item.text.indexOf('\n') !== -1);
 
-                    state.ctx.font = `${item.italic ? 'italic ' : ''}${item.bold === false ? '' : 'bold '}${item.fontSize || 48}px "Hind Siliguri", "Plus Jakarta Sans", sans-serif`;
+                    state.ctx.font = `${item.italic ? 'italic ' : ''}${item.bold === false ? '' : 'bold '}${item.fontSize || 48}px "${item.font || 'Hind Siliguri'}", "Plus Jakarta Sans", sans-serif`;
                     state.ctx.fillStyle = item.color;
                     state.ctx.textBaseline = 'middle';
 
@@ -4735,8 +4837,11 @@ document.addEventListener('DOMContentLoaded', () => {
                     textToDraw = item.text.slice(0, revealCount);
                 }
 
-                if (curveAmount) {
+                if (curveAmount && !(item.curvePoints && item.curvePoints.length >= 2) && !(state.isDrawingTextCurve && state.textCurvePoints && state.textCurvePoints.length >= 2)) {
                     drawCurvedTextOverlay(state.ctx, textToDraw, curveAmount, outlineColor, outlineWidth);
+                } else if ((item.curvePoints && item.curvePoints.length >= 2) || (state.isDrawingTextCurve && state.textCurvePoints && state.textCurvePoints.length >= 2)) {
+                    var activeCurvePoints = (state.isDrawingTextCurve && state.textCurvePoints && state.textCurvePoints.length >= 2) ? state.textCurvePoints : item.curvePoints;
+                    drawCustomCurveTextOverlay(state.ctx, textToDraw, activeCurvePoints, outlineColor, outlineWidth);
                 } else if (animStyle === 'letter-cascade' && anim.phase !== 'settled') {
                     drawTextOverlayStaggered(state.ctx, textToDraw, 'letter', anim.p, outlineColor, outlineWidth);
                 } else if (animStyle === 'word-stagger' && anim.phase !== 'settled') {
@@ -4759,6 +4864,40 @@ document.addEventListener('DOMContentLoaded', () => {
 
                 state.ctx.restore();
             });
+        }
+
+        // Draw custom curve control points when in curve drawing mode or when selected text has saved custom curve
+        var drawCurvePoints = state.isDrawingTextCurve ? state.textCurvePoints : null;
+        if (!drawCurvePoints && state.selectedTextOverlayId && state.currentStep === 3 && !state.isPlaying) {
+            var selItem = state.textOverlays.find(t => t.id === state.selectedTextOverlayId);
+            if (selItem && selItem.curvePoints && selItem.curvePoints.length >= 2) {
+                drawCurvePoints = selItem.curvePoints;
+            }
+        }
+        if (drawCurvePoints && drawCurvePoints.length > 0) {
+            state.ctx.save();
+            state.ctx.fillStyle = '#10b981';
+            state.ctx.strokeStyle = 'rgba(16,185,129,0.6)';
+            state.ctx.lineWidth = 2;
+            state.ctx.setLineDash([4, 3]);
+            for (var cp = 0; cp < drawCurvePoints.length; cp++) {
+                var px = drawCurvePoints[cp].x * canvasW;
+                var py = drawCurvePoints[cp].y * canvasH;
+                state.ctx.beginPath();
+                state.ctx.arc(px, py, 6, 0, Math.PI * 2);
+                state.ctx.fill();
+                state.ctx.stroke();
+                if (cp > 0) {
+                    var ppx = drawCurvePoints[cp - 1].x * canvasW;
+                    var ppy = drawCurvePoints[cp - 1].y * canvasH;
+                    state.ctx.beginPath();
+                    state.ctx.moveTo(ppx, ppy);
+                    state.ctx.lineTo(px, py);
+                    state.ctx.stroke();
+                }
+            }
+            state.ctx.setLineDash([]);
+            state.ctx.restore();
         }
 
         // --- Step F2: Draw Sticker/Emoji Overlays (Phase 4A) ---
@@ -5778,7 +5917,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     let pw = canvasW * 0.35;
                     let ph = pw;
                     if (brollHit.type === 'text') {
-                        state.ctx.font = `${brollHit.italic ? 'italic ' : ''}${brollHit.bold === false ? '' : 'bold '}${brollHit.fontSize}px "Hind Siliguri", "Plus Jakarta Sans", sans-serif`;
+                        state.ctx.font = `${brollHit.italic ? 'italic ' : ''}${brollHit.bold === false ? '' : 'bold '}${brollHit.fontSize}px "${brollHit.font || 'Hind Siliguri'}", "Plus Jakarta Sans", sans-serif`;
                         const metrics = state.ctx.measureText(brollHit.text);
                         pw = metrics.width + 32;
                         ph = brollHit.fontSize + 24;
@@ -5921,6 +6060,18 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         }
 
+        // Custom text curve drawing mode — place points on canvas to define a path
+        if (state.isDrawingTextCurve) {
+            const coords = getCanvasCoords(e);
+            const nx = coords.x / canvasW;
+            const ny = coords.y / canvasH;
+            state.textCurvePoints = state.textCurvePoints || [];
+            state.textCurvePoints.push({ x: nx, y: ny });
+            drawFrame();
+            e.preventDefault();
+            return;
+        }
+
         // Text overlay drag/select (Phase 2C) — checked last so logo/crop take priority
         if (state.textOverlays && state.textOverlays.length > 0) {
             const hit = findTextOverlayAt(coords);
@@ -5933,7 +6084,11 @@ document.addEventListener('DOMContentLoaded', () => {
                 e.preventDefault();
             } else {
                 state.selectedTextOverlayId = null;
+                state.isDrawingTextCurve = false;
+                state.textCurvePoints = [];
+                state.canvas.style.cursor = 'default';
                 if (window.onTextOverlaySelected) window.onTextOverlaySelected(null);
+                if (window.updateCurveButtonVisibility) window.updateCurveButtonVisibility();
             }
         }
     }
@@ -5992,7 +6147,7 @@ document.addEventListener('DOMContentLoaded', () => {
             } else {
                 // PiP mode
                 if (item.type === 'text') {
-                    state.ctx.font = `${item.italic ? 'italic ' : ''}${item.bold === false ? '' : 'bold '}${item.fontSize}px "Hind Siliguri", "Plus Jakarta Sans", sans-serif`;
+                    state.ctx.font = `${item.italic ? 'italic ' : ''}${item.bold === false ? '' : 'bold '}${item.fontSize}px "${item.font || 'Hind Siliguri'}", "Plus Jakarta Sans", sans-serif`;
                     const metrics = state.ctx.measureText(item.text);
                     pipW = metrics.width + 32;
                     pipH = item.fontSize + 24;
@@ -6059,7 +6214,7 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         } else {
             if (item.type === 'text') {
-                state.ctx.font = `${item.italic ? 'italic ' : ''}${item.bold === false ? '' : 'bold '}${item.fontSize}px "Hind Siliguri", "Plus Jakarta Sans", sans-serif`;
+                state.ctx.font = `${item.italic ? 'italic ' : ''}${item.bold === false ? '' : 'bold '}${item.fontSize}px "${item.font || 'Hind Siliguri'}", "Plus Jakarta Sans", sans-serif`;
                 const metrics = state.ctx.measureText(item.text);
                 pipW = metrics.width + 32;
                 pipH = item.fontSize + 24;
@@ -8028,6 +8183,65 @@ document.addEventListener('DOMContentLoaded', () => {
         if (item) { item.curve = parseInt(e.target.value); drawFrame(); }
     });
 
+    const drawCurveBtn = document.getElementById('draw-curve-btn');
+    const clearCurveBtn = document.getElementById('clear-curve-btn');
+
+    function updateCurveButtonVisibility() {
+        const item = getSelectedTextOverlay();
+        const hasCurve = item && item.curvePoints && item.curvePoints.length >= 2;
+        if (clearCurveBtn) clearCurveBtn.style.display = hasCurve ? 'inline-flex' : 'none';
+        if (drawCurveBtn) {
+            drawCurveBtn.innerHTML = state.isDrawingTextCurve
+                ? '<i class="fa-solid fa-check"></i> Finish Curve'
+                : '<i class="fa-solid fa-bezier-curve"></i> Draw Curve';
+        }
+    }
+
+    if (drawCurveBtn) {
+        drawCurveBtn.addEventListener('click', () => {
+            if (!state.selectedTextOverlayId) {
+                alert('প্রথমে একটি টেক্সট সিলেক্ট করুন। (Select a text overlay first.)');
+                return;
+            }
+            state.isDrawingTextCurve = !state.isDrawingTextCurve;
+            if (!state.isDrawingTextCurve) {
+                const item = getSelectedTextOverlay();
+                if (item && state.textCurvePoints.length > 0) {
+                    item.curvePoints = state.textCurvePoints.slice();
+                    item.curve = 0;
+                    if (textOverlayCurveSlider) textOverlayCurveSlider.value = 0;
+                    if (textOverlayCurveVal) textOverlayCurveVal.innerText = '0';
+                }
+                state.textCurvePoints = [];
+                state.canvas.style.cursor = 'default';
+            } else {
+                state.canvas.style.cursor = 'crosshair';
+            }
+            updateCurveButtonVisibility();
+            drawFrame();
+        });
+    }
+
+    if (clearCurveBtn) {
+        clearCurveBtn.addEventListener('click', () => {
+            const item = getSelectedTextOverlay();
+            if (item) {
+                item.curvePoints = [];
+                item.curve = 0;
+                if (textOverlayCurveSlider) textOverlayCurveSlider.value = 0;
+                if (textOverlayCurveVal) textOverlayCurveVal.innerText = '0';
+            }
+            state.isDrawingTextCurve = false;
+            state.textCurvePoints = [];
+            state.canvas.style.cursor = 'default';
+            updateCurveButtonVisibility();
+            drawFrame();
+        });
+    }
+
+    // Expose so showTextOverlayTimingFor can keep buttons in sync
+    window.updateCurveButtonVisibility = updateCurveButtonVisibility;
+
     addTextOverlayBtn.addEventListener('click', () => {
         const text = textOverlayInput.value.trim();
         if (!text) return;
@@ -8044,6 +8258,7 @@ document.addEventListener('DOMContentLoaded', () => {
             boxColor: textOverlayBoxColorInput.value || '#4f46e5',
             animStyle: textOverlayAnimSelect.value || 'none',
             curve: parseInt(textOverlayCurveSlider.value) || 0,
+            curvePoints: [],
             startSec: 0,
             endSec: Math.max(1, state.duration || 5)
         };
@@ -8054,6 +8269,7 @@ document.addEventListener('DOMContentLoaded', () => {
         textOverlayInput.value = '';
         renderTextOverlayList();
         showTextOverlayTimingFor(newItem.id);
+        if (window.updateCurveButtonVisibility) window.updateCurveButtonVisibility();
         drawFrame();
     });
 
@@ -8118,6 +8334,7 @@ document.addEventListener('DOMContentLoaded', () => {
         textOverlayCurveSlider.value = item.curve || 0;
         textOverlayCurveVal.innerText = item.curve || 0;
         refreshTextOverlayBoxColorVisibility();
+        if (window.updateCurveButtonVisibility) window.updateCurveButtonVisibility();
     }
 
     textOverlayStartInput.addEventListener('input', (e) => {
@@ -8139,8 +8356,12 @@ document.addEventListener('DOMContentLoaded', () => {
     deleteTextOverlayBtn.addEventListener('click', () => {
         state.textOverlays = state.textOverlays.filter(t => t.id !== state.selectedTextOverlayId);
         state.selectedTextOverlayId = null;
+        state.isDrawingTextCurve = false;
+        state.textCurvePoints = [];
+        state.canvas.style.cursor = 'default';
         renderTextOverlayList();
         textOverlayTimingContainer.style.display = 'none';
+        if (window.updateCurveButtonVisibility) window.updateCurveButtonVisibility();
         drawFrame();
     });
 
@@ -8352,6 +8573,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const brollEditTextSection = document.getElementById('broll-edit-text-section');
     const brollEditTextInput = document.getElementById('broll-edit-text-input');
+    const brollEditTextFontSelect = document.getElementById('broll-edit-text-font-select');
     const brollEditTextFontsize = document.getElementById('broll-edit-text-fontsize');
     const brollEditTextFontsizeVal = document.getElementById('broll-edit-text-fontsize-val');
     const brollEditTextColor = document.getElementById('broll-edit-text-color');
@@ -8400,6 +8622,16 @@ document.addEventListener('DOMContentLoaded', () => {
         };
         brollEditTextInput.addEventListener('input', syncBrollTextEdit);
         brollEditTextInput.addEventListener('change', syncBrollTextEdit);
+    }
+    if (brollEditTextFontSelect) {
+        brollEditTextFontSelect.addEventListener('change', (e) => {
+            const item = state.brollOverlays.find(b => b.id === state.selectedBrollId);
+            if (item && item.type === 'text') {
+                item.font = e.target.value || 'Hind Siliguri';
+                drawFrame();
+                if (window.triggerAutoSave) window.triggerAutoSave();
+            }
+        });
     }
     if (brollEditTextFontsize) {
         brollEditTextFontsize.addEventListener('input', (e) => {
@@ -9155,6 +9387,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 id: generateBrollId(),
                 type: 'text',
                 text: text,
+                font: (brollEditTextFontSelect && brollEditTextFontSelect.value) || 'Hind Siliguri',
                 fontSize: 48,
                 color: '#ffffff',
                 bgEnabled: false,
@@ -9360,7 +9593,7 @@ document.addEventListener('DOMContentLoaded', () => {
     function getBrollTextLayout(ctx, item, maxW) {
         const text = String(item.text || '');
         const paragraphs = text.split(/\r?\n/);
-        const font = `${item.italic ? 'italic ' : ''}${item.bold === false ? '' : 'bold '}${item.fontSize || 48}px "Hind Siliguri", "Plus Jakarta Sans", sans-serif`;
+        const font = `${item.italic ? 'italic ' : ''}${item.bold === false ? '' : 'bold '}${item.fontSize || 48}px "${item.font || 'Hind Siliguri'}", "Plus Jakarta Sans", sans-serif`;
         ctx.font = font;
 
         const bulletRegex = /^([•✔➤★▶►➕🔹❤️\*\-—–]|\d+[\.\)])\s*/;
@@ -9650,6 +9883,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         brollEditTextInput.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
                     }, 0);
                 }
+                if (brollEditTextFontSelect) brollEditTextFontSelect.value = item.font || 'Hind Siliguri';
                 if (brollEditTextFontsize) {
                     brollEditTextFontsize.value = item.fontSize || 48;
                     if (brollEditTextFontsizeVal) brollEditTextFontsizeVal.innerText = (item.fontSize || 48) + 'px';

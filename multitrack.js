@@ -342,7 +342,30 @@
         var globalT = isExporting ? (state.exportTickerTime || 0) : computeGlobalTime();
 
         state.extraTracks.forEach(function (track) {
-            if (track.type === 'audio') return; // no visual layer; audio mixed offline (audio.js)
+            if (track.type === 'audio') {
+                // No visual layer to draw, but it still needs to actually play
+                // during LIVE PREVIEW so the user can hear it while adjusting
+                // volume/timing — during export the final mix is done offline
+                // instead (audio.js), so nothing to do here in that case.
+                if (isExporting) return;
+                var activeAudio = findActiveClipInTrack(track, globalT);
+                (track.clips || []).forEach(function (c) {
+                    if (c !== activeAudio && c._el && !c._el.paused) c._el.pause();
+                });
+                if (!activeAudio) return;
+                var relativeAudio = Math.max(0, (globalT - activeAudio.timelineOffset) + activeAudio.sourceStart);
+                var audioEl = ensureMediaEl(activeAudio, 'audio');
+                audioEl.muted = !!track.muted;
+                audioEl.volume = Math.max(0, Math.min(1, track.volume !== undefined ? track.volume : 1));
+                if (state.isPlaying) {
+                    if (audioEl.paused) audioEl.play().catch(function () {});
+                    if (Math.abs(audioEl.currentTime - relativeAudio) > 0.35) audioEl.currentTime = relativeAudio;
+                } else {
+                    if (!audioEl.paused) audioEl.pause();
+                    if (Math.abs(audioEl.currentTime - relativeAudio) > 0.05) audioEl.currentTime = relativeAudio;
+                }
+                return;
+            }
             var active = findActiveClipInTrack(track, globalT);
 
             if (!isExporting) {
@@ -594,6 +617,7 @@
         var dur = Math.max(0.1, clip.sourceEnd - clip.sourceStart);
         var block = document.createElement('div');
         block.className = 'mt-clip-block';
+        block.setAttribute('data-clip-id', clip.id);
         styleEl(block, {
             position: 'absolute', top: '3px', bottom: '3px',
             left: (clip.timelineOffset / totalDur) * 100 + '%',
@@ -603,6 +627,18 @@
             display: 'flex', alignItems: 'center', overflow: 'hidden',
             cursor: 'grab', userSelect: 'none', minWidth: '10px'
         });
+
+        if (track.type === 'audio') {
+            var progressFill = document.createElement('div');
+            progressFill.className = 'mt-audio-progress';
+            styleEl(progressFill, {
+                position: 'absolute', left: '0', top: '0', bottom: '0',
+                width: '0%', opacity: '0.35',
+                background: 'rgba(16,185,129,0.5)',
+                pointerEvents: 'none', transition: 'width 0.1s linear'
+            });
+            block.appendChild(progressFill);
+        }
 
         var label = document.createElement('span');
         label.innerText = clip.name && clip.name.length > 18 ? clip.name.slice(0, 18) + '…' : (clip.name || '');
@@ -729,6 +765,47 @@
 
     window.renderMultiTrackPanel = render;
 
+    // --- Audio Track Playback Progress (Phase 12) ---
+    function updateMultiTrackProgress() {
+        var state = ve();
+        if (!state || !state.extraTracks) return;
+        var globalT = computeGlobalTime();
+
+        state.extraTracks.forEach(function (track) {
+            if (track.type !== 'audio') return;
+            (track.clips || []).forEach(function (clip) {
+                var block = document.querySelector('.mt-clip-block[data-clip-id="' + clip.id + '"]');
+                if (!block) return;
+                var progressFill = block.querySelector('.mt-audio-progress');
+                if (!progressFill) return;
+
+                var clipDur = Math.max(0.1, clip.sourceEnd - clip.sourceStart);
+                var clipStart = clip.timelineOffset;
+                var clipEnd = clipStart + clipDur;
+
+                if (globalT >= clipStart && globalT <= clipEnd) {
+                    var pct = Math.max(0, Math.min(100, ((globalT - clipStart) / clipDur) * 100));
+                    progressFill.style.width = pct + '%';
+                    progressFill.style.opacity = '0.6';
+                } else if (globalT > clipEnd) {
+                    progressFill.style.width = '100%';
+                    progressFill.style.opacity = '0.35';
+                } else {
+                    progressFill.style.width = '0%';
+                    progressFill.style.opacity = '0.15';
+                }
+            });
+        });
+    }
+
+    function startMultiTrackProgressLoop() {
+        function tick() {
+            updateMultiTrackProgress();
+            requestAnimationFrame(tick);
+        }
+        requestAnimationFrame(tick);
+    }
+
     function init() {
         if (!ve()) {
             setTimeout(init, 200);
@@ -736,6 +813,7 @@
         }
         if (!ve().extraTracks) ve().extraTracks = [];
         render();
+        startMultiTrackProgressLoop();
     }
 
     if (document.readyState === 'loading') {

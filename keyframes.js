@@ -216,6 +216,28 @@
         var item = selection.item, cfg = selection.cfg;
         if (!item.keyframes) item.keyframes = [];
 
+        var duration0 = editor.duration;
+        var currentTime0 = editor.currentTime || 0;
+        var playheadPct0 = Math.min(100, Math.max(0, (currentTime0 / duration0) * 100));
+
+        // This function runs both on real state changes (button clicks,
+        // keyframe add/remove) AND on a 150ms poll timer whose only job is to
+        // keep the playhead marker moving during playback. Unconditionally
+        // rebuilding innerHTML on every poll tick destroys and recreates the
+        // interactive elements — including the disclosure button below — on
+        // every tick, which can silently swallow a click if the tick lands
+        // between mousedown and mouseup on it (the element the browser
+        // tracked the press on no longer exists when it looks for a click
+        // target). So: only fully rebuild when what's being shown actually
+        // changed; otherwise just nudge the playhead marker in place.
+        var renderKey = item.id + ':' + !!item.keyframeEditorOpen + ':' + item.keyframes.length;
+        if (mountEl.__kfRenderKey === renderKey) {
+            var existingPlayhead0 = mountEl.querySelector('.keyframe-track-playhead');
+            if (existingPlayhead0) existingPlayhead0.style.left = playheadPct0 + '%';
+            return;
+        }
+        mountEl.__kfRenderKey = renderKey;
+
         // Keyframes are an advanced, optional animation tool. Keeping their
         // full editor open for every selected overlay makes ordinary drag /
         // resize work feel like it has been replaced, even though it has not.

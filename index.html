@@ -156,18 +156,10 @@
                         <!-- Seek/scrub bar — freely move the playhead forward/back without changing the trim range -->
                         <div class="seek-bar-container">
                             <span class="seek-time-label" id="seek-current-time">00:00.0</span>
-                            <div class="seek-slider-column">
-                                <div class="seek-slider-wrapper">
-                                    <div class="seek-track-bg"></div>
-                                    <div class="seek-track-fill" id="seek-fill"></div>
-                                    <input type="range" id="seek-slider" min="0" max="100" value="0" step="0.01">
-                                </div>
-                                <div class="audio-waveform-wrapper" id="audio-waveform-wrapper" title="অডিও ওয়েভফর্ম — ক্লিক করে সিক করুন">
-                                    <canvas id="audio-waveform-canvas"></canvas>
-                                    <div class="waveform-trim-fill" id="waveform-trim-fill"></div>
-                                    <div class="waveform-playhead" id="waveform-playhead-indicator"></div>
-                                    <div class="waveform-empty-label" id="waveform-empty-label" style="display:none;"></div>
-                                </div>
+                            <div class="seek-slider-wrapper">
+                                <div class="seek-track-bg"></div>
+                                <div class="seek-track-fill" id="seek-fill"></div>
+                                <input type="range" id="seek-slider" min="0" max="100" value="0" step="0.01">
                             </div>
                             <span class="seek-time-label" id="seek-total-time">00:00.0</span>
                         </div>
@@ -1339,6 +1331,16 @@
                                     <p class="help-text mt-1">বাম দিকে টানলে নিচের দিকে বাঁক (স্মাইল), ডান দিকে টানলে উপরের দিকে বাঁক (রেইনবো)।</p>
                                 </div>
 
+                                <div style="display: flex; gap: 6px; flex-wrap: wrap;">
+                                    <button id="draw-curve-btn" class="btn btn-outline btn-sm" type="button">
+                                        <i class="fa-solid fa-bezier-curve"></i> Draw Curve (কার্ভ আঁকুন)
+                                    </button>
+                                    <button id="clear-curve-btn" class="btn btn-outline btn-sm" type="button" style="display: none;">
+                                        <i class="fa-solid fa-xmark"></i> Clear Curve
+                                    </button>
+                                </div>
+                                <p class="help-text mt-1">"Draw Curve" চেপে ক্যানভাসে ক্লিক করলে কার্ভের পয়েন্ট যোগ হবে। আরও ক্লিক করলে কার্ভ ন smoothen হবে। "Clear Curve" চেপে রিসেট করুন।</p>
+
                                 <button id="add-text-overlay-btn" class="btn btn-primary mt-3">
                                     <i class="fa-solid fa-plus"></i> Add Text
                                 </button>
@@ -1542,6 +1544,28 @@
                                                 <input type="checkbox" id="broll-edit-text-underline">
                                                 <span style="text-decoration:underline;">Underline (আন্ডারলাইন)</span>
                                             </label>
+                                        </div>
+                                        <div class="control-group mt-2">
+                                            <label>Font Family (ফন্ট)</label>
+                                            <select id="broll-edit-text-font-select" class="form-select">
+                                                <option value="Hind Siliguri">Hind Siliguri (Bengali Clean Sans)</option>
+                                                <option value="Galada">Galada (Bengali Stylized)</option>
+                                                <option value="Baloo Da 2">Baloo Da 2 (Bengali Rounded)</option>
+                                                <option value="Tiro Bangla">Tiro Bangla (Bengali Serif)</option>
+                                                <option value="Outfit">Outfit (English)</option>
+                                                <option value="Plus Jakarta Sans">Plus Jakarta Sans (English)</option>
+                                                <option value="Montserrat">Montserrat (English)</option>
+                                                <option value="Poppins">Poppins (English)</option>
+                                                <option value="Oswald">Oswald (English Condensed)</option>
+                                                <option value="Bebas Neue">Bebas Neue (English Bold Display)</option>
+                                                <option value="Anton">Anton (English Impact)</option>
+                                                <option value="Archivo Black">Archivo Black (English Heavy)</option>
+                                                <option value="Righteous">Righteous (English Rounded)</option>
+                                                <option value="Playfair Display">Playfair Display (English Elegant Serif)</option>
+                                                <option value="Caveat">Caveat (English Handwriting)</option>
+                                                <option value="Pacifico">Pacifico (English Script)</option>
+                                                <option value="Permanent Marker">Permanent Marker (English Marker)</option>
+                                            </select>
                                         </div>
                                         <div class="control-group mt-2">
                                             <label>Font Size (টেক্সট সাইজ)</label>
@@ -3135,7 +3159,6 @@
          window.Capacitor safely so our plugin calls no-op until shipped. -->
     <script src="theme.js?v=1"></script>
     <script src="color-scopes.js?v=1"></script>
-    <script src="audio-waveform-track.js?v=1"></script>
     <script src="public/capacitor/capacitor.js"></script>
     <script src="audio.js?v=4"></script>
     <script src="editor.js?v=8"></script>
