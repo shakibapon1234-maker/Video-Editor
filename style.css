@@ -478,6 +478,7 @@ body {
 /* --- Workspace Layout --- */
 .workspace {
     flex-grow: 1;
+    min-width: 0;
     display: flex;
     flex-direction: column;
     height: 100%;
@@ -485,12 +486,12 @@ body {
 }
 
 .workspace-header {
-    height: 80px;
+    min-height: 72px;
     border-bottom: 1px solid var(--border-color);
     display: flex;
     align-items: center;
     justify-content: justify;
-    padding: 0 40px;
+    padding: 10px 28px;
     justify-content: space-between;
     background-color: var(--bg-surface-glass);
     backdrop-filter: blur(10px);
@@ -509,7 +510,49 @@ body {
     margin-top: 2px;
 }
 
+.keyframe-panel-actions {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.keyframe-close-btn,
+.keyframe-disclosure {
+    border: 1px solid var(--border-color);
+    background: var(--bg-surface-elevated);
+    color: var(--text-secondary);
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+}
+
+.keyframe-close-btn {
+    width: 28px;
+    height: 28px;
+    padding: 0;
+}
+
+.keyframe-disclosure {
+    align-self: center;
+    margin: 10px 0 0;
+    padding: 7px 12px;
+    font-size: 12px;
+    font-weight: 600;
+}
+
+.keyframe-disclosure:hover,
+.keyframe-close-btn:hover {
+    border-color: var(--primary);
+    color: var(--text-primary);
+}
+
+.header-title {
+    min-width: 0;
+    flex: 0 1 320px;
+}
+
 .header-actions {
+    align-items: center;
+    min-width: 0;
     display: flex;
     gap: 12px;
 }
@@ -517,24 +560,28 @@ body {
 .workspace-body {
     flex-grow: 1;
     display: grid;
-    grid-template-columns: 1fr 400px;
-    height: calc(100% - 80px);
+    grid-template-columns: minmax(0, 1fr) minmax(300px, 340px);
+    min-height: 0;
 }
 
 /* --- Preview Panel Area --- */
 .preview-panel {
-    padding: 40px;
+    min-width: 0;
+    padding: 28px;
     display: flex;
     flex-direction: column;
     align-items: center;
-    justify-content: center;
+    justify-content: flex-start;
     border-right: 1px solid var(--border-color);
     background-color: rgba(0, 0, 0, 0.2);
-    overflow: hidden;
+    overflow-x: hidden;
+    overflow-y: auto;
+    overscroll-behavior: contain;
 }
 
 .canvas-container {
     position: relative;
+    flex: 0 0 auto;
     width: 100%;
     max-width: 960px;
     height: min(70vh, 640px);
@@ -854,9 +901,10 @@ body {
 
 /* --- Control Panels --- */
 .control-panel {
+    min-width: 0;
     background-color: var(--bg-surface);
     border-left: 1px solid var(--border-color);
-    padding: 30px;
+    padding: 22px;
     overflow-y: auto;
     display: flex;
     flex-direction: column;
@@ -1811,9 +1859,89 @@ input:checked + .slider:before {
    =================================================== */
 
 /* Tablet: hide sidebar text, show only icons */
+/* Desktop laptops: keep the editor usable instead of letting the top actions
+   squeeze the page title and run off the right edge. Full labels remain
+   available through each button's tooltip. */
+@media (min-width: 861px) and (max-width: 1600px) {
+    .sidebar {
+        width: 260px;
+        padding: 20px;
+    }
+
+    .brand { margin-bottom: 28px; }
+    .nav-steps { gap: 10px; }
+    .step-item { gap: 12px; padding: 12px; }
+
+    .workspace-header {
+        min-height: 68px;
+        padding: 8px 20px;
+        gap: 16px;
+    }
+
+    .header-title {
+        flex: 0 1 210px;
+    }
+
+    .header-title h1 { font-size: 18px; }
+    .header-title p {
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    .header-actions {
+        flex: 1 1 auto;
+        justify-content: flex-end;
+        gap: 6px;
+        flex-wrap: nowrap;
+    }
+
+    .header-actions #theme-switcher-mount,
+    .header-actions .history-controls {
+        margin-right: 0 !important;
+    }
+
+    .header-actions .btn {
+        width: 38px;
+        height: 38px;
+        min-width: 38px;
+        padding: 0;
+        font-size: 0;
+    }
+
+    .header-actions .btn i { font-size: 15px; }
+
+    .workspace-body {
+        grid-template-columns: minmax(0, 1fr) 300px;
+    }
+
+    .preview-panel { padding: 24px; }
+    .control-panel { padding: 18px; }
+}
+
+@media (min-width: 861px) and (max-width: 1180px) {
+    .sidebar {
+        width: 88px;
+        padding: 16px 12px;
+        align-items: center;
+    }
+
+    .brand-text,
+    .step-info,
+    .sidebar-footer { display: none; }
+
+    .brand { margin-bottom: 24px; }
+    .nav-steps { width: 100%; }
+    .step-item { justify-content: center; padding: 12px 6px; }
+
+    .header-title { flex-basis: 150px; }
+    .header-title p { display: none; }
+    .workspace-body { grid-template-columns: minmax(0, 1fr) 280px; }
+}
+
 @media (max-width: 1100px) {
     .workspace-body {
-        grid-template-columns: 1fr 340px;
+        grid-template-columns: minmax(0, 1fr) 280px;
     }
 }
 

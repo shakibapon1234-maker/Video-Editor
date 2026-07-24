@@ -1334,8 +1334,8 @@
 
                                 <div id="broll-text-input-section" style="display: none;">
                                     <div class="control-group mt-3">
-                                        <label>Text Content</label>
-                                        <input type="text" id="broll-text-input" class="form-input" placeholder="যেমনঃ ঢাকা টু কক্সবাজার" maxlength="120">
+                                        <label>Text / Bullet List</label>
+                                        <textarea id="broll-text-input" class="form-textarea" rows="5" placeholder="এক লাইনে একটি পয়েন্ট লিখুন&#10;যেমনঃ&#10;ভিসা প্রসেসিং শুরু&#10;প্রয়োজনীয় কাগজপত্র জমা দিন&#10;ইন্টারভিউ প্রস্তুতি নিন"></textarea>
                                     </div>
                                     <div class="control-group mt-3">
                                         <label>Bullet Style (বুলেট)</label>
@@ -1350,41 +1350,7 @@
                                             <option value="🔹">🔹 ডায়মন্ড (Diamond)</option>
                                             <option value="❤️">❤️ হার্ট (Heart)</option>
                                         </select>
-                                        <p class="help-text mt-1">লিস্ট আকারে একাধিক লাইন (একটার নিচে আরেকটা) দেখাতে চাইলে প্রতিটা লাইনের জন্য আলাদা Text B-roll যোগ করুন এবং একই বুলেট বেছে নিন।</p>
-                                    </div>
-                                    <div class="control-group mt-3">
-                                        <label>Font Size</label>
-                                        <div class="slider-val-container">
-                                            <input type="range" id="broll-text-fontsize" min="14" max="120" value="48">
-                                            <span id="broll-text-fontsize-val">48px</span>
-                                        </div>
-                                    </div>
-                                    <div class="control-group mt-3">
-                                        <label>Text Color</label>
-                                        <div class="color-picker-wrapper">
-                                            <input type="color" id="broll-text-color" value="#ffffff">
-                                            <span class="color-value-text" id="broll-text-color-val">#ffffff</span>
-                                        </div>
-                                    </div>
-                                    <div class="control-group mt-3">
-                                        <label class="checkbox-label" style="display:flex; align-items:center; gap:8px;">
-                                            <input type="checkbox" id="broll-text-bg-enabled">
-                                            ব্ল্যাঙ্ক ব্যাকগ্রাউন্ড দিন (পুরো স্ক্রিন একরঙা হয়ে যাবে — পয়েন্ট-টু-পয়েন্ট বলার জন্য)
-                                        </label>
-                                        <div id="broll-text-bg-color-row" class="color-picker-wrapper mt-2" style="display:none;">
-                                            <input type="color" id="broll-text-bg-color" value="#0f172a">
-                                            <span class="color-value-text" id="broll-text-bg-color-val">#0f172a</span>
-                                        </div>
-                                    </div>
-                                    <div class="control-group mt-3">
-                                        <label class="checkbox-label" style="display:flex; align-items:center; gap:8px;">
-                                            <input type="checkbox" id="broll-text-highlight-enabled">
-                                            মার্কার-স্টাইল সলিড হাইলাইট (টেক্সটের ঠিক মাপে কালার ব্যান্ড)
-                                        </label>
-                                        <div id="broll-text-highlight-color-row" class="color-picker-wrapper mt-2" style="display:none;">
-                                            <input type="color" id="broll-text-highlight-color" value="#ffe600">
-                                            <span class="color-value-text" id="broll-text-highlight-color-val">#ffe600</span>
-                                        </div>
+                                        <p class="help-text mt-1">প্রতিটি লাইনে আলাদা পয়েন্ট লিখুন। Add করার পর নিচের Timing ও Text Settings থেকে Blank Background, marker highlight, color ও size ঠিক করুন।</p>
                                     </div>
                                     <button id="add-broll-text-btn" class="btn btn-primary mt-3">
                                         <i class="fa-solid fa-plus"></i> Add Text B-roll

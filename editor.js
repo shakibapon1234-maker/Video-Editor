@@ -1398,6 +1398,19 @@ document.addEventListener('DOMContentLoaded', () => {
             container.style.height = Math.round(previewWidth / targetAspect) + 'px';
         }
     }
+
+    // The editor preview lives beside panels whose available width changes when
+    // the desktop window is maximized/restored. Recalculate the display size
+    // after that change, without changing the chosen export resolution.
+    let previewResizeTimer = null;
+    window.addEventListener('resize', () => {
+        clearTimeout(previewResizeTimer);
+        previewResizeTimer = setTimeout(() => {
+            if (!state.duration) return;
+            updateCanvasDimensions();
+            drawFrame();
+        }, 120);
+    });
     
     // --- Timeline Playing & Trimming ---
     playPauseBtn.addEventListener('click', () => {
@@ -1801,11 +1814,19 @@ document.addEventListener('DOMContentLoaded', () => {
 
     let gifPreviewRefreshActive = false;
 
+    // B-roll timing is local to the clip being edited. Without this link an
+    // overlay set to 1–4 seconds on an image clip also appears at 1–4 seconds
+    // of every other clip, because each clip has its own local playhead.
+    function brollBelongsToActiveClip(item) {
+        return !item.clipId || item.clipId === state.activeClipId;
+    }
+
     function refreshAnimatedGifPreview() {
         const hasVisibleGif = state.brollOverlays.some((item) => {
             if (item.type !== 'gif' || !item.imageImg) return false;
             const isBeingEdited = state.currentStep === 3 && !state.isPlaying && item.id === state.selectedBrollId;
-            return isBeingEdited || (state.currentTime >= item.startSec && state.currentTime <= item.endSec);
+            return brollBelongsToActiveClip(item) &&
+                (isBeingEdited || (state.currentTime >= item.startSec && state.currentTime <= item.endSec));
         });
 
         if (!hasVisibleGif || state.isPlaying || state.customExportTime !== undefined) {
@@ -2006,6 +2027,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
                 updateCanvasDimensions();
                 state.currentTime = state.startTime;
+                state.video.currentTime = state.startTime;
                 updatePlayhead();
                 updateCropDimensionsDisplay();
                 drawFrame();
@@ -2041,6 +2063,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
                 updateCanvasDimensions();
                 state.currentTime = state.startTime;
+                // A cut creates two segments that share one media file. Seek the
+                // underlying <video> as well as the editor state; otherwise the
+                // UI moves to the kept segment while native playback continues
+                // from the old, uncut position.
+                state.video.currentTime = state.startTime;
                 updatePlayhead();
                 updateCropDimensionsDisplay();
                 state.video.playbackRate = Math.max(0.5, Math.min(2, Number(clip.speed) || 1));
@@ -3085,9 +3112,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 // already-exported item's box can sit on top of the one you're trying
                 // to place). Once playing (in any step), everything respects real timing.
                 const isBeingEdited = state.currentStep === 3 && !state.isPlaying && item.id === state.selectedBrollId;
-                const inRange = isBeingEdited
+                const inRange = brollBelongsToActiveClip(item) && (isBeingEdited
                     ? true
-                    : (currentTime >= item.startSec && currentTime <= item.endSec);
+                    : (currentTime >= item.startSec && currentTime <= item.endSec));
                 if (!inRange) {
                     // Pause an overlay video the moment it's no longer on screen so it
                     // doesn't keep decoding/playing in the background. Skipped during
@@ -3576,13 +3603,21 @@ document.addEventListener('DOMContentLoaded', () => {
                         }
                         drawKineticText(state.ctx, item, style, item.text, cx, cy, tIn, tOut, animDur, item.mode === 'fullscreen' && item.transparentBg === false);
                     } else {
-                        state.ctx.textAlign = 'center';
+                        const textLines = String(renderText).split(/\r?\n/).filter(Boolean);
+                        const isBulletPage = textLines.length > 1;
+                        state.ctx.textAlign = isBulletPage ? 'left' : 'center';
+                        const lineHeight = item.fontSize * 1.42;
+                        const firstLineY = isBulletPage ? cy - ((textLines.length - 1) * lineHeight) / 2 : cy;
+                        const textX = isBulletPage ? drawBoxX + Math.max(34, boxW * 0.09) : cx;
                         if (item.mode === 'fullscreen' && item.transparentBg === false) {
                             state.ctx.lineWidth = Math.max(2, item.fontSize * 0.08);
                             state.ctx.strokeStyle = 'rgba(0,0,0,0.55)';
-                            state.ctx.strokeText(renderText, cx, cy);
                         }
-                        state.ctx.fillText(renderText, cx, cy);
+                        textLines.forEach((line, index) => {
+                            const lineY = firstLineY + index * lineHeight;
+                            if (item.mode === 'fullscreen' && item.transparentBg === false) state.ctx.strokeText(line, textX, lineY);
+                            state.ctx.fillText(line, textX, lineY);
+                        });
                     }
 
                     // Blinking cursor while the text is still being "typed". Blink phase
@@ -5490,7 +5525,8 @@ document.addEventListener('DOMContentLoaded', () => {
             // older overlay whose time window has passed could still "catch" clicks
             // meant for a different item positioned in the same spot.
             const isBeingEdited = state.currentStep === 3 && !state.isPlaying && item.id === state.selectedBrollId;
-            const visible = isBeingEdited || (currentTime >= item.startSec && currentTime <= item.endSec);
+            const visible = brollBelongsToActiveClip(item) &&
+                (isBeingEdited || (currentTime >= item.startSec && currentTime <= item.endSec));
             if (!visible) continue;
 
             let px, py, pipW, pipH;
@@ -5633,7 +5669,13 @@ document.addEventListener('DOMContentLoaded', () => {
         const box = getBrollBoxRect(item, canvasW, canvasH);
         const handleDist = Math.max(28, Math.min(canvasW, canvasH) * 0.05);
         const angleRad = (item.rotation || 0) * Math.PI / 180;
-        const world = rotatePointAround(box.cx, box.y - handleDist, box.cx, box.cy, angleRad);
+        // The selection controls are drawn inside the same transform as the
+        // B-roll itself. Account for a user/keyframe scale before testing the
+        // pointer; otherwise a scaled-down item shows a rotate handle that
+        // cannot actually be clicked.
+        const itemScale = Math.max(0.05, Number(item.scale) || 1);
+        const localHandleY = box.cy + ((box.y - handleDist) - box.cy) * itemScale;
+        const world = rotatePointAround(box.cx, localHandleY, box.cx, box.cy, angleRad);
         const rect = state.canvas.getBoundingClientRect();
         const physScale = canvasW / rect.width;
         const hr = 16 * physScale;
@@ -5659,6 +5701,16 @@ document.addEventListener('DOMContentLoaded', () => {
         if (item.rotation) {
             const local = rotatePointAround(coords.x, coords.y, bx + bW / 2, by + bH / 2, -(item.rotation * Math.PI / 180));
             testX = local.x; testY = local.y;
+        }
+        // Selection handles are rendered after the B-roll scale transform.
+        // Convert the pointer back to the unscaled box before comparing it
+        // with the eight resize handles, just as we do for rotation above.
+        const itemScale = Math.max(0.05, Number(item.scale) || 1);
+        if (itemScale !== 1) {
+            const cx = bx + bW / 2;
+            const cy = by + bH / 2;
+            testX = cx + (testX - cx) / itemScale;
+            testY = cy + (testY - cy) / itemScale;
         }
         // Physical hit radius: 14px on-screen regardless of canvas resolution
         const rect = state.canvas.getBoundingClientRect();
@@ -6602,8 +6654,10 @@ document.addEventListener('DOMContentLoaded', () => {
             if (item) {
                 let newX = (coords.x - state.dragBrollOffsetX) / canvasW;
                 let newY = (coords.y - state.dragBrollOffsetY) / canvasH;
-                newX = Math.max(0, Math.min(1, newX));
-                newY = Math.max(0, Math.min(1, newY));
+                // Do not clamp the overlay's anchor point. A scaled or rotated
+                // B-roll needs a small negative x/y value to visually reach the
+                // top/left corners, and creators may deliberately park part of
+                // an overlay outside the frame for an entrance effect.
                 item.x = newX;
                 item.y = newY;
                 drawFrame();
@@ -8341,6 +8395,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 x: 0.05,
                 y: 0.6,
                 rotation: 0, // manual tilt angle in degrees, set via the rotate handle
+                clipId: state.activeClipId,
                 startSec: Math.min(state.endTime || state.duration || 5, state.currentTime || 0),
                 endSec: Math.min(state.endTime || state.duration || 5, (state.currentTime || 0) + 3),
                 // Each B-roll clip enters from a different side so a sequence
@@ -8505,6 +8560,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 x: 0.05,
                 y: 0.6,
                 rotation: 0,
+                clipId: state.activeClipId,
                 startSec: Math.min(state.endTime || state.duration || 5, state.currentTime || 0),
                 // Default display window matches the overlay video's own length
                 // (capped at 8s so it doesn't swallow the whole timeline by default).
@@ -8551,28 +8607,32 @@ document.addEventListener('DOMContentLoaded', () => {
             const rawText = brollTextInput.value.trim();
             if (!rawText) return;
 
-            // Prepend the chosen bullet character (e.g. •, ✔, ➤) so this reads as
-            // one line in a bulleted list. Handy for the "line by line, stacked
-            // list" effect: add several Text B-rolls, each with the same bullet,
-            // positioned on separate lines with overlapping Show From/Until times.
+            // Treat every newline as one list item. The selected bullet is added
+            // to each non-empty line so one Blank Background page can carry a
+            // complete 5–7 point list instead of requiring separate overlays.
             const bulletChar = brollBulletSelect && brollBulletSelect.value !== 'none' ? brollBulletSelect.value : '';
-            const text = bulletChar ? `${bulletChar} ${rawText}` : rawText;
+            const text = rawText.split(/\r?\n/)
+                .map(line => line.trim())
+                .filter(Boolean)
+                .map(line => bulletChar ? `${bulletChar} ${line}` : line)
+                .join('\n');
 
             const newItem = {
                 id: brollIdCounter++,
                 type: 'text',
                 text: text,
-                fontSize: brollTextFontsizeSlider ? parseInt(brollTextFontsizeSlider.value) : 48,
-                color: brollTextColorInput ? brollTextColorInput.value : '#ffffff',
-                bgEnabled: brollTextBgEnabled ? brollTextBgEnabled.checked : false,
-                bgColor: brollTextBgColor ? brollTextBgColor.value : '#0f172a',
-                solidHighlight: brollTextHighlightEnabled ? brollTextHighlightEnabled.checked : false,
-                highlightColor: brollTextHighlightColor ? brollTextHighlightColor.value : '#ffe600',
+                fontSize: 48,
+                color: '#ffffff',
+                bgEnabled: false,
+                bgColor: '#0f172a',
+                solidHighlight: false,
+                highlightColor: '#ffe600',
                 mode: brollModeSelect ? brollModeSelect.value : 'fullscreen',
                 size: brollSizeSlider ? parseInt(brollSizeSlider.value) : 35,
                 x: 0.5,
                 y: 0.5,
                 rotation: 0, // manual tilt angle in degrees, set via the rotate handle
+                clipId: state.activeClipId,
                 startSec: Math.min(state.endTime || state.duration || 5, state.currentTime || 0),
                 endSec: Math.min(state.endTime || state.duration || 5, (state.currentTime || 0) + 3),
                 entryDirection: ['left', 'right', 'top', 'bottom'][Math.floor(Math.random() * 4)],
@@ -8608,6 +8668,7 @@ document.addEventListener('DOMContentLoaded', () => {
             x: 0.33,
             y: 0.20,
             rotation: 0,
+            clipId: state.activeClipId,
             startSec: Math.min(state.endTime || state.duration || 5, state.currentTime || 0),
             endSec: Math.min(state.endTime || state.duration || 5, (state.currentTime || 0) + 3),
             entryDirection: 'bottom',
@@ -8644,6 +8705,7 @@ document.addEventListener('DOMContentLoaded', () => {
             x: 0.40,
             y: 0.40,
             rotation: 0,
+            clipId: state.activeClipId,
             startSec: Math.max(0, state.currentTime || 0),
             endSec: Math.min(state.endTime || state.duration || 5, (state.currentTime || 0) + 3),
             entryDirection: 'bottom',
@@ -8943,6 +9005,10 @@ document.addEventListener('DOMContentLoaded', () => {
             if (brollTimingContainer) brollTimingContainer.style.display = 'none';
             return;
         }
+        // Older projects did not store a clip id. Once the user opens their
+        // timing controls, bind that legacy overlay to the currently selected
+        // clip so its local 1–4s range cannot leak into every other clip.
+        if (!item.clipId && state.activeClipId) item.clipId = state.activeClipId;
         const maxVal = state.endTime || state.duration || 1000;
         if (brollTimingContainer) brollTimingContainer.style.display = 'block';
         if (brollStartInput) {

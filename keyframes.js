@@ -216,6 +216,23 @@
         var item = selection.item, cfg = selection.cfg;
         if (!item.keyframes) item.keyframes = [];
 
+        // Keyframes are an advanced, optional animation tool. Keeping their
+        // full editor open for every selected overlay makes ordinary drag /
+        // resize work feel like it has been replaced, even though it has not.
+        // Start collapsed until the user explicitly asks to animate an item.
+        if (!item.keyframeEditorOpen) {
+            mountEl.innerHTML =
+                '<button class="keyframe-disclosure" id="kf-open-btn" type="button" title="সময় অনুযায়ী position, size, rotation বা opacity পরিবর্তন করুন">' +
+                    '<i class="fa-solid fa-wand-magic-sparkles"></i> Animate this ' + cfg.label + ' (optional)' +
+                '</button>';
+            var openBtn = document.getElementById('kf-open-btn');
+            if (openBtn) openBtn.addEventListener('click', function () {
+                item.keyframeEditorOpen = true;
+                renderPanel();
+            });
+            return;
+        }
+
         var duration = editor.duration;
         var currentTime = editor.currentTime || 0;
         var playheadPct = Math.min(100, Math.max(0, (currentTime / duration) * 100));
@@ -242,7 +259,7 @@
             '<div class="keyframe-panel">' +
                 '<div class="keyframe-panel-header">' +
                     '<span class="keyframe-panel-title"><i class="fa-solid ' + cfg.icon + '"></i> ' + cfg.label + ' Keyframes — "' + escapeHtml(String(cfg.nameOf(item)).slice(0, 24)) + '"</span>' +
-                    '<button class="keyframe-add-btn" id="kf-add-btn" type="button"><i class="fa-solid fa-plus"></i> Set Keyframe (' + fmtTime(currentTime) + ')</button>' +
+                    '<span class="keyframe-panel-actions"><button class="keyframe-close-btn" id="kf-close-btn" type="button" title="Close animation controls"><i class="fa-solid fa-xmark"></i></button><button class="keyframe-add-btn" id="kf-add-btn" type="button"><i class="fa-solid fa-plus"></i> Set Keyframe (' + fmtTime(currentTime) + ')</button></span>' +
                 '</div>' +
                 '<div class="keyframe-prop-controls">' +
                     '<div class="slider-val-container"><label style="min-width:56px; font-size:12px;">Scale</label>' +
@@ -266,6 +283,14 @@
         if (addBtn) {
             addBtn.addEventListener('click', function () {
                 addOrUpdateKeyframe(item, currentTime);
+            });
+        }
+
+        var closeBtn = document.getElementById('kf-close-btn');
+        if (closeBtn) {
+            closeBtn.addEventListener('click', function () {
+                item.keyframeEditorOpen = false;
+                renderPanel();
             });
         }
 
