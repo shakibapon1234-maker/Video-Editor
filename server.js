@@ -20,8 +20,10 @@ const PORT = 4000;
 const WHISPER_TEMP_DIR = path.join(process.env.SF_DATA_DIR || __dirname, 'temp_whisper');
 let whisperTranscriberPromise = null;
 
-// Parse JSON bodies for the TTS proxy route.
-app.use(express.json({ limit: '2mb' }));
+// Parse JSON bodies for the TTS proxy and AI Thumbnail proxy routes. The
+// limit is higher than the TTS route needs on its own because the AI
+// Thumbnail proxy carries a base64 PNG data URL of the current frame.
+app.use(express.json({ limit: '15mb' }));
 
 app.post('/api/log', (req, res) => {
     try {
@@ -210,6 +212,82 @@ app.post('/api/tts-proxy', async (req, res) => {
     }
 });
 
+
+
+// ------------------------------------------------------------
+// [10-3] AI Thumbnail Generator -- CORS-free proxy
+// ------------------------------------------------------------
+// Same reasoning as the [10-1] TTS proxy: the browser can't call
+// Stability AI / OpenAI directly with an API key attached, so the
+// current preview frame (already captured client-side as a PNG data
+// URL, overlays baked in) is forwarded here, sent on to the chosen
+// image API, and the resulting image is streamed back as a plain PNG.
+app.post('/api/thumbnail-proxy', async (req, res) => {
+    try {
+        const { provider, apiKey, prompt, imageBase64 } = req.body || {};
+        if (!imageBase64) return res.status(400).json({ error: 'imageBase64 (current frame) is required' });
+        if (!apiKey) return res.status(400).json({ error: 'apiKey is required' });
+
+        const base64Data = imageBase64.replace(/^data:image\/[a-zA-Z+]+;base64,/, '');
+        const imageBuffer = Buffer.from(base64Data, 'base64');
+
+        let resultBuffer;
+
+        if (provider === 'openai') {
+            const form = new FormData();
+            form.append('image', new Blob([imageBuffer], { type: 'image/png' }), 'frame.png');
+            form.append('model', 'gpt-image-1');
+            form.append('prompt', prompt || 'Enhance this video frame into an eye-catching YouTube thumbnail: vibrant colors, sharp contrast, cinematic look.');
+            form.append('size', '1024x1024');
+
+            const upstream = await fetch('https://api.openai.com/v1/images/edits', {
+                method: 'POST',
+                headers: { 'Authorization': 'Bearer ' + apiKey },
+                body: form
+            });
+            if (!upstream.ok) {
+                const detail = await upstream.text();
+                return res.status(upstream.status).json({ error: detail.slice(0, 300) });
+            }
+            const data = await upstream.json();
+            const b64 = data && data.data && data.data[0] && data.data[0].b64_json;
+            if (!b64) return res.status(500).json({ error: 'OpenAI returned no image data' });
+            resultBuffer = Buffer.from(b64, 'base64');
+        } else {
+            // Default / 'stability': Stability AI image-to-image (SDXL).
+            const form = new FormData();
+            form.append('init_image', new Blob([imageBuffer], { type: 'image/png' }), 'frame.png');
+            form.append('init_image_mode', 'IMAGE_STRENGTH');
+            form.append('image_strength', '0.35');
+            form.append('text_prompts[0][text]', prompt || 'vibrant colors, cinematic lighting, bold contrast, eye-catching YouTube thumbnail style');
+            form.append('text_prompts[0][weight]', '1');
+            form.append('cfg_scale', '7');
+            form.append('samples', '1');
+            form.append('steps', '30');
+
+            const upstream = await fetch('https://api.stability.ai/v1/generation/stable-diffusion-xl-1024-v1-0/image-to-image', {
+                method: 'POST',
+                headers: { 'Authorization': 'Bearer ' + apiKey, 'Accept': 'application/json' },
+                body: form
+            });
+            if (!upstream.ok) {
+                const detail = await upstream.text();
+                return res.status(upstream.status).json({ error: detail.slice(0, 300) });
+            }
+            const data = await upstream.json();
+            const b64 = data && data.artifacts && data.artifacts[0] && data.artifacts[0].base64;
+            if (!b64) return res.status(500).json({ error: 'Stability AI returned no image data' });
+            resultBuffer = Buffer.from(b64, 'base64');
+        }
+
+        res.setHeader('Content-Type', 'image/png');
+        res.setHeader('Access-Control-Allow-Origin', '*');
+        res.send(resultBuffer);
+    } catch (err) {
+        console.error('Thumbnail proxy error:', err);
+        res.status(500).json({ error: String(err && err.message ? err.message : err) });
+    }
+});
 
 // Serve editor static files
 app.use(express.static(__dirname));

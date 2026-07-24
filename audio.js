@@ -3099,7 +3099,7 @@ document.addEventListener('DOMContentLoaded', () => {
             if (clipTrimDuration <= 0) continue;
 
             const clipSpeed = Math.max(0.5, Math.min(2, Number(clip.speed) || 1));
-            const clipOutputDuration = clipTrimDuration / clipSpeed;
+            const clipOutputDuration = window.getClipOutputDuration ? window.getClipOutputDuration(clip) : (clipTrimDuration / clipSpeed);
 
             if (clip.type !== 'image' && clip.file) {
                 try {
@@ -3126,7 +3126,16 @@ document.addEventListener('DOMContentLoaded', () => {
         decodedVideoBuffers.forEach(({ buffer, clip, timelineStart, clipTrimDuration, clipSpeed }) => {
             const source = offlineCtx.createBufferSource();
             source.buffer = buffer;
-            source.playbackRate.setValueAtTime(clipSpeed, 0);
+            if (window.getClipSpeedSegments) {
+                const segs = window.getClipSpeedSegments(clip);
+                let segWallClockOffset = 0;
+                segs.forEach((seg) => {
+                    source.playbackRate.setValueAtTime(seg.speed, timelineStart + segWallClockOffset);
+                    segWallClockOffset += Math.max(0, seg.srcEnd - seg.srcStart) / seg.speed;
+                });
+            } else {
+                source.playbackRate.setValueAtTime(clipSpeed, 0);
+            }
 
             const clipGain = offlineCtx.createGain();
             clipGain.gain.setValueAtTime(state.videoVolume, 0);
@@ -3309,6 +3318,58 @@ document.addEventListener('DOMContentLoaded', () => {
                     });
                 } catch (err) {
                     console.error('Error decoding background music:', err);
+                }
+            }
+        }
+
+        // --- 4B. Multi-Track Timeline — Extra Video/Audio Track Audio ---
+        // Phase 11 STEP 3 (see PHASE11_ADVANCED_EDITING_PLAN.txt, multitrack.js).
+        // Extra video/image/audio tracks (state.extraTracks, from multitrack.js)
+        // already composite visually into export via
+        // window.compositeExtraTracksForExport (exporter.js) for video/image
+        // tracks. This block is the audio half: an extra track's clip audio
+        // (video and audio type tracks — image tracks have no sound) is
+        // decoded, trimmed to [sourceStart, sourceEnd), and scheduled at
+        // `introDur + clip.timelineOffset` on the shared offline timeline —
+        // the same "seconds since the start of the main clips timeline" frame
+        // of reference multitrack.js's computeGlobalTime()/exporter.js's
+        // exportTickerTime already use, so audio lines up with what was heard
+        // in the live preview. Muted tracks are skipped entirely. Routed
+        // straight to offlineCtx.destination (like background music above),
+        // not through the speech DSP chain (hp/lp/compressor) — these are
+        // arbitrary user-added layers, not necessarily voice.
+        if (state.extraTracks && state.extraTracks.length > 0) {
+            for (let ti = 0; ti < state.extraTracks.length; ti++) {
+                const track = state.extraTracks[ti];
+                if (track.type === 'image' || track.muted) continue;
+                for (let ci = 0; ci < (track.clips || []).length; ci++) {
+                    const eclip = track.clips[ci];
+                    if (!eclip.file) continue;
+                    const trimDuration = Math.max(0, (eclip.sourceEnd || 0) - (eclip.sourceStart || 0));
+                    if (trimDuration <= 0) continue;
+                    try {
+                        const arrayBuffer = await eclip.file.arrayBuffer();
+                        const decodeCtx = new (window.AudioContext || window.webkitAudioContext)();
+                        const clipBuffer = await decodeCtx.decodeAudioData(arrayBuffer.slice(0));
+                        await decodeCtx.close();
+
+                        const source = offlineCtx.createBufferSource();
+                        source.buffer = clipBuffer;
+
+                        const trackGain = offlineCtx.createGain();
+                        trackGain.gain.setValueAtTime(Math.max(0, Math.min(1, track.volume !== undefined ? track.volume : 1)), 0);
+
+                        source.connect(trackGain);
+                        trackGain.connect(offlineCtx.destination);
+
+                        const startAt = introDur + (eclip.timelineOffset || 0);
+                        const safeTrimDuration = Math.min(trimDuration, Math.max(0, clipBuffer.duration - (eclip.sourceStart || 0)));
+                        if (safeTrimDuration > 0.01 && startAt < totalDuration) {
+                            source.start(Math.max(0, startAt), Math.max(0, eclip.sourceStart || 0), safeTrimDuration);
+                        }
+                    } catch (err) {
+                        console.error(`Error decoding extra track audio for "${eclip.name}":`, err);
+                    }
                 }
             }
         }

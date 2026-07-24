@@ -171,10 +171,7 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         }
 
-        const totalDuration = state.clips.reduce((sum, c) => {
-            const speed = Math.max(0.5, Math.min(2, Number(c.speed) || 1));
-            return sum + (Math.max(0, c.end - c.start) / speed);
-        }, 0);
+        const totalDuration = state.clips.reduce((sum, c) => sum + (window.getClipOutputDuration ? window.getClipOutputDuration(c) : (Math.max(0, c.end - c.start) / Math.max(0.5, Math.min(2, Number(c.speed) || 1)))), 0);
 
         if (totalDuration <= 0) {
             alert('Trim duration is invalid. Please set the trim range in Step 2.');
@@ -241,6 +238,7 @@ document.addEventListener('DOMContentLoaded', () => {
             // Ensure the overlay clock override never leaks back into the editor.
             state.customExportTime = undefined;
             state.exportTickerTime = undefined;
+            if (window.cleanupExtraTracksExportMedia) window.cleanupExtraTracksExportMedia();
             if (cancelRenderBtn) cancelRenderBtn.disabled = false;
         }
     }
@@ -526,6 +524,7 @@ document.addEventListener('DOMContentLoaded', () => {
             if (renderEtaText) renderEtaText.innerText = '';
             state.customExportTime = undefined;
             state.exportTickerTime = undefined;
+            if (window.cleanupExtraTracksExportMedia) window.cleanupExtraTracksExportMedia();
         }
 
         // --- Step A: Offline Audio Rendering ---
@@ -638,10 +637,25 @@ document.addEventListener('DOMContentLoaded', () => {
         // Automatically pauses/resumes if canvas compression lags behind.
         async function captureVideoClipSequential(clip, clipTrimStart, clipTrimEnd, clipFrames, clipIndex) {
             await serverLog(`captureVideoClipSequential start: clipTrimStart=${clipTrimStart}, clipTrimEnd=${clipTrimEnd}, clipFrames=${clipFrames}, clipIndex=${clipIndex}`);
+            // Speed Ramping (Phase 11): getClipSourceTimeForOutputElapsed (phase9.js)
+            // maps output-elapsed-within-clip -> source time, respecting the clip's
+            // 3-segment ramp if enabled. Falls back to the plain constant-speed
+            // formula (identical to pre-ramping behavior) if phase9.js hasn't loaded
+            // for any reason, so this never breaks export.
             const clipSpeed = Math.max(0.5, Math.min(2, Number(clip.speed) || 1));
-            const sourceTimeForFrame = (frame) => clipTrimStart + ((frame / 30) * clipSpeed);
+            const sourceTimeForFrame = window.getClipSourceTimeForOutputElapsed
+                ? (frame) => window.getClipSourceTimeForOutputElapsed(clip, frame / 30)
+                : (frame) => clipTrimStart + ((frame / 30) * clipSpeed);
+            // Decode pacing only (how fast to real-time-play the source video while
+            // capturing) — NOT used for frame-position accuracy, that's entirely
+            // sourceTimeForFrame's job. Uses the clip's duration-weighted average
+            // speed under ramping so decode keeps pace with the fastest/slowest
+            // segments reasonably well; any mismatch is absorbed by the existing
+            // overshoot-fill / undershoot-wait logic below, same as before ramping.
+            const clipOutputDur = window.getClipOutputDuration ? window.getClipOutputDuration(clip) : ((clipTrimEnd - clipTrimStart) / clipSpeed);
+            const decodePaceSpeed = Math.max(0.5, Math.min(2, (clipTrimEnd - clipTrimStart) / Math.max(0.001, clipOutputDur)));
             video.pause();
-            video.playbackRate = 0.4 * clipSpeed; // Stable decoding while preserving the selected timeline speed.
+            video.playbackRate = 0.4 * decodePaceSpeed; // Stable decoding while preserving the selected timeline speed.
             await serverLog(`Seeking to start of clip: ${clipTrimStart}`);
             await waitForSeek(video, clipTrimStart);
             await serverLog(`Seeked to ${clipTrimStart}. Beginning frame processing.`);
@@ -700,6 +714,13 @@ document.addEventListener('DOMContentLoaded', () => {
                             if (window.phase9PrepareTransitionFrame) {
                                 await window.phase9PrepareTransitionFrame(clip, loopTarget);
                             }
+                            // Multi-Track Timeline (render-order fix): seek extra video
+                            // tracks BEFORE drawing — editor.js's drawFrame() draws them
+                            // itself, synchronously, at the correct point in its own
+                            // render order (above the main video, below captions/overlays).
+                            if (window.prepareExtraTracksForExportFrame) {
+                                await window.prepareExtraTracksForExportFrame(state.exportTickerTime);
+                            }
                             if (window.drawEditorFrame) window.drawEditorFrame();
 
                             const p = new Promise(async (r) => {
@@ -737,6 +758,13 @@ document.addEventListener('DOMContentLoaded', () => {
                         await syncBrollVideoOverlays(currentTarget);
                         if (window.phase9PrepareTransitionFrame) {
                             await window.phase9PrepareTransitionFrame(clip, currentTarget);
+                        }
+                        // Multi-Track Timeline (render-order fix): seek extra video
+                        // tracks BEFORE drawing — editor.js's drawFrame() draws them
+                        // itself, synchronously, at the correct point in its own
+                        // render order (above the main video, below captions/overlays).
+                        if (window.prepareExtraTracksForExportFrame) {
+                            await window.prepareExtraTracksForExportFrame(state.exportTickerTime);
                         }
                         if (window.drawEditorFrame) window.drawEditorFrame();
 
@@ -821,7 +849,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const clipTrimEnd = clip.end;
             const clipTrimDuration = Math.max(0, clipTrimEnd - clipTrimStart);
             const clipSpeed = Math.max(0.5, Math.min(2, Number(clip.speed) || 1));
-            const clipOutputDuration = clipTrimDuration / clipSpeed;
+            const clipOutputDuration = window.getClipOutputDuration ? window.getClipOutputDuration(clip) : (clipTrimDuration / clipSpeed);
             if (clipTrimDuration <= 0) continue;
 
             // Load clip
@@ -871,7 +899,9 @@ document.addEventListener('DOMContentLoaded', () => {
                     if (exportCancelled) break;
 
                     const elapsedSecInClip = f / 30;
-                    const targetTime = clipTrimStart + (elapsedSecInClip * clipSpeed);
+                    const targetTime = window.getClipSourceTimeForOutputElapsed
+                        ? window.getClipSourceTimeForOutputElapsed(clip, elapsedSecInClip)
+                        : (clipTrimStart + (elapsedSecInClip * clipSpeed));
                     state.currentTime = targetTime;
 
                     // Same explicit-clock fix as the video path above so the
@@ -883,6 +913,14 @@ document.addEventListener('DOMContentLoaded', () => {
 
                     if (window.phase9PrepareTransitionFrame) {
                         await window.phase9PrepareTransitionFrame(clip, targetTime);
+                    }
+
+                    // Multi-Track Timeline (render-order fix): seek extra video
+                    // tracks BEFORE drawing — editor.js's drawFrame() draws them
+                    // itself, synchronously, at the correct point in its own
+                    // render order (above the main video, below captions/overlays).
+                    if (window.prepareExtraTracksForExportFrame) {
+                        await window.prepareExtraTracksForExportFrame(state.exportTickerTime);
                     }
 
                     if (window.drawEditorFrame) {
@@ -913,6 +951,9 @@ document.addEventListener('DOMContentLoaded', () => {
         // post-export restore draw) reads the real video.currentTime again.
         state.customExportTime = undefined;
         state.exportTickerTime = undefined;
+        // STEP 3 — Multi-Track Timeline: release the dedicated export-only
+        // <video> elements created for extra track clips (prepareExtraTracksForExportFrame).
+        if (window.cleanupExtraTracksExportMedia) window.cleanupExtraTracksExportMedia();
 
 
         // C3. Render Outro if enabled

@@ -264,6 +264,17 @@ window.VideoEditor = {
     clips: [],
     activeClipId: null,
 
+    // Multi-Track Timeline (Phase 11, step 1 — data model + UI only).
+    // Extra layered tracks that sit alongside the main `clips` timeline above.
+    // Each track: { id, name, type: 'video'|'image'|'audio', muted, volume, clips: [...] }
+    // Each track clip: { id, type, url, file, name, duration (full source length),
+    //   sourceStart, sourceEnd (trim window within the source),
+    //   timelineOffset (seconds, position on the shared timeline) }
+    // NOTE: rendering these into the live canvas preview/export is a later step
+    // (see PHASE11_ADVANCED_EDITING_PLAN.txt) — this step only stores and lets
+    // the user arrange the data safely without affecting today's single-track render.
+    extraTracks: [],
+
     // Image/photo playhead emulation
     imagePlayheadTime: 0,
     lastImageTickTime: 0,
@@ -2895,6 +2906,15 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
 
+        // Multi-Track Timeline (multitrack.js, Phase 11): extra video/image
+        // tracks are drawn here — above the main video/blur regions, but
+        // BELOW every caption/overlay type drawn from this point onward
+        // (B-roll, banners, ticker, watermark, progress bar, text, stickers,
+        // symbols, shapes, highlights, captions). This is a single, narrow
+        // hook — multitrack.js owns 100% of what it draws and how; this line
+        // only fixes WHERE in the stacking order it draws.
+        if (window.drawExtraTracksMidFrame) window.drawExtraTracksMidFrame();
+
         // --- Step E: Draw B-roll / Topic Image Overlays (Phase 5D, unified in v2.5) ---
         // NOTE: Steps B/B2/C/D (banners, ticker, logo, progress bar) have been moved
         // to render AFTER this step so they always appear on top of fullscreen B-roll images.
@@ -3373,6 +3393,13 @@ document.addEventListener('DOMContentLoaded', () => {
                 // rotated B-roll box still plays its entry/exit rotation animations
                 // (e.g. 'rotate-in') around its own tilted angle.
                 if (item.rotation) rotateAmt += item.rotation * Math.PI / 180;
+                // Keyframe v2 (Phase 11): user/keyframe-driven scale & opacity compose
+                // multiplicatively on top of whatever the entry/exit animation set,
+                // exactly like rotation composes additively above — so a keyframed
+                // B-roll box still plays its entry/exit animations, just scaled/faded
+                // relative to its own animated baseline.
+                if (item.scale != null && item.scale !== 1) scaleAmt *= item.scale;
+                if (item.opacity != null && item.opacity !== 100) alpha *= Math.max(0, Math.min(1, item.opacity / 100));
 
                 // ---- 3. Draw: box transform (position/scale/rotate/blur/alpha) is the
                 // same regardless of mode; only the content differs (text vs image, and
@@ -4237,8 +4264,15 @@ document.addEventListener('DOMContentLoaded', () => {
 
                 const tx = item.x * canvasW;
                 const ty = item.y * canvasH;
+                const txScale = item.scale ?? 1;
+                const txRotationRad = (item.rotation || 0) * Math.PI / 180;
+                const txAlpha = Math.max(0, Math.min(1, (item.opacity ?? 100) / 100));
 
                 state.ctx.save();
+                state.ctx.globalAlpha = txAlpha;
+                state.ctx.translate(tx, ty);
+                if (txRotationRad) state.ctx.rotate(txRotationRad);
+                if (txScale !== 1) state.ctx.scale(txScale, txScale);
                 state.ctx.font = `bold ${item.fontSize}px "${item.font}", "Plus Jakarta Sans", sans-serif`;
                 state.ctx.fillStyle = item.color;
                 state.ctx.textAlign = 'center';
@@ -4247,8 +4281,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 // Subtle outline for readability over any video background
                 state.ctx.lineWidth = Math.max(2, item.fontSize * 0.08);
                 state.ctx.strokeStyle = 'rgba(0,0,0,0.55)';
-                state.ctx.strokeText(item.text, tx, ty);
-                state.ctx.fillText(item.text, tx, ty);
+                state.ctx.strokeText(item.text, 0, 0);
+                state.ctx.fillText(item.text, 0, 0);
 
                 // Selection box in Step 3 for the active overlay being edited
                 if (state.currentStep === 3 && item.id === state.selectedTextOverlayId) {
@@ -4258,7 +4292,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     state.ctx.strokeStyle = 'rgba(79, 70, 229, 0.9)';
                     state.ctx.lineWidth = 2;
                     state.ctx.setLineDash([6, 4]);
-                    state.ctx.strokeRect(tx - boxW / 2, ty - boxH / 2, boxW, boxH);
+                    state.ctx.strokeRect(-boxW / 2, -boxH / 2, boxW, boxH);
                     state.ctx.setLineDash([]);
                 }
 
@@ -4272,12 +4306,19 @@ document.addEventListener('DOMContentLoaded', () => {
                 const fontSize = canvasW * (item.size / 100);
                 const sx = item.x * canvasW;
                 const sy = item.y * canvasH;
+                const stScale = item.scale ?? 1;
+                const stRotationRad = (item.rotation || 0) * Math.PI / 180;
+                const stAlpha = Math.max(0, Math.min(1, (item.opacity ?? 100) / 100));
 
                 state.ctx.save();
+                state.ctx.globalAlpha = stAlpha;
+                state.ctx.translate(sx, sy);
+                if (stRotationRad) state.ctx.rotate(stRotationRad);
+                if (stScale !== 1) state.ctx.scale(stScale, stScale);
                 state.ctx.font = `${fontSize}px "Segoe UI Emoji", "Apple Color Emoji", "Noto Color Emoji", sans-serif`;
                 state.ctx.textAlign = 'center';
                 state.ctx.textBaseline = 'middle';
-                state.ctx.fillText(item.emoji, sx, sy);
+                state.ctx.fillText(item.emoji, 0, 0);
                 state.ctx.restore();
 
                 // Selection box + resize handle in Step 3 for the active sticker being edited
@@ -4315,10 +4356,14 @@ document.addEventListener('DOMContentLoaded', () => {
 
                 const box = getSymbolBox(item, canvasW, canvasH);
                 const rotation = item.rotation || 0;
+                const symScale = item.scale ?? 1;
+                const symAlpha = Math.max(0, Math.min(1, (item.opacity ?? 100) / 100));
 
                 state.ctx.save();
+                state.ctx.globalAlpha = symAlpha;
                 state.ctx.translate(box.cx, box.cy);
                 state.ctx.rotate(rotation * Math.PI / 180);
+                if (symScale !== 1) state.ctx.scale(symScale, symScale);
                 drawSymbolShape(state.ctx, item.symbolType, box.s, item.color || '#ffffff');
                 state.ctx.restore();
 
@@ -4378,10 +4423,14 @@ document.addEventListener('DOMContentLoaded', () => {
 
                 const box = getShapeOverlayBox(item, canvasW, canvasH);
                 const rotation = item.rotation || 0;
+                const shpScale = item.scale ?? 1;
+                const shpAlpha = Math.max(0, Math.min(1, (item.opacity ?? 100) / 100));
 
                 state.ctx.save();
+                state.ctx.globalAlpha = shpAlpha;
                 state.ctx.translate(box.cx, box.cy);
                 state.ctx.rotate(rotation * Math.PI / 180);
+                if (shpScale !== 1) state.ctx.scale(shpScale, shpScale);
                 drawShapeOverlayPath(state.ctx, item.shapeType, box.w, box.h, item.fillColor || '#4f46e5');
                 if (item.text) {
                     drawShapeOverlayText(state.ctx, item, box.w, box.h);
@@ -4618,9 +4667,12 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
 
-        if (state.subtitlesEnabled && state.subtitles && state.subtitles.length > 0) {
+        const activeSubtitleTrack = (state.subtitlesUseTranslated && state.translatedSubtitles && state.translatedSubtitles.length > 0)
+            ? state.translatedSubtitles
+            : state.subtitles;
+        if (state.subtitlesEnabled && activeSubtitleTrack && activeSubtitleTrack.length > 0) {
             const currentTime = state.currentTime;
-            const activeSub = state.subtitles.find(s => currentTime >= s.startSec && currentTime <= s.endSec);
+            const activeSub = activeSubtitleTrack.find(s => currentTime >= s.startSec && currentTime <= s.endSec);
             if (activeSub && activeSub.text) {
                 const st = state.subtitleStyle || {};
                 const canvasW = state.canvas.width;
@@ -10030,6 +10082,105 @@ document.addEventListener('DOMContentLoaded', () => {
         removeCustomThumbnailBtn.style.display = 'none';
     });
 
+    // --- AI Thumbnail Generator (Phase 10-3, experimental) ---
+    // Sends the current preview frame (with all overlays baked in, same frame
+    // "Generate Thumbnail" above captures) to an external image API and shows
+    // the returned image as a suggested thumbnail. This stays fully separate
+    // from the plain Generate Thumbnail flow until the user explicitly clicks
+    // "Use as Thumbnail" -- at that point it plugs into the exact same
+    // state.customThumbnailFile the manual upload box uses, so exporter.js's
+    // MP4 cover-art embedding needs no changes at all.
+    const aiThumbProvider = document.getElementById('ai-thumb-provider');
+    const aiThumbKey = document.getElementById('ai-thumb-key');
+    const aiThumbPrompt = document.getElementById('ai-thumb-prompt');
+    const aiThumbGenerateBtn = document.getElementById('ai-thumb-generate-btn');
+    const aiThumbSaveKeyBtn = document.getElementById('ai-thumb-save-key-btn');
+    const aiThumbStatus = document.getElementById('ai-thumb-status');
+    const aiThumbPreviewBox = document.getElementById('ai-thumb-preview-box');
+    const aiThumbPreviewImg = document.getElementById('ai-thumb-preview-img');
+    const aiThumbDownloadLink = document.getElementById('ai-thumb-download-link');
+    const aiThumbUseBtn = document.getElementById('ai-thumb-use-btn');
+
+    // Same per-feature localStorage key pattern as the [10-1] TTS card.
+    if (aiThumbKey) {
+        const savedKey = localStorage.getItem('ai_thumb_api_key');
+        if (savedKey) aiThumbKey.value = savedKey;
+    }
+    if (aiThumbSaveKeyBtn) {
+        aiThumbSaveKeyBtn.addEventListener('click', () => {
+            localStorage.setItem('ai_thumb_api_key', aiThumbKey.value.trim());
+            alert('API Key সফলভাবে সেভ করা হয়েছে!');
+        });
+    }
+
+    function setAiThumbStatus(msg, isError) {
+        if (!aiThumbStatus) return;
+        aiThumbStatus.style.display = msg ? 'block' : 'none';
+        aiThumbStatus.textContent = msg || '';
+        aiThumbStatus.style.color = isError ? '#f87171' : '';
+    }
+
+    let aiThumbLastBlob = null;
+
+    if (aiThumbGenerateBtn) {
+        aiThumbGenerateBtn.addEventListener('click', async () => {
+            const provider = aiThumbProvider ? aiThumbProvider.value : 'stability';
+            const apiKey = aiThumbKey ? aiThumbKey.value.trim() : '';
+            const prompt = aiThumbPrompt ? aiThumbPrompt.value.trim() : '';
+
+            if (!apiKey) {
+                alert('অনুগ্রহ করে API Key প্রদান করুন।');
+                return;
+            }
+
+            drawFrame(); // ensure canvas reflects the exact current frame + overlays
+            const imageBase64 = state.canvas.toDataURL('image/png');
+
+            aiThumbGenerateBtn.disabled = true;
+            if (aiThumbPreviewBox) aiThumbPreviewBox.style.display = 'none';
+            setAiThumbStatus('⏳ ফ্রেম আপলোড হচ্ছে ও AI থাম্বনেইল তৈরি হচ্ছে... (একটু সময় লাগতে পারে)');
+
+            try {
+                const response = await fetch('/api/thumbnail-proxy', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ provider, apiKey, prompt, imageBase64 })
+                });
+
+                if (!response.ok) {
+                    const errData = await response.json().catch(() => ({}));
+                    throw new Error(errData.error || `HTTP error! status: ${response.status}`);
+                }
+
+                const blob = await response.blob();
+                aiThumbLastBlob = blob;
+                const url = URL.createObjectURL(blob);
+                if (aiThumbPreviewImg) aiThumbPreviewImg.src = url;
+                if (aiThumbDownloadLink) {
+                    aiThumbDownloadLink.href = url;
+                    aiThumbDownloadLink.download = `ai-thumbnail-${Date.now()}.png`;
+                }
+                if (aiThumbPreviewBox) aiThumbPreviewBox.style.display = 'block';
+                setAiThumbStatus('✅ AI থাম্বনেইল তৈরি হয়েছে — নিচে প্রিভিউ দেখুন।');
+            } catch (err) {
+                console.error(err);
+                setAiThumbStatus('⚠️ ভুল হয়েছে: ' + err.message, true);
+            } finally {
+                aiThumbGenerateBtn.disabled = false;
+            }
+        });
+    }
+
+    if (aiThumbUseBtn) {
+        aiThumbUseBtn.addEventListener('click', () => {
+            if (!aiThumbLastBlob) return;
+            const file = new File([aiThumbLastBlob], `ai-thumbnail-${Date.now()}.png`, { type: 'image/png' });
+            state.customThumbnailFile = file;
+            showThumbnailPreview(URL.createObjectURL(file), file.name, true);
+            setAiThumbStatus('✅ এই AI থাম্বনেইলটি এক্সপোর্টের কভার হিসেবে সেট করা হয়েছে।');
+        });
+    }
+
     // --- Intro / Outro Templates (Phase 5C) ---
     const introEnabledToggle = document.getElementById('intro-enabled-toggle');
     const introControlsBox = document.getElementById('intro-controls-box');
@@ -11080,6 +11231,34 @@ document.addEventListener('DOMContentLoaded', () => {
                 data.bgMusicTracks.push(trackCopy);
             }
 
+            // Convert Multi-Track Timeline extra tracks to Base64 (conditional based on mode)
+            // (Phase 11 step 4 fix — this used to be missing entirely, so extra
+            // tracks silently disappeared on manual JSON export/import even
+            // though they were already fully wired into IndexedDB auto-save.)
+            data.extraTracks = [];
+            for (let i = 0; i < state.extraTracks.length; i++) {
+                const track = state.extraTracks[i];
+                const trackCopy = {...track};
+                trackCopy.clips = [];
+                for (let j = 0; j < (track.clips || []).length; j++) {
+                    const eclip = track.clips[j];
+                    const clipCopy = {...eclip};
+                    delete clipCopy.imageImg;
+                    delete clipCopy.file;
+                    delete clipCopy._el;
+                    delete clipCopy._exportEl;
+
+                    if (mode === 'full') {
+                        if (eclip.file) {
+                            clipCopy.mediaBase64 = await blobToBase64(eclip.file);
+                            clipCopy.fileType = eclip.file.type;
+                        }
+                    }
+                    trackCopy.clips.push(clipCopy);
+                }
+                data.extraTracks.push(trackCopy);
+            }
+
             // Trigger JSON file download
             const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(data));
             const downloadAnchor = document.createElement('a');
@@ -11175,6 +11354,29 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
             }
 
+            // Check Multi-Track Timeline extra tracks (Phase 11 step 4 fix)
+            for (let i = 0; i < (data.extraTracks || []).length; i++) {
+                const track = data.extraTracks[i];
+                for (let j = 0; j < (track.clips || []).length; j++) {
+                    const eclip = track.clips[j];
+                    if (!eclip.mediaBase64) {
+                        const cachedFile = await getFileFromDB(`track_${track.id}_${eclip.id}`);
+                        if (cachedFile) {
+                            eclip.file = cachedFile;
+                            eclip.url = URL.createObjectURL(cachedFile);
+                        } else {
+                            missingFiles.push({
+                                type: 'extratrack',
+                                id: eclip.id,
+                                trackId: track.id,
+                                name: eclip.name,
+                                meta: `এক্সট্রা ট্র্যাক ক্লিপ (${track.type === 'audio' ? 'অডিও' : (track.type === 'image' ? 'ছবি' : 'ভিডিও')})`
+                            });
+                        }
+                    }
+                }
+            }
+
             if (missingFiles.length > 0) {
                 showMediaReLinkerModal(missingFiles);
             } else {
@@ -11226,7 +11428,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
             const fileInput = document.createElement('input');
             fileInput.type = 'file';
-            fileInput.accept = item.type === 'bgmusic' ? 'audio/*' : 'video/*, image/*';
+            fileInput.accept = item.type === 'bgmusic' ? 'audio/*' : (item.type === 'extratrack' ? 'video/*, image/*, audio/*' : 'video/*, image/*');
 
             fileInput.addEventListener('change', (e) => {
                 const selectedFile = e.target.files[0];
@@ -11265,6 +11467,13 @@ document.addEventListener('DOMContentLoaded', () => {
                     if (track) {
                         track.blob = item.fileObj;
                         track.url = URL.createObjectURL(item.fileObj);
+                    }
+                } else if (item.type === 'extratrack') {
+                    const track = (pendingImportData.extraTracks || []).find(t => t.id === item.trackId);
+                    const eclip = track && (track.clips || []).find(c => c.id === item.id);
+                    if (eclip) {
+                        eclip.file = item.fileObj;
+                        eclip.url = URL.createObjectURL(item.fileObj);
                     }
                 }
             });
@@ -11373,6 +11582,32 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
             }
 
+            // Restore Multi-Track Timeline extra tracks (Phase 11 step 4 fix)
+            for (let i = 0; i < (data.extraTracks || []).length; i++) {
+                const track = data.extraTracks[i];
+                for (let j = 0; j < (track.clips || []).length; j++) {
+                    const eclip = track.clips[j];
+                    if (eclip.mediaBase64) {
+                        const eBlob = dataURLtoBlob(eclip.mediaBase64);
+                        eclip.file = new File([eBlob], eclip.name || (eclip.type === 'image' ? 'track_image.png' : (eclip.type === 'audio' ? 'track_audio.mp3' : 'track_video.mp4')), { type: eclip.fileType || eBlob.type });
+                        eclip.url = URL.createObjectURL(eclip.file);
+                        if (eclip.type === 'image') {
+                            eclip.imageImg = new Image();
+                            eclip.imageImg.src = eclip.url;
+                            await new Promise(r => eclip.imageImg.onload = r);
+                        }
+                        await storeFileInDB(`track_${track.id}_${eclip.id}`, eclip.file);
+                    } else if (eclip.file) {
+                        if (eclip.type === 'image') {
+                            eclip.imageImg = new Image();
+                            eclip.imageImg.src = eclip.url;
+                            await new Promise(r => eclip.imageImg.onload = r);
+                        }
+                        await storeFileInDB(`track_${track.id}_${eclip.id}`, eclip.file);
+                    }
+                }
+            }
+
             // Assign settings to editor state object
             Object.assign(state, data.settings);
             state.textOverlays = data.textOverlays || [];
@@ -11386,6 +11621,7 @@ document.addEventListener('DOMContentLoaded', () => {
             state.subtitles = data.subtitles || [];
             state.clips = data.clips || [];
             state.bgMusicTracks = data.bgMusicTracks || [];
+            state.extraTracks = data.extraTracks || [];
 
             sanitizeLoadedProjectIds();
 
@@ -11405,6 +11641,7 @@ document.addEventListener('DOMContentLoaded', () => {
             // Re-sync and render
             syncUIFromState();
             drawFrame();
+            if (window.renderMultiTrackPanel) window.renderMultiTrackPanel();
 
             // Set default step view
             state.currentStep = 1;
@@ -11539,6 +11776,10 @@ document.addEventListener('DOMContentLoaded', () => {
         state.bgMusicTracks = [];
         state.selectedBgMusicTrackId = null;
         state.bgMusicDuckingEnabled = true;
+        // Multi-Track Timeline (Phase 11 step 4 fix): without this, extra
+        // tracks from a previous project silently carried over into a new
+        // project / project switch, since nothing else here touched them.
+        state.extraTracks = [];
         state.introTransitionType = 'none';
         state.introTransitionDuration = 1;
         state.bannerStyle = 'none';
@@ -11595,6 +11836,9 @@ document.addEventListener('DOMContentLoaded', () => {
         };
         state.brollOverlays = [];
         state.subtitles = [];
+        state.translatedSubtitles = [];
+        state.translatedSubtitlesLang = null;
+        state.subtitlesUseTranslated = false;
         state.textOverlays = [];
         state.stickers = [];
         state.highlights = [];
@@ -11969,7 +12213,16 @@ document.addEventListener('DOMContentLoaded', () => {
                     const copy = {...t};
                     delete copy.blob;
                     return copy;
-                })
+                }),
+                extraTracks: (state.extraTracks || []).map(t => ({
+                    ...t,
+                    clips: (t.clips || []).map(c => {
+                        const copy = {...c};
+                        delete copy.file;
+                        delete copy.imageImg;
+                        return copy;
+                    })
+                }))
             };
 
             localStorage.setItem(`studio_flow_project_${projId}`, JSON.stringify(settingsToSave));
@@ -12008,6 +12261,14 @@ document.addEventListener('DOMContentLoaded', () => {
                 if ((b.type === 'image' || b.type === 'gif') && b.file) {
                     store.put(b.file, `${projId}_broll_${b.id}`);
                 }
+            });
+
+            (state.extraTracks || []).forEach(t => {
+                (t.clips || []).forEach(c => {
+                    if (c.file) {
+                        store.put(c.file, `${projId}_track_${t.id}_${c.id}`);
+                    }
+                });
             });
             
             await new Promise((res, rej) => {
@@ -12135,6 +12396,21 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
             }
 
+            // Multi-Track Timeline (extra layered tracks, Phase 11 step 1)
+            for (const t of (savedData.extraTracks || [])) {
+                for (const c of (t.clips || [])) {
+                    const file = await getFileFromDBWithFallback(`track_${t.id}_${c.id}`, activeProjId);
+                    if (file) {
+                        c.file = file;
+                        c.url = URL.createObjectURL(file);
+                        if (c.type === 'image') {
+                            c.imageImg = new Image();
+                            await loadSafeImagePromise(c.imageImg, c.url);
+                        }
+                    }
+                }
+            }
+
             // Load settings into current state object
             Object.assign(state, savedData.settings);
             state.textOverlays = savedData.textOverlays || [];
@@ -12148,6 +12424,7 @@ document.addEventListener('DOMContentLoaded', () => {
             state.subtitles = savedData.subtitles || [];
             state.clips = savedData.clips || [];
             state.bgMusicTracks = savedData.bgMusicTracks || [];
+            state.extraTracks = savedData.extraTracks || [];
 
             if (savedData.settings && typeof savedData.settings.duration !== 'undefined') {
                 state.duration = savedData.settings.duration;
@@ -12185,6 +12462,7 @@ document.addEventListener('DOMContentLoaded', () => {
             if (typeof renderShapeList === 'function') renderShapeList();
             if (typeof renderSubtitlesList === 'function') renderSubtitlesList();
             if (typeof renderClipTimeline === 'function') renderClipTimeline();
+            if (window.renderMultiTrackPanel) window.renderMultiTrackPanel();
             if (typeof renderHighlightList === 'function') renderHighlightList();
             if (typeof renderBlurRegionList === 'function') renderBlurRegionList();
             if (typeof renderFillList === 'function') renderFillList();

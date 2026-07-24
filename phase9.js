@@ -11,6 +11,14 @@ document.addEventListener('DOMContentLoaded', () => {
     function ensureClipDefaults(clip) {
         if (!clip) return clip;
         if (clip.speed == null || isNaN(clip.speed)) clip.speed = 1;
+        if (!clip.speedRamp || typeof clip.speedRamp !== 'object') {
+            clip.speedRamp = { enabled: false, segments: [1, 1, 1] };
+        } else {
+            if (clip.speedRamp.enabled == null) clip.speedRamp.enabled = false;
+            if (!Array.isArray(clip.speedRamp.segments) || clip.speedRamp.segments.length !== 3) {
+                clip.speedRamp.segments = [1, 1, 1];
+            }
+        }
         if (!clip.transitionType) clip.transitionType = 'none';
         if (clip.transitionDuration == null || isNaN(clip.transitionDuration)) clip.transitionDuration = 0.5;
         if (clip.kenBurnsEnabled == null) clip.kenBurnsEnabled = false;
@@ -29,9 +37,106 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function getClipPlayDuration(clip) {
         ensureClipDefaults(clip);
-        const trim = Math.max(0, (clip.end || 0) - (clip.start || 0));
-        return trim / (clip.speed || 1);
+        return getClipOutputDuration(clip);
     }
+
+    // --- Speed Ramping (Phase 11) ---------------------------------------
+    // A clip either has a single constant speed (clip.speed, unchanged
+    // behavior — this is the default and what every existing project
+    // still uses), OR clip.speedRamp.enabled === true, in which case its
+    // trimmed [start, end) source range is split into 3 EQUAL-LENGTH
+    // source-time segments, each with its own speed multiplier
+    // (clip.speedRamp.segments = [s0, s1, s2]). Fixed 3-segment design
+    // (per PHASE11 plan: "start with 3-4 segments, not a smooth curve" —
+    // keeps export timing 100% predictable and avoids arbitrary-boundary
+    // UI complexity).
+    //
+    // These functions are exposed on `window` and are the SINGLE shared
+    // source of truth — exporter.js, audio.js, and multitrack.js all call
+    // these instead of re-deriving `trim/speed` inline, so every place
+    // that needs "how long does this clip play for" or "what source frame
+    // corresponds to this output moment" agrees, including under ramping.
+    function getClipSpeedSegments(clip) {
+        ensureClipDefaults(clip);
+        const srcStart = clip.start || 0;
+        const srcEnd = clip.end || 0;
+        if (clip.speedRamp && clip.speedRamp.enabled) {
+            const segLen = Math.max(0, srcEnd - srcStart) / 3;
+            const speeds = clip.speedRamp.segments.map(s => Math.max(0.5, Math.min(2, Number(s) || 1)));
+            return [
+                { srcStart: srcStart, srcEnd: srcStart + segLen, speed: speeds[0] },
+                { srcStart: srcStart + segLen, srcEnd: srcStart + 2 * segLen, speed: speeds[1] },
+                { srcStart: srcStart + 2 * segLen, srcEnd: srcEnd, speed: speeds[2] }
+            ];
+        }
+        const speed = Math.max(0.5, Math.min(2, Number(clip.speed) || 1));
+        return [{ srcStart: srcStart, srcEnd: srcEnd, speed: speed }];
+    }
+
+    // Total OUTPUT (rendered-timeline) duration of the clip — replaces
+    // `trim/speed` wherever ramping needs to be respected.
+    function getClipOutputDuration(clip) {
+        const segs = getClipSpeedSegments(clip);
+        return segs.reduce((sum, s) => sum + Math.max(0, s.srcEnd - s.srcStart) / s.speed, 0);
+    }
+
+    // Given `outputElapsed` seconds measured from the START of this clip's
+    // OWN output timeline (0 = clip's first output frame), returns the
+    // corresponding SOURCE time to seek/draw. Monotonic and clamped to
+    // [srcStart, srcEnd] of the last segment.
+    function getClipSourceTimeForOutputElapsed(clip, outputElapsed) {
+        const segs = getClipSpeedSegments(clip);
+        let cum = 0;
+        for (let i = 0; i < segs.length; i++) {
+            const s = segs[i];
+            const segOutDur = Math.max(0, s.srcEnd - s.srcStart) / s.speed;
+            const isLast = (i === segs.length - 1);
+            if (outputElapsed <= cum + segOutDur || isLast) {
+                const within = Math.max(0, outputElapsed - cum);
+                return Math.min(s.srcEnd, s.srcStart + within * s.speed);
+            }
+            cum += segOutDur;
+        }
+        return segs[segs.length - 1].srcEnd;
+    }
+
+    // Which segment's speed applies at a given SOURCE time (used for live
+    // preview: video.currentTime is already source time, so this avoids
+    // needing an output-elapsed calculation during normal playback).
+    function getClipSpeedAtSourceTime(clip, sourceTime) {
+        const segs = getClipSpeedSegments(clip);
+        for (let i = 0; i < segs.length; i++) {
+            const s = segs[i];
+            const isLast = (i === segs.length - 1);
+            if (sourceTime < s.srcEnd || isLast) return s.speed;
+        }
+        return segs[segs.length - 1].speed;
+    }
+
+    // Inverse of getClipSourceTimeForOutputElapsed: given a SOURCE time within
+    // this clip, returns how much OUTPUT time has elapsed since the clip's
+    // first output frame. Used by multitrack.js to keep extra tracks synced
+    // to the main timeline while a ramped clip is playing/scrubbing.
+    function getClipOutputElapsedForSourceTime(clip, sourceTime) {
+        const segs = getClipSpeedSegments(clip);
+        let cum = 0;
+        for (let i = 0; i < segs.length; i++) {
+            const s = segs[i];
+            const segOutDur = Math.max(0, s.srcEnd - s.srcStart) / s.speed;
+            const isLast = (i === segs.length - 1);
+            if (sourceTime <= s.srcEnd || isLast) {
+                const withinSrc = Math.max(0, sourceTime - s.srcStart);
+                return cum + withinSrc / s.speed;
+            }
+            cum += segOutDur;
+        }
+        return cum;
+    }
+
+    window.getClipOutputDuration = getClipOutputDuration;
+    window.getClipSourceTimeForOutputElapsed = getClipSourceTimeForOutputElapsed;
+    window.getClipSpeedAtSourceTime = getClipSpeedAtSourceTime;
+    window.getClipOutputElapsedForSourceTime = getClipOutputElapsedForSourceTime;
 
     function getActiveClipIndex() {
         return state.clips.findIndex(c => c.id === state.activeClipId);
@@ -392,6 +497,10 @@ document.addEventListener('DOMContentLoaded', () => {
     // --- UI: clip speed, transition, ken burns, chroma ---
     const clipSpeedSlider = document.getElementById('clip-speed-slider');
     const clipSpeedVal = document.getElementById('clip-speed-val');
+    const speedRampToggle = document.getElementById('speed-ramp-toggle');
+    const speedRampControls = document.getElementById('speed-ramp-controls');
+    const speedRampSegSliders = [0, 1, 2].map(i => document.getElementById(`speed-ramp-seg-${i}`));
+    const speedRampSegVals = [0, 1, 2].map(i => document.getElementById(`speed-ramp-seg-${i}-val`));
     const clipTransitionType = document.getElementById('clip-transition-type');
     const clipTransitionDuration = document.getElementById('clip-transition-duration');
     const clipTransitionDurationVal = document.getElementById('clip-transition-duration-val');
@@ -436,6 +545,17 @@ document.addEventListener('DOMContentLoaded', () => {
         if (clipSpeedSlider && clip) {
             clipSpeedSlider.value = clip.speed || 1;
             if (clipSpeedVal) clipSpeedVal.textContent = (clip.speed || 1).toFixed(2) + 'x';
+        }
+
+        if (clip) {
+            if (speedRampToggle) speedRampToggle.checked = !!(clip.speedRamp && clip.speedRamp.enabled);
+            if (speedRampControls) speedRampControls.style.display = (clip.speedRamp && clip.speedRamp.enabled) ? 'block' : 'none';
+            const segs = (clip.speedRamp && clip.speedRamp.segments) || [1, 1, 1];
+            speedRampSegSliders.forEach((el, i) => {
+                if (!el) return;
+                el.value = segs[i] != null ? segs[i] : 1;
+                if (speedRampSegVals[i]) speedRampSegVals[i].textContent = (parseFloat(el.value) || 1).toFixed(2) + 'x';
+            });
         }
 
         // Static Zoom & Position Sync
@@ -520,11 +640,44 @@ document.addEventListener('DOMContentLoaded', () => {
             if (!clip) return;
             clip.speed = parseFloat(e.target.value) || 1;
             if (clipSpeedVal) clipSpeedVal.textContent = clip.speed.toFixed(2) + 'x';
-            if (clip.type !== 'image' && state.video) state.video.playbackRate = clip.speed;
+            if (clip.type !== 'image' && state.video && !(clip.speedRamp && clip.speedRamp.enabled)) {
+                state.video.playbackRate = clip.speed;
+            }
             if (window.drawEditorFrame) window.drawEditorFrame();
         });
         clipSpeedSlider.addEventListener('change', () => recordEditorHistory('Clip speed changed'));
     }
+
+    if (speedRampToggle) {
+        speedRampToggle.addEventListener('change', (e) => {
+            const clip = getActiveClip();
+            if (!clip) return;
+            ensureClipDefaults(clip);
+            clip.speedRamp.enabled = e.target.checked;
+            if (speedRampControls) speedRampControls.style.display = clip.speedRamp.enabled ? 'block' : 'none';
+            if (clip.type !== 'image' && state.video) {
+                state.video.playbackRate = getClipSpeedAtSourceTime(clip, state.video.currentTime || clip.start || 0);
+            }
+            if (window.drawEditorFrame) window.drawEditorFrame();
+            recordEditorHistory('Speed ramping toggled');
+        });
+    }
+
+    speedRampSegSliders.forEach((el, i) => {
+        if (!el) return;
+        el.addEventListener('input', (e) => {
+            const clip = getActiveClip();
+            if (!clip) return;
+            ensureClipDefaults(clip);
+            clip.speedRamp.segments[i] = parseFloat(e.target.value) || 1;
+            if (speedRampSegVals[i]) speedRampSegVals[i].textContent = clip.speedRamp.segments[i].toFixed(2) + 'x';
+            if (clip.type !== 'image' && state.video && clip.speedRamp.enabled) {
+                state.video.playbackRate = getClipSpeedAtSourceTime(clip, state.video.currentTime || clip.start || 0);
+            }
+            if (window.drawEditorFrame) window.drawEditorFrame();
+        });
+        el.addEventListener('change', () => recordEditorHistory('Speed ramp segment changed'));
+    });
 
     if (clipTransitionType) {
         clipTransitionType.addEventListener('focus', captureUndoCheckpoint);
@@ -877,6 +1030,59 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
 
+        if (type === 'glitch') {
+            const w = state.canvas.width, h = state.canvas.height;
+            // Intensity peaks in the middle of the transition and eases out at both ends.
+            const intensity = Math.sin(Math.min(1, Math.max(0, p)) * Math.PI);
+
+            // Base crossfade between outgoing and incoming.
+            ctx.save();
+            ctx.globalAlpha = 1;
+            drawOutgoing();
+            ctx.restore();
+            ctx.save();
+            ctx.globalAlpha = p;
+            drawIncoming();
+            ctx.restore();
+
+            if (intensity > 0.03) {
+                // Snapshot the composited frame so far — glitch layers sample from it.
+                transitionCanvas.width = w;
+                transitionCanvas.height = h;
+                transitionCtx.clearRect(0, 0, w, h);
+                transitionCtx.drawImage(state.canvas, 0, 0, w, h);
+
+                // Cheap chromatic-aberration look: two hue-shifted ghost copies
+                // offset in opposite directions, blended with 'screen'.
+                const shift = intensity * w * 0.02;
+                ctx.save();
+                ctx.globalCompositeOperation = 'screen';
+                ctx.globalAlpha = intensity * 0.5;
+                try {
+                    ctx.filter = 'hue-rotate(-40deg) saturate(4)';
+                    ctx.drawImage(transitionCanvas, -shift, 0, w, h);
+                    ctx.filter = 'hue-rotate(160deg) saturate(4)';
+                    ctx.drawImage(transitionCanvas, shift, 0, w, h);
+                    ctx.filter = 'none';
+                } catch (e) {
+                    // ctx.filter unsupported — skip the color-split layer, tearing still shows.
+                }
+                ctx.restore();
+
+                // Random horizontal slice tearing.
+                const sliceCount = 14;
+                const sliceH = h / sliceCount;
+                for (let i = 0; i < sliceCount; i++) {
+                    if (Math.random() < intensity * 0.5) {
+                        const y = i * sliceH;
+                        const xOffset = (Math.random() - 0.5) * intensity * w * 0.12;
+                        ctx.drawImage(transitionCanvas, 0, y, w, sliceH, xOffset, y, w, sliceH);
+                    }
+                }
+            }
+            return;
+        }
+
         // Crossfade / push / wipe — draw outgoing then incoming with composite
         ctx.save();
         if (type === 'crossfade') ctx.globalAlpha = 1 - p;
@@ -903,6 +1109,27 @@ document.addEventListener('DOMContentLoaded', () => {
         ctx.restore();
     };
 
+    // Speed Ramping (Phase 11): during playback, video.currentTime moves
+    // across the clip's 3 fixed segments — this keeps playbackRate in sync
+    // as each boundary is crossed. No-op (never fires a rate change) for
+    // clips without ramping enabled, since getClipSpeedAtSourceTime then
+    // just returns the same constant clip.speed every time.
+    let lastRampSpeedApplied = null;
+    if (state.video) {
+        state.video.addEventListener('timeupdate', () => {
+            const clip = getActiveClip();
+            if (!clip || clip.type === 'image' || !clip.speedRamp || !clip.speedRamp.enabled) {
+                lastRampSpeedApplied = null;
+                return;
+            }
+            const targetSpeed = getClipSpeedAtSourceTime(clip, state.video.currentTime);
+            if (targetSpeed !== lastRampSpeedApplied) {
+                state.video.playbackRate = targetSpeed;
+                lastRampSpeedApplied = targetSpeed;
+            }
+        });
+    }
+
     // Apply playback rate when switching clips
     const origSwitch = window.switchActiveClipGlobal;
     if (typeof origSwitch === 'function') {
@@ -911,7 +1138,7 @@ document.addEventListener('DOMContentLoaded', () => {
             liveTransitionKey = null;
             const clip = getActiveClip();
             if (clip && clip.type !== 'image' && state.video) {
-                state.video.playbackRate = clip.speed || 1;
+                state.video.playbackRate = getClipSpeedAtSourceTime(clip, state.video.currentTime || clip.start || 0);
             }
             syncPhase9ClipUI();
         };
@@ -956,16 +1183,21 @@ document.addEventListener('DOMContentLoaded', () => {
         return t;
     }
 
-    function exportSubtitles(format) {
-        if (!state.subtitles || state.subtitles.length === 0) {
-            alert('কোনো সাবটাইটেল নেই — আগে Auto Subtitle দিয়ে তৈরি করুন।');
+    function exportSubtitles(format, which) {
+        const list = which === 'translated' ? state.translatedSubtitles : state.subtitles;
+        if (!list || list.length === 0) {
+            if (which === 'translated') {
+                alert('কোনো অনুবাদ করা সাবটাইটেল নেই — আগে Auto-Caption Translate দিয়ে অনুবাদ করুন।');
+            } else {
+                alert('কোনো সাবটাইটেল নেই — আগে Auto Subtitle দিয়ে তৈরি করুন।');
+            }
             return;
         }
         const clipIndex = getActiveClipIndex();
         const offset = clipIndex >= 0 ? getTimelineOffsetBeforeClip(clipIndex) : 0;
         let body = '';
         if (format === 'vtt') body += 'WEBVTT\n\n';
-        state.subtitles.forEach((sub, i) => {
+        list.forEach((sub, i) => {
             const start = offset + (sub.startSec || 0);
             const end = offset + (sub.endSec || start + 2);
             const text = (sub.text || '').trim();
@@ -981,8 +1213,9 @@ document.addEventListener('DOMContentLoaded', () => {
         });
         const blob = new Blob([body], { type: 'text/plain;charset=utf-8' });
         const a = document.createElement('a');
+        const suffix = which === 'translated' ? ('_' + (state.translatedSubtitlesLang || 'translated')) : '';
         a.href = URL.createObjectURL(blob);
-        a.download = format === 'srt' ? 'subtitles.srt' : 'subtitles.vtt';
+        a.download = format === 'srt' ? ('subtitles' + suffix + '.srt') : ('subtitles' + suffix + '.vtt');
         a.click();
         setTimeout(() => URL.revokeObjectURL(a.href), 5000);
     }
@@ -991,6 +1224,137 @@ document.addEventListener('DOMContentLoaded', () => {
     const exportVttBtn = document.getElementById('export-vtt-btn');
     if (exportSrtBtn) exportSrtBtn.addEventListener('click', () => exportSubtitles('srt'));
     if (exportVttBtn) exportVttBtn.addEventListener('click', () => exportSubtitles('vtt'));
+
+    // --- Auto-Caption Translate (Phase 10-2, experimental) ---
+    // Uses the free MyMemory Translation API (no key required, CORS-enabled)
+    // to translate each existing subtitle line into a new "translated" track,
+    // kept fully separate from state.subtitles so the original is never lost.
+    const subtitleTranslateBtn = document.getElementById('subtitle-translate-btn');
+    const subtitleTranslateStatus = document.getElementById('subtitle-translate-status');
+    const subtitleTranslateSourceLang = document.getElementById('subtitle-translate-source-lang');
+    const subtitleTranslateTargetLang = document.getElementById('subtitle-translate-target-lang');
+    const translatedSubtitleListEl = document.getElementById('translated-subtitle-list');
+    const subtitleTranslatePreviewToggleContainer = document.getElementById('subtitle-translate-preview-toggle-container');
+    const subtitleTranslatePreviewToggle = document.getElementById('subtitle-translate-preview-toggle');
+    const subtitleTranslateExportActions = document.getElementById('subtitle-translate-export-actions');
+    const exportSrtTranslatedBtn = document.getElementById('export-srt-translated-btn');
+    const exportVttTranslatedBtn = document.getElementById('export-vtt-translated-btn');
+
+    state.translatedSubtitles = state.translatedSubtitles || [];
+    state.translatedSubtitlesLang = state.translatedSubtitlesLang || null;
+    state.subtitlesUseTranslated = false;
+
+    function setTranslateStatus(msg, isError) {
+        if (!subtitleTranslateStatus) return;
+        subtitleTranslateStatus.style.display = msg ? 'block' : 'none';
+        subtitleTranslateStatus.textContent = msg || '';
+        subtitleTranslateStatus.style.color = isError ? '#f87171' : '';
+    }
+
+    async function translateOneLine(text, sourceLang, targetLang) {
+        const url = 'https://api.mymemory.translated.net/get?q=' + encodeURIComponent(text) +
+            '&langpair=' + encodeURIComponent(sourceLang) + '|' + encodeURIComponent(targetLang);
+        const res = await fetch(url);
+        if (!res.ok) throw new Error('HTTP ' + res.status);
+        const data = await res.json();
+        if (data && data.responseData && data.responseData.translatedText) {
+            return data.responseData.translatedText;
+        }
+        throw new Error('empty response');
+    }
+
+    function renderTranslatedSubtitlesList() {
+        if (!translatedSubtitleListEl) return;
+        translatedSubtitleListEl.innerHTML = '';
+        state.translatedSubtitles.forEach((sub) => {
+            const row = document.createElement('div');
+            row.style.display = 'flex';
+            row.style.alignItems = 'center';
+            row.style.justifyContent = 'space-between';
+            row.style.gap = '8px';
+            row.style.padding = '8px 12px';
+            row.style.borderRadius = '6px';
+            row.style.marginBottom = '6px';
+            row.style.background = 'rgba(255,255,255,0.04)';
+
+            const label = document.createElement('span');
+            label.innerText = sub.text + (sub.failed ? ' (অনুবাদ ব্যর্থ হয়েছে — মূল টেক্সট দেখানো হচ্ছে)' : '');
+            label.style.fontSize = '13px';
+            label.style.flex = '1';
+            if (sub.failed) label.style.color = '#f87171';
+
+            const timeLabel = document.createElement('span');
+            timeLabel.innerText = `${sub.startSec.toFixed(1)}s`;
+            timeLabel.style.fontSize = '11px';
+            timeLabel.style.opacity = '0.6';
+
+            row.appendChild(label);
+            row.appendChild(timeLabel);
+            translatedSubtitleListEl.appendChild(row);
+        });
+    }
+
+    async function translateSubtitlesTrack() {
+        if (!state.subtitles || state.subtitles.length === 0) {
+            alert('কোনো সাবটাইটেল নেই — আগে Auto Subtitle দিয়ে তৈরি করুন।');
+            return;
+        }
+        const sourceLang = subtitleTranslateSourceLang ? subtitleTranslateSourceLang.value : 'bn';
+        const targetLang = subtitleTranslateTargetLang ? subtitleTranslateTargetLang.value : 'en';
+        if (sourceLang === targetLang) {
+            alert('মূল ভাষা ও টার্গেট ভাষা একই — অনুবাদ করার কিছু নেই।');
+            return;
+        }
+        if (subtitleTranslateBtn) subtitleTranslateBtn.disabled = true;
+        state.translatedSubtitles = [];
+        let failCount = 0;
+        for (let i = 0; i < state.subtitles.length; i++) {
+            const sub = state.subtitles[i];
+            setTranslateStatus(`অনুবাদ হচ্ছে... (${i + 1}/${state.subtitles.length})`);
+            const text = (sub.text || '').trim();
+            let translatedText = text;
+            let failed = false;
+            if (text) {
+                try {
+                    translatedText = await translateOneLine(text, sourceLang, targetLang);
+                } catch (err) {
+                    failed = true;
+                    failCount++;
+                    translatedText = text;
+                }
+            }
+            state.translatedSubtitles.push({
+                id: 'tr_' + sub.id,
+                sourceId: sub.id,
+                text: translatedText,
+                startSec: sub.startSec,
+                endSec: sub.endSec,
+                failed: failed
+            });
+            // Small delay between calls so we stay gentle on the free public API.
+            await new Promise((resolve) => setTimeout(resolve, 300));
+        }
+        state.translatedSubtitlesLang = targetLang;
+        if (subtitleTranslateBtn) subtitleTranslateBtn.disabled = false;
+        renderTranslatedSubtitlesList();
+        if (subtitleTranslatePreviewToggleContainer) subtitleTranslatePreviewToggleContainer.style.display = 'flex';
+        if (subtitleTranslateExportActions) subtitleTranslateExportActions.style.display = 'block';
+        if (failCount > 0) {
+            setTranslateStatus(`⚠️ সম্পন্ন হয়েছে, তবে ${failCount}টি লাইন অনুবাদ ব্যর্থ হয়েছে (মূল টেক্সট রাখা হয়েছে)।`, true);
+        } else {
+            setTranslateStatus(`✅ অনুবাদ সম্পন্ন — মোট ${state.subtitles.length}টি লাইন।`);
+        }
+    }
+
+    if (subtitleTranslateBtn) subtitleTranslateBtn.addEventListener('click', () => { translateSubtitlesTrack(); });
+    if (subtitleTranslatePreviewToggle) {
+        subtitleTranslatePreviewToggle.addEventListener('change', () => {
+            state.subtitlesUseTranslated = !!subtitleTranslatePreviewToggle.checked;
+            if (window.drawEditorFrame) window.drawEditorFrame();
+        });
+    }
+    if (exportSrtTranslatedBtn) exportSrtTranslatedBtn.addEventListener('click', () => exportSubtitles('srt', 'translated'));
+    if (exportVttTranslatedBtn) exportVttTranslatedBtn.addEventListener('click', () => exportSubtitles('vtt', 'translated'));
 
     // --- History capture for the rest of the editor (plan 9-2) ---
     // The editor's own controls don't call recordEditorHistory, so we capture
@@ -1149,10 +1513,7 @@ document.addEventListener('DOMContentLoaded', () => {
             }
             setProgressSafe(10 + Math.round((i / ratios.length) * 80));
 
-            const totalDuration = state.clips.reduce((sum, c) => {
-                const speed = Math.max(0.5, Math.min(2, Number(c.speed) || 1));
-                return sum + (Math.max(0, c.end - c.start) / speed);
-            }, 0);
+            const totalDuration = state.clips.reduce((sum, c) => sum + getClipOutputDuration(c), 0);
             await window.runExportPipeline(totalDuration, true, `video_${ratio}`, i + 1, ratios.length);
         }
 

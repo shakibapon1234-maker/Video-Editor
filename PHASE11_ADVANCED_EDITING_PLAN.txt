@@ -1,0 +1,513 @@
+=====================================================
+ STUDIO FLOW - PHASE 11 PLAN
+ প্রফেশনাল-এডিটর-লেভেল ফিচার রোডম্যাপ (Theme system-এর পর)
+=====================================================
+
+এই ফাইলটি AI-এর জন্য কনটেক্সট। এখানে যেসব ফিচার নিয়ে আলোচনা হয়েছে
+(CapCut/Premiere/DaVinci-এর সাথে তুলনার পর) সেগুলোর বাস্তবতা, প্রায়োরিটি
+আর কোনটা এখন করা হচ্ছে না এবং কেন, তা লেখা আছে। নতুন সেশনে কাজ করার
+আগে এই ফাইল পড়ে নিতে হবে।
+
+
+-----------------------------------------------------
+স্ট্যাটাস লিজেন্ড
+-----------------------------------------------------
+  [DONE]     - সম্পন্ন
+  [TODO-EASY]    - এখনই শুরু করা যাবে, রিস্ক কম
+  [TODO-MEDIUM]  - সম্ভব, তবে সময়/এফোর্ট বেশি লাগবে, ধাপে ধাপে করতে হবে
+  [HOLD-HW]      - ব্যবহারকারীর PC আপগ্রেড না হওয়া পর্যন্ত স্থগিত
+                   (নিচে "HOLD" সেকশনে কারণ বিস্তারিত)
+
+
+-----------------------------------------------------
+[DONE] Theme System (Phase 11 শুরু)
+-----------------------------------------------------
+  Dark (default) / Light / Midnight / Ocean — 4টা থিম, header palette
+  আইকন থেকে সুইচ করা যায়, localStorage-এ সেভ থাকে।
+  ফাইল: style.css (:root + [data-theme] override), theme.js
+  Sync: root, www/, android/app/src/main/assets/public/ — তিন জায়গাতেই।
+
+
+-----------------------------------------------------
+[DONE] Color Scopes: Waveform (Luma) + RGB Histogram
+-----------------------------------------------------
+  কী করে : Advanced Color Grading প্যানেল খুললে এখন দুইটা ছোট মনিটর
+           দেখা যায় — Waveform (luma distribution) আর RGB Histogram।
+           এখন থেকে গেস করে না, আসল pixel ডেটা দেখে কালার ঠিক করা যাবে।
+  কিভাবে কাজ করে : মূল preview canvas-কে প্রতিবার 128x72 পিক্সেলের
+           একটা ছোট offscreen canvas-এ ডাউনস্কেল করে আঁকা হয়, তারপর
+           সেই ছোট frame থেকেই getImageData() নেওয়া হয় — তাই মূল
+           ভিডিওর রেজোলিউশন যত বড়ই হোক, স্ক্যান সবসময় সস্তা।
+  পারফরম্যান্স সেফগার্ড (লো-স্পেক হার্ডওয়্যারের জন্য):
+           - প্রতি animation frame-এ না, প্রতি ~300ms-এ একবার আপডেট হয়
+           - Color Grading প্যানেল বন্ধ থাকলে scope loop সম্পূর্ণ বন্ধ
+             থাকে (CPU খরচ প্রায় শূন্য)
+  ফাইল: color-scopes.js (নতুন, স্বতন্ত্র মডিউল — editor.js-এ হাত
+        দেওয়া হয়নি, শুধু existing #color-grade-toggle ইভেন্টের সাথে
+        sync করা হয়েছে)
+
+
+-----------------------------------------------------
+[DONE] Generic Keyframe Animation — v1 (Position Only)
+-----------------------------------------------------
+  কী করে : যেকোনো overlay (Text, Sticker, Symbol, Shape+Text, B-roll)
+           সিলেক্ট করলে ক্যানভাসের নিচে একটা Keyframe প্যানেল দেখা যায়।
+           প্লেহেড যেখানে আছে সেখানে "+ Set Keyframe" চাপলে ওই মুহূর্তের
+           position (x, y) সেভ হয়। কমপক্ষে ২টা কীফ্রেম দিলেই মাঝের
+           সময়টায় object টা এক পজিশন থেকে আরেক পজিশনে smooth
+           ease-in-out মোশনে চলে যায় — প্লে করার সময় আর এক্সপোর্ট করা
+           ভিডিও দুই জায়গাতেই।
+  স্কোপ (ইচ্ছাকৃতভাবে v1-এ যা রাখা হয়নি): scale/rotation/opacity
+           keyframing এখনো নেই — কারণ সব overlay টাইপের render কোড
+           এই properties গুলো read করে না (যেমন sticker-এর কোনো
+           opacity ফিল্ড নেই), তাই ওগুলো keyframe করলে কিছু টাইপে
+           silently কোনো visual effect হতো না। Position (x, y) সব
+           overlay টাইপেই guaranteed কাজ করে বলে সেটা দিয়েই শুরু করা
+           হয়েছে। পরের ধাপে scale/rotation/opacity যোগ করার আগে
+           প্রতিটা overlay টাইপের render কোড আলাদাভাবে verify/আপডেট
+           করতে হবে।
+  কিভাবে কাজ করে (কারিগরি): editor.js-এ কোনো পরিবর্তন করা হয়নি —
+           সম্পূর্ণ আলাদা `keyframes.js` মডিউল হিসেবে বানানো হয়েছে।
+             - প্রতিটা keyframed item-এ `item.keyframes = [{t, x, y}, ...]`
+               array যোগ হয়
+             - প্রতি frame-এ currentTime অনুযায়ী x/y ইন্টারপোলেট করে
+               সরাসরি item.x / item.y-তে বসিয়ে দেওয়া হয় — যেহেতু
+               সবগুলো overlay-র render কোড ইতিমধ্যেই item.x/item.y
+               ব্যবহার করে, তাই render লজিকে হাত না দিয়েই animation
+               কাজ করে
+             - Preview playback: নিজস্ব persistent requestAnimationFrame
+               loop
+             - Export: exporter.js-এর `window.drawEditorFrame` কল
+               wrap করা হয়েছে (monkey-patch, editor.js ফাইলে কোনো এডিট
+               ছাড়াই) — তাই export-এও frame-accurate ভাবে animation
+               বসে
+             - Paused/seek redraw: `window.redrawPausedFrameGlobal`
+               একইভাবে wrap করা, প্লাস #seek-slider-এ input listener
+  ফাইল: keyframes.js (নতুন), index.html (#keyframe-panel-mount যোগ),
+        style.css (.keyframe-panel ইত্যাদি)
+  (v2 আপডেট: scale/rotation/opacity এখন যোগ করা হয়েছে — নিচে দেখুন।)
+
+
+-----------------------------------------------------
+[DONE] Generic Keyframe Animation — v2 (Scale/Rotation/Opacity)
+-----------------------------------------------------
+  অডিট প্রথমে (editor.js-এর draw কোড টাইপ-বাই-টাইপ চেক করে):
+    - textOverlays  : scale/rotation/opacity — কোনোটাই draw-এ ছিল না
+    - stickers      : scale/rotation/opacity — কোনোটাই draw-এ ছিল না
+    - symbolOverlays: rotation ছিল (rotate handle দিয়ে), scale/opacity ছিল না
+    - shapeOverlays : rotation ছিল (rotate handle দিয়ে), scale/opacity ছিল না
+    - brollOverlays : rotation (item.rotation, static) + scaleAmt/alpha
+                      (animation-driven) দুটোই ছিল, কিন্তু কোনো স্বতন্ত্র
+                      static scale/opacity multiplier ছিল না
+
+  করা হয়েছে (editor.js — সব ৫ টাইপের render কোডে):
+    - textOverlays/stickers: translate→rotate→scale ট্রান্সফর্ম + globalAlpha
+      যোগ করা হয়েছে (আগে ছিল না)
+    - symbolOverlays/shapeOverlays: existing rotate-এর পাশে scale +
+      globalAlpha যোগ করা হয়েছে
+    - brollOverlays: item.scale/item.opacity এখন বিদ্যমান animation-driven
+      scaleAmt/alpha-এর সাথে multiplicatively compose করে — ঠিক যেভাবে
+      item.rotation ইতিমধ্যে rotateAmt-এর সাথে additively compose করত।
+      মানে keyframed B-roll এখনো তার entry/exit animation ঠিকভাবে
+      চালায়, শুধু তার নিজস্ব animated baseline-এর তুলনায় scale/fade হয়।
+    - সবকটার ডিফল্ট: scale=1, rotation=0, opacity=100 — সেট না করলে
+      দেখতে আগের মতোই থাকে, কোনো পুরনো প্রজেক্ট ভাঙে না।
+
+  keyframes.js:
+    - `item.keyframes` array-এর প্রতিটা এন্ট্রিতে এখন ঐচ্ছিকভাবে scale,
+      rotation, opacity-ও থাকতে পারে; পুরনো (v1) কীফ্রেম যেগুলোতে শুধু
+      {t,x,y} আছে সেগুলো এখনো কাজ করে (fallback: scale=1, rotation=0,
+      opacity=100)
+    - "Set Keyframe" চাপলে এখন x/y-এর পাশাপাশি item-এর বর্তমান scale/
+      rotation/opacity-ও ক্যাপচার হয়, একইভাবে ৫টা মান-ই ইজ-ইন-আউট
+      কার্ভে ইন্টারপোলেট হয়
+    - Keyframe প্যানেলে নতুন Scale/Rotation/Opacity স্লাইডার যোগ করা
+      হয়েছে — এটাই একমাত্র জায়গা যেখান থেকে text/sticker-এর মতো টাইপে
+      (যাদের নিজস্ব কোনো rotate/scale UI নেই) এই মানগুলো সেট করা যায়।
+      স্লাইডার তিনটা সরাসরি item.scale/rotation/opacity-তে লেখে এবং
+      redrawPausedFrameGlobal() কল করে লাইভ প্রিভিউ দেখায়।
+    - সাইড-ইফেক্ট ফিক্স: প্যানেলটা প্রতি ১৫০ms পোল-রেন্ডার হয় (v1
+      থেকেই), যেটা innerHTML পুরোপুরি রিবিল্ড করে — এই তিনটা নতুন
+      স্লাইডার যোগ করার পর এটা করলে ইউজার স্লাইডার drag করার মাঝপথে
+      DOM এলিমেন্ট রিপ্লেস হয়ে drag ভেঙে যেত। ফিক্স: renderPanel()
+      এখন চেক করে ইউজার এই প্যানেলের কোনো input-এ focus করে আছে কিনা,
+      থাকলে সেই টিক-এ rebuild স্কিপ করে।
+
+  Export: কোনো নতুন এক্সপোর্ট-নির্দিষ্ট কোড লাগেনি — v1-এই
+  window.drawEditorFrame মাঙ্কি-প্যাচ করা ছিল, তাই scale/rotation/
+  opacity keyframe-ও এমনিতেই এক্সপোর্টে ফ্রেম-অ্যাকুরেটভাবে বসে যায়।
+
+  ফাইল sync: root, www/, android/app/src/main/assets/public/ — তিন
+  জায়গাতেই আপডেট করা হয়েছে (editor.js, keyframes.js, style.css)।
+
+
+-----------------------------------------------------
+[DONE] Timeline Transitions Library
+-----------------------------------------------------
+  কী করা হয়েছে : বিদ্যমান "Clip Transition" ফিচার (phase9.js) — যেটাতে
+             ইতিমধ্যেই crossfade/dip_black/push/wipe/zoom/spin টাইপ ছিল —
+             এখন একটা ছোট, ক্যাটেগরাইজড লাইব্রেরি হিসেবে উপস্থাপন করা
+             হয়েছে: Fade, Slide, Wipe, Zoom, Glitch। প্রতিটা টাইপ এখন
+             ড্র্যাগ করে সরাসরি ক্লিপ টাইমলাইনে দুই ক্লিপের মাঝের ফাঁকা
+             (gap) জায়গায় ছেড়ে দেওয়া যায় — আগের মতো শুধু ক্লিপ সিলেক্ট
+             করে ড্রপডাউন থেকেও করা যায়, দুটো পথই কাজ করে।
+  নতুন ফিচার (Glitch): এতদিন Fade/Wipe/Zoom/Slide-এর সমতুল্য টাইপ থাকলেও
+             Glitch ছিল না। নতুন 'glitch' transitionType যোগ হয়েছে —
+             ক্যানভাস-লেভেল crossfade + chromatic-aberration ঘোস্ট কপি
+             (hue-rotate + 'screen' composite) + র‍্যান্ডম horizontal
+             slice tearing দিয়ে ইমপ্লিমেন্ট করা, বিদ্যমান
+             transitionCanvas/transitionCtx অফস্ক্রিন বাফার পুনর্ব্যবহার
+             করে। preview এবং export দুই জায়গাতেই কাজ করে কারণ এটা
+             phase9.js-এর একই window.phase9DrawMainMedia সুইচেই বসানো
+             হয়েছে যেখানে অন্য সব transition টাইপ render হয়।
+  আর্কিটেকচার : সম্পূর্ণ নতুন স্বতন্ত্র মডিউল `transitions-library.js`
+             (editor.js-এ হাত দেওয়া হয়নি) — window.renderClipTimeline-কে
+             keyframes.js-এর প্যাটার্নেই wrap করে প্রতিটা রি-রেন্ডারে
+             ক্লিপ ব্লকগুলোর মাঝে ড্রপ-জোন বসায়। ড্রপ হলে সরাসরি
+             clip.transitionType/transitionDuration আপডেট হয় — এই
+             ফিল্ডগুলো phase9.js আগে থেকেই প্রতি ফ্রেমে পড়ে এবং প্রজেক্ট
+             সেভ কোড ({...c} স্প্রেড দিয়ে) আগে থেকেই সেভ করে, তাই
+             save/load ফরম্যাটে কোনো পরিবর্তন লাগেনি।
+  ফাইল : transitions-library.js (নতুন), phase9.js (শুধু 'glitch' render
+         branch যোগ), index.html (ড্রপডাউনে optgroup + Glitch option +
+         #transition-library-mount)। root, www/, android অ্যাসেট — তিন
+         জায়গাতেই sync করা হয়েছে।
+
+
+-----------------------------------------------------
+[DONE] সত্যিকারের Multi-Track Timeline (বড় প্রজেক্ট)
+-----------------------------------------------------
+  লক্ষ্য   : একাধিক ভিডিও/ইমেজ/অডিও ট্র্যাক আলাদা লেয়ারে drag করে
+             সাজানো, reorder করা, প্রতিটা ট্র্যাকের নিজস্ব trim/volume/
+             blend control।
+  কেন বড়   : (1) editor.js এমনিতেই ৬২০ KB — নতুন timeline data model
+             এমনভাবে যোগ করতে হবে যাতে existing single-main-clip +
+             overlay-layers architecture না ভাঙে
+             (2) নতুন UI কম্পোনেন্ট: multi-row draggable timeline
+             (3) exporter.js/render-engine.js-এ multi-layer compositing
+             অর্ডার আর z-index handling যোগ করতে হবে
+             (4) IndexedDB প্রজেক্ট সেভ/লোড ফরম্যাট আপডেট করতে হবে
+             (existing saved projects backward-compatible রাখতে হবে)
+  প্ল্যান  : একবারে না, ধাপে ধাপে —
+             ধাপ ১: [DONE] data model + UI (শুধু preview, এক্সপোর্ট এখনো পুরনো পথে)
+             ধাপ ২: [DONE] multi-track preview rendering (লাইভ প্রিভিউ ক্যানভাসে + সাউন্ড)
+             ধাপ ৩: [DONE] exporter multi-layer compositing
+             ধাপ ৪: [DONE] প্রজেক্ট সেভ/লোড ফরম্যাট মাইগ্রেশন
+  রিস্ক    : মাঝারি-বেশি — কয়েকটা সেশন লাগবে, প্রতি ধাপের পর টেস্ট
+             করে এগোতে হবে।
+
+  ধাপ ১ — যা করা হয়েছে (নতুন ফাইল `multitrack.js`, editor.js-এ হাত
+  দেওয়া হয়নি core render logic-এ):
+    - state.extraTracks[] ডেটা মডেল যোগ (editor.js state object-এ,
+      শুধু ঘোষণা — বিদ্যমান কোনো ফিল্ড বদলায়নি)
+    - প্রতিটা ট্র্যাক: video/image/audio টাইপ, mute/volume, একাধিক ক্লিপ
+    - প্রতিটা ট্র্যাক ক্লিপ: drag করে timelineOffset পাল্টানো, ডান-পাশ
+      টেনে trim (sourceEnd) করা, delete করা
+    - Add Track (video/image/audio) এবং Add Clip (file picker, দ্রুত
+      duration probe করে) বাটন
+    - Persistence: saveProjectToBrowserStorage/restoreProjectFromBrowserStorage
+      (editor.js)-এ extraTracks সেভ/রিস্টোর যোগ করা হয়েছে (brollOverlays-
+      এর প্যাটার্নেই — IndexedDB-তে ফাইল, localStorage-এ মেটাডেটা)
+    - সততার সাথে UI-তেই লেখা আছে: "এখনো ক্যানভাস প্রিভিউ/এক্সপোর্টে যুক্ত
+      হয়নি" — যাতে ব্যবহারকারী ভুল না বোঝেন যে ট্র্যাক যোগ করলেই ভিডিওতে
+      দেখা যাবে। ধাপ ২-এ আসল রেন্ডারিং যুক্ত হবে।
+
+  ধাপ ২ — যা করা হয়েছে (multitrack.js-এই, editor.js এখনো অপরিবর্তিত):
+    - `computeGlobalTime()`: main clip-এর currentTime LOCAL (প্রতি ক্লিপ
+      বদলালে রিসেট হয়) বলে mainTimelineDuration()-এর মতোই সব আগের ক্লিপের
+      duration যোগ করে আসল "প্রজেক্টের শুরু থেকে সেকেন্ড" বের করা হয়েছে —
+      যাতে extra track-এর ক্লিপ কোন main clip active তার উপর নির্ভর না
+      করে সঠিক সময়ে শুরু/শেষ হয়।
+    - `window.drawEditorFrame` ও `window.redrawPausedFrameGlobal` — একই
+      দুইটা hook point যেখানে keyframes.js/transitions-library.js হুক করে —
+      সেখানেই wrap করা হয়েছে, কিন্তু POST-hook হিসেবে (originalDraw() call
+      হওয়ার পরে): drawFrame() নিজেই প্রথমে ক্যানভাস ক্লিয়ার করে বলে
+      আগে আঁকলে মুছে যেত। ফলে extra track গুলো মূল ভিডিও+ক্যাপশনের
+      "উপরে" বসে, পরে যোগ করা ট্র্যাক আগেরটার উপরে (V1/V2 স্ট্যাকিং কনভেনশন)।
+    - Video/audio ক্লিপের জন্য detached (DOM-এ attach করা হয়নি) <video>/
+      <audio> element lazily তৈরি হয়, isPlaying অনুযায়ী play/pause এবং
+      drift > 0.35s (playing) বা > 0.05s (paused/scrub) হলে হার্ড-সিক করা
+      হয়। Image ক্লিপ আগে থেকে তৈরি imageImg দিয়ে "cover" fit-এ আঁকা হয়।
+    - এক্সপোর্টের সময় (customExportTime সেট থাকলে) এই মডিউল সম্পূর্ণ
+      no-op — তাই এক্সপোর্ট করা ভিডিও এই পরিবর্তনের আগে-পরে বাইট-বাই-বাইট
+      একই থাকবে, ধাপ ৩ না হওয়া পর্যন্ত।
+    - সততার সাথে জানা সীমাবদ্ধতা (UI প্যানেলেও লেখা আছে): সক্রিয় থাকা
+      অবস্থায় ভিডিও/ইমেজ ট্র্যাক ক্যাপশন/টেক্সট ওভারলে ঢেকে দিতে পারে,
+      কারণ এটা canvas render-order-এর সীমাবদ্ধতা (editor.js-এ হাত না
+      দিয়ে overlay-এর নিচে বসানো সম্ভব না)। [FIXED — নিচে "ধাপ ৩ রিভিশন —
+      render-order ফিক্স" দেখুন, এই সীমাবদ্ধতা আর নেই]
+    - ফাইল sync: root, www/, android/app/src/main/assets/public/ — তিন
+      জায়গাতেই আপডেট করা হয়েছে।
+
+  ধাপ ৩ — যা করা হয়েছে (এক্সপোর্ট কম্পোজিটিং, multitrack.js + exporter.js +
+  audio.js, editor.js এখনো অপরিবর্তিত):
+    - ভিজ্যুয়াল (multitrack.js-এ নতুন `compositeExtraTracksForExport()`,
+      exporter.js থেকে কল করা হয়): মূল ক্লিপ এক্সপোর্ট লুপের তিনটা জায়গায়
+      (image ক্লিপ লুপ, video ক্লিপের overshoot-fill লুপ, video ক্লিপের মূল
+      per-frame draw) — প্রতিটা জায়গায় যেখানে `window.drawEditorFrame()` কল
+      হয় এবং `state.exportTickerTime` (global timeline সেকেন্ড) সেট করা
+      থাকে — সেখানেই এখন এই ফাংশনটাও কল হয়, ঠিক পরে। এটা STEP 2-এর মতো
+      লাইভ `<video>` এলিমেন্ট re-use না করে প্রতিটা extra-track ক্লিপের
+      জন্য আলাদা "export-only" `<video>` এলিমেন্ট (`clip._exportEl`) বানায়,
+      exporter.js-এর মূল ক্লিপ ক্যাপচারের মতোই সঠিক সময়ে seek করে
+      'seeked' ইভেন্টের জন্য অপেক্ষা করে, তারপর draw করে — তাই এক্সপোর্ট
+      হওয়া প্রতিটা ফ্রেম ফ্রেম-অ্যাকিউরেট। Image ট্র্যাক আগে থেকেই decode
+      হওয়া ইমেজ দিয়ে সরাসরি আঁকা হয় (seek লাগে না)। Audio ট্র্যাকের কোনো
+      ভিজ্যুয়াল লেয়ার নেই বলে স্কিপ করা হয়। Stacking order STEP 2-এর
+      preview-এর মতোই — পরে যোগ করা ট্র্যাক আগেরটার উপরে বসে। এক্সপোর্ট
+      শেষ হলে (সফল বা বাতিল, দুই ক্ষেত্রেই) `cleanupExtraTracksExportMedia()`
+      কল হয়ে এই export-only ভিডিও এলিমেন্টগুলো রিলিজ করে দেয়।
+    - অডিও (audio.js-এর `renderAudioOffline()`-এ নতুন "--- 4B. Multi-Track
+      Timeline — Extra Video/Audio Track Audio ---" সেকশন, background music
+      ব্লকের ঠিক পরে): প্রতিটা video/audio টাইপ extra track-এর প্রতিটা
+      ক্লিপের অডিও ডিকোড করে, sourceStart/sourceEnd অনুযায়ী ট্রিম করে,
+      `introDur + timelineOffset`-এ শিডিউল করে সরাসরি offlineCtx.destination-এ
+      রুট করা হয় (background music-এর প্যাটার্নেই — speech DSP chain-এর
+      ভেতর দিয়ে না, কারণ এগুলো নির্দিষ্ট voice না, যেকোনো ধরনের ইউজার-যোগ
+      করা লেয়ার)। Muted ট্র্যাক সম্পূর্ণ স্কিপ করা হয়, Image ট্র্যাকের
+      কোনো অডিও নেই তাই সেটাও স্কিপ।
+    - সততার সাথে জানা সীমাবদ্ধতা (এখনো একই, STEP 2 থেকে): সক্রিয় থাকা
+      অবস্থায় ভিডিও/ইমেজ ট্র্যাক ক্যাপশন/টেক্সট ওভারলে ঢেকে দিতে পারে —
+      এখন প্রিভিউ আর এক্সপোর্ট দুই জায়গাতেই, কারণ এটা canvas
+      render-order-এর সীমাবদ্ধতা (editor.js-এ হাত না দিয়ে সমাধান সম্ভব না)।
+      [FIXED — নিচে "ধাপ ৩ রিভিশন — render-order ফিক্স" দেখুন]
+    - পারফরম্যান্স নোট: video extra-track থাকলে প্রতি ফ্রেমে সেই ট্র্যাকের
+      জন্য একটা awaited seek লাগতে পারে (drift > ~11ms হলে) — তাই বেশি
+      video extra-track + লো-স্পেক হার্ডওয়্যার একসাথে এক্সপোর্ট সময় বাড়াতে
+      পারে। Image/audio-only extra track ব্যবহার করলে এই খরচ নেই।
+    - ফাইল sync: root, www/, android/app/src/main/assets/public/ — তিন
+      জায়গাতেই আপডেট করা হয়েছে।
+
+  ধাপ ৩ রিভিশন — render-order ফিক্স (ব্যবহারকারীর অনুরোধে, একই সেশনে):
+    - সমস্যা: প্রথম ধাপ ৩ পাসে extra ট্র্যাকগুলো editor.js-এর drawFrame()
+      সম্পূর্ণ শেষ হওয়ার পরে (outer post-hook দিয়ে) আঁকা হতো — ফলে
+      ক্যাপশন/টেক্সট/স্টিকার/সিম্বল ওভারলে সব কিছুর উপরে video/image
+      extra track বসে যেত, প্রিভিউ আর এক্সপোর্ট দুই জায়গাতেই।
+    - সমাধান: editor.js-এর drawFrame()-এ এখন একটা ছোট, narrow হুক যোগ করা
+      হয়েছে — মূল ভিডিও+ব্লার রিজিয়ন আঁকা হওয়ার ঠিক পরে, B-roll/ক্যাপশন/
+      টেক্সট/স্টিকার/সিম্বল/শেপ ওভারলে আঁকা শুরু হওয়ার ঠিক আগে
+      `window.drawExtraTracksMidFrame()` কল করা হয় (editor.js-এ মাত্র
+      এক লাইন যোগ, বাকি সব লজিক multitrack.js-এই)। ফলে extra track এখন
+      মূল ভিডিওর উপরে কিন্তু সব ওভারলে/ক্যাপশনের নিচে বসে — Premiere/
+      CapCut-এর মতো স্বাভাবিক v-track স্ট্যাকিং।
+    - টেকনিক্যাল জটিলতা: drawFrame() সম্পূর্ণ সিঙ্ক্রোনাস, কিন্তু এক্সপোর্টে
+      video extra-track-কে ঠিক ফ্রেমে seek করতে async wait লাগে। তাই
+      এক্সপোর্ট পাইপলাইন দুই ধাপে ভাগ করা হয়েছে: (১) exporter.js
+      `drawEditorFrame()` কল করার ঠিক আগে `await
+      window.prepareExtraTracksForExportFrame(...)` কল করে সব active video
+      extra-track ক্লিপ সঠিক সময়ে seek করে ফেলে (কিছু আঁকা হয় না এই ধাপে),
+      (২) তারপর `drawEditorFrame()` স্বাভাবিকভাবে সিঙ্ক্রোনাসলি চলে, আর
+      ভেতরের হুক (`drawExtraTracksMidFrame()`) শুধু draw করে — কোনো wait
+      ছাড়াই, কারণ ধাপ ১-এ আগেই seek হয়ে গেছে। লাইভ প্রিভিউতে এই split
+      লাগে না — sync (play/pause/soft-seek) আর draw একসাথেই সিঙ্ক্রোনাসলি
+      হয়, ঠিক আগের মতোই, শুধু ডাকার জায়গাটা বদলেছে।
+    - পুরনো mechanism (STEP 2-এর `hookRenderEntryPoints`/outer post-hook
+      wrap) সম্পূর্ণ সরিয়ে ফেলা হয়েছে — আর দরকার নেই, কারণ editor.js নিজেই
+      সঠিক জায়গায় হুক কল করে, প্রিভিউ আর এক্সপোর্ট দুই ক্ষেত্রেই।
+    - ঝুঁকি যাচাই (এই চেঞ্জ অন্য ফিচার ভাঙবে কিনা): keyframes.js এবং
+      transitions-library.js-ও window.drawEditorFrame/redrawPausedFrameGlobal
+      wrap করে, কিন্তু ওরা item.x/y প্রি-সেট করা বা phase9DrawMainMedia-র
+      একটা switch-branch যোগ করার জন্য — drawFrame()-এর ভেতরের render-order
+      নিয়ে কোনো ধারণা রাখে না, তাই touched হয়নি এবং প্রভাবিত হয়নি।
+      editor.js-এ যোগ করা লাইনটাও একদম narrow (single hook call, no logic) —
+      বিদ্যমান কোনো Step-এর ভেতরে হাত দেওয়া হয়নি।
+    - ফাইল sync: root, www/, android/app/src/main/assets/public/ — তিন
+      জায়গাতেই আপডেট করা হয়েছে (multitrack.js, exporter.js, editor.js)।
+
+  ধাপ ৪ — যা করা হয়েছে (audit-first: প্রথমে দুটো আলাদা save/load path
+  আলাদাভাবে চেক করা হয়েছে):
+    - অডিট রেজাল্ট: IndexedDB auto-save/restore (saveProjectToBrowserStorage/
+      restoreProjectFromBrowserStorage) আগে থেকেই extraTracks সঠিকভাবে
+      handle করছিল। কিন্তু আলাদা একটা দ্বিতীয় path আছে — ম্যানুয়াল "Export/
+      Import Project (JSON)" ফিচার (exportProject/importProject/
+      applyImportedProject) — এটা সম্পূর্ণভাবে extraTracks উপেক্ষা করছিল:
+      exportProject() কখনো data.extraTracks লিখতই না, importProject()
+      কখনো সেটা ফেরত বসাতোই না, আর clearWorkspaceState() (নতুন প্রজেক্ট/
+      প্রজেক্ট সুইচে ব্যবহৃত) state.extraTracks রিসেট করত না। ফলাফল: (ক)
+      JSON export/import করলে extra track নীরবে হারিয়ে যেত, (খ) নতুন
+      প্রজেক্ট শুরু করলে আগের প্রজেক্টের extra track state-এ লেগে থাকতে
+      পারত।
+    - সমাধান (editor.js, চারটা জায়গায়):
+        1. clearWorkspaceState() — bgMusicTracks রিসেটের পাশেই
+           state.extraTracks = [] যোগ করা হয়েছে।
+        2. exportProject() — bgMusicTracks-এর একই প্যাটার্নে
+           data.extraTracks বিল্ড করা হয় (settings mode-এ ফাইল ছাড়া,
+           full mode-এ প্রতিটা ক্লিপের ফাইল mediaBase64 হিসেবে embed করে)।
+        3. importProject() — data.extraTracks-এর প্রতিটা ক্লিপ চেক করে,
+           embed করা base64 না থাকলে IndexedDB cache (`track_${trackId}_
+           ${clipId}` key) থেকে ফাইল খোঁজে, না পেলে Media Re-linker মোডালে
+           "extratrack" টাইপ হিসেবে দেখায় (accept: video/image/audio সব)।
+        4. applyImportedProject() — mediaBase64 থাকলে File-এ কনভার্ট করে
+           (image টাইপের জন্য imageImg-ও লোড করে), IndexedDB-তে cache করে,
+           তারপর state.extraTracks = data.extraTracks || [] সেট করে। শেষে
+           window.renderMultiTrackPanel() কল করে প্যানেল UI রিফ্রেশ করা হয়
+           (restoreProjectFromBrowserStorage যেমন করে, একই প্যাটার্নে)।
+    - Backward compatibility: সবগুলো read path `savedData.extraTracks ||
+      []` / `data.extraTracks || []` guard ব্যবহার করে, তাই extraTracks
+      ছাড়া পুরনো সেভ করা প্রজেক্ট/JSON ফাইল লোড করলে ভাঙবে না — খালি array
+      দিয়ে শুরু হবে।
+    - এখন দুটো save/load path-ই (IndexedDB auto-save এবং ম্যানুয়াল JSON
+      export/import) সমানভাবে extraTracks সাপোর্ট করে — এটাই "ফরম্যাট
+      ফাইনাল" কনফার্মেশন এই ধাপের জন্য।
+    - ফাইল sync: root, www/, android/app/src/main/assets/public/ — তিন
+      জায়গাতেই আপডেট করা হয়েছে (editor.js)।
+
+
+-----------------------------------------------------
+[DONE] Speed Ramping / Speed Curve
+-----------------------------------------------------
+  লক্ষ্য   : বর্তমান constant Clip Speed-এর বদলে/পাশাপাশি একটা speed
+             curve — যেমন ধীরে শুরু, মাঝে নরমাল, শেষে দ্রুত।
+  সিদ্ধান্ত : প্ল্যানের নিজস্ব পরামর্শ অনুযায়ী স্মুথ কার্ভ না করে
+             ৩টা fixed সেগমেন্ট (শুরু/মাঝ/শেষ, ক্লিপের সমান ১/৩ অংশ)
+             দিয়ে implement করা হয়েছে — export timing পুরোপুরি
+             predictable থাকে, আর arbitrary boundary UI-এর জটিলতা
+             লাগেনি।
+
+  ডেটা মডেল (backward-compatible):
+    clip.speedRamp = { enabled: false, segments: [1, 1, 1] }
+    enabled=false বা field অনুপস্থিত থাকলে আগের constant clip.speed
+    আচরণ হুবহু বজায় থাকে — কোনো পুরনো প্রজেক্ট ভাঙে না।
+
+  Shared helper functions (phase9.js-এ ডিফাইন, window-এ expose করা —
+  exporter.js/audio.js/multitrack.js সবাই এগুলোই কল করে, যাতে
+  duplicate/ভুল লজিক না ছড়ায়):
+    - getClipSpeedSegments(clip)             — ৩টা {srcStart,srcEnd,speed}
+    - getClipOutputDuration(clip)             — রেন্ডার-টাইমলাইনে ক্লিপ
+                                                 কতক্ষণ চলবে
+    - getClipSourceTimeForOutputElapsed(clip, t) — output-elapsed → source
+                                                 time (exporter/preview
+                                                 seek/draw-এর জন্য)
+    - getClipSpeedAtSourceTime(clip, t)       — লাইভ প্রিভিউ playbackRate
+                                                 সুইচের জন্য (video.currentTime
+                                                 already source-time, তাই
+                                                 output-elapsed হিসাব লাগে না)
+    - getClipOutputElapsedForSourceTime(clip, t) — উল্টো ম্যাপিং, multi-track
+                                                 sync (computeGlobalTime)-এর জন্য
+
+  স্পর্শ করা ফাইল ও কী পাল্টেছে:
+    - phase9.js    : clip defaults + সব শেয়ার্ড হেল্পার + Speed Ramping UI
+                      (toggle + ৩টা সেগমেন্ট স্লাইডার) + লাইভ প্রিভিউ-এ
+                      timeupdate লিসেনার যেটা সেগমেন্ট বাউন্ডারি ক্রস করার
+                      সময় video.playbackRate আপডেট করে।
+    - index.html   : Clip Speed কার্ডের নিচে নতুন Speed Ramping টগল ও
+                      ৩টা সেগমেন্ট স্লাইডার।
+    - exporter.js  : captureVideoClipSequential()-এর sourceTimeForFrame
+                      এখন সেগমেন্ট-অ্যাওয়্যার ম্যাপিং ব্যবহার করে (decode
+                      playbackRate শুধু pacing-এর জন্য effective average
+                      speed ব্যবহার করে, ফ্রেম-অ্যাকুরেসি পুরোপুরি
+                      sourceTimeForFrame-এর দায়িত্বে); main লুপের
+                      clipOutputDuration, image ক্লিপের Ken Burns
+                      time-progression, আর টপ-লেভেল totalDuration হিসাবও
+                      আপডেট করা হয়েছে।
+    - audio.js     : offline export audio mix — আগে পুরো ক্লিপের জন্য
+                      একটাই constant source.playbackRate.setValueAtTime()
+                      ছিল, এখন প্রতিটা সেগমেন্টের শুরুতে আলাদা
+                      setValueAtTime() shedule করা হয় (single
+                      AudioBufferSourceNode-এই, একাধিক নোডে ভাগ না করে —
+                      Web Audio-র duration প্যারামিটার buffer-time-এ কাজ
+                      করে বলে এটা automation দিয়েই নিখুঁতভাবে কাজ করে)।
+    - multitrack.js: mainTimelineDuration() ও computeGlobalTime() এখন
+                      getClipOutputDuration/getClipOutputElapsedForSourceTime
+                      কল করে, তাই কোনো main ক্লিপে ramping চালু থাকলেও
+                      extra track গুলো ঠিক সিঙ্কে থাকে।
+
+  সব জায়গায় `window.getClip... ` ফাংশন না থাকলে (ডিফেন্সিভ) পুরনো
+  constant-speed ফর্মুলায় fallback করে — কোনো একটা ফাইল লোড না হলেও
+  export ভেঙে পড়বে না।
+
+  ফাইল sync: root, www/, android/app/src/main/assets/public/ — তিন
+  জায়গাতেই আপডেট করা হয়েছে (phase9.js, index.html, exporter.js,
+  audio.js, multitrack.js)।
+
+
+=====================================================
+ HOLD — যেগুলো এখন করা হচ্ছে না (PC আপগ্রেডের অপেক্ষায়)
+=====================================================
+
+ব্যবহারকারীর নোট (২০২৬-০৭-২৩): বর্তমান PC কনফিগারেশন লো-স্পেক
+(i5-8350U / 8GB RAM টার্গেট অনুযায়ী)। নিচের দুইটা ফিচার এই
+কনফিগারেশনে বাস্তবসম্মতভাবে কাজ করবে না বলে এখন implement করা
+হচ্ছে না। ব্যবহারকারী পরবর্তীতে PC আপগ্রেড করলে এই সেকশন থেকে
+কাজ আবার শুরু করা যাবে — সেই সময় "PHASE11_ADVANCED_EDITING_PLAN.txt"
+ফাইলটা আবার পড়ে নেওয়া দরকার হবে।
+
+-----------------------------------------------------
+[HOLD-HW] Motion Tracking
+-----------------------------------------------------
+  কেন আটকে আছে: এটা কম্পিউটার ভিশন-এর কাজ (optical flow / object
+           tracking) — ব্রাউজারে চালাতে হলে OpenCV.js বা TensorFlow.js-
+           জাতীয় WASM/ML লাইব্রেরি লাগবে, যেটা CPU-ভারী। লো-স্পেক
+           iGPU + 8GB RAM-এ real-time tracking practically ব্যবহারযোগ্য
+           হবে না — UI ফ্রিজ বা অত্যন্ত ধীর ফ্রেম-রেট হতে পারে।
+  আপগ্রেডের পর করণীয়: প্রথমে একটা lightweight single-point tracker
+           (যেমন simple template matching) দিয়ে শুরু করা ভালো, তারপর
+           দরকার হলে ML-based tracker-এ যাওয়া যায়।
+
+-----------------------------------------------------
+[HOLD-HW] AI Auto-Reframe
+-----------------------------------------------------
+  কেন আটকে আছে: Landscape ভিডিও থেকে অটোমেটিক portrait crop করতে
+           প্রতি ফ্রেমে subject/saliency detection মডেল চালাতে হয়
+           (face detection বা saliency map)। এটাও ML inference —
+           লো-স্পেক হার্ডওয়্যারে batch export অলরেডি ধীর, তার উপর
+           per-frame ML inference যোগ হলে export সময় বহুগুণ বেড়ে
+           যাবে, আর ব্রাউজার/অ্যাপ ক্র্যাশও করতে পারে বড় ভিডিওতে।
+  আপগ্রেডের পর করণীয়: একটা lightweight face-detection মডেল (যেমন
+           TensorFlow.js BlazeFace বা অনুরূপ ছোট মডেল) দিয়ে শুরু
+           করা যায়, পুরোপুরি সাধারণ saliency-based reframe পরের ধাপ।
+
+-----------------------------------------------------
+[HOLD-HW] Cloud Sync / Cross-Device Project
+-----------------------------------------------------
+  নোট: এটা হার্ডওয়্যার-সীমাবদ্ধতা না, বরং স্কোপ/আর্কিটেকচার সিদ্ধান্ত —
+           পুরো অ্যাপের ডিজাইন-ই offline-first (IndexedDB-based)।
+           Cloud sync করতে হলে Supabase-এর মতো backend + account
+           system লাগবে (WFA প্রজেক্টে যেমন আছে), যা এই প্রজেক্টের
+           বর্তমান স্কোপের বাইরে একটা বড় সিদ্ধান্ত। আপাতত holdlist-এ
+           রাখা হলো — ব্যবহারকারী confirm করলে আলাদা phase হিসেবে
+           প্ল্যান করা হবে।
+
+
+=====================================================
+ এক্সিকিউশন অর্ডার (এই মুহূর্তে যা কনফার্মড)
+=====================================================
+  ১. [DONE] Theme System
+  ২. [DONE] Color Scopes (Waveform + Histogram)
+  ৩. [DONE] Generic Keyframe Animation (v1 — position, v2 — scale/
+     rotation/opacity, সব overlay টাইপে)
+  ৪. [DONE] Timeline Transitions Library
+  ৫. [DONE] Multi-Track Timeline — ধাপ ১, ২, ৩ ও ৪ সবই সম্পন্ন (data model
+     + UI, live preview rendering, exporter multi-layer compositing,
+     save/load ফরম্যাট — IndexedDB auto-save ও ম্যানুয়াল JSON export/
+     import দুই পথেই)
+  ৬. [DONE] Speed Ramping/Curve — ৩ fixed সেগমেন্ট (শুরু/মাঝ/শেষ), সব
+     save/load path backward-compatible
+  ৭. [DONE] Keyframe v2 — scale/rotation/opacity (সব ৫ overlay টাইপে
+     verify ও render-support যোগ করে)
+  --- এরপর শুধু PC আপগ্রেড হলে ---
+  ৮. Motion Tracking
+  ৯. AI Auto-Reframe
+  (Cloud Sync — আলাদা confirm লাগবে, এই লিস্টে অন্তর্ভুক্ত না)
+
+=====================================================
+ শেষ আপডেট: Keyframe v2 সম্পন্ন — scale/rotation/opacity এখন সব ৫
+ overlay টাইপে (Text, Sticker, Symbol, Shape+Text, B-roll) keyframe করা
+ যায়। প্রথমে editor.js-এর render কোড টাইপ-বাই-টাইপ audit করে দেখা হয়
+ কোনটা কী সাপোর্ট করে (Text/Sticker-এর কোনোটাই ছিল না, Symbol/Shape-এ
+ rotation ছিল, B-roll-এ rotation + animation-driven scale/opacity ছিল
+ কিন্তু static multiplier ছিল না) — তারপর সবগুলোতে সামঞ্জস্যপূর্ণভাবে
+ backward-compatible ডিফল্ট (scale=1, rotation=0, opacity=100) দিয়ে
+ support যোগ করা হয়েছে। B-roll-এ নতুন keyframe মান বিদ্যমান entry/exit
+ animation-এর সাথে multiplicatively/additively compose করে, ওভাররাইট
+ করে না। Keyframe প্যানেলে নতুন Scale/Rotation/Opacity স্লাইডার যোগ করা
+ হয়েছে (Text/Sticker-এর মতো টাইপের জন্য এটাই একমাত্র ইনপুট পথ), সাথে
+ একটা mid-drag DOM-rebuild বাগ ফিক্স। এক্সপোর্টে আলাদা কোনো কোড লাগেনি
+ — v1-এর window.drawEditorFrame হুক সবকিছু ইতিমধ্যেই কভার করে।
+ বিস্তারিত উপরে "Generic Keyframe Animation — v2" অংশে।
+
+ PHASE11_ADVANCED_EDITING_PLAN.txt-এর মূল কাজ তালিকা এখন সম্পূর্ণ
+ [DONE] (Theme, Color Scopes, Keyframe v1+v2, Transitions Library,
+ Multi-Track Timeline ধাপ ১-৪, Speed Ramping)। বাকি শুধু HOLD সেকশনে
+ থাকা Motion Tracking ও AI Auto-Reframe — PC আপগ্রেডের অপেক্ষায়।
+=====================================================

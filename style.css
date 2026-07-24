@@ -198,6 +198,132 @@ body, .sidebar, .workspace-header, .btn, .form-input,
     visibility: visible;
 }
 
+/* --- Generic Keyframe Animation Panel (Phase 11) --- */
+.keyframe-panel {
+    background: var(--bg-surface);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+    padding: 12px 14px;
+    margin-top: 10px;
+}
+
+.keyframe-panel-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 8px;
+}
+
+.keyframe-panel-title {
+    font-size: 12px;
+    font-weight: 700;
+    color: var(--text-primary);
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.keyframe-panel-title i {
+    color: var(--primary-hover);
+}
+
+.keyframe-add-btn {
+    font-size: 12px;
+    padding: 5px 10px;
+    border-radius: var(--radius-sm);
+    background: var(--primary);
+    color: #fff;
+    border: none;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    transition: var(--transition-smooth);
+}
+
+.keyframe-add-btn:hover {
+    background: var(--primary-hover);
+}
+
+.keyframe-prop-controls {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    margin-bottom: 10px;
+    padding: 8px 10px;
+    background: var(--bg-elevated, rgba(255,255,255,0.03));
+    border-radius: var(--radius-sm);
+}
+
+.keyframe-prop-controls .slider-val-container {
+    margin: 0;
+}
+
+.keyframe-track {
+    position: relative;
+    height: 22px;
+    background: var(--bg-base);
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    margin-bottom: 6px;
+    cursor: default;
+}
+
+.keyframe-track-playhead {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    width: 2px;
+    background: var(--danger);
+    pointer-events: none;
+}
+
+.keyframe-marker {
+    position: absolute;
+    top: 50%;
+    width: 10px;
+    height: 10px;
+    background: var(--primary-hover);
+    border: 1.5px solid #fff;
+    transform: translate(-50%, -50%) rotate(45deg);
+    cursor: pointer;
+}
+
+.keyframe-hint {
+    font-size: 11px;
+    color: var(--text-muted);
+    margin-bottom: 6px;
+}
+
+.keyframe-list {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    max-height: 110px;
+    overflow-y: auto;
+}
+
+.keyframe-list-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    font-size: 12px;
+    color: var(--text-secondary);
+    padding: 4px 8px;
+    border-radius: 6px;
+    background: var(--bg-base);
+}
+
+.keyframe-list-item button {
+    background: none;
+    border: none;
+    color: var(--danger);
+    cursor: pointer;
+    font-size: 12px;
+    padding: 2px 6px;
+}
+
+
 /* --- Base Reset --- */
 * {
     margin: 0;
@@ -2517,4 +2643,36 @@ input:checked + .slider:before {
 .silence-item.playing {
     background-color: rgba(79, 70, 229, 0.08);
     border-color: rgba(79, 70, 229, 0.3);
+}
+
+/* --- Color Scopes: Waveform + Histogram (Phase 11) --- */
+.color-scopes-wrap {
+    display: flex;
+    gap: 12px;
+    flex-wrap: wrap;
+}
+
+.color-scope-box {
+    flex: 1;
+    min-width: 220px;
+    background: var(--bg-base);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-sm);
+    padding: 8px;
+}
+
+.color-scope-label {
+    font-size: 11px;
+    color: var(--text-secondary);
+    margin-bottom: 6px;
+    text-transform: uppercase;
+    letter-spacing: 0.4px;
+}
+
+.color-scope-box canvas {
+    width: 100%;
+    height: 90px;
+    display: block;
+    border-radius: 4px;
+    background: #000;
 }

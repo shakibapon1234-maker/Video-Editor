@@ -34,7 +34,7 @@ external API/cloud ব্যবহার করে। এগুলো সম্�
     - "Generate" button -> fetch() -> audio blob -> voiceover pipeline
     - Error handling + status message
 
-[10-2] Auto-Caption Translate
+[10-2] Auto-Caption Translate — [DONE] (2026-07-24)
   কী করে: existing subtitles (bn) -> translate -> en (বা reverse)
           -> new subtitle track তৈরি
   কম-কফিগ PC: ⚠️ API-তে depend, PC load কম
@@ -46,7 +46,42 @@ external API/cloud ব্যবহার করে। এগুলো সম্�
     - API call -> translated text -> state.subtitles (new copy)
     - SRT/VTT export-এ translated version অপশন
 
-[10-3] AI Thumbnail Generator
+  বাস্তবায়ন নোট: Auto Subtitle কার্ডের ঠিক নিচে নতুন "Auto-Caption
+  Translate" কার্ড যোগ করা হয়েছে (index.html)। Source/Target language
+  select, "Translate" button, প্রতি-লাইন progress status, আলাদা
+  translated list, Preview/Export-এ translated track দেখানোর toggle,
+  এবং translated .SRT/.VTT export বাটন — সব যোগ হয়েছে।
+    - state model: state.translatedSubtitles = [{id, sourceId, text,
+      startSec, endSec, failed}], state.translatedSubtitlesLang,
+      state.subtitlesUseTranslated (boolean) — সব state.subtitles থেকে
+      সম্পূর্ণ আলাদা রাখা হয়েছে, মূল ট্র্যাক কখনো ওভাররাইট হয় না।
+    - API: প্রতিটা লাইন MyMemory Translation API (api.mymemory.translated.net,
+      কোনো key/signup লাগে না, CORS-enabled) দিয়ে আলাদাভাবে translate করা
+      হয়, রেট-লিমিটের জন্য কল-এর মাঝে ৩০০ms delay দেওয়া হয়েছে। কোনো
+      একটা লাইনের translate ব্যর্থ হলে সেই লাইনে মূল টেক্সট রাখা হয়
+      (failed:true ফ্ল্যাগসহ), পুরো ব্যাচ থেমে যায় না।
+    - drawFrame() (editor.js)-এ subtitle render logic এখন
+      state.subtitlesUseTranslated true ও translatedSubtitles ফাঁকা না
+      হলে সেই ট্র্যাক থেকে active caption খুঁজে বের করে, নাহলে আগের
+      মতোই state.subtitles ব্যবহার করে — word-by-word highlight/pill/
+      position সব লজিক অপরিবর্তিত ও দুই ট্র্যাকেই কাজ করে।
+    - SRT/VTT export function (phase9.js exportSubtitles) একটা optional
+      second param নেয় ('translated' হলে translated ট্র্যাক এক্সপোর্ট
+      করে, ফাইলনেম-এ ভাষার কোড যোগ হয়) — পুরনো call site
+      (exportSrtBtn/exportVttBtn) অপরিবর্তিত আচরণ বজায় রাখে।
+    - clearWorkspaceState()-এ নতুন প্রজেক্ট শুরু/সুইচ করলে
+      translatedSubtitles/translatedSubtitlesLang/subtitlesUseTranslated
+      রিসেট করা হয় (extraTracks-এর জন্য Phase 11-এ যেমন করা হয়েছিল,
+      একই প্যাটার্নে)।
+    - সীমাবদ্ধতা: translated track বর্তমানে save/load (IndexedDB auto-save
+      বা JSON export/import) কোনোটাতেই persist হয় না — এটা ইচ্ছাকৃতভাবে
+      experimental/re-generatable রাখা হয়েছে; persist দরকার হলে জানালে
+      exportProject/importProject/applyImportedProject-এ bgMusicTracks/
+      extraTracks-এর মতো একই প্যাটার্নে যোগ করা যাবে।
+    - ফাইল sync: root, www/, android/app/src/main/assets/public/ — তিন
+      জায়গাতেই আপডেট করা হয়েছে (index.html, phase9.js, editor.js)।
+
+[10-3] AI Thumbnail Generator — [DONE] (2026-07-24)
   কী করে: ভিডিও ফ্রেম -> external API (image generation/edit) ->
           AI thumbnail suggest করে
   কম-কনফিগ PC: ✅ ভালো (cloud load)
@@ -56,6 +91,49 @@ external API/cloud ব্যবহার করে। এগুলো সম্�
     - Thumbnail card-এ "AI Suggest" button
     - Current frame upload -> API -> returned image -> preview
     - "Use as Thumbnail" -> canvas-এ বসানো
+
+  বাস্তবায়ন নোট: Thumbnail Generator (Phase 5B) কার্ডের ঠিক নিচে নতুন
+  "AI Thumbnail Generator" কার্ড যোগ করা হয়েছে (index.html)। Provider
+  select (Stability AI / OpenAI gpt-image-1), password-type API key
+  input + "Save Key" বাটন (localStorage-এ, [10-1]-এর মতো একই প্যাটার্ন),
+  ঐচ্ছিক style prompt textarea, "AI Suggest" বাটন, স্ট্যাটাস মেসেজ, এবং
+  আলাদা প্রিভিউ বক্স (preview img + "Use as Thumbnail" + "Download")
+  — সব যোগ হয়েছে।
+    - Client (editor.js, Thumbnail Generator ব্লকের ঠিক নিচে): "AI
+      Suggest" ক্লিকে drawFrame() কল করে ক্যানভাস আপ-টু-ডেট করা হয়,
+      state.canvas.toDataURL('image/png') দিয়ে বর্তমান ফ্রেম (সব
+      overlay/logo/banner সহ) বের করা হয়, তারপর { provider, apiKey,
+      prompt, imageBase64 } POST করা হয় /api/thumbnail-proxy-তে।
+      রেসপন্স blob হিসেবে এসে প্রিভিউতে দেখানো হয় — মূল Thumbnail
+      Generator/customThumbnailFile কিছুই touch হয় না যতক্ষণ না
+      ব্যবহারকারী "Use as Thumbnail" ক্লিক করেন। ক্লিক করলে blob->File
+      বানিয়ে state.customThumbnailFile-এ বসানো হয় এবং একই
+      showThumbnailPreview() ফাংশন কল হয় যেটা কাস্টম আপলোডের জন্য
+      ব্যবহৃত হয় — মানে এক্সপোর্টের MP4 cover-art embedding
+      (exporter.js) কোনো পরিবর্তন ছাড়াই কাজ করে।
+    - Server (server.js): নতুন POST /api/thumbnail-proxy route,
+      [10-1]-এর TTS proxy-এর মতোই CORS-free প্রক্সি। imageBase64
+      (data URL) -> Buffer -> upstream API-তে multipart/form-data
+      দিয়ে পাঠানো হয়:
+        - provider='stability' (ডিফল্ট): Stability AI v1
+          image-to-image endpoint (stable-diffusion-xl-1024-v1-0),
+          init_image + text_prompts + image_strength=0.35 দিয়ে মূল
+          ফ্রেমের কম্পোজিশন মোটামুটি রেখে স্টাইল পরিবর্তন করে।
+        - provider='openai': OpenAI /v1/images/edits (gpt-image-1)
+          — image + prompt পাঠিয়ে edited ছবি ফেরত পাওয়া যায়।
+      দুই ক্ষেত্রেই upstream base64 রেসপন্স Buffer-এ কনভার্ট করে প্লেইন
+      PNG হিসেবে ব্রাউজারে ফেরত পাঠানো হয় (TTS proxy-এর মতোই)।
+      express.json() limit ২mb থেকে বাড়িয়ে ১৫mb করা হয়েছে যাতে
+      base64 ফ্রেম payload আটকে থাকে।
+    - সীমাবদ্ধতা: server.js শুধু root-এ আছে (Electron desktop app,
+      main.js দিয়ে চলে) — www/ ও android build-এ কোনো লোকাল সার্ভার
+      নেই বলে এই ফিচারটা শুধু desktop app-এ কাজ করবে, ঠিক যেমন
+      [10-1] TTS External API (openai/elevenlabs providers)-ও একই
+      সীমাবদ্ধতায় আছে। API key ইউজারকে নিজে জোগাড় করতে হবে
+      (Stability AI বা OpenAI dashboard থেকে), কোনো key bundled নেই।
+    - ফাইল sync: root, www/, android/app/src/main/assets/public/ —
+      তিন জায়গাতেই আপডেট করা হয়েছে (index.html, editor.js);
+      server.js শুধু root-এই আছে যেহেতু ওটা শুধু desktop app চালায়।
 
 
 -----------------------------------------------------

@@ -148,6 +148,9 @@
                         </div>
                     </div>
 
+                    <!-- Generic Keyframe Animation Panel (Phase 11) -->
+                    <div id="keyframe-panel-mount"></div>
+
                     <!-- Custom Timeline Control -->
                     <div class="timeline-bar" style="display: none;" id="timeline-controls">
                         <!-- Seek/scrub bar — freely move the playhead forward/back without changing the trim range -->
@@ -212,6 +215,9 @@
                                 <input type="file" id="add-clip-input" accept="video/*, image/*" style="display: none;">
                             </div>
                         </div>
+
+                        <!-- Multi-Track Timeline (Phase 11, step 1: data model + UI) -->
+                        <div id="multitrack-mount" class="mt-3"></div>
                     </div>
                 </div>
 
@@ -567,19 +573,31 @@
                                     <label for="clip-transition-type">Transition Style</label>
                                     <select id="clip-transition-type" class="form-select">
                                         <option value="none" selected>None</option>
-                                        <option value="crossfade">Crossfade / Dissolve</option>
-                                        <option value="dip_black">Dip to Black</option>
-                                        <option value="push_right">Push Right</option>
-                                        <option value="push_left">Push Left</option>
-                                        <option value="wipe_right">Wipe Right</option>
-                                        <option value="wipe_left">Wipe Left</option>
-                                        <option value="zoom_in">Zoom In from Center</option>
-                                        <option value="zoom_out">Zoom Out to Fit</option>
-                                        <option value="spin_in">Spin In from Center</option>
-                                        <option value="spin_out">Spin Out to Fit</option>
-                                        <option value="zoom_rotate">Zoom + Rotate to Fit</option>
+                                        <optgroup label="Fade">
+                                            <option value="crossfade">Crossfade / Dissolve</option>
+                                            <option value="dip_black">Dip to Black</option>
+                                        </optgroup>
+                                        <optgroup label="Slide">
+                                            <option value="push_right">Push Right</option>
+                                            <option value="push_left">Push Left</option>
+                                        </optgroup>
+                                        <optgroup label="Wipe">
+                                            <option value="wipe_right">Wipe Right</option>
+                                            <option value="wipe_left">Wipe Left</option>
+                                        </optgroup>
+                                        <optgroup label="Zoom">
+                                            <option value="zoom_in">Zoom In from Center</option>
+                                            <option value="zoom_out">Zoom Out to Fit</option>
+                                            <option value="spin_in">Spin In from Center</option>
+                                            <option value="spin_out">Spin Out to Fit</option>
+                                            <option value="zoom_rotate">Zoom + Rotate to Fit</option>
+                                        </optgroup>
+                                        <optgroup label="Glitch">
+                                            <option value="glitch">Digital Glitch</option>
+                                        </optgroup>
                                     </select>
                                 </div>
+                                <div id="transition-library-mount"></div>
                                 <div class="control-group mt-3">
                                     <label>Duration (0.2s – 1.5s)</label>
                                     <div class="slider-val-container">
@@ -611,6 +629,36 @@
                                 <div class="slider-val-container">
                                     <input type="range" id="clip-speed-slider" min="0.5" max="2" value="1" step="0.05">
                                     <span id="clip-speed-val">1.00x</span>
+                                </div>
+
+                                <!-- Phase 11: Speed Ramping -->
+                                <div class="toggle-control mt-3">
+                                    <div class="toggle-label">
+                                        <h4>Speed Ramping (৩ ভাগে আলাদা স্পিড)</h4>
+                                        <p>শুরু/মাঝ/শেষ — প্রতিটা অংশের নিজস্ব স্পিড</p>
+                                    </div>
+                                    <label class="switch">
+                                        <input type="checkbox" id="speed-ramp-toggle">
+                                        <span class="slider round"></span>
+                                    </label>
+                                </div>
+                                <div id="speed-ramp-controls" style="display:none;">
+                                    <p class="help-text">ক্লিপটাকে সমান ৩ ভাগে ভাগ করে প্রতিটা ভাগের নিজস্ব স্পিড দেওয়া যায় (উপরের একক Clip Speed স্লাইডার তখন উপেক্ষা করা হয়)। ধীরে-স্বাভাবিক-দ্রুত বা যেকোনো কম্বিনেশন — preview ও export দুই জায়গাতেই কাজ করে।</p>
+                                    <div class="slider-val-container">
+                                        <label style="min-width:70px; font-size:12px;">শুরু (১/৩)</label>
+                                        <input type="range" id="speed-ramp-seg-0" min="0.5" max="2" value="1" step="0.05">
+                                        <span id="speed-ramp-seg-0-val">1.00x</span>
+                                    </div>
+                                    <div class="slider-val-container">
+                                        <label style="min-width:70px; font-size:12px;">মাঝ (২/৩)</label>
+                                        <input type="range" id="speed-ramp-seg-1" min="0.5" max="2" value="1" step="0.05">
+                                        <span id="speed-ramp-seg-1-val">1.00x</span>
+                                    </div>
+                                    <div class="slider-val-container">
+                                        <label style="min-width:70px; font-size:12px;">শেষ (৩/৩)</label>
+                                        <input type="range" id="speed-ramp-seg-2" min="0.5" max="2" value="1" step="0.05">
+                                        <span id="speed-ramp-seg-2-val">1.00x</span>
+                                    </div>
                                 </div>
                             </div>
                         </div>
@@ -907,6 +955,18 @@
 
                                 <div class="color-grade-container mt-3" id="color-grade-container" style="display: none;">
                                     <p class="help-text">CSS filter preset-এর উপরে আরও সূক্ষ্মভাবে rendering pixel-level-এ প্রতিটি color channel-এর curve কন্ট্রোল করুন। "Normal" preset হলেও এটি কাজ করবে।</p>
+
+                                    <!-- Color Scopes: Waveform + RGB Histogram (Phase 11) -->
+                                    <div class="color-scopes-wrap mt-3">
+                                        <div class="color-scope-box">
+                                            <div class="color-scope-label">Waveform (Luma)</div>
+                                            <canvas id="scope-waveform-canvas" width="280" height="90"></canvas>
+                                        </div>
+                                        <div class="color-scope-box">
+                                            <div class="color-scope-label">RGB Histogram</div>
+                                            <canvas id="scope-histogram-canvas" width="280" height="90"></canvas>
+                                        </div>
+                                    </div>
 
                                     <div class="color-grade-channel mt-3">
                                         <label class="color-grade-channel-label" style="color:#ef4444;"><i class="fa-solid fa-circle" style="font-size:8px;"></i> Red Channel</label>
@@ -2164,6 +2224,67 @@
                                 </p>
                             </div>
                         </div>
+
+                        <!-- Auto-Caption Translate (Phase 10-2, experimental) -->
+                        <div class="card mt-4">
+                            <div class="card-header">
+                                <i class="fa-solid fa-language card-icon"></i>
+                                <h3>Auto-Caption Translate (সাবটাইটেল অনুবাদ)</h3>
+                            </div>
+                            <div class="card-body">
+                                <p class="help-text">উপরের Auto Subtitle থেকে তৈরি করা লাইনগুলো অন্য ভাষায় অনুবাদ করে একটা আলাদা সাবটাইটেল ট্র্যাক তৈরি করুন। এটি experimental — external translate API ও internet লাগবে। আপনার PC-এর লোড কম (cloud-এ প্রসেসিং)।</p>
+
+                                <div class="control-group mt-3">
+                                    <label>মূল ভাষা (Source Language)</label>
+                                    <select id="subtitle-translate-source-lang" class="form-select">
+                                        <option value="bn">বাংলা (Bengali)</option>
+                                        <option value="en">English</option>
+                                    </select>
+                                </div>
+
+                                <div class="control-group mt-3">
+                                    <label>টার্গেট ভাষা (Translate To)</label>
+                                    <select id="subtitle-translate-target-lang" class="form-select">
+                                        <option value="en">English</option>
+                                        <option value="bn">বাংলা (Bengali)</option>
+                                        <option value="hi">Hindi</option>
+                                        <option value="ar">Arabic</option>
+                                        <option value="es">Spanish</option>
+                                        <option value="fr">French</option>
+                                        <option value="ur">Urdu</option>
+                                    </select>
+                                </div>
+
+                                <button id="subtitle-translate-btn" class="btn btn-secondary btn-block mt-3">
+                                    <i class="fa-solid fa-wand-magic-sparkles"></i> Translate Subtitles (অনুবাদ শুরু করুন)
+                                </button>
+                                <p class="help-text mt-2" id="subtitle-translate-status" style="display: none;"></p>
+
+                                <div class="subtitle-list mt-3" id="translated-subtitle-list">
+                                    <!-- Dynamically populated translated transcript list -->
+                                </div>
+
+                                <div class="toggle-control mt-3" id="subtitle-translate-preview-toggle-container" style="display:none;">
+                                    <div class="toggle-label">
+                                        <h4>Preview/Export-এ অনুবাদ দেখান</h4>
+                                        <p>ক্যানভাসে মূল সাবটাইটেলের বদলে অনুবাদ করা লাইন দেখাবে</p>
+                                    </div>
+                                    <label class="switch">
+                                        <input type="checkbox" id="subtitle-translate-preview-toggle">
+                                        <span class="slider round"></span>
+                                    </label>
+                                </div>
+
+                                <div class="subtitle-actions mt-3" id="subtitle-translate-export-actions" style="display:none;">
+                                    <button id="export-srt-translated-btn" class="btn btn-outline mt-1" style="width: 100%;" type="button">
+                                        <i class="fa-solid fa-file-lines"></i> Export Translated .SRT
+                                    </button>
+                                    <button id="export-vtt-translated-btn" class="btn btn-outline mt-2" style="width: 100%;" type="button">
+                                        <i class="fa-solid fa-file-lines"></i> Export Translated .VTT
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
                     </div>
 
                     <!-- Step 5: Export Studio -->
@@ -2386,6 +2507,56 @@
                                         <i class="fa-solid fa-download"></i> Download Thumbnail (PNG)
                                     </a>
                                     <button id="remove-custom-thumbnail-btn" class="btn btn-outline btn-block mt-2" type="button" style="display:none;"><i class="fa-solid fa-xmark"></i> Custom Thumbnail Remove</button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- AI Thumbnail Generator (Phase 10-3, experimental) -->
+                        <div class="card mt-4">
+                            <div class="card-header">
+                                <i class="fa-solid fa-wand-magic-sparkles card-icon"></i>
+                                <h3>AI Thumbnail Generator (পরীক্ষামূলক)</h3>
+                            </div>
+                            <div class="card-body">
+                                <p class="help-text">প্রিভিউ স্ক্রিনে এখন যেই ফ্রেম দেখা যাচ্ছে সেটা ক্লাউড AI API-তে পাঠিয়ে একটা enhanced/স্টাইলাইজড থাম্বনেইল সাজেস্ট করান। এটি experimental — API key ও internet লাগবে। আপনার PC-এর load নেয় না (cloud-এ processing), তবে ফ্রেম আপলোড হওয়ায় ধীর internet-এ কিছুটা সময় লাগতে পারে।</p>
+
+                                <div class="control-group mt-3">
+                                    <label>API Provider</label>
+                                    <select id="ai-thumb-provider" class="form-select">
+                                        <option value="stability">Stability AI</option>
+                                        <option value="openai">OpenAI (gpt-image-1)</option>
+                                    </select>
+                                </div>
+
+                                <div class="control-group mt-3">
+                                    <label>API Key (সেভ থাকবে localStorage-এ)</label>
+                                    <input type="password" id="ai-thumb-key" class="form-input" placeholder="sk-...">
+                                </div>
+
+                                <div class="control-group mt-3">
+                                    <label>Style Prompt / নির্দেশনা (ঐচ্ছিক)</label>
+                                    <textarea id="ai-thumb-prompt" class="form-textarea" rows="2" placeholder="যেমন: vibrant colors, cinematic lighting, bold contrast, YouTube thumbnail style"></textarea>
+                                </div>
+
+                                <div class="record-controls mt-3">
+                                    <button id="ai-thumb-generate-btn" class="btn btn-secondary">
+                                        <i class="fa-solid fa-camera-retro"></i> AI Suggest (এই ফ্রেম থেকে)
+                                    </button>
+                                    <button id="ai-thumb-save-key-btn" class="btn btn-outline">
+                                        <i class="fa-solid fa-key"></i> Save Key
+                                    </button>
+                                </div>
+
+                                <p class="help-text mt-2" id="ai-thumb-status" style="display:none;"></p>
+
+                                <div class="thumbnail-preview-box mt-4" id="ai-thumb-preview-box" style="display: none;">
+                                    <img id="ai-thumb-preview-img" alt="AI suggested thumbnail preview" style="max-width: 100%; border-radius: var(--radius-sm); border: 1px solid var(--border-color);">
+                                    <button id="ai-thumb-use-btn" class="btn btn-success btn-block mt-3" type="button">
+                                        <i class="fa-solid fa-check"></i> Use as Thumbnail (এক্সপোর্টে ব্যবহার করুন)
+                                    </button>
+                                    <a id="ai-thumb-download-link" href="#" download="ai-thumbnail.png" class="btn btn-outline btn-block mt-2">
+                                        <i class="fa-solid fa-download"></i> Download (PNG)
+                                    </a>
                                 </div>
                             </div>
                         </div>
@@ -2888,11 +3059,15 @@
          bridge is injected automatically; on a plain browser this just defines
          window.Capacitor safely so our plugin calls no-op until shipped. -->
     <script src="theme.js?v=1"></script>
+    <script src="color-scopes.js?v=1"></script>
     <script src="public/capacitor/capacitor.js"></script>
     <script src="audio.js?v=4"></script>
     <script src="editor.js?v=8"></script>
+    <script src="keyframes.js?v=1"></script>
     <script src="render-engine.js?v=2"></script>
     <script src="exporter.js?v=4"></script>
     <script src="phase9.js?v=2"></script>
+    <script src="transitions-library.js?v=1"></script>
+    <script src="multitrack.js?v=2"></script>
 </body>
 </html>
