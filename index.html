@@ -202,6 +202,19 @@
                                     <i class="fa-solid fa-scissors"></i> বাদ দিন (Cut Out)
                                 </button>
                             </div>
+
+                            <!-- Image Duration override -- only shown when the active clip is a still image.
+                                 Images default to a fixed 5.0s length; this lets that length be extended
+                                 (e.g. so a long voice-over B-roll caption isn't capped at 5s). -->
+                            <div class="time-inputs" id="image-duration-container" style="display: none; align-items: flex-end; gap: 8px; margin-top: 8px;">
+                                <div class="time-field">
+                                    <label title="ছবিটি টাইমলাইনে কতক্ষণ থাকবে (Image Duration)">ছবির সময়কাল (সেকেন্ড)</label>
+                                    <input type="number" id="image-duration-input" class="form-input" min="0.5" max="600" step="0.5" style="width: 90px;">
+                                </div>
+                                <button id="image-duration-apply-btn" class="btn" title="ছবির নতুন দৈর্ঘ্য প্রয়োগ করুন" style="background: rgba(34, 197, 94, 0.15); border: 1.5px solid #22c55e; color: #22c55e; height: 36px; font-size: 11px; padding: 0 10px; display: flex; align-items: center; gap: 4px; border-radius: 4px; cursor: pointer; font-weight: 600;" type="button">
+                                    <i class="fa-solid fa-check"></i> প্রয়োগ করুন (Apply)
+                                </button>
+                            </div>
                         </div>
 
                         <!-- Multi-Clip Timeline (Phase 2B) -->
@@ -1434,6 +1447,20 @@
                                         <div class="control-group">
                                             <label>Edit Text Content (টেক্সট পরিবর্তন করুন)</label>
                                             <textarea id="broll-edit-text-input" class="form-textarea" rows="4" placeholder="যেমনঃ ঢাকা টু কক্সবাজার"></textarea>
+                                        </div>
+                                        <div class="control-group mt-2" style="display:flex; align-items:center; gap:16px;">
+                                            <label class="checkbox-label" style="display:flex; align-items:center; gap:6px; margin:0;">
+                                                <input type="checkbox" id="broll-edit-text-bold" checked>
+                                                <b>Bold (বোল্ড)</b>
+                                            </label>
+                                            <label class="checkbox-label" style="display:flex; align-items:center; gap:6px; margin:0;">
+                                                <input type="checkbox" id="broll-edit-text-italic">
+                                                <i>Italic (ইটালিক)</i>
+                                            </label>
+                                            <label class="checkbox-label" style="display:flex; align-items:center; gap:6px; margin:0;">
+                                                <input type="checkbox" id="broll-edit-text-underline">
+                                                <span style="text-decoration:underline;">Underline (আন্ডারলাইন)</span>
+                                            </label>
                                         </div>
                                         <div class="control-group mt-2">
                                             <label>Font Size (টেক্সট সাইজ)</label>

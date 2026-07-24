@@ -342,6 +342,73 @@ document.addEventListener('DOMContentLoaded', () => {
     const seekFill = document.getElementById('seek-fill');
     const seekCurrentTimeEl = document.getElementById('seek-current-time');
     const seekTotalTimeEl = document.getElementById('seek-total-time');
+    const imageDurationContainer = document.getElementById('image-duration-container');
+    const imageDurationInput = document.getElementById('image-duration-input');
+    const imageDurationApplyBtn = document.getElementById('image-duration-apply-btn');
+
+    // Shows/hides the "ছবির সময়কাল (Image Duration)" control based on whether
+    // the currently active clip is a still image, and fills it with that
+    // clip's current length. Images default to a fixed 5.0s on import, which
+    // also caps how long a B-roll caption on that image can stay on screen
+    // (see showBrollTimingFor's `maxVal = state.endTime || state.duration`) --
+    // this lets that length be extended per-clip.
+    function syncImageDurationUI() {
+        if (!imageDurationContainer) return;
+        const clip = state.clips && state.clips.find(c => c.id === state.activeClipId);
+        if (clip && clip.type === 'image') {
+            imageDurationContainer.style.display = 'flex';
+            if (imageDurationInput && document.activeElement !== imageDurationInput) {
+                imageDurationInput.value = clip.duration || 5.0;
+            }
+        } else {
+            imageDurationContainer.style.display = 'none';
+        }
+    }
+
+    if (imageDurationApplyBtn) {
+        imageDurationApplyBtn.addEventListener('click', () => {
+            const clip = state.clips && state.clips.find(c => c.id === state.activeClipId);
+            if (!clip || clip.type !== 'image') return;
+
+            let newDuration = parseFloat(imageDurationInput.value);
+            if (!newDuration || isNaN(newDuration) || newDuration <= 0) {
+                alert('সঠিক একটি সময় (সেকেন্ডে) দিন।');
+                return;
+            }
+            newDuration = Math.min(600, Math.max(0.5, newDuration));
+
+            // If the trim end was sitting at the old full length, extend it to
+            // match the new length too, so the whole image stays visible by
+            // default. If the user had already trimmed it shorter on purpose,
+            // leave that trim point alone.
+            const wasFullLength = Math.abs((clip.end || 0) - (clip.duration || 0)) < 0.05;
+            clip.duration = newDuration;
+            if (wasFullLength || clip.end > newDuration) {
+                clip.end = newDuration;
+            }
+            if (clip.start > clip.end) clip.start = 0;
+
+            // Mirror into the live state if this is the clip currently on screen.
+            if (state.activeClipId === clip.id) {
+                state.duration = clip.duration;
+                state.startTime = clip.start;
+                state.endTime = clip.end;
+                if (trimStart) { trimStart.max = state.duration; trimStart.value = state.startTime; }
+                if (trimEnd) { trimEnd.max = state.duration; trimEnd.value = state.endTime; }
+                if (startVal) startVal.value = formatTime(state.startTime);
+                if (endVal) endVal.value = formatTime(state.endTime);
+                drawFrame();
+            }
+
+            imageDurationInput.value = newDuration;
+            if (typeof renderClipTimeline === 'function') renderClipTimeline();
+            if (window.recordEditorHistory) {
+                window.recordEditorHistory(`Image duration set to ${newDuration}s`);
+            } else if (window.triggerAutoSave) {
+                window.triggerAutoSave();
+            }
+        });
+    }
     
     const prevBtn = document.getElementById('prev-btn');
     const nextBtn = document.getElementById('next-btn');
@@ -530,6 +597,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 state.currentTime = 0;
                 updatePlayhead();
                 drawFrame();
+                syncImageDurationUI();
                 if (window.recordEditorHistory) {
                     window.recordEditorHistory('Video added');
                 }
@@ -2037,6 +2105,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 drawFrame();
                 renderClipTimeline();
                 if (window.syncPhase9ClipUI) window.syncPhase9ClipUI();
+                syncImageDurationUI();
 
                 if (autoPlay) {
                     playVideo();
@@ -2074,6 +2143,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 drawFrame();
                 renderClipTimeline();
                 if (window.syncPhase9ClipUI) window.syncPhase9ClipUI();
+                syncImageDurationUI();
 
                 if (autoPlay) {
                     playVideo();
@@ -3572,7 +3642,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     const numLines = sublines.length;
                     const isBulletPage = sublines.length > 1 || (item.text && item.text.indexOf('\n') !== -1);
 
-                    state.ctx.font = `bold ${item.fontSize || 48}px "Hind Siliguri", "Plus Jakarta Sans", sans-serif`;
+                    state.ctx.font = `${item.italic ? 'italic ' : ''}${item.bold === false ? '' : 'bold '}${item.fontSize || 48}px "Hind Siliguri", "Plus Jakarta Sans", sans-serif`;
                     state.ctx.fillStyle = item.color;
                     state.ctx.textBaseline = 'middle';
 
@@ -3696,6 +3766,23 @@ document.addEventListener('DOMContentLoaded', () => {
                                     state.ctx.fillText(lineObj.bullet, drawBulletX, drawLineY);
                                 }
                                 state.ctx.fillText(textToDraw, drawLineX, drawLineY);
+
+                                // Canvas text has no native underline, so draw one manually
+                                // under whatever's currently on screen (handles the typewriter
+                                // reveal mid-animation too, since textToDraw may be partial).
+                                if (item.underline && textToDraw) {
+                                    const ulW = state.ctx.measureText(textToDraw).width;
+                                    const ulX = (state.ctx.textAlign === 'center') ? (drawLineX - ulW / 2) : drawLineX;
+                                    const ulY = drawLineY + item.fontSize * 0.38;
+                                    state.ctx.save();
+                                    state.ctx.strokeStyle = item.color;
+                                    state.ctx.lineWidth = Math.max(1.5, item.fontSize * 0.05);
+                                    state.ctx.beginPath();
+                                    state.ctx.moveTo(ulX, ulY);
+                                    state.ctx.lineTo(ulX + ulW, ulY);
+                                    state.ctx.stroke();
+                                    state.ctx.restore();
+                                }
 
                                 if (isTypingLine && Math.floor(currentTime * 2.5) % 2 === 0) {
                                     const curX = drawLineX + state.ctx.measureText(textToDraw).width + Math.max(2, item.fontSize * 0.04);
@@ -5430,7 +5517,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     let pw = canvasW * 0.35;
                     let ph = pw;
                     if (brollHit.type === 'text') {
-                        state.ctx.font = `bold ${brollHit.fontSize}px "Hind Siliguri", "Plus Jakarta Sans", sans-serif`;
+                        state.ctx.font = `${brollHit.italic ? 'italic ' : ''}${brollHit.bold === false ? '' : 'bold '}${brollHit.fontSize}px "Hind Siliguri", "Plus Jakarta Sans", sans-serif`;
                         const metrics = state.ctx.measureText(brollHit.text);
                         pw = metrics.width + 32;
                         ph = brollHit.fontSize + 24;
@@ -5644,7 +5731,7 @@ document.addEventListener('DOMContentLoaded', () => {
             } else {
                 // PiP mode
                 if (item.type === 'text') {
-                    state.ctx.font = `bold ${item.fontSize}px "Hind Siliguri", "Plus Jakarta Sans", sans-serif`;
+                    state.ctx.font = `${item.italic ? 'italic ' : ''}${item.bold === false ? '' : 'bold '}${item.fontSize}px "Hind Siliguri", "Plus Jakarta Sans", sans-serif`;
                     const metrics = state.ctx.measureText(item.text);
                     pipW = metrics.width + 32;
                     pipH = item.fontSize + 24;
@@ -5711,7 +5798,7 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         } else {
             if (item.type === 'text') {
-                state.ctx.font = `bold ${item.fontSize}px "Hind Siliguri", "Plus Jakarta Sans", sans-serif`;
+                state.ctx.font = `${item.italic ? 'italic ' : ''}${item.bold === false ? '' : 'bold '}${item.fontSize}px "Hind Siliguri", "Plus Jakarta Sans", sans-serif`;
                 const metrics = state.ctx.measureText(item.text);
                 pipW = metrics.width + 32;
                 pipH = item.fontSize + 24;
@@ -7938,6 +8025,39 @@ document.addEventListener('DOMContentLoaded', () => {
     const brollEditTextFontsizeVal = document.getElementById('broll-edit-text-fontsize-val');
     const brollEditTextColor = document.getElementById('broll-edit-text-color');
     const brollEditTextColorVal = document.getElementById('broll-edit-text-color-val');
+    const brollEditTextBold = document.getElementById('broll-edit-text-bold');
+    const brollEditTextItalic = document.getElementById('broll-edit-text-italic');
+    const brollEditTextUnderline = document.getElementById('broll-edit-text-underline');
+    if (brollEditTextBold) {
+        brollEditTextBold.addEventListener('change', (e) => {
+            const item = state.brollOverlays.find(b => b.id === state.selectedBrollId);
+            if (item && item.type === 'text') {
+                item.bold = e.target.checked;
+                drawFrame();
+                if (window.triggerAutoSave) window.triggerAutoSave();
+            }
+        });
+    }
+    if (brollEditTextItalic) {
+        brollEditTextItalic.addEventListener('change', (e) => {
+            const item = state.brollOverlays.find(b => b.id === state.selectedBrollId);
+            if (item && item.type === 'text') {
+                item.italic = e.target.checked;
+                drawFrame();
+                if (window.triggerAutoSave) window.triggerAutoSave();
+            }
+        });
+    }
+    if (brollEditTextUnderline) {
+        brollEditTextUnderline.addEventListener('change', (e) => {
+            const item = state.brollOverlays.find(b => b.id === state.selectedBrollId);
+            if (item && item.type === 'text') {
+                item.underline = e.target.checked;
+                drawFrame();
+                if (window.triggerAutoSave) window.triggerAutoSave();
+            }
+        });
+    }
     if (brollEditTextInput) {
         const syncBrollTextEdit = (e) => {
             const item = state.brollOverlays.find(b => b.id === state.selectedBrollId);
@@ -8909,7 +9029,7 @@ document.addEventListener('DOMContentLoaded', () => {
     function getBrollTextLayout(ctx, item, maxW) {
         const text = String(item.text || '');
         const paragraphs = text.split(/\r?\n/);
-        const font = `bold ${item.fontSize || 48}px "Hind Siliguri", "Plus Jakarta Sans", sans-serif`;
+        const font = `${item.italic ? 'italic ' : ''}${item.bold === false ? '' : 'bold '}${item.fontSize || 48}px "Hind Siliguri", "Plus Jakarta Sans", sans-serif`;
         ctx.font = font;
 
         const bulletRegex = /^([•✔➤★▶►➕🔹❤️\*\-—–]|\d+[\.\)])\s*/;
@@ -9207,6 +9327,12 @@ document.addEventListener('DOMContentLoaded', () => {
                     brollEditTextColor.value = item.color || '#ffffff';
                     if (brollEditTextColorVal) brollEditTextColorVal.innerText = item.color || '#ffffff';
                 }
+                // Bold defaults to true for older items that predate this toggle
+                // (they were always rendered bold, so item.bold === undefined must
+                // still mean "on" here, not "off").
+                if (brollEditTextBold) brollEditTextBold.checked = item.bold !== false;
+                if (brollEditTextItalic) brollEditTextItalic.checked = !!item.italic;
+                if (brollEditTextUnderline) brollEditTextUnderline.checked = !!item.underline;
                 if (brollEditTextBgEnabled) brollEditTextBgEnabled.checked = !!item.bgEnabled;
                 if (brollEditTextBgColorRow) brollEditTextBgColorRow.style.display = item.bgEnabled ? 'flex' : 'none';
                 if (brollEditTextBgColor) {
