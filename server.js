@@ -72,7 +72,6 @@ app.post('/api/local-transcribe', express.raw({ type: 'audio/*', limit: '25mb' }
     const recordingId = `voice_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
     const inputPath = path.join(WHISPER_TEMP_DIR, `${recordingId}.webm`);
     const audioPath = path.join(WHISPER_TEMP_DIR, `${recordingId}.f32`);
-
     try {
         await fs.promises.writeFile(inputPath, req.body);
         await convertRecordingToWhisperAudio(inputPath, audioPath);

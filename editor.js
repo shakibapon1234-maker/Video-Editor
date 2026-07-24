@@ -1988,10 +1988,14 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function switchActiveClip(clipId, autoPlay = false) {
         const clip = state.clips.find(c => c.id === clipId);
-        if (!clip || clip.id === state.activeClipId) return;
+        if (!clip) return;
+
+        const isSameClip = clip.id === state.activeClipId;
 
         // Persist the outgoing clip's crop area before switching away from it.
-        syncCropToActiveClip();
+        if (!isSameClip) {
+            syncCropToActiveClip();
+        }
 
         // Only mark this as an "in-progress" transition (as opposed to a real
         // stop) when we're about to auto-resume on the next clip -- that's the
@@ -2063,10 +2067,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
                 updateCanvasDimensions();
                 state.currentTime = state.startTime;
-                // A cut creates two segments that share one media file. Seek the
-                // underlying <video> as well as the editor state; otherwise the
-                // UI moves to the kept segment while native playback continues
-                // from the old, uncut position.
                 state.video.currentTime = state.startTime;
                 updatePlayhead();
                 updateCropDimensionsDisplay();
@@ -12503,6 +12503,7 @@ document.addEventListener('DOMContentLoaded', () => {
             // Setup video element src
             if (state.clips.length > 0) {
                 const activeClip = state.clips.find(c => c.id === state.activeClipId) || state.clips[0];
+                state.activeClipId = activeClip.id;
                 if (activeClip && activeClip.type !== 'image' && activeClip.url) {
                     state.video.src = activeClip.url;
                     state.video.load();
@@ -12513,6 +12514,10 @@ document.addEventListener('DOMContentLoaded', () => {
                 } else if (activeClip && activeClip.type === 'image') {
                     if (!state.duration) state.duration = activeClip.duration || 5.0;
                 }
+
+                // Force startTime and endTime to match the active clip's own trim range
+                state.startTime = activeClip.start || 0;
+                state.endTime = activeClip.end || activeClip.duration || state.duration || 0;
             }
 
             if (!state.endTime || state.endTime > state.duration) {
@@ -13387,175 +13392,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 break;
         }
     });
-
-    // --- Voice typing for text fields ---
-    // Chrome/Edge provide this Web Speech API; each field receives its own
-    // language selector so Bangla and English dictation can both be used.
-    const VoiceRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-    // Chrome and Edge provide reliable built-in dictation. Electron uses the
-    // local recorder because its bundled Chromium speech service is incomplete.
-    const useLocalVoiceTyping = /Electron/i.test(navigator.userAgent) || !VoiceRecognition;
-    const activeVoiceInput = { recognition: null, recorder: null, stream: null, button: null };
-
-    function resetVoiceTypingButton(button) {
-        button.classList.remove('is-listening');
-        button.innerHTML = '<i class="fa-solid fa-microphone"></i>';
-        button.title = 'মাইক্রোফোন চাপুন, তারপর কথা বলুন';
-        button.setAttribute('aria-label', 'Start voice typing');
-    }
-
-    function stopVoiceTyping() {
-        if (activeVoiceInput.recognition) {
-            try { activeVoiceInput.recognition.stop(); } catch (err) { /* already stopped */ }
-        }
-        if (activeVoiceInput.recorder && activeVoiceInput.recorder.state !== 'inactive') {
-            activeVoiceInput.recorder.stop();
-        }
-    }
-
-    function insertVoiceText(input, text) {
-        const cleanText = text.trim();
-        if (!cleanText) return;
-        const start = input.selectionStart == null ? input.value.length : input.selectionStart;
-        const end = input.selectionEnd == null ? input.value.length : input.selectionEnd;
-        const spacer = start > 0 && input.value[start - 1] && !/\s$/.test(input.value.slice(0, start)) ? ' ' : '';
-        input.value = input.value.slice(0, start) + spacer + cleanText + input.value.slice(end);
-        const caret = start + spacer.length + cleanText.length;
-        input.setSelectionRange(caret, caret);
-        input.dispatchEvent(new Event('input', { bubbles: true }));
-        input.dispatchEvent(new Event('change', { bubbles: true }));
-        input.focus();
-    }
-
-    async function startLocalVoiceTyping(input, language, button) {
-        try {
-            const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-            const recorder = new MediaRecorder(stream, { mimeType: MediaRecorder.isTypeSupported('audio/webm;codecs=opus') ? 'audio/webm;codecs=opus' : 'audio/webm' });
-            const chunks = [];
-            recorder.addEventListener('dataavailable', (event) => {
-                if (event.data.size) chunks.push(event.data);
-            });
-            recorder.addEventListener('stop', async () => {
-                stream.getTracks().forEach((track) => track.stop());
-                if (activeVoiceInput.recorder !== recorder) return;
-                button.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i>';
-                button.title = 'কথা text-এ পরিবর্তন হচ্ছে...';
-                try {
-                    const audio = new Blob(chunks, { type: recorder.mimeType || 'audio/webm' });
-                    const response = await fetch('/api/local-transcribe?language=' + encodeURIComponent(language.value), {
-                        method: 'POST',
-                        headers: { 'Content-Type': audio.type },
-                        body: audio
-                    });
-                    const data = await response.json();
-                    if (!response.ok) throw new Error(data.error || 'Voice typing failed.');
-                    insertVoiceText(input, data.text || '');
-                    if (!data.text) alert('কোনো কথা শনাক্ত করা যায়নি। আবার একটু পরিষ্কারভাবে বলুন।');
-                } catch (error) {
-                    console.error('Local voice typing failed:', error);
-                    alert('Voice typing করা যায়নি। প্রথমবার Whisper model download হতে internet লাগবে।\n' + error.message);
-                } finally {
-                    if (activeVoiceInput.recorder === recorder) {
-                        activeVoiceInput.recorder = null;
-                        activeVoiceInput.stream = null;
-                        activeVoiceInput.button = null;
-                        resetVoiceTypingButton(button);
-                    }
-                }
-            });
-            activeVoiceInput.recorder = recorder;
-            activeVoiceInput.stream = stream;
-            activeVoiceInput.button = button;
-            button.classList.add('is-listening');
-            button.innerHTML = '<i class="fa-solid fa-stop"></i>';
-            button.title = 'কথা শেষ হলে আবার চাপুন';
-            button.setAttribute('aria-label', 'Stop voice typing');
-            recorder.start();
-        } catch (error) {
-            console.error('Unable to start local voice typing:', error);
-            alert('Voice typing ব্যবহার করতে Microphone permission Allow করুন।');
-            resetVoiceTypingButton(button);
-        }
-    }
-
-    function addVoiceTypingControl(input) {
-        if ((useLocalVoiceTyping && !navigator.mediaDevices?.getUserMedia) || input.dataset.voiceTypingReady) return;
-        input.dataset.voiceTypingReady = 'true';
-
-        const wrapper = document.createElement('div');
-        wrapper.className = 'voice-type-field';
-        input.parentNode.insertBefore(wrapper, input);
-        wrapper.appendChild(input);
-
-        const language = document.createElement('select');
-        language.className = 'form-select voice-language-select';
-        language.setAttribute('aria-label', 'Voice typing language');
-        language.innerHTML = '<option value="bn-BD">বাংলা</option><option value="en-US">English</option>';
-
-        const button = document.createElement('button');
-        button.type = 'button';
-        button.className = 'voice-type-btn';
-        button.title = 'মাইক্রোফোন চাপুন, তারপর কথা বলুন';
-        button.setAttribute('aria-label', 'Start voice typing');
-        button.innerHTML = '<i class="fa-solid fa-microphone"></i>';
-        wrapper.append(language, button);
-
-        button.addEventListener('click', () => {
-            if (activeVoiceInput.button === button) {
-                stopVoiceTyping();
-                return;
-            }
-
-            stopVoiceTyping();
-            if (useLocalVoiceTyping) {
-                startLocalVoiceTyping(input, language, button);
-                return;
-            }
-
-            const recognition = new VoiceRecognition();
-            recognition.lang = language.value;
-            recognition.continuous = true;
-            recognition.interimResults = false;
-
-            recognition.onresult = (event) => {
-                let text = '';
-                for (let i = event.resultIndex; i < event.results.length; i++) {
-                    if (event.results[i].isFinal) text += event.results[i][0].transcript;
-                }
-                if (!text) return;
-
-                insertVoiceText(input, text);
-            };
-
-            recognition.onerror = (event) => {
-                if (event.error === 'not-allowed' || event.error === 'service-not-allowed') {
-                    alert('Voice typing ব্যবহার করতে ব্রাউজার থেকে Microphone permission Allow করুন।');
-                }
-            };
-
-            recognition.onend = () => {
-                if (activeVoiceInput.recognition === recognition) {
-                    resetVoiceTypingButton(button);
-                    activeVoiceInput.recognition = null;
-                    activeVoiceInput.button = null;
-                }
-            };
-
-            try {
-                recognition.start();
-                activeVoiceInput.recognition = recognition;
-                activeVoiceInput.button = button;
-                button.classList.add('is-listening');
-                button.innerHTML = '<i class="fa-solid fa-stop"></i>';
-                button.title = 'Voice typing বন্ধ করুন';
-                button.setAttribute('aria-label', 'Stop voice typing');
-            } catch (err) {
-                console.warn('Unable to start voice typing:', err);
-            }
-        });
-    }
-
-    document.querySelectorAll('input.form-input[type="text"], textarea.form-input').forEach(addVoiceTypingControl);
 
     // Bind global trigger to allow re-render on demands
     window.triggerCanvasRedraw = drawFrame;
