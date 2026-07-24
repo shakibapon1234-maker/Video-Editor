@@ -757,6 +757,72 @@ body {
     align-items: center;
 }
 
+/* Stack the waveform below the seek slider while keeping both aligned. */
+.seek-slider-column {
+    display: flex;
+    flex-direction: column;
+    flex-grow: 1;
+    gap: 4px;
+    min-width: 0;
+}
+
+.seek-slider-column .seek-slider-wrapper {
+    flex-grow: 0;
+    width: 100%;
+}
+
+.audio-waveform-wrapper {
+    position: relative;
+    width: 100%;
+    height: 34px;
+    background-color: var(--bg-surface-elevated);
+    border-radius: 5px;
+    overflow: hidden;
+    cursor: pointer;
+    flex-shrink: 0;
+}
+
+.audio-waveform-wrapper canvas {
+    display: block;
+    width: 100%;
+    height: 100%;
+}
+
+.waveform-trim-fill {
+    position: absolute;
+    inset: 0 auto 0 0;
+    width: 0%;
+    background-color: var(--primary);
+    opacity: 0.12;
+    pointer-events: none;
+}
+
+.waveform-playhead {
+    position: absolute;
+    top: 0;
+    left: 0%;
+    width: 2px;
+    height: 100%;
+    background-color: var(--success);
+    box-shadow: 0 0 6px var(--success);
+    pointer-events: none;
+    z-index: 10;
+}
+
+.waveform-empty-label {
+    position: absolute;
+    inset: 0;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    padding: 0 8px;
+    color: var(--text-secondary);
+    font-size: 11px;
+    opacity: 0.75;
+    pointer-events: none;
+    text-align: center;
+}
+
 .seek-track-bg {
     position: absolute;
     width: 100%;

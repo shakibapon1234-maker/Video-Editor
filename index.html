@@ -8,7 +8,7 @@
     <!-- Google Fonts for Modern Typography -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=Hind+Siliguri:wght@400;500;600;700&family=Galada&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=Hind+Siliguri:wght@400;500;600;700&family=Galada&family=Montserrat:wght@400;600;700;800&family=Poppins:wght@400;600;700&family=Bebas+Neue&family=Anton&family=Oswald:wght@400;600;700&family=Playfair+Display:wght@600;700&family=Caveat:wght@600;700&family=Pacifico&family=Archivo+Black&family=Righteous&family=Permanent+Marker&family=Baloo+Da+2:wght@600;700&family=Tiro+Bangla&display=swap" rel="stylesheet">
     <!-- FontAwesome for Icons -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <!-- Apply saved theme immediately to prevent a flash of the wrong theme -->
@@ -156,10 +156,18 @@
                         <!-- Seek/scrub bar — freely move the playhead forward/back without changing the trim range -->
                         <div class="seek-bar-container">
                             <span class="seek-time-label" id="seek-current-time">00:00.0</span>
-                            <div class="seek-slider-wrapper">
-                                <div class="seek-track-bg"></div>
-                                <div class="seek-track-fill" id="seek-fill"></div>
-                                <input type="range" id="seek-slider" min="0" max="100" value="0" step="0.01">
+                            <div class="seek-slider-column">
+                                <div class="seek-slider-wrapper">
+                                    <div class="seek-track-bg"></div>
+                                    <div class="seek-track-fill" id="seek-fill"></div>
+                                    <input type="range" id="seek-slider" min="0" max="100" value="0" step="0.01">
+                                </div>
+                                <div class="audio-waveform-wrapper" id="audio-waveform-wrapper" title="অডিও ওয়েভফর্ম — ক্লিক করে সিক করুন">
+                                    <canvas id="audio-waveform-canvas"></canvas>
+                                    <div class="waveform-trim-fill" id="waveform-trim-fill"></div>
+                                    <div class="waveform-playhead" id="waveform-playhead-indicator"></div>
+                                    <div class="waveform-empty-label" id="waveform-empty-label" style="display:none;"></div>
+                                </div>
                             </div>
                             <span class="seek-time-label" id="seek-total-time">00:00.0</span>
                         </div>
@@ -1243,6 +1251,29 @@
                                 </div>
 
                                 <div class="control-group mt-3">
+                                    <label>Font Family</label>
+                                    <select id="text-overlay-font-select" class="form-select">
+                                        <option value="Hind Siliguri">Hind Siliguri (Bengali Clean Sans)</option>
+                                        <option value="Galada">Galada (Bengali Stylized)</option>
+                                        <option value="Baloo Da 2">Baloo Da 2 (Bengali Rounded)</option>
+                                        <option value="Tiro Bangla">Tiro Bangla (Bengali Serif)</option>
+                                        <option value="Outfit">Outfit (English)</option>
+                                        <option value="Plus Jakarta Sans">Plus Jakarta Sans (English)</option>
+                                        <option value="Montserrat">Montserrat (English)</option>
+                                        <option value="Poppins">Poppins (English)</option>
+                                        <option value="Oswald">Oswald (English Condensed)</option>
+                                        <option value="Bebas Neue">Bebas Neue (English Bold Display)</option>
+                                        <option value="Anton">Anton (English Impact)</option>
+                                        <option value="Archivo Black">Archivo Black (English Heavy)</option>
+                                        <option value="Righteous">Righteous (English Rounded)</option>
+                                        <option value="Playfair Display">Playfair Display (English Elegant Serif)</option>
+                                        <option value="Caveat">Caveat (English Handwriting)</option>
+                                        <option value="Pacifico">Pacifico (English Script)</option>
+                                        <option value="Permanent Marker">Permanent Marker (English Marker)</option>
+                                    </select>
+                                </div>
+
+                                <div class="control-group mt-3">
                                     <label>Font Size</label>
                                     <div class="slider-val-container">
                                         <input type="range" id="text-overlay-fontsize" min="14" max="100" value="32">
@@ -1256,6 +1287,56 @@
                                         <input type="color" id="text-overlay-color" value="#ffffff">
                                         <span class="color-value-text" id="text-overlay-color-val">#ffffff</span>
                                     </div>
+                                </div>
+
+                                <div class="control-group mt-3">
+                                    <label>Box Style (ব্যাকগ্রাউন্ড বক্স)</label>
+                                    <select id="text-overlay-box-select" class="form-select">
+                                        <option value="none">None (কোনো বক্স নেই)</option>
+                                        <option value="solid">Solid Box</option>
+                                        <option value="outline">Outline Box</option>
+                                        <option value="gradient">Gradient Box</option>
+                                        <option value="pill">Pill / Badge</option>
+                                        <option value="marker">Highlighter Marker</option>
+                                        <option value="speech">Speech Bubble</option>
+                                        <option value="ribbon">Ribbon Banner</option>
+                                        <option value="neon">Neon Glow</option>
+                                    </select>
+                                </div>
+
+                                <div class="control-group mt-3" id="text-overlay-boxcolor-group">
+                                    <label>Box Color</label>
+                                    <div class="color-picker-wrapper">
+                                        <input type="color" id="text-overlay-boxcolor" value="#4f46e5">
+                                        <span class="color-value-text" id="text-overlay-boxcolor-val">#4f46e5</span>
+                                    </div>
+                                </div>
+
+                                <div class="control-group mt-3">
+                                    <label>Animation (এন্ট্রি/এক্সিট অ্যানিমেশন)</label>
+                                    <select id="text-overlay-anim-select" class="form-select">
+                                        <option value="none">None</option>
+                                        <option value="fade">Fade</option>
+                                        <option value="slide-up">Slide Up</option>
+                                        <option value="slide-down">Slide Down</option>
+                                        <option value="slide-left">Slide In (Left)</option>
+                                        <option value="slide-right">Slide In (Right)</option>
+                                        <option value="zoom">Zoom</option>
+                                        <option value="bounce">Bounce Pop</option>
+                                        <option value="rotate-in">Rotate In</option>
+                                        <option value="typewriter">Typewriter</option>
+                                        <option value="letter-cascade">Letter by Letter</option>
+                                        <option value="word-stagger">Word by Word</option>
+                                    </select>
+                                </div>
+
+                                <div class="control-group mt-3">
+                                    <label>Curve (কার্ভ শেপ)</label>
+                                    <div class="slider-val-container">
+                                        <input type="range" id="text-overlay-curve" min="-100" max="100" value="0">
+                                        <span id="text-overlay-curve-val">0</span>
+                                    </div>
+                                    <p class="help-text mt-1">বাম দিকে টানলে নিচের দিকে বাঁক (স্মাইল), ডান দিকে টানলে উপরের দিকে বাঁক (রেইনবো)।</p>
                                 </div>
 
                                 <button id="add-text-overlay-btn" class="btn btn-primary mt-3">
@@ -3054,6 +3135,7 @@
          window.Capacitor safely so our plugin calls no-op until shipped. -->
     <script src="theme.js?v=1"></script>
     <script src="color-scopes.js?v=1"></script>
+    <script src="audio-waveform-track.js?v=1"></script>
     <script src="public/capacitor/capacitor.js"></script>
     <script src="audio.js?v=4"></script>
     <script src="editor.js?v=8"></script>

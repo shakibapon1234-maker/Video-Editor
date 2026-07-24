@@ -598,6 +598,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 updatePlayhead();
                 drawFrame();
                 syncImageDurationUI();
+                if (window.refreshAudioWaveform) window.refreshAudioWaveform();
                 if (window.recordEditorHistory) {
                     window.recordEditorHistory('Video added');
                 }
@@ -1947,6 +1948,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (seekFill) seekFill.style.width = Math.max(0, Math.min(100, percent)) + '%';
         if (seekCurrentTimeEl) seekCurrentTimeEl.innerHTML = formatTimeDual(current);
         if (seekTotalTimeEl) seekTotalTimeEl.innerHTML = formatTimeDual(total);
+        if (window.updateWaveformPlayhead) window.updateWaveformPlayhead();
     }
     
     // Trim Slider Interaction
@@ -2106,6 +2108,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 renderClipTimeline();
                 if (window.syncPhase9ClipUI) window.syncPhase9ClipUI();
                 syncImageDurationUI();
+                if (window.refreshAudioWaveform) window.refreshAudioWaveform();
 
                 if (autoPlay) {
                     playVideo();
@@ -2144,6 +2147,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 renderClipTimeline();
                 if (window.syncPhase9ClipUI) window.syncPhase9ClipUI();
                 syncImageDurationUI();
+                if (window.refreshAudioWaveform) window.refreshAudioWaveform();
 
                 if (autoPlay) {
                     playVideo();
@@ -2583,6 +2587,197 @@ document.addEventListener('DOMContentLoaded', () => {
         const c1 = 1.70158;
         const c3 = c1 + 1;
         return 1 + c3 * Math.pow(x - 1, 3) + c1 * Math.pow(x - 1, 2);
+    }
+
+    // --- Text Overlay v2: box styles, entry/exit animation, curved text ---
+    function easeOutCubicTO(p) { return 1 - Math.pow(1 - Math.max(0, Math.min(1, p)), 3); }
+
+    // Lightens/darkens a hex color by `percent` (-100..100). Used to build a
+    // second gradient stop from a single user-picked box color.
+    function shadeColorTO(hex, percent) {
+        const num = parseInt((hex || '#4f46e5').replace('#', ''), 16) || 0x4f46e5;
+        let r = (num >> 16) + Math.round(2.55 * percent);
+        let g = ((num >> 8) & 0xff) + Math.round(2.55 * percent);
+        let b = (num & 0xff) + Math.round(2.55 * percent);
+        r = Math.max(0, Math.min(255, r));
+        g = Math.max(0, Math.min(255, g));
+        b = Math.max(0, Math.min(255, b));
+        return '#' + (0x1000000 + r * 0x10000 + g * 0x100 + b).toString(16).slice(1);
+    }
+
+    // Computes entry/exit "settle" progress for a Text Overlay's animation.
+    // p=1 means fully visible/settled; p=0 means fully hidden (start of entry
+    // or end of exit). phase tells the caller which edge it's currently near.
+    function getTextOverlayAnimProgress(item, currentTime, animDur) {
+        if (!item.animStyle || item.animStyle === 'none') return { p: 1, phase: 'settled' };
+        const tIn = currentTime - item.startSec;
+        const tOut = item.endSec - currentTime;
+        if (tIn < animDur) return { p: Math.max(0, Math.min(1, tIn / animDur)), phase: 'in' };
+        if (tOut < animDur) return { p: Math.max(0, Math.min(1, tOut / animDur)), phase: 'out' };
+        return { p: 1, phase: 'settled' };
+    }
+
+    // Draws a decorative background box behind a Text Overlay, centered on the
+    // current canvas origin (caller is expected to have already translated to
+    // the overlay's position). (w, h) are the full box dimensions.
+    function drawTextOverlayBox(ctx, style, color, w, h) {
+        if (!style || style === 'none') return;
+        const x = -w / 2, y = -h / 2;
+        ctx.save();
+        switch (style) {
+            case 'solid':
+                ctx.globalAlpha *= 0.9;
+                ctx.fillStyle = color;
+                ctx.beginPath();
+                ctx.roundRect(x, y, w, h, 10);
+                ctx.fill();
+                break;
+            case 'outline':
+                ctx.strokeStyle = color;
+                ctx.lineWidth = Math.max(2, h * 0.06);
+                ctx.beginPath();
+                ctx.roundRect(x, y, w, h, 10);
+                ctx.stroke();
+                break;
+            case 'gradient': {
+                const grad = ctx.createLinearGradient(x, y, x + w, y + h);
+                grad.addColorStop(0, color);
+                grad.addColorStop(1, shadeColorTO(color, -30));
+                ctx.fillStyle = grad;
+                ctx.beginPath();
+                ctx.roundRect(x, y, w, h, 12);
+                ctx.fill();
+                break;
+            }
+            case 'pill':
+                ctx.fillStyle = color;
+                ctx.beginPath();
+                ctx.roundRect(x, y, w, h, h / 2);
+                ctx.fill();
+                break;
+            case 'marker':
+                ctx.globalAlpha *= 0.85;
+                ctx.fillStyle = color;
+                ctx.rotate(-0.025);
+                ctx.beginPath();
+                ctx.roundRect(x, y + h * 0.12, w, h * 0.76, h * 0.12);
+                ctx.fill();
+                break;
+            case 'speech':
+                ctx.fillStyle = color;
+                ctx.beginPath();
+                ctx.roundRect(x, y, w, h, 12);
+                {
+                    const tailW = Math.min(w * 0.18, 26);
+                    const tailH = Math.min(h * 0.5, 20);
+                    ctx.moveTo(-tailW / 2, y + h);
+                    ctx.lineTo(0, y + h + tailH);
+                    ctx.lineTo(tailW / 2, y + h);
+                    ctx.closePath();
+                }
+                ctx.fill();
+                break;
+            case 'ribbon': {
+                const notch = Math.min(h * 0.5, 16);
+                ctx.fillStyle = color;
+                ctx.beginPath();
+                ctx.moveTo(x, y);
+                ctx.lineTo(x + w, y);
+                ctx.lineTo(x + w - notch, y + h / 2);
+                ctx.lineTo(x + w, y + h);
+                ctx.lineTo(x, y + h);
+                ctx.lineTo(x + notch, y + h / 2);
+                ctx.closePath();
+                ctx.fill();
+                break;
+            }
+            case 'neon':
+                ctx.fillStyle = 'rgba(10,10,20,0.55)';
+                ctx.beginPath();
+                ctx.roundRect(x, y, w, h, 10);
+                ctx.fill();
+                ctx.shadowColor = color;
+                ctx.shadowBlur = Math.max(8, h * 0.35);
+                ctx.strokeStyle = color;
+                ctx.lineWidth = Math.max(2, h * 0.05);
+                ctx.beginPath();
+                ctx.roundRect(x, y, w, h, 10);
+                ctx.stroke();
+                ctx.shadowBlur = 0;
+                break;
+        }
+        ctx.restore();
+    }
+
+    // Draws `text` centered at the current origin, arced along a circle whose
+    // curvature is set by `curveAmount` (-100..100; 0 = perfectly flat).
+    // Positive values arch upward in the middle (rainbow/badge look), negative
+    // values dip down in the middle (smile/cup look). ctx.font/fillStyle/
+    // textAlign/textBaseline must already be set by the caller.
+    function drawCurvedTextOverlay(ctx, text, curveAmount, strokeColor, strokeWidth) {
+        const strength = Math.min(1, Math.abs(curveAmount) / 100);
+        if (strength <= 0.001 || !text) {
+            if (strokeColor) { ctx.lineWidth = strokeWidth; ctx.strokeStyle = strokeColor; ctx.strokeText(text, 0, 0); }
+            ctx.fillText(text, 0, 0);
+            return;
+        }
+        const arcUp = curveAmount > 0;
+        const chars = text.split('');
+        const widths = chars.map(c => ctx.measureText(c).width || 1);
+        const totalWidth = widths.reduce((a, b) => a + b, 0);
+        const totalAngle = strength * 2.3; // radians, up to ~132 degrees at max curve
+        const radius = totalWidth / totalAngle;
+
+        ctx.save();
+        if (strokeColor) { ctx.lineWidth = strokeWidth; ctx.strokeStyle = strokeColor; }
+        ctx.translate(0, arcUp ? radius : -radius);
+        ctx.rotate(-totalAngle / 2);
+        for (let i = 0; i < chars.length; i++) {
+            const charAngle = widths[i] / radius;
+            ctx.rotate(charAngle / 2);
+            ctx.save();
+            ctx.translate(0, arcUp ? -radius : radius);
+            if (!arcUp) ctx.rotate(Math.PI);
+            if (strokeColor) ctx.strokeText(chars[i], 0, 0);
+            ctx.fillText(chars[i], 0, 0);
+            ctx.restore();
+            ctx.rotate(charAngle / 2);
+        }
+        ctx.restore();
+    }
+
+    // Draws `text` centered at the current origin with each letter or word
+    // fading/rising into place on a staggered delay, driven by overall
+    // animation progress `progress` (0..1). Used for the letter-cascade and
+    // word-stagger Text Overlay animation presets.
+    function drawTextOverlayStaggered(ctx, text, mode, progress, strokeColor, strokeWidth) {
+        const units = mode === 'word' ? text.split(/(\s+)/) : text.split('');
+        const meaningfulCount = units.filter(u => u.trim().length > 0).length || 1;
+        const widths = units.map(u => ctx.measureText(u).width);
+        const totalWidth = widths.reduce((a, b) => a + b, 0);
+        let cursorX = -totalWidth / 2;
+        let order = 0;
+        ctx.save();
+        if (strokeColor) { ctx.lineWidth = strokeWidth; ctx.strokeStyle = strokeColor; }
+        units.forEach((u, i) => {
+            const w = widths[i];
+            const isSpace = mode === 'word' && !u.trim();
+            if (!isSpace) {
+                const perUnitDur = Math.max(0.2, (1 / meaningfulCount) * 1.6);
+                const stagger = meaningfulCount > 1 ? (order / (meaningfulCount - 1)) * Math.max(0, 1 - perUnitDur) : 0;
+                const localP = Math.max(0, Math.min(1, (progress - stagger) / perUnitDur));
+                const eased = easeOutCubicTO(localP);
+                ctx.save();
+                ctx.globalAlpha *= Math.max(0.02, eased);
+                ctx.translate(cursorX + w / 2, (1 - eased) * 14);
+                if (strokeColor) ctx.strokeText(u, 0, 0);
+                ctx.fillText(u, 0, 0);
+                ctx.restore();
+                order++;
+            }
+            cursorX += w;
+        });
+        ctx.restore();
     }
 
     // Builds a 256-entry per-channel lookup table from Shadows/Midtones/Highlights
@@ -4453,11 +4648,13 @@ document.addEventListener('DOMContentLoaded', () => {
             state.ctx.restore();
         }
 
-        // --- Step F: Draw Text Overlays (Phase 2C) ---
+        // --- Step F: Draw Text Overlays (Phase 2C, extended with box styles/fonts/animation/curve) ---
         if (state.textOverlays && state.textOverlays.length > 0) {
             const currentTime = state.currentTime;
+            const TO_ANIM_DUR = 0.45;
+            const isEditingStill = (state.currentStep === 3 && !state.isPlaying);
             state.textOverlays.forEach((item) => {
-                const isVisible = (state.currentStep === 3 && !state.isPlaying)
+                const isVisible = isEditingStill
                     ? true
                     : (currentTime >= item.startSec && currentTime <= item.endSec);
                 if (!isVisible) return;
@@ -4468,27 +4665,91 @@ document.addEventListener('DOMContentLoaded', () => {
                 const txRotationRad = (item.rotation || 0) * Math.PI / 180;
                 const txAlpha = Math.max(0, Math.min(1, (item.opacity ?? 100) / 100));
 
+                const curveAmount = item.curve || 0;
+                // Freeze animation to fully-settled while calmly editing in Step 3
+                // so positioning/timing controls aren't fighting a moving target.
+                const animStyle = isEditingStill ? 'none' : (item.animStyle || 'none');
+                const anim = getTextOverlayAnimProgress({ ...item, animStyle }, currentTime, TO_ANIM_DUR);
+                const eased = easeOutCubicTO(anim.p);
+
+                let animOffX = 0, animOffY = 0, animScale = 1, animRot = 0, animAlpha = 1;
+                if (animStyle !== 'none' && anim.phase !== 'settled') {
+                    switch (animStyle) {
+                        case 'fade':
+                            animAlpha = eased; break;
+                        case 'slide-up':
+                            animOffY = (1 - eased) * (item.fontSize * 1.2); animAlpha = eased; break;
+                        case 'slide-down':
+                            animOffY = -(1 - eased) * (item.fontSize * 1.2); animAlpha = eased; break;
+                        case 'slide-left':
+                            animOffX = (1 - eased) * (item.fontSize * 2); animAlpha = eased; break;
+                        case 'slide-right':
+                            animOffX = -(1 - eased) * (item.fontSize * 2); animAlpha = eased; break;
+                        case 'zoom':
+                            animScale = 0.5 + 0.5 * eased; animAlpha = eased; break;
+                        case 'bounce':
+                            animScale = Math.max(0.02, easeOutBackOvershoot(anim.p)); animAlpha = Math.max(0.05, eased); break;
+                        case 'rotate-in':
+                            animRot = (1 - eased) * 0.3; animScale = 0.85 + 0.15 * eased; animAlpha = eased; break;
+                        default:
+                            break; // 'typewriter' / 'letter-cascade' / 'word-stagger' are handled at draw time below
+                    }
+                }
+
                 state.ctx.save();
-                state.ctx.globalAlpha = txAlpha;
-                state.ctx.translate(tx, ty);
-                if (txRotationRad) state.ctx.rotate(txRotationRad);
-                if (txScale !== 1) state.ctx.scale(txScale, txScale);
-                state.ctx.font = `bold ${item.fontSize}px "${item.font}", "Plus Jakarta Sans", sans-serif`;
+                state.ctx.globalAlpha = txAlpha * animAlpha;
+                state.ctx.translate(tx + animOffX, ty + animOffY);
+                if (txRotationRad || animRot) state.ctx.rotate(txRotationRad + animRot);
+                const finalScale = txScale * animScale;
+                if (finalScale !== 1) state.ctx.scale(finalScale, finalScale);
+
+                const fontFamily = item.font || 'Hind Siliguri';
+                state.ctx.font = `bold ${item.fontSize}px "${fontFamily}", "Plus Jakarta Sans", sans-serif`;
                 state.ctx.fillStyle = item.color;
                 state.ctx.textAlign = 'center';
                 state.ctx.textBaseline = 'middle';
+                const outlineWidth = Math.max(2, item.fontSize * 0.08);
+                const outlineColor = 'rgba(0,0,0,0.55)';
 
-                // Subtle outline for readability over any video background
-                state.ctx.lineWidth = Math.max(2, item.fontSize * 0.08);
-                state.ctx.strokeStyle = 'rgba(0,0,0,0.55)';
-                state.ctx.strokeText(item.text, 0, 0);
-                state.ctx.fillText(item.text, 0, 0);
+                // Box sizing estimate (straight-line metrics, widened a bit if curved).
+                const metrics = state.ctx.measureText(item.text);
+                const boxPadX = Math.max(16, item.fontSize * 0.45);
+                const boxPadY = Math.max(10, item.fontSize * 0.32);
+                let boxW = metrics.width + boxPadX * 2;
+                let boxH = item.fontSize + boxPadY * 2;
+                if (curveAmount) {
+                    const strength = Math.min(1, Math.abs(curveAmount) / 100);
+                    boxH += item.fontSize * strength * 0.9;
+                    boxW *= (1 + strength * 0.08);
+                }
+
+                if (item.boxStyle && item.boxStyle !== 'none') {
+                    drawTextOverlayBox(state.ctx, item.boxStyle, item.boxColor || '#4f46e5', boxW, boxH);
+                }
+
+                // Subtle outline for readability over any video background,
+                // applied per-draw-mode below.
+                let textToDraw = item.text;
+                if (animStyle === 'typewriter' && anim.phase === 'in') {
+                    const revealCount = Math.max(0, Math.min(item.text.length, Math.round(item.text.length * anim.p)));
+                    textToDraw = item.text.slice(0, revealCount);
+                }
+
+                if (curveAmount) {
+                    drawCurvedTextOverlay(state.ctx, textToDraw, curveAmount, outlineColor, outlineWidth);
+                } else if (animStyle === 'letter-cascade' && anim.phase !== 'settled') {
+                    drawTextOverlayStaggered(state.ctx, textToDraw, 'letter', anim.p, outlineColor, outlineWidth);
+                } else if (animStyle === 'word-stagger' && anim.phase !== 'settled') {
+                    drawTextOverlayStaggered(state.ctx, textToDraw, 'word', anim.p, outlineColor, outlineWidth);
+                } else {
+                    state.ctx.lineWidth = outlineWidth;
+                    state.ctx.strokeStyle = outlineColor;
+                    state.ctx.strokeText(textToDraw, 0, 0);
+                    state.ctx.fillText(textToDraw, 0, 0);
+                }
 
                 // Selection box in Step 3 for the active overlay being edited
                 if (state.currentStep === 3 && item.id === state.selectedTextOverlayId) {
-                    const metrics = state.ctx.measureText(item.text);
-                    const boxW = metrics.width + 20;
-                    const boxH = item.fontSize + 16;
                     state.ctx.strokeStyle = 'rgba(79, 70, 229, 0.9)';
                     state.ctx.lineWidth = 2;
                     state.ctx.setLineDash([6, 4]);
@@ -7691,13 +7952,21 @@ document.addEventListener('DOMContentLoaded', () => {
         showFillControls(id);
     };
 
-    // --- Text Overlay Bindings (Phase 2C) ---
+    // --- Text Overlay Bindings (Phase 2C, extended with box styles/fonts/animation/curve) ---
     const textOverlayInput = document.getElementById('text-overlay-input');
 
     const textOverlayFontsizeSlider = document.getElementById('text-overlay-fontsize');
     const textOverlayFontsizeVal = document.getElementById('text-overlay-fontsize-val');
     const textOverlayColorInput = document.getElementById('text-overlay-color');
     const textOverlayColorVal = document.getElementById('text-overlay-color-val');
+    const textOverlayFontSelect = document.getElementById('text-overlay-font-select');
+    const textOverlayBoxSelect = document.getElementById('text-overlay-box-select');
+    const textOverlayBoxColorGroup = document.getElementById('text-overlay-boxcolor-group');
+    const textOverlayBoxColorInput = document.getElementById('text-overlay-boxcolor');
+    const textOverlayBoxColorVal = document.getElementById('text-overlay-boxcolor-val');
+    const textOverlayAnimSelect = document.getElementById('text-overlay-anim-select');
+    const textOverlayCurveSlider = document.getElementById('text-overlay-curve');
+    const textOverlayCurveVal = document.getElementById('text-overlay-curve-val');
     const addTextOverlayBtn = document.getElementById('add-text-overlay-btn');
     const textOverlayListEl = document.getElementById('text-overlay-list');
     const textOverlayTimingContainer = document.getElementById('text-overlay-timing-container');
@@ -7707,12 +7976,56 @@ document.addEventListener('DOMContentLoaded', () => {
 
     let textOverlayIdCounter = 1;
 
+    // Toggles the box-color picker's visibility based on the chosen box style.
+    function refreshTextOverlayBoxColorVisibility() {
+        textOverlayBoxColorGroup.style.display = (textOverlayBoxSelect.value === 'none') ? 'none' : 'block';
+    }
+    refreshTextOverlayBoxColorVisibility();
+
+    // While a Text Overlay is selected, these controls edit that item live in
+    // addition to setting the defaults for the *next* new overlay you add.
+    function getSelectedTextOverlay() {
+        return state.textOverlays.find(t => t.id === state.selectedTextOverlayId);
+    }
+
     textOverlayFontsizeSlider.addEventListener('input', (e) => {
         textOverlayFontsizeVal.innerText = e.target.value + 'px';
+        const item = getSelectedTextOverlay();
+        if (item) { item.fontSize = parseInt(e.target.value); drawFrame(); }
     });
 
     textOverlayColorInput.addEventListener('input', (e) => {
         textOverlayColorVal.innerText = e.target.value;
+        const item = getSelectedTextOverlay();
+        if (item) { item.color = e.target.value; drawFrame(); }
+    });
+
+    textOverlayFontSelect.addEventListener('change', (e) => {
+        const item = getSelectedTextOverlay();
+        if (item) { item.font = e.target.value; drawFrame(); }
+    });
+
+    textOverlayBoxSelect.addEventListener('change', (e) => {
+        refreshTextOverlayBoxColorVisibility();
+        const item = getSelectedTextOverlay();
+        if (item) { item.boxStyle = e.target.value; drawFrame(); }
+    });
+
+    textOverlayBoxColorInput.addEventListener('input', (e) => {
+        textOverlayBoxColorVal.innerText = e.target.value;
+        const item = getSelectedTextOverlay();
+        if (item) { item.boxColor = e.target.value; drawFrame(); }
+    });
+
+    textOverlayAnimSelect.addEventListener('change', (e) => {
+        const item = getSelectedTextOverlay();
+        if (item) { item.animStyle = e.target.value; drawFrame(); }
+    });
+
+    textOverlayCurveSlider.addEventListener('input', (e) => {
+        textOverlayCurveVal.innerText = e.target.value;
+        const item = getSelectedTextOverlay();
+        if (item) { item.curve = parseInt(e.target.value); drawFrame(); }
     });
 
     addTextOverlayBtn.addEventListener('click', () => {
@@ -7726,7 +8039,11 @@ document.addEventListener('DOMContentLoaded', () => {
             y: 0.5,
             fontSize: parseInt(textOverlayFontsizeSlider.value),
             color: textOverlayColorInput.value,
-            font: 'Hind Siliguri',
+            font: textOverlayFontSelect.value || 'Hind Siliguri',
+            boxStyle: textOverlayBoxSelect.value || 'none',
+            boxColor: textOverlayBoxColorInput.value || '#4f46e5',
+            animStyle: textOverlayAnimSelect.value || 'none',
+            curve: parseInt(textOverlayCurveSlider.value) || 0,
             startSec: 0,
             endSec: Math.max(1, state.duration || 5)
         };
@@ -7787,6 +8104,20 @@ document.addEventListener('DOMContentLoaded', () => {
         textOverlayTimingContainer.style.display = 'block';
         textOverlayStartInput.value = item.startSec;
         textOverlayEndInput.value = item.endSec;
+
+        // Sync the style controls to reflect this item so they can be edited live.
+        textOverlayFontsizeSlider.value = item.fontSize;
+        textOverlayFontsizeVal.innerText = item.fontSize + 'px';
+        textOverlayColorInput.value = item.color;
+        textOverlayColorVal.innerText = item.color;
+        textOverlayFontSelect.value = item.font || 'Hind Siliguri';
+        textOverlayBoxSelect.value = item.boxStyle || 'none';
+        textOverlayBoxColorInput.value = item.boxColor || '#4f46e5';
+        textOverlayBoxColorVal.innerText = item.boxColor || '#4f46e5';
+        textOverlayAnimSelect.value = item.animStyle || 'none';
+        textOverlayCurveSlider.value = item.curve || 0;
+        textOverlayCurveVal.innerText = item.curve || 0;
+        refreshTextOverlayBoxColorVisibility();
     }
 
     textOverlayStartInput.addEventListener('input', (e) => {
