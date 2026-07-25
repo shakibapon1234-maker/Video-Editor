@@ -4452,61 +4452,76 @@ document.addEventListener('DOMContentLoaded', () => {
                 // Fullscreen = the video frame's own draw rect. PiP = a small box
                 // sized by its content and positioned by item.x/item.y (drag-anywhere).
                 let boxX, boxY, boxW, boxH;
-                if (item.mode === 'fullscreen') {
-                    const scale = ((item.size !== undefined ? item.size : 100)) / 100;
-                    if (scale >= 0.999) {
-                        // Full coverage (default) — identical to the old behaviour
-                        boxX = drawX; boxY = drawY; boxW = drawW; boxH = drawH;
-                    } else {
-                        // Custom size: scale from the center of the video draw rect.
-                        // item.x/y are set when the user drags the box, otherwise centered.
-                        boxW = drawW * scale;
-                        boxH = drawH * scale;
-                        if (item._fsPosSet) {
+                if (item.type === 'text') {
+                    const maxW = item.pipW !== undefined ? (item.pipW * canvasW - 32) : (canvasW * 0.82);
+                    const layout = getBrollTextLayout(state.ctx, item, maxW);
+                    boxW = item.pipW !== undefined ? (item.pipW * canvasW) : layout.totalW;
+                    boxH = layout.totalH;
+                    if (item.mode === 'fullscreen') {
+                        const scale = ((item.size !== undefined ? item.size : 100)) / 100;
+                        if (scale < 0.999 && item._fsPosSet) {
                             boxX = item.x * canvasW;
                             boxY = item.y * canvasH;
                         } else {
-                            boxX = drawX + (drawW - boxW) / 2;
-                            boxY = drawY + (drawH - boxH) / 2;
+                            boxX = (canvasW - boxW) / 2;
+                            boxY = (canvasH - boxH) / 2;
                         }
+                    } else {
+                        boxX = item.x * canvasW;
+                        boxY = item.y * canvasH;
                     }
                 } else {
-                    if (item.type === 'text') {
-                        const maxW = canvasW * 0.82;
-                        const layout = getBrollTextLayout(state.ctx, item, maxW);
-                        boxW = layout.totalW;
-                        boxH = layout.totalH;
-                    } else if (item.type === 'cash' || item.type === 'built-in') {
-                        if (item.pipW !== undefined && item.pipH !== undefined) {
-                            boxW = item.pipW * canvasW;
-                            boxH = item.pipH * canvasH;
+                    if (item.mode === 'fullscreen') {
+                        const scale = ((item.size !== undefined ? item.size : 100)) / 100;
+                        if (scale >= 0.999) {
+                            // Full coverage (default) — identical to the old behaviour
+                            boxX = drawX; boxY = drawY; boxW = drawW; boxH = drawH;
                         } else {
-                            boxW = canvasW * (item.size / 100);
-                            if (item.type === 'built-in' && item.builtInType !== 'cash') {
-                                boxH = boxW;
+                            // Custom size: scale from the center of the video draw rect.
+                            // item.x/y are set when the user drags the box, otherwise centered.
+                            boxW = drawW * scale;
+                            boxH = drawH * scale;
+                            if (item._fsPosSet) {
+                                boxX = item.x * canvasW;
+                                boxY = item.y * canvasH;
                             } else {
-                                let imgAspect = 0.62;
-                                if (state.takaImage && state.takaImage.complete && state.takaImage.naturalWidth > 0) {
-                                    imgAspect = state.takaImage.naturalHeight / state.takaImage.naturalWidth;
-                                }
-                                boxH = boxW * imgAspect;
+                                boxX = drawX + (drawW - boxW) / 2;
+                                boxY = drawY + (drawH - boxH) / 2;
                             }
                         }
                     } else {
-                        if (item.pipW !== undefined && item.pipH !== undefined) {
-                            // Free-form resize set by dragging corner/edge handles
-                            boxW = item.pipW * canvasW;
-                            boxH = item.pipH * canvasH;
+                        if (item.type === 'cash' || item.type === 'built-in') {
+                            if (item.pipW !== undefined && item.pipH !== undefined) {
+                                boxW = item.pipW * canvasW;
+                                boxH = item.pipH * canvasH;
+                            } else {
+                                boxW = canvasW * (item.size / 100);
+                                if (item.type === 'built-in' && item.builtInType !== 'cash') {
+                                    boxH = boxW;
+                                } else {
+                                    let imgAspect = 0.62;
+                                    if (state.takaImage && state.takaImage.complete && state.takaImage.naturalWidth > 0) {
+                                        imgAspect = state.takaImage.naturalHeight / state.takaImage.naturalWidth;
+                                    }
+                                    boxH = boxW * imgAspect;
+                                }
+                            }
                         } else {
-                            boxW = canvasW * (item.size / 100);
-                            const dims = getItemImageDimensions(item);
-                            boxH = boxW * (dims.height / dims.width);
+                            if (item.pipW !== undefined && item.pipH !== undefined) {
+                                // Free-form resize set by dragging corner/edge handles
+                                boxW = item.pipW * canvasW;
+                                boxH = item.pipH * canvasH;
+                            } else {
+                                boxW = canvasW * (item.size / 100);
+                                const dims = getItemImageDimensions(item);
+                                boxH = boxW * (dims.height / dims.width);
+                            }
                         }
+                        if (item.visualTemplate === 'phone') boxH = boxW * 2.06;
+                        if (item.visualTemplate === 'laptop') boxH = boxW * 0.70;
+                        boxX = item.x * canvasW;
+                        boxY = item.y * canvasH;
                     }
-                    if (item.visualTemplate === 'phone') boxH = boxW * 2.06;
-                    if (item.visualTemplate === 'laptop') boxH = boxW * 0.70;
-                    boxX = item.x * canvasW;
-                    boxY = item.y * canvasH;
                 }
 
                 // ---- 2. Resolve the animation transform (same style set, any box) ----
@@ -4854,7 +4869,7 @@ document.addEventListener('DOMContentLoaded', () => {
                             state.ctx.fillRect(drawBoxX, drawBoxY, boxW, boxH);
                         }
                     }
-                    const maxW = (item.mode === 'fullscreen') ? (canvasW * 0.82) : Math.max(100, boxW - 32);
+                    const maxW = (item.mode === 'fullscreen') ? (canvasW * 0.82) : (item.pipW !== undefined ? (item.pipW * canvasW - 32) : Math.max(100, boxW - 32 + 3));
                     const layout = getBrollTextLayout(state.ctx, item, maxW);
                     const sublines = layout.sublines;
                     const lineHeight = layout.lineHeight;
@@ -7130,81 +7145,18 @@ document.addEventListener('DOMContentLoaded', () => {
             const item = state.brollOverlays[i];
             if (item.type !== 'text' && item.type !== 'cash' && item.type !== 'built-in' && !item.imageImg) continue;
 
-            // Only let the user click-select an overlay that's actually visible on
-            // screen right now — same rule the render loop uses. Without this, an
-            // older overlay whose time window has passed could still "catch" clicks
-            // meant for a different item positioned in the same spot.
             const isBeingEdited = state.currentStep === 3 && !state.isPlaying && item.id === state.selectedBrollId;
             const visible = brollBelongsToActiveClip(item) &&
                 (isBeingEdited || (currentTime >= item.startSec && currentTime <= item.endSec));
             if (!visible) continue;
 
-            let px, py, pipW, pipH;
-
-            if (item.mode === 'fullscreen') {
-                if (item.type === 'text') {
-                    // Fullscreen or PiP text layout
-                    const maxW = canvasW * 0.82;
-                    const layout = getBrollTextLayout(state.ctx, item, maxW);
-                    pipW = layout.totalW;
-                    pipH = layout.totalH;
-                    px = (canvasW - pipW) / 2;
-                    py = (canvasH - pipH) / 2;
-                } else {
-                    // Fullscreen image — hit-test uses actual scaled box when size < 100%
-                    const scale = (item.size !== undefined ? item.size : 100) / 100;
-                    if (scale >= 0.999) {
-                        px = 0; py = 0; pipW = canvasW; pipH = canvasH;
-                    } else {
-                        const videoAspect = (state.video && state.video.videoWidth && state.video.videoHeight)
-                            ? state.video.videoWidth / state.video.videoHeight : 16 / 9;
-                        const canvasAspect = canvasW / canvasH;
-                        let dvW = canvasW, dvH = canvasH, dvX = 0, dvY = 0;
-                        if (videoAspect > canvasAspect) { dvH = canvasW / videoAspect; dvY = (canvasH - dvH) / 2; }
-                        else if (videoAspect < canvasAspect) { dvW = canvasH * videoAspect; dvX = (canvasW - dvW) / 2; }
-                        pipW = dvW * scale;
-                        pipH = dvH * scale;
-                        if (item._fsPosSet) {
-                            px = item.x * canvasW;
-                            py = item.y * canvasH;
-                        } else {
-                            px = dvX + (dvW - pipW) / 2;
-                            py = dvY + (dvH - pipH) / 2;
-                        }
-                    }
-                }
-            } else {
-                // PiP mode
-                if (item.type === 'text') {
-                    state.ctx.font = `${item.italic ? 'italic ' : ''}${item.bold === false ? '' : 'bold '}${item.fontSize}px "${item.font || 'Hind Siliguri'}", "Plus Jakarta Sans", sans-serif`;
-                    const metrics = state.ctx.measureText(item.text);
-                    pipW = metrics.width + 32;
-                    pipH = item.fontSize + 24;
-                } else {
-                    if (item.pipW !== undefined && item.pipH !== undefined) {
-                        pipW = item.pipW * canvasW;
-                        pipH = item.pipH * canvasH;
-                    } else {
-                        pipW = canvasW * (item.size / 100);
-                        pipH = (item.type === 'cash' || item.type === 'built-in')
-                            ? (item.type === 'built-in' && item.builtInType !== 'cash' ? pipW : (state.takaImage && state.takaImage.complete && state.takaImage.naturalWidth > 0 ? pipW * (state.takaImage.naturalHeight / state.takaImage.naturalWidth) : pipW * 0.62))
-                            : pipW * (getItemImageDimensions(item).height / getItemImageDimensions(item).width);
-                    }
-                    if (item.visualTemplate === 'phone') pipH = pipW * 2.06;
-                    if (item.visualTemplate === 'laptop') pipH = pipW * 0.70;
-                }
-                px = item.x * canvasW;
-                py = item.y * canvasH;
-            }
-
-            // Rotated box: test in the box's own unrotated frame by rotating the
-            // pointer coords backwards around the box center first.
+            const box = getBrollBoxRect(item, canvasW, canvasH);
             let testX = coords.x, testY = coords.y;
             if (item.rotation) {
-                const local = rotatePointAround(coords.x, coords.y, px + pipW / 2, py + pipH / 2, -(item.rotation * Math.PI / 180));
+                const local = rotatePointAround(coords.x, coords.y, box.cx, box.cy, -(item.rotation * Math.PI / 180));
                 testX = local.x; testY = local.y;
             }
-            if (testX >= px && testX <= px + pipW && testY >= py && testY <= py + pipH) {
+            if (testX >= box.x && testX <= box.x + box.w && testY >= box.y && testY <= box.y + box.h) {
                 return item;
             }
         }
@@ -7224,29 +7176,42 @@ document.addEventListener('DOMContentLoaded', () => {
     // pulled out so hit-testing helpers (resize handle, rotate handle) can share it.
     function getBrollBoxRect(item, canvasW, canvasH) {
         let px, py, pipW, pipH;
-        if (item.mode === 'fullscreen') {
-            const scale = (item.size !== undefined ? item.size : 100) / 100;
-            const videoAspect = (state.video && state.video.videoWidth && state.video.videoHeight)
-                ? state.video.videoWidth / state.video.videoHeight : 16 / 9;
-            const canvasAspect = canvasW / canvasH;
-            let dvW = canvasW, dvH = canvasH, dvX = 0, dvY = 0;
-            if (videoAspect > canvasAspect) { dvH = canvasW / videoAspect; dvY = (canvasH - dvH) / 2; }
-            else if (videoAspect < canvasAspect) { dvW = canvasH * videoAspect; dvX = (canvasW - dvW) / 2; }
-            pipW = dvW * scale;
-            pipH = dvH * scale;
-            if (item._fsPosSet) {
+        if (item.type === 'text') {
+            const maxW = item.pipW !== undefined ? (item.pipW * canvasW - 32) : (canvasW * 0.82);
+            const layout = getBrollTextLayout(state.ctx, item, maxW);
+            pipW = item.pipW !== undefined ? (item.pipW * canvasW) : layout.totalW;
+            pipH = layout.totalH;
+            if (item.mode === 'fullscreen') {
+                const scale = (item.size !== undefined ? item.size : 100) / 100;
+                if (scale < 0.999 && item._fsPosSet) {
+                    px = item.x * canvasW;
+                    py = item.y * canvasH;
+                } else {
+                    px = (canvasW - pipW) / 2;
+                    py = (canvasH - pipH) / 2;
+                }
+            } else {
                 px = item.x * canvasW;
                 py = item.y * canvasH;
-            } else {
-                px = dvX + (dvW - pipW) / 2;
-                py = dvY + (dvH - pipH) / 2;
             }
         } else {
-            if (item.type === 'text') {
-                state.ctx.font = `${item.italic ? 'italic ' : ''}${item.bold === false ? '' : 'bold '}${item.fontSize}px "${item.font || 'Hind Siliguri'}", "Plus Jakarta Sans", sans-serif`;
-                const metrics = state.ctx.measureText(item.text);
-                pipW = metrics.width + 32;
-                pipH = item.fontSize + 24;
+            if (item.mode === 'fullscreen') {
+                const scale = (item.size !== undefined ? item.size : 100) / 100;
+                const videoAspect = (state.video && state.video.videoWidth && state.video.videoHeight)
+                    ? state.video.videoWidth / state.video.videoHeight : 16 / 9;
+                const canvasAspect = canvasW / canvasH;
+                let dvW = canvasW, dvH = canvasH, dvX = 0, dvY = 0;
+                if (videoAspect > canvasAspect) { dvH = canvasW / videoAspect; dvY = (canvasH - dvH) / 2; }
+                else if (videoAspect < canvasAspect) { dvW = canvasH * videoAspect; dvX = (canvasW - dvW) / 2; }
+                pipW = dvW * scale;
+                pipH = dvH * scale;
+                if (item._fsPosSet) {
+                    px = item.x * canvasW;
+                    py = item.y * canvasH;
+                } else {
+                    px = dvX + (dvW - pipW) / 2;
+                    py = dvY + (dvH - pipH) / 2;
+                }
             } else {
                 if (item.pipW !== undefined && item.pipH !== undefined) {
                     pipW = item.pipW * canvasW;
@@ -7259,9 +7224,9 @@ document.addEventListener('DOMContentLoaded', () => {
                     if (item.visualTemplate === 'phone') pipH = pipW * 2.06;
                     if (item.visualTemplate === 'laptop') pipH = pipW * 0.70;
                 }
+                px = item.x * canvasW;
+                py = item.y * canvasH;
             }
-            px = item.x * canvasW;
-            py = item.y * canvasH;
         }
         return { x: px, y: py, w: pipW, h: pipH, cx: px + pipW / 2, cy: py + pipH / 2 };
     }
@@ -8334,16 +8299,27 @@ document.addEventListener('DOMContentLoaded', () => {
                 nY = Math.max(0, Math.min(1 - nH, nY));
 
                 if (item.type === 'text') {
-                    let scaleFactor = 1;
+                    let changedFont = false;
+                    let newFontSize = state.brollResizeStartFontSize;
                     if (handle === 'left' || handle === 'right') {
-                        scaleFactor = nW / sw0;
+                        // Change width only (wrap text differently)
+                        item.pipW = nW;
                     } else if (handle === 'top' || handle === 'bottom') {
-                        scaleFactor = nH / sh0;
+                        // Change font size only (height scales with font size)
+                        const scaleFactor = nH / sh0;
+                        newFontSize = Math.max(14, Math.min(120, Math.round(state.brollResizeStartFontSize * scaleFactor)));
+                        item.fontSize = newFontSize;
+                        changedFont = true;
                     } else {
-                        scaleFactor = (nW / sw0 + nH / sh0) / 2;
+                        // Corner handle: scale both width and font size
+                        const scaleFactor = nH / sh0;
+                        newFontSize = Math.max(14, Math.min(120, Math.round(state.brollResizeStartFontSize * scaleFactor)));
+                        item.fontSize = newFontSize;
+                        // Initialize pipW if it wasn't set, using start box width
+                        const startW = state.brollResizeStartW;
+                        item.pipW = startW * scaleFactor;
+                        changedFont = true;
                     }
-                    const newFontSize = Math.max(14, Math.min(120, Math.round(state.brollResizeStartFontSize * scaleFactor)));
-                    item.fontSize = newFontSize;
                     
                     const box = getBrollBoxRect(item, canvasW, canvasH);
                     const finalW = box.w / canvasW;
@@ -8360,11 +8336,13 @@ document.addEventListener('DOMContentLoaded', () => {
                     item.x = Math.max(0, Math.min(1 - finalW, targetX));
                     item.y = Math.max(0, Math.min(1 - finalH, targetY));
                     
-                    const brollEditTextFontsize = document.getElementById('broll-edit-text-fontsize');
-                    const brollEditTextFontsizeVal = document.getElementById('broll-edit-text-fontsize-val');
-                    if (brollEditTextFontsize) {
-                        brollEditTextFontsize.value = newFontSize;
-                        if (brollEditTextFontsizeVal) brollEditTextFontsizeVal.innerText = newFontSize + 'px';
+                    if (changedFont) {
+                        const brollEditTextFontsize = document.getElementById('broll-edit-text-fontsize');
+                        const brollEditTextFontsizeVal = document.getElementById('broll-edit-text-fontsize-val');
+                        if (brollEditTextFontsize) {
+                            brollEditTextFontsize.value = newFontSize;
+                            if (brollEditTextFontsizeVal) brollEditTextFontsizeVal.innerText = newFontSize + 'px';
+                        }
                     }
                 } else if (item.mode === 'fullscreen') {
                     const box = getBrollBoxRect(item, canvasW, canvasH);
