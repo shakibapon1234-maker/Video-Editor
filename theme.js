@@ -53,11 +53,13 @@
         wrap.innerHTML =
             '<button id="theme-switcher-toggle" class="btn btn-outline btn-sm" type="button" title="Change theme (থিম পরিবর্তন করুন)">' +
                 '<i class="fa-solid fa-palette"></i>' +
-            '</button>' +
-            '<div id="theme-switcher-panel" class="theme-switcher-panel"></div>';
+            '</button>';
         mount.appendChild(wrap);
 
-        var panel = wrap.querySelector('#theme-switcher-panel');
+        var panel = document.createElement('div');
+        panel.id = 'theme-switcher-panel';
+        panel.className = 'theme-switcher-panel';
+        document.body.appendChild(panel);
         var toggleBtn = wrap.querySelector('#theme-switcher-toggle');
 
         function renderOptions() {
@@ -106,7 +108,7 @@
         });
 
         document.addEventListener('click', function (e) {
-            if (!wrap.contains(e.target)) {
+            if (!wrap.contains(e.target) && e.target !== panel && !panel.contains(e.target)) {
                 panel.classList.remove('open');
             }
         });

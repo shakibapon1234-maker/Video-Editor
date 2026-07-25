@@ -177,12 +177,29 @@ window.VideoEditor = {
     brollResizeStartH: 0,
     brollResizeStartBoxX: 0,
     brollResizeStartBoxY: 0,
+    brollResizeStartSize: 100,
     isDraggingSeek: false,
     dragBrollOffsetX: 0,
     dragBrollOffsetY: 0,
     isRotatingBroll: false,
     brollRotateStartAngle: 0,
     brollRotateStartRotation: 0,
+
+    // Image clip display scale (for playhead-inserted images / freeze frames)
+    imageClipDisplayScale: 1,
+    isResizingImageClip: false,
+    imageClipResizeHandle: null,
+    imageClipResizeStartScale: 1,
+    imageClipResizeStartX: 0,
+    imageClipResizeStartY: 0,
+    imageClipResizeStartBox: null,
+    imageClipFitBox: null,
+    // Drag-to-move (reposition) for playhead-inserted images / freeze frames
+    isDraggingImageClip: false,
+    imageClipDragStartX: 0,
+    imageClipDragStartY: 0,
+    imageClipDragStartOffsetX: 0,
+    imageClipDragStartOffsetY: 0,
 
     // Blur/Mosaic Regions (Phase 4B)
     blurRegions: [],
@@ -1670,7 +1687,8 @@ document.addEventListener('DOMContentLoaded', () => {
                         cropW: 1,
                         cropH: 1,
                         type: 'image',
-                        imageImg: freezeImg
+                        imageImg: freezeImg,
+                        imageClipDisplayScale: 1
                     };
 
                     // Shrink the original clip to end at the split point, then insert
@@ -3026,20 +3044,17 @@ document.addEventListener('DOMContentLoaded', () => {
         
         if (state.layoutMode === 'fill') {
             if (currentAspect > canvasAspect) {
-                // Video is wider than canvas container -> fill height, crop sides
                 drawH = canvasH;
                 drawW = canvasH * currentAspect;
                 drawX = (canvasW - drawW) / 2;
                 drawY = 0;
             } else {
-                // Video is taller than canvas container -> fill width, crop top/bottom
                 drawW = canvasW;
                 drawH = canvasW / currentAspect;
                 drawX = 0;
                 drawY = (canvasH - drawH) / 2;
             }
         } else {
-            // Fit mode (default contain with black bars)
             if (currentAspect > canvasAspect) {
                 drawH = canvasW / currentAspect;
                 drawY = (canvasH - drawH) / 2;
@@ -3047,6 +3062,20 @@ document.addEventListener('DOMContentLoaded', () => {
                 drawW = canvasH * currentAspect;
                 drawX = (canvasW - drawW) / 2;
             }
+        }
+
+        let imgDrawX = drawX;
+        let imgDrawY = drawY;
+        let imgDrawW = drawW;
+        let imgDrawH = drawH;
+        if (isImageClip) {
+            const { sx, sy } = getImageClipScale(activeClip);
+            const ox = (activeClip.imageClipOffsetX || 0) * canvasW;
+            const oy = (activeClip.imageClipOffsetY || 0) * canvasH;
+            imgDrawW = drawW * sx;
+            imgDrawH = drawH * sy;
+            imgDrawX = drawX + (drawW - imgDrawW) / 2 + ox;
+            imgDrawY = drawY + (drawH - imgDrawH) / 2 + oy;
         }
         
         // --- Step A: Apply Cinematic Filters & Color Adjustments ---
@@ -3162,15 +3191,46 @@ document.addEventListener('DOMContentLoaded', () => {
             if (window.phase9DrawMainMedia) {
                 window.phase9DrawMainMedia(
                     state.ctx, mediaSource, sx, sy, sw, sh,
-                    drawX, drawY, drawW, drawH,
+                    imgDrawX, imgDrawY, imgDrawW, imgDrawH,
                     activeClip, effectiveTime, videoW, videoH
                 );
             } else {
-                state.ctx.drawImage(mediaSource, sx, sy, sw, sh, drawX, drawY, drawW, drawH);
+                state.ctx.drawImage(mediaSource, sx, sy, sw, sh, imgDrawX, imgDrawY, imgDrawW, imgDrawH);
             }
         }
         state.ctx.restore();
 
+        // Image clip resize handles in Step 3 (for playhead-inserted images / freeze frames)
+        if (state.currentStep === 3 && isImageClip && activeClip.id === state.activeClipId) {
+            state.ctx.save();
+            state.ctx.strokeStyle = 'rgba(79, 70, 229, 0.9)';
+            state.ctx.lineWidth = 2;
+            state.ctx.setLineDash([6, 4]);
+            state.ctx.strokeRect(imgDrawX, imgDrawY, imgDrawW, imgDrawH);
+            state.ctx.setLineDash([]);
+
+            const hs = Math.max(7, Math.min(canvasW, canvasH) * 0.018);
+            const hpts = [
+                [imgDrawX, imgDrawY],
+                [imgDrawX + imgDrawW / 2, imgDrawY],
+                [imgDrawX + imgDrawW, imgDrawY],
+                [imgDrawX + imgDrawW, imgDrawY + imgDrawH / 2],
+                [imgDrawX + imgDrawW, imgDrawY + imgDrawH],
+                [imgDrawX + imgDrawW / 2, imgDrawY + imgDrawH],
+                [imgDrawX, imgDrawY + imgDrawH],
+                [imgDrawX, imgDrawY + imgDrawH / 2],
+            ];
+            state.ctx.fillStyle = '#ffffff';
+            state.ctx.strokeStyle = 'rgba(79, 70, 229, 0.95)';
+            state.ctx.lineWidth = 1.5;
+            hpts.forEach(([hx, hy]) => {
+                state.ctx.beginPath();
+                state.ctx.rect(hx - hs / 2, hy - hs / 2, hs, hs);
+                state.ctx.fill();
+                state.ctx.stroke();
+            });
+            state.ctx.restore();
+        }
 
 
         // --- Step A3: Advanced Color Grading (Custom RGB Curves, Phase 4C) ---
@@ -4686,43 +4746,39 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
 
                 // Selection outline + resize handles in Step 3.
-                // Shown for PiP always, and for Fullscreen when size < 100%.
-                const isFsCustom = item.mode === 'fullscreen' && (item.size !== undefined && item.size < 100);
-                if (state.currentStep === 3 && (item.mode === 'pip' || isFsCustom) && item.id === state.selectedBrollId) {
+                // Shown for PiP always, and for Fullscreen (any size) so the
+                // user can drag-resize the image even when it covers the full frame.
+                if (state.currentStep === 3 && (item.mode === 'pip' || item.mode === 'fullscreen') && item.id === state.selectedBrollId) {
                     // Dashed outline
                     state.ctx.strokeStyle = 'rgba(79, 70, 229, 0.9)';
                     state.ctx.lineWidth = 2;
                     state.ctx.setLineDash([6, 4]);
                     state.ctx.strokeRect(drawBoxX, drawBoxY, boxW, boxH);
                     state.ctx.setLineDash([]);
-                    // Resize handles for PiP (8-point: 4 corners + 4 edges)
-                    if (item.mode === 'pip') {
-                        const hs = Math.max(7, Math.min(canvasW, canvasH) * 0.018);
-                        const hpts = [
-                            [drawBoxX,          drawBoxY],
-                            [drawBoxX + boxW/2,  drawBoxY],
-                            [drawBoxX + boxW,    drawBoxY],
-                            [drawBoxX + boxW,    drawBoxY + boxH/2],
-                            [drawBoxX + boxW,    drawBoxY + boxH],
-                            [drawBoxX + boxW/2,  drawBoxY + boxH],
-                            [drawBoxX,           drawBoxY + boxH],
-                            [drawBoxX,           drawBoxY + boxH/2],
-                        ];
-                        state.ctx.fillStyle = '#ffffff';
-                        state.ctx.strokeStyle = 'rgba(79, 70, 229, 0.95)';
-                        state.ctx.lineWidth = 1.5;
-                        hpts.forEach(([hx, hy]) => {
-                            state.ctx.beginPath();
-                            state.ctx.rect(hx - hs/2, hy - hs/2, hs, hs);
-                            state.ctx.fill();
-                            state.ctx.stroke();
-                        });
-                    }
+                    // Resize handles (8-point: 4 corners + 4 edges)
+                    const hs = Math.max(7, Math.min(canvasW, canvasH) * 0.018);
+                    const hpts = [
+                        [drawBoxX,          drawBoxY],
+                        [drawBoxX + boxW/2,  drawBoxY],
+                        [drawBoxX + boxW,    drawBoxY],
+                        [drawBoxX + boxW,    drawBoxY + boxH/2],
+                        [drawBoxX + boxW,    drawBoxY + boxH],
+                        [drawBoxX + boxW/2,  drawBoxY + boxH],
+                        [drawBoxX,           drawBoxY + boxH],
+                        [drawBoxX,           drawBoxY + boxH/2],
+                    ];
+                    state.ctx.fillStyle = '#ffffff';
+                    state.ctx.strokeStyle = 'rgba(79, 70, 229, 0.95)';
+                    state.ctx.lineWidth = 1.5;
+                    hpts.forEach(([hx, hy]) => {
+                        state.ctx.beginPath();
+                        state.ctx.rect(hx - hs/2, hy - hs/2, hs, hs);
+                        state.ctx.fill();
+                        state.ctx.stroke();
+                    });
                     // Rotate handle: a small circle above the box's top-center, joined by
-                    // a stem line. Drawn here (still inside the box's own rotate/scale
-                    // ctx transform above) so it visually spins together with the box —
-                    // dragging it sets item.rotation (see findBrollRotateHandle / handlePointerMove).
-                    {
+                    // a stem line. Dragged only for PiP items; fullscreen items skip rotation.
+                    if (item.mode === 'pip') {
                         const rCx = drawBoxX + boxW / 2;
                         const handleDist = Math.max(28, Math.min(canvasW, canvasH) * 0.05);
                         const rHy = drawBoxY - handleDist;
@@ -6009,6 +6065,8 @@ document.addEventListener('DOMContentLoaded', () => {
         const coords = getCanvasCoords(e);
         const canvasW = state.canvas.width;
         const canvasH = state.canvas.height;
+        const activeClip = state.clips.find(c => c.id === state.activeClipId);
+        const isImageClip = activeClip && activeClip.type === 'image';
 
         // Logo behavior
         if (state.logoImg) {
@@ -6065,6 +6123,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     state.brollResizeStartBoxX = item.x;
                     state.brollResizeStartBoxY = item.y;
                     state.brollResizeStartFontSize = item.fontSize || 48;
+                    state.brollResizeStartSize = item.size || 100;
                     const box = getBrollBoxRect(item, canvasW, canvasH);
                     state.brollResizeStartW = box.w / canvasW;
                     state.brollResizeStartH = box.h / canvasH;
@@ -6123,6 +6182,33 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
 
                 if (window.onBrollSelected) window.onBrollSelected(brollHit.id);
+                e.preventDefault();
+                return;
+            }
+        }
+
+        // Image clip resize handle check (for playhead-inserted images / freeze frames)
+        if (state.currentStep === 3 && isImageClip && activeClip.id === state.activeClipId) {
+            const resizeHandle = findImageClipResizeHandle(coords);
+            if (resizeHandle) {
+                if (window.captureUndoCheckpoint) window.captureUndoCheckpoint();
+                const box = getImageClipDrawBox(activeClip, canvasW, canvasH);
+                state.isResizingImageClip = true;
+                state.imageClipResizeHandle = resizeHandle;
+                state.imageClipResizeStartBox = { imgDrawX: box.imgDrawX, imgDrawY: box.imgDrawY, imgDrawW: box.imgDrawW, imgDrawH: box.imgDrawH };
+                state.imageClipFitBox = box.fit;
+                e.preventDefault();
+                return;
+            }
+            // Not on a handle — if the click is inside the image itself, start
+            // a drag-to-move instead so the user can reposition it.
+            if (isInsideImageClipBox(activeClip, coords)) {
+                if (window.captureUndoCheckpoint) window.captureUndoCheckpoint();
+                state.isDraggingImageClip = true;
+                state.imageClipDragStartX = coords.x;
+                state.imageClipDragStartY = coords.y;
+                state.imageClipDragStartOffsetX = activeClip.imageClipOffsetX || 0;
+                state.imageClipDragStartOffsetY = activeClip.imageClipOffsetY || 0;
                 e.preventDefault();
                 return;
             }
@@ -6463,7 +6549,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // B-roll item, or null if the pointer isn't near any handle.
     function findBrollResizeHandle(coords) {
         const item = state.brollOverlays.find(b => b.id === state.selectedBrollId);
-        if (!item || item.mode !== 'pip') return null;
+        if (!item || (item.mode !== 'pip' && item.mode !== 'fullscreen')) return null;
         const canvasW = state.canvas.width;
         const canvasH = state.canvas.height;
         const box = getBrollBoxRect(item, canvasW, canvasH);
@@ -6506,6 +6592,117 @@ document.addEventListener('DOMContentLoaded', () => {
             if (Math.hypot(testX - h.x, testY - h.y) < hr) return h.id;
         }
         return null;
+    }
+
+    // The "fit" box is where the image would sit at scale 1 / offset 0 (i.e.
+    // the normal Fit/Fill layout box), before the user's manual resize/move
+    // is applied. Mirrors the calculation in drawFrame() so handles/hit-tests
+    // always line up with what's actually drawn (crop-aware, layout-aware).
+    function getImageClipFitBox(activeClip, canvasW, canvasH) {
+        const videoW = activeClip.imageImg?.naturalWidth || canvasW;
+        const videoH = activeClip.imageImg?.naturalHeight || canvasH;
+        const cropWVal = (state.cropW && state.cropW > 0 && !isNaN(state.cropW)) ? state.cropW : 1;
+        const cropHVal = (state.cropH && state.cropH > 0 && !isNaN(state.cropH)) ? state.cropH : 1;
+        const videoAspect = (videoW && videoH) ? (videoW / videoH) : (16 / 9);
+        const canvasAspect = (canvasW && canvasH) ? (canvasW / canvasH) : videoAspect;
+        const currentAspect = state.isAdjustingCrop ? videoAspect : ((cropWVal * videoW) / (cropHVal * videoH));
+
+        let drawW = canvasW, drawH = canvasH, drawX = 0, drawY = 0;
+        if (state.layoutMode === 'fill') {
+            if (currentAspect > canvasAspect) { drawH = canvasH; drawW = canvasH * currentAspect; drawX = (canvasW - drawW) / 2; drawY = 0; }
+            else { drawW = canvasW; drawH = canvasW / currentAspect; drawX = 0; drawY = (canvasH - drawH) / 2; }
+        } else {
+            if (currentAspect > canvasAspect) { drawH = canvasW / currentAspect; drawY = (canvasH - drawH) / 2; }
+            else if (currentAspect < canvasAspect) { drawW = canvasH * currentAspect; drawX = (canvasW - drawW) / 2; }
+        }
+        return { drawX, drawY, drawW, drawH };
+    }
+
+    // Independent X/Y scale (free resize — no forced aspect lock). Falls back
+    // to the legacy uniform `imageClipDisplayScale` field for older projects
+    // that only ever used the old center-scale resize.
+    function getImageClipScale(clip) {
+        if (clip.imageClipScaleX || clip.imageClipScaleY) {
+            return { sx: clip.imageClipScaleX || 1, sy: clip.imageClipScaleY || 1 };
+        }
+        const legacy = clip.imageClipDisplayScale || 1;
+        return { sx: legacy, sy: legacy };
+    }
+
+    // Final on-canvas box for a playhead-inserted image / freeze-frame clip,
+    // combining the fit box with the user's resize (scale X/Y) and
+    // move/drag (offset X/Y, stored as a fraction of canvas width/height so
+    // it survives canvas/preview resizes).
+    function getImageClipDrawBox(activeClip, canvasW, canvasH) {
+        const fit = getImageClipFitBox(activeClip, canvasW, canvasH);
+        const { sx, sy } = getImageClipScale(activeClip);
+        const ox = (activeClip.imageClipOffsetX || 0) * canvasW;
+        const oy = (activeClip.imageClipOffsetY || 0) * canvasH;
+        const imgDrawW = fit.drawW * sx;
+        const imgDrawH = fit.drawH * sy;
+        const imgDrawX = fit.drawX + (fit.drawW - imgDrawW) / 2 + ox;
+        const imgDrawY = fit.drawY + (fit.drawH - imgDrawH) / 2 + oy;
+        return { imgDrawX, imgDrawY, imgDrawW, imgDrawH, fit };
+    }
+
+    // Free (non-uniform) resize math: dragging a corner moves both edges from
+    // that corner while the opposite corner stays put; dragging a top/bottom
+    // edge changes height only; dragging a left/right edge changes width only.
+    function computeImageClipResizeBox(handle, startBox, mouseX, mouseY) {
+        const MIN_SIZE = 20;
+        let { imgDrawX: x, imgDrawY: y, imgDrawW: w, imgDrawH: h } = startBox;
+
+        if (handle.includes('left') || handle.includes('right')) {
+            const anchorX = handle.includes('left') ? (x + w) : x;
+            let newW = Math.max(MIN_SIZE, Math.abs(mouseX - anchorX));
+            x = handle.includes('left') ? (anchorX - newW) : anchorX;
+            w = newW;
+        }
+        if (handle.includes('top') || handle.includes('bottom')) {
+            const anchorY = handle.includes('top') ? (y + h) : y;
+            let newH = Math.max(MIN_SIZE, Math.abs(mouseY - anchorY));
+            y = handle.includes('top') ? (anchorY - newH) : anchorY;
+            h = newH;
+        }
+        return { imgDrawX: x, imgDrawY: y, imgDrawW: w, imgDrawH: h };
+    }
+
+    function findImageClipResizeHandle(coords) {
+        const activeClip = state.clips.find(c => c.id === state.activeClipId);
+        if (!activeClip || activeClip.type !== 'image') return null;
+
+        const canvasW = state.canvas.width;
+        const canvasH = state.canvas.height;
+        const { imgDrawX, imgDrawY, imgDrawW, imgDrawH } = getImageClipDrawBox(activeClip, canvasW, canvasH);
+
+        const rect = state.canvas.getBoundingClientRect();
+        const physScale = canvasW / rect.width;
+        const hr = 14 * physScale;
+        const hpts = [
+            { id: 'top-left',     x: imgDrawX,         y: imgDrawY },
+            { id: 'top',          x: imgDrawX + imgDrawW/2, y: imgDrawY },
+            { id: 'top-right',    x: imgDrawX + imgDrawW,   y: imgDrawY },
+            { id: 'right',        x: imgDrawX + imgDrawW,   y: imgDrawY + imgDrawH/2 },
+            { id: 'bottom-right', x: imgDrawX + imgDrawW,   y: imgDrawY + imgDrawH },
+            { id: 'bottom',       x: imgDrawX + imgDrawW/2, y: imgDrawY + imgDrawH },
+            { id: 'bottom-left',  x: imgDrawX,         y: imgDrawY + imgDrawH },
+            { id: 'left',         x: imgDrawX,         y: imgDrawY + imgDrawH/2 },
+        ];
+        for (const h of hpts) {
+            if (Math.hypot(coords.x - h.x, coords.y - h.y) < hr) return h.id;
+        }
+
+        return null;
+    }
+
+    // True if the given canvas coords fall inside the image clip's current
+    // draw box (used to start a drag-to-move when the click isn't on a handle).
+    function isInsideImageClipBox(activeClip, coords) {
+        const canvasW = state.canvas.width;
+        const canvasH = state.canvas.height;
+        const { imgDrawX, imgDrawY, imgDrawW, imgDrawH } = getImageClipDrawBox(activeClip, canvasW, canvasH);
+        return coords.x >= imgDrawX && coords.x <= imgDrawX + imgDrawW &&
+               coords.y >= imgDrawY && coords.y <= imgDrawY + imgDrawH;
     }
 
     // --- Symbol / Shape Overlay geometry + hit-testing ---
@@ -7407,6 +7604,19 @@ document.addEventListener('DOMContentLoaded', () => {
                         brollEditTextFontsize.value = newFontSize;
                         if (brollEditTextFontsizeVal) brollEditTextFontsizeVal.innerText = newFontSize + 'px';
                     }
+                } else if (item.mode === 'fullscreen') {
+                    const box = getBrollBoxRect(item, canvasW, canvasH);
+                    const cx = box.cx;
+                    const cy = box.cy;
+                    const startDist = Math.hypot(state.brollResizeStartX - cx, state.brollResizeStartY - cy);
+                    const currentDist = Math.hypot(coords.x - cx, coords.y - cy);
+                    const distDelta = currentDist - startDist;
+                    const scaleFactor = (distDelta / canvasW) * 100;
+                    let newSize = state.brollResizeStartSize + scaleFactor;
+                    newSize = Math.max(5, Math.min(200, newSize));
+                    item.size = Math.round(newSize);
+                    if (brollSizeSlider) brollSizeSlider.value = Math.min(200, item.size);
+                    if (brollSizeVal) brollSizeVal.innerText = item.size + '%';
                 } else {
                     item.pipW = nW;
                     item.pipH = nH;
@@ -7439,6 +7649,51 @@ document.addEventListener('DOMContentLoaded', () => {
                 item.y = newY;
                 drawFrame();
             }
+            return;
+        }
+
+        // Image clip resize drag (playhead-inserted images / freeze frames).
+        // Free resize: each of the 8 handles moves only the edge(s) it sits
+        // on, with the opposite edge/corner staying fixed (no aspect lock).
+        if (state.isResizingImageClip && state.activeClipId !== null) {
+            const coords = getCanvasCoords(e);
+            const canvasW = state.canvas.width;
+            const canvasH = state.canvas.height;
+            const item = state.clips.find(c => c.id === state.activeClipId);
+            if (item && item.type === 'image' && state.imageClipResizeStartBox && state.imageClipFitBox) {
+                const newBox = computeImageClipResizeBox(state.imageClipResizeHandle, state.imageClipResizeStartBox, coords.x, coords.y);
+                const fit = state.imageClipFitBox;
+                if (fit.drawW > 0 && fit.drawH > 0) {
+                    const newScaleX = Math.max(0.05, Math.min(5, newBox.imgDrawW / fit.drawW));
+                    const newScaleY = Math.max(0.05, Math.min(5, newBox.imgDrawH / fit.drawH));
+                    const fitOriginX = fit.drawX + (fit.drawW - newBox.imgDrawW) / 2;
+                    const fitOriginY = fit.drawY + (fit.drawH - newBox.imgDrawH) / 2;
+                    item.imageClipScaleX = newScaleX;
+                    item.imageClipScaleY = newScaleY;
+                    item.imageClipOffsetX = (newBox.imgDrawX - fitOriginX) / canvasW;
+                    item.imageClipOffsetY = (newBox.imgDrawY - fitOriginY) / canvasH;
+                    delete item.imageClipDisplayScale; // migrate away from the old uniform-scale field
+                }
+                drawFrame();
+            }
+            e.preventDefault();
+            return;
+        }
+
+        // Image clip drag-to-move (playhead-inserted images / freeze frames)
+        if (state.isDraggingImageClip && state.activeClipId !== null) {
+            const coords = getCanvasCoords(e);
+            const canvasW = state.canvas.width;
+            const canvasH = state.canvas.height;
+            const item = state.clips.find(c => c.id === state.activeClipId);
+            if (item && item.type === 'image') {
+                const dx = coords.x - state.imageClipDragStartX;
+                const dy = coords.y - state.imageClipDragStartY;
+                item.imageClipOffsetX = state.imageClipDragStartOffsetX + dx / canvasW;
+                item.imageClipOffsetY = state.imageClipDragStartOffsetY + dy / canvasH;
+                drawFrame();
+            }
+            e.preventDefault();
             return;
         }
 
@@ -7634,6 +7889,25 @@ document.addEventListener('DOMContentLoaded', () => {
         // "move" hand the instant the pointer is over something draggable, so the
         // drag-anywhere behavior is obvious without needing to read any help text.
         const idleCoords = getCanvasCoords(e);
+        if (state.currentStep === 3) {
+            const activeClip = state.clips.find(c => c.id === state.activeClipId);
+            if (activeClip && activeClip.type === 'image') {
+                const handle = findImageClipResizeHandle(idleCoords);
+                const handleCursors = {
+                    'top-left': 'nwse-resize', 'bottom-right': 'nwse-resize',
+                    'top-right': 'nesw-resize', 'bottom-left': 'nesw-resize',
+                    'top': 'ns-resize', 'bottom': 'ns-resize',
+                    'left': 'ew-resize', 'right': 'ew-resize',
+                };
+                if (handle) {
+                    state.canvas.style.cursor = handleCursors[handle] || 'nwse-resize';
+                    return;
+                } else if (isInsideImageClipBox(activeClip, idleCoords)) {
+                    state.canvas.style.cursor = 'move';
+                    return;
+                }
+            }
+        }
         if (state.logoImg) {
             const check = isPointerOnLogo(idleCoords);
             if (check.isResize) {
@@ -7773,6 +8047,8 @@ document.addEventListener('DOMContentLoaded', () => {
         if (state.isDraggingLogo || state.isResizingLogo) recordedAction = 'Logo modified';
         else if (state.isDraggingTextOverlay) recordedAction = 'Text overlay modified';
         else if (state.isDraggingBroll || state.isResizingBroll || state.isRotatingBroll) recordedAction = 'B-roll modified';
+        else if (state.isResizingImageClip) recordedAction = 'Image resized';
+        else if (state.isDraggingImageClip) recordedAction = 'Image moved';
         else if (state.isDraggingSticker || state.isResizingSticker) recordedAction = 'Sticker modified';
         else if (state.isDraggingSymbol || state.isResizingSymbol || state.isRotatingSymbol) recordedAction = 'Symbol modified';
         else if (state.isDraggingShapeOverlay || state.isResizingShapeOverlay || state.isRotatingShapeOverlay) recordedAction = 'Shape modified';
@@ -7783,6 +8059,11 @@ document.addEventListener('DOMContentLoaded', () => {
         state.isDraggingBroll = false;
         state.isResizingBroll = false;
         state.isRotatingBroll = false;
+        state.isResizingImageClip = false;
+        state.imageClipResizeHandle = null;
+        state.imageClipResizeStartBox = null;
+        state.imageClipFitBox = null;
+        state.isDraggingImageClip = false;
         state.isDraggingSticker = false;
         state.isResizingSticker = false;
         state.isDraggingSymbol = false;
@@ -10202,7 +10483,7 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         }
         if (brollSizeSlider) {
-            brollSizeSlider.max = item.mode === 'pip' ? 60 : 100;
+            brollSizeSlider.max = item.mode === 'pip' ? 60 : 200;
             brollSizeSlider.value = item.size !== undefined ? item.size : (item.mode === 'pip' ? 35 : 100);
             if (brollSizeVal) brollSizeVal.innerText = (item.size !== undefined ? item.size : (item.mode === 'pip' ? 35 : 100)) + '%';
         }
@@ -10526,7 +10807,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
                 if (brollFitSelect) brollFitSelect.value = item.fitMode || 'cover';
                 if (brollSizeSlider) {
-                    brollSizeSlider.max = item.mode === 'pip' ? 60 : 100;
+                    brollSizeSlider.max = item.mode === 'pip' ? 60 : 200;
                     // When switching to fullscreen, reset to 100% so it covers fully by default
                     if (item.mode === 'fullscreen') {
                         item.size = 100;

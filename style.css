@@ -133,6 +133,7 @@ body, .sidebar, .workspace-header, .btn, .form-input,
 /* --- Theme Switcher UI --- */
 .theme-switcher {
     position: relative;
+    overflow: visible;
 }
 
 .theme-switcher-panel {
@@ -556,6 +557,7 @@ body {
     min-width: 0;
     display: flex;
     gap: 12px;
+    overflow: visible;
 }
 
 .workspace-body {
