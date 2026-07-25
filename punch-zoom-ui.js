@@ -22,7 +22,24 @@
     }
 
     var scaleSlider, scaleVal, durationSlider, durationVal, focusXSlider, focusXVal,
-        focusYSlider, focusYVal, addBtn, updateBtn, listEl, pickBtn, pickHintEl;
+        focusYSlider, focusYVal, addBtn, updateBtn, listEl, pickBtn;
+
+    function setPickBtnActive(isActive) {
+        if (!pickBtn) return;
+        pickBtn.style.background = isActive ? 'rgba(99,102,241,0.35)' : '';
+        pickBtn.innerHTML = isActive ?
+            '<i class="fa-solid fa-crosshairs"></i> ভিডিওতে ক্লিক/ড্র্যাগ করুন — শেষ হলে আবার চাপুন / Click video — tap again to stop' :
+            '<i class="fa-solid fa-crosshairs"></i> ভিডিওতে ক্লিক করে ফোকাস বসান / Pick focus on video';
+    }
+
+    function stopPunchZoomPicking() {
+        var state = ve();
+        if (state) {
+            state.isPunchZoomPicking = false;
+            if (state.canvas) state.canvas.style.cursor = 'default';
+        }
+        setPickBtnActive(false);
+    }
 
     var selectedId = null; // id of the punch zoom point currently loaded into the sliders for editing
 
@@ -118,21 +135,38 @@
     function updateLivePreview() {
         var state = ve();
         if (!state) return;
-        var v = currentFormValues();
-        state.punchZoomLivePreview = { scale: v.scale, focusX: v.focusX, focusY: v.focusY };
         // The preview override in phase9.js is intentionally skipped while
         // state.isPlaying is true (so it never fights with normal playback
-        // timing). Auto-pause so a drag/click is always reflected immediately
-        // even if the video happened to be playing. Wrapped defensively so a
-        // problem here can never block the preview state above from being
-        // set and drawn.
-        try {
-            if (state.isPlaying && window.pauseVideoForExport) {
-                window.pauseVideoForExport();
-            }
-        } catch (err) {
-            console.error('[punch-zoom] auto-pause failed:', err);
+        // timing). But that means if the user drags a slider while the video
+        // happens to be playing, nothing visibly changes — the old committed
+        // values just keep looping on their normal timed schedule, which is
+        // exactly what looked like "the video snaps back no matter where I
+        // drag." Auto-pause so the drag is always reflected immediately.
+        if (state.isPlaying && window.pauseVideoForExport) {
+            window.pauseVideoForExport();
         }
+        var v = currentFormValues();
+        var clip = getActiveClip();
+
+        // Write the dragged values straight onto the point being edited,
+        // right now — not just as a temporary overlay that gets thrown away
+        // once the drag ends. That "throw away on release" behavior was
+        // exactly the bug: while paused and adjusting a point, there is
+        // nothing to revert to once we do this, because the real data
+        // already matches what's on screen. A point that hasn't been added
+        // yet has no object to write into, so it stays preview-only until
+        // "Add at current time" is pressed.
+        if (clip && selectedId) {
+            var pz = (clip.punchZooms || []).find(function (p) { return p.id === selectedId; });
+            if (pz) {
+                pz.scale = v.scale;
+                pz.duration = v.duration;
+                pz.focusX = v.focusX;
+                pz.focusY = v.focusY;
+            }
+        }
+
+        state.punchZoomLivePreview = { scale: v.scale, focusX: v.focusX, focusY: v.focusY, clipId: clip ? clip.id : null };
         if (window.drawEditorFrame) window.drawEditorFrame();
     }
 
@@ -146,15 +180,7 @@
     function syncPunchZoomUI() {
         var clip = getActiveClip();
         clearLivePreview();
-        var state = ve();
-        if (state) state.isPunchZoomPicking = false;
-        var canvasEl = document.getElementById('editor-canvas');
-        if (canvasEl) canvasEl.style.cursor = 'default';
-        if (pickBtn) {
-            pickBtn.innerHTML = '<i class="fa-solid fa-crosshairs"></i> ভিডিওতে ক্লিক করে ফোকাস পয়েন্ট বসান / Click on video to set focus';
-            pickBtn.classList.remove('btn-primary');
-        }
-        if (pickHintEl) pickHintEl.style.display = 'none';
+        stopPunchZoomPicking();
         if (!clip) return;
         if (!Array.isArray(clip.punchZooms)) clip.punchZooms = [];
         selectedId = null;
@@ -198,8 +224,9 @@
 
         if (updateBtn) {
             updateBtn.addEventListener('click', function () {
+                var state = ve();
                 var clip = getActiveClip();
-                if (!clip || !selectedId) return;
+                if (!state || !clip || !selectedId) return;
                 var pz = (clip.punchZooms || []).find(function (p) { return p.id === selectedId; });
                 if (!pz) return;
                 var v = currentFormValues();
@@ -218,63 +245,58 @@
             });
         }
 
-        function updatePickBtnLabel() {
-            if (!pickBtn) return;
-            var state = ve();
-            var active = !!(state && state.isPunchZoomPicking);
-            pickBtn.innerHTML = active
-                ? '<i class="fa-solid fa-xmark"></i> ফোকাস বসানো শেষ করুন / Done picking'
-                : '<i class="fa-solid fa-crosshairs"></i> ভিডিওতে ক্লিক করে ফোকাস পয়েন্ট বসান / Click on video to set focus';
-            pickBtn.classList.toggle('btn-primary', active);
-            if (pickHintEl) pickHintEl.style.display = active ? 'block' : 'none';
-        }
-
-        // Called from editor.js's canvas pointerdown/pointermove handlers
-        // while picking mode is on — fx/fy are 0..1 fractions of the video
-        // frame (already converted from screen coords using the same base
-        // rect the zoom math itself uses).
-        window.__setPunchZoomFocusFromClick = function (fx, fy) {
-            if (!focusXSlider || !focusYSlider) return;
-            focusXSlider.value = Math.round(fx * 100);
-            focusYSlider.value = Math.round(fy * 100);
-            syncLabels();
-            updateLivePreview();
-        };
-        window.__finishPunchZoomFocusPick = function () {
-            // Keep the zoomed-in preview showing after the drag ends (instead
-            // of immediately reverting to the normal timeline view) so the
-            // chosen spot stays visible until the user picks again, adjusts a
-            // slider, or presses Add/Update — matches the slider behavior.
-        };
-
-        if (pickBtn) {
-            pickBtn.addEventListener('click', function () {
-                var state = ve();
-                if (!state) return;
-                state.isPunchZoomPicking = !state.isPunchZoomPicking;
-                var canvasEl = document.getElementById('editor-canvas');
-                if (canvasEl) canvasEl.style.cursor = state.isPunchZoomPicking ? 'crosshair' : 'default';
-                if (!state.isPunchZoomPicking) {
-                    clearLivePreview();
-                }
-                updatePickBtnLabel();
-            });
-        }
-
         [scaleSlider, durationSlider, focusXSlider, focusYSlider].forEach(function (el) {
             if (!el) return;
             el.addEventListener('input', function () {
                 syncLabels();
                 updateLivePreview();
             });
-            // Once the user lets go of the slider, drop back to the normal
-            // timeline-based preview (the playhead is already parked at the
-            // effect's peak from add/select above, so it keeps showing
-            // correctly without the override).
-            el.addEventListener('change', clearLivePreview);
-            el.addEventListener('blur', clearLivePreview);
+            // Previously 'change'/'blur' called clearLivePreview() here, which
+            // snapped the canvas back to whatever was committed *before* this
+            // drag — since the drag itself hadn't been saved anywhere yet.
+            // That was the "zooms then immediately jumps back" bug. Now that
+            // updateLivePreview() commits the value onto the point directly
+            // (above), there's nothing stale to revert to, so we just leave
+            // it as edited. The only thing that should hand control back to
+            // the timed bell-curve animation is actual playback starting —
+            // see the onPlaybackStart hook in init() below.
+            el.addEventListener('change', function () { renderList(); });
         });
+
+        if (pickBtn) {
+            pickBtn.addEventListener('click', function () {
+                var state = ve();
+                if (!state) return;
+                state.isPunchZoomPicking = !state.isPunchZoomPicking;
+                if (state.isPunchZoomPicking) {
+                    setPickBtnActive(true);
+                    if (state.canvas) state.canvas.style.cursor = 'crosshair';
+                    updateLivePreview();
+                } else {
+                    stopPunchZoomPicking();
+                }
+            });
+        }
     }
+
+    // Called from editor.js's canvas pointerdown/pointermove handlers while
+    // state.isPunchZoomPicking is on: fx/fy are 0-1 fractions of the video
+    // frame where the user clicked or dragged to. Moves the Focus X/Y
+    // sliders to match and commits it live, same as dragging them by hand.
+    window.__setPunchZoomFocusFromClick = function (fx, fy) {
+        if (!focusXSlider || !focusYSlider) return;
+        focusXSlider.value = Math.round(Math.max(0, Math.min(1, fx)) * 100);
+        focusYSlider.value = Math.round(Math.max(0, Math.min(1, fy)) * 100);
+        syncLabels();
+        updateLivePreview();
+    };
+
+    // Called from editor.js's canvas pointerup handler when a click/drag
+    // pick finishes. The point is already committed live by
+    // __setPunchZoomFocusFromClick, so this just refreshes the list labels.
+    window.__finishPunchZoomFocusPick = function () {
+        renderList();
+    };
 
     function init() {
         scaleSlider = document.getElementById('punch-zoom-scale-slider');
@@ -289,14 +311,27 @@
         updateBtn = document.getElementById('punch-zoom-update-btn');
         listEl = document.getElementById('punch-zoom-list');
         pickBtn = document.getElementById('punch-zoom-pick-btn');
-        pickHintEl = document.getElementById('punch-zoom-pick-hint');
 
         if (!scaleSlider || !listEl) return false; // panel not in DOM yet
         wireEvents();
         syncLabels();
         renderList();
-        if (pickBtn) {
-            pickBtn.innerHTML = '<i class="fa-solid fa-crosshairs"></i> ভিডিওতে ক্লিক করে ফোকাস পয়েন্ট বসান / Click on video to set focus';
+
+        // The only moment an in-progress punch-zoom edit should let go and
+        // hand control back to the timed bell-curve animation is when the
+        // user actually presses Play — not when they release a slider or
+        // click away, which was the earlier bug. audio.js defines
+        // onPlaybackStart before this script runs (loaded earlier in
+        // index.html), so it's safe to wrap here.
+        if (window.onPlaybackStart && !window.onPlaybackStart.__pzWrapped) {
+            var originalOnPlaybackStart = window.onPlaybackStart;
+            var wrappedOnPlaybackStart = function () {
+                clearLivePreview();
+                stopPunchZoomPicking();
+                return originalOnPlaybackStart.apply(this, arguments);
+            };
+            wrappedOnPlaybackStart.__pzWrapped = true;
+            window.onPlaybackStart = wrappedOnPlaybackStart;
         }
 
         // Piggyback on the existing clip-panel refresh cycle (phase9.js calls

@@ -789,17 +789,16 @@ document.addEventListener('DOMContentLoaded', () => {
     // stays visually fixed on screen while everything around it grows and
     // shrinks back — no in/out segment bookkeeping needed.
     function applyPunchZoomTransform(drawX, drawY, drawW, drawH, clip, effectiveTime) {
-        // Live preview override (set by punch-zoom-ui.js while the sliders are
-        // being dragged): show the zoom at full strength regardless of the
-        // playhead position, so moving Focus X/Y is immediately visible on
-        // canvas instead of only showing up when scrubbed to the exact middle
-        // of the effect's time window. Ignored during real playback so it
-        // never interferes with normal export/preview timing.
-        if (state.punchZoomLivePreview && clip && clip.id === state.activeClipId && !state.isPlaying) {
-            const lp = state.punchZoomLivePreview;
-            const maxZoom = Math.max(1, lp.scale != null ? lp.scale : 1.4);
-            const focusX = lp.focusX != null ? lp.focusX : 0.5;
-            const focusY = lp.focusY != null ? lp.focusY : 0.5;
+        // Live-editing preview: while the user is dragging the scale/duration/
+        // focus sliders in the Punch Zoom panel, show the effect at full
+        // strength (bell = 1) regardless of the playhead position, so drags
+        // are reflected on the canvas immediately instead of only becoming
+        // visible once the timeline happens to cross the zoom's time window.
+        const preview = state.punchZoomLivePreview;
+        if (preview && clip && (!preview.clipId || preview.clipId === clip.id)) {
+            const maxZoom = Math.max(1, preview.scale != null ? preview.scale : 1.4);
+            const focusX = preview.focusX != null ? preview.focusX : 0.5;
+            const focusY = preview.focusY != null ? preview.focusY : 0.5;
             const nw = drawW * maxZoom;
             const nh = drawH * maxZoom;
             const nx = drawX + focusX * drawW * (1 - maxZoom);
