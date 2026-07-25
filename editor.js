@@ -3408,6 +3408,13 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         }
 
+        // Exposed for punch-zoom-ui.js's click-on-video focus picker: this is
+        // the same base rect (before Ken Burns/punch-zoom/static-zoom scaling)
+        // that focusX/focusY are measured against, so a click at this rect's
+        // top-left corner is focusX=0, focusY=0, and a click at its
+        // bottom-right corner is focusX=1, focusY=1.
+        window.__baseMediaRect = { x: drawX, y: drawY, w: drawW, h: drawH };
+
         let imgDrawX = drawX;
         let imgDrawY = drawY;
         let imgDrawW = drawW;
@@ -6119,6 +6126,19 @@ document.addEventListener('DOMContentLoaded', () => {
     function handlePointerDown(e) {
         if (state.currentStep !== 2 && state.currentStep !== 3) return;
 
+        if (state.isPunchZoomPicking) {
+            const coords = getCanvasCoords(e);
+            const rect = window.__baseMediaRect;
+            if (rect && rect.w > 0 && rect.h > 0 && window.__setPunchZoomFocusFromClick) {
+                const fx = Math.max(0, Math.min(1, (coords.x - rect.x) / rect.w));
+                const fy = Math.max(0, Math.min(1, (coords.y - rect.y) / rect.h));
+                window.__setPunchZoomFocusFromClick(fx, fy);
+            }
+            state.isDraggingPunchZoomFocus = true;
+            e.preventDefault();
+            return;
+        }
+
         if (state.isColorPickingBroll) {
             const coords = getCanvasCoords(e);
             try {
@@ -7555,6 +7575,18 @@ document.addEventListener('DOMContentLoaded', () => {
     function handlePointerMove(e) {
         if (state.currentStep !== 2 && state.currentStep !== 3) return;
 
+        if (state.isPunchZoomPicking && state.isDraggingPunchZoomFocus) {
+            const coords = getCanvasCoords(e);
+            const rect = window.__baseMediaRect;
+            if (rect && rect.w > 0 && rect.h > 0 && window.__setPunchZoomFocusFromClick) {
+                const fx = Math.max(0, Math.min(1, (coords.x - rect.x) / rect.w));
+                const fy = Math.max(0, Math.min(1, (coords.y - rect.y) / rect.h));
+                window.__setPunchZoomFocusFromClick(fx, fy);
+            }
+            e.preventDefault();
+            return;
+        }
+
         if (state.isAdjustingCrop) {
             const coords = getCanvasCoords(e);
             const canvasW = state.canvas.width;
@@ -8310,6 +8342,12 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     
     function handlePointerUp() {
+        if (state.isDraggingPunchZoomFocus) {
+            state.isDraggingPunchZoomFocus = false;
+            if (window.__finishPunchZoomFocusPick) window.__finishPunchZoomFocusPick();
+            return;
+        }
+
         if (state.isResizingCrop || state.isDraggingCrop || state.isDrawingNewCrop) {
             state.isResizingCrop = false;
             state.isDraggingCrop = false;

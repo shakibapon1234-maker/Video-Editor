@@ -22,7 +22,7 @@
     }
 
     var scaleSlider, scaleVal, durationSlider, durationVal, focusXSlider, focusXVal,
-        focusYSlider, focusYVal, addBtn, updateBtn, listEl;
+        focusYSlider, focusYVal, addBtn, updateBtn, listEl, pickBtn, pickHintEl;
 
     var selectedId = null; // id of the punch zoom point currently loaded into the sliders for editing
 
@@ -120,6 +120,19 @@
         if (!state) return;
         var v = currentFormValues();
         state.punchZoomLivePreview = { scale: v.scale, focusX: v.focusX, focusY: v.focusY };
+        // The preview override in phase9.js is intentionally skipped while
+        // state.isPlaying is true (so it never fights with normal playback
+        // timing). Auto-pause so a drag/click is always reflected immediately
+        // even if the video happened to be playing. Wrapped defensively so a
+        // problem here can never block the preview state above from being
+        // set and drawn.
+        try {
+            if (state.isPlaying && window.pauseVideoForExport) {
+                window.pauseVideoForExport();
+            }
+        } catch (err) {
+            console.error('[punch-zoom] auto-pause failed:', err);
+        }
         if (window.drawEditorFrame) window.drawEditorFrame();
     }
 
@@ -133,6 +146,15 @@
     function syncPunchZoomUI() {
         var clip = getActiveClip();
         clearLivePreview();
+        var state = ve();
+        if (state) state.isPunchZoomPicking = false;
+        var canvasEl = document.getElementById('editor-canvas');
+        if (canvasEl) canvasEl.style.cursor = 'default';
+        if (pickBtn) {
+            pickBtn.innerHTML = '<i class="fa-solid fa-crosshairs"></i> ভিডিওতে ক্লিক করে ফোকাস পয়েন্ট বসান / Click on video to set focus';
+            pickBtn.classList.remove('btn-primary');
+        }
+        if (pickHintEl) pickHintEl.style.display = 'none';
         if (!clip) return;
         if (!Array.isArray(clip.punchZooms)) clip.punchZooms = [];
         selectedId = null;
@@ -196,6 +218,49 @@
             });
         }
 
+        function updatePickBtnLabel() {
+            if (!pickBtn) return;
+            var state = ve();
+            var active = !!(state && state.isPunchZoomPicking);
+            pickBtn.innerHTML = active
+                ? '<i class="fa-solid fa-xmark"></i> ফোকাস বসানো শেষ করুন / Done picking'
+                : '<i class="fa-solid fa-crosshairs"></i> ভিডিওতে ক্লিক করে ফোকাস পয়েন্ট বসান / Click on video to set focus';
+            pickBtn.classList.toggle('btn-primary', active);
+            if (pickHintEl) pickHintEl.style.display = active ? 'block' : 'none';
+        }
+
+        // Called from editor.js's canvas pointerdown/pointermove handlers
+        // while picking mode is on — fx/fy are 0..1 fractions of the video
+        // frame (already converted from screen coords using the same base
+        // rect the zoom math itself uses).
+        window.__setPunchZoomFocusFromClick = function (fx, fy) {
+            if (!focusXSlider || !focusYSlider) return;
+            focusXSlider.value = Math.round(fx * 100);
+            focusYSlider.value = Math.round(fy * 100);
+            syncLabels();
+            updateLivePreview();
+        };
+        window.__finishPunchZoomFocusPick = function () {
+            // Keep the zoomed-in preview showing after the drag ends (instead
+            // of immediately reverting to the normal timeline view) so the
+            // chosen spot stays visible until the user picks again, adjusts a
+            // slider, or presses Add/Update — matches the slider behavior.
+        };
+
+        if (pickBtn) {
+            pickBtn.addEventListener('click', function () {
+                var state = ve();
+                if (!state) return;
+                state.isPunchZoomPicking = !state.isPunchZoomPicking;
+                var canvasEl = document.getElementById('editor-canvas');
+                if (canvasEl) canvasEl.style.cursor = state.isPunchZoomPicking ? 'crosshair' : 'default';
+                if (!state.isPunchZoomPicking) {
+                    clearLivePreview();
+                }
+                updatePickBtnLabel();
+            });
+        }
+
         [scaleSlider, durationSlider, focusXSlider, focusYSlider].forEach(function (el) {
             if (!el) return;
             el.addEventListener('input', function () {
@@ -223,11 +288,16 @@
         addBtn = document.getElementById('punch-zoom-add-btn');
         updateBtn = document.getElementById('punch-zoom-update-btn');
         listEl = document.getElementById('punch-zoom-list');
+        pickBtn = document.getElementById('punch-zoom-pick-btn');
+        pickHintEl = document.getElementById('punch-zoom-pick-hint');
 
         if (!scaleSlider || !listEl) return false; // panel not in DOM yet
         wireEvents();
         syncLabels();
         renderList();
+        if (pickBtn) {
+            pickBtn.innerHTML = '<i class="fa-solid fa-crosshairs"></i> ভিডিওতে ক্লিক করে ফোকাস পয়েন্ট বসান / Click on video to set focus';
+        }
 
         // Piggyback on the existing clip-panel refresh cycle (phase9.js calls
         // window.syncPhase9ClipUI whenever the active clip / its properties
