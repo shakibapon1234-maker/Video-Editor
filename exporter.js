@@ -1701,6 +1701,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const acropRemoveResultBtn = document.getElementById('acrop-remove-result-btn');
     const acropEditorBox = document.getElementById('acrop-editor-box');
     const acropPreviewPlayer = document.getElementById('acrop-preview-player');
+    const acropModeSelect = document.getElementById('acrop-mode-select');
+    const acropModeHint = document.getElementById('acrop-mode-hint');
     const acropStartSlider = document.getElementById('acrop-start');
     const acropEndSlider = document.getElementById('acrop-end');
     const acropFill = document.getElementById('acrop-fill');
@@ -1851,7 +1853,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
         acropStartVal.value = acropFormatTime(0);
         acropEndVal.value = acropFormatTime(acropDuration);
+        if (acropModeSelect) acropModeSelect.value = 'keep';
         acropUpdateFill();
+        acropUpdateModeUI();
         acropEditorBox.style.display = 'block';
     }
 
@@ -1863,6 +1867,30 @@ document.addEventListener('DOMContentLoaded', () => {
             acropFill.style.left = startPercent + '%';
             acropFill.style.width = Math.max(0, endPercent - startPercent) + '%';
         }
+    }
+
+    // Keeps the hint text, the highlighted slider color, and the crop
+    // button's label in sync with whether the person wants to KEEP the
+    // selected range (old default behaviour) or REMOVE it and keep
+    // everything before + after instead (what was missing before).
+    function acropUpdateModeUI() {
+        const mode = acropModeSelect ? acropModeSelect.value : 'keep';
+        const isRemove = mode === 'remove';
+        if (acropFill) acropFill.classList.toggle('acrop-fill-remove', isRemove);
+        if (acropModeHint) {
+            acropModeHint.innerHTML = isRemove
+                ? 'নিচের স্লাইডার টেনে যে অংশটুকু <strong>বাদ দিতে (মুছে ফেলতে)</strong> চান সেটুকু বেছে নিন — বাকি অংশ জোড়া লেগে থাকবে।'
+                : 'নিচের স্লাইডার টেনে যে অংশটুকু <strong>রাখতে</strong> চান সেটুকু বেছে নিন — বাকি অংশ বাদ চলে যাবে।';
+        }
+        if (acropCropBtn) {
+            acropCropBtn.innerHTML = isRemove
+                ? '<i class="fa-solid fa-scissors"></i> নির্বাচিত অংশ বাদ দিন (Remove Selected Part)'
+                : '<i class="fa-solid fa-scissors"></i> নির্বাচিত অংশ রাখুন (Crop Audio)';
+        }
+    }
+
+    if (acropModeSelect) {
+        acropModeSelect.addEventListener('change', acropUpdateModeUI);
     }
 
     if (acropStartSlider) {
@@ -1935,6 +1963,11 @@ document.addEventListener('DOMContentLoaded', () => {
             alert('দয়া করে কমপক্ষে কিছু সময়ের একটি অংশ সিলেক্ট করুন।');
             return;
         }
+        const mode = acropModeSelect ? acropModeSelect.value : 'keep';
+        if (mode === 'remove' && startSec <= 0.001 && endSec >= acropDuration - 0.001) {
+            alert('পুরো ফাইলটাই সিলেক্ট করা আছে — এটা বাদ দিলে কিছুই বাকি থাকবে না। দয়া করে অংশটুকু ছোট করে সিলেক্ট করুন।');
+            return;
+        }
         const format = acropFormatSelect ? acropFormatSelect.value : 'wav';
 
         acropCropBtn.disabled = true;
@@ -1967,14 +2000,32 @@ document.addEventListener('DOMContentLoaded', () => {
             const sampleRate = audioBuffer.sampleRate;
             const startFrame = Math.max(0, Math.floor(startSec * sampleRate));
             const endFrame = Math.min(audioBuffer.length, Math.ceil(endSec * sampleRate));
-            const frameCount = Math.max(1, endFrame - startFrame);
             const numChannels = audioBuffer.numberOfChannels;
 
-            const croppedBuffer = decodeCtx.createBuffer(numChannels, frameCount, sampleRate);
-            for (let ch = 0; ch < numChannels; ch++) {
-                const sourceData = audioBuffer.getChannelData(ch);
-                const slice = sourceData.subarray(startFrame, startFrame + frameCount);
-                croppedBuffer.copyToChannel(slice, ch);
+            let croppedBuffer;
+            if (mode === 'remove') {
+                // Keep everything OUTSIDE the selected range: the part
+                // before "start" and the part after "end", spliced back
+                // together with the selected middle removed.
+                const beforeLen = startFrame;
+                const afterLen = audioBuffer.length - endFrame;
+                const frameCount = Math.max(1, beforeLen + afterLen);
+                croppedBuffer = decodeCtx.createBuffer(numChannels, frameCount, sampleRate);
+                for (let ch = 0; ch < numChannels; ch++) {
+                    const sourceData = audioBuffer.getChannelData(ch);
+                    const dest = croppedBuffer.getChannelData(ch);
+                    if (beforeLen > 0) dest.set(sourceData.subarray(0, beforeLen), 0);
+                    if (afterLen > 0) dest.set(sourceData.subarray(endFrame, audioBuffer.length), beforeLen);
+                }
+            } else {
+                // Keep ONLY the selected range (original behaviour).
+                const frameCount = Math.max(1, endFrame - startFrame);
+                croppedBuffer = decodeCtx.createBuffer(numChannels, frameCount, sampleRate);
+                for (let ch = 0; ch < numChannels; ch++) {
+                    const sourceData = audioBuffer.getChannelData(ch);
+                    const slice = sourceData.subarray(startFrame, startFrame + frameCount);
+                    croppedBuffer.copyToChannel(slice, ch);
+                }
             }
 
             setAcropProgress(55, format === 'mp3'
@@ -2002,9 +2053,12 @@ document.addEventListener('DOMContentLoaded', () => {
             if (acropLastDownloadURL) URL.revokeObjectURL(acropLastDownloadURL);
             acropLastDownloadURL = URL.createObjectURL(blob);
             acropDownloadLink.href = acropLastDownloadURL;
-            acropDownloadLink.download = `${baseName}_cropped.${ext}`;
+            const suffix = mode === 'remove' ? '_trimmed' : '_cropped';
+            acropDownloadLink.download = `${baseName}${suffix}.${ext}`;
             if (acropSuccessDesc) {
-                acropSuccessDesc.innerText = `${mimeLabel} ফাইল প্রস্তুত (${acropFormatTime(startSec)} - ${acropFormatTime(endSec)}) — "${baseName}_cropped.${ext}" ডাউনলোড করুন।`;
+                acropSuccessDesc.innerText = mode === 'remove'
+                    ? `${mimeLabel} ফাইল প্রস্তুত — (${acropFormatTime(startSec)} - ${acropFormatTime(endSec)}) অংশটুকু বাদ দিয়ে বাকিটা জোড়া লাগানো হয়েছে — "${baseName}${suffix}.${ext}" ডাউনলোড করুন।`
+                    : `${mimeLabel} ফাইল প্রস্তুত (${acropFormatTime(startSec)} - ${acropFormatTime(endSec)}) — "${baseName}${suffix}.${ext}" ডাউনলোড করুন।`;
             }
 
             setTimeout(() => {

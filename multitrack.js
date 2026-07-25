@@ -674,7 +674,15 @@
             background: track.type === 'video' ? 'rgba(79,70,229,0.35)' : (track.type === 'audio' ? 'rgba(16,185,129,0.35)' : 'rgba(245,158,11,0.35)'),
             border: '1px solid rgba(255,255,255,0.25)', borderRadius: '4px',
             display: 'flex', alignItems: 'center', overflow: 'hidden',
-            cursor: 'grab', userSelect: 'none', minWidth: '10px'
+            cursor: 'grab', userSelect: 'none',
+            // A real pixel floor (not just a %-based minWidth, which barely
+            // helps once the lane is wide) — otherwise a short clip like a
+            // 5s image dropped on a 113s timeline renders ~30px wide, and
+            // the 8px resize handle below eats a quarter of that, leaving
+            // almost no room to grab the body to drag it. This is the main
+            // reason image/video clips felt "stuck" compared to audio.
+            minWidth: '36px',
+            touchAction: 'none'
         });
 
         if (track.type === 'audio') {
@@ -698,8 +706,11 @@
         delBtn.innerHTML = '<i class="fa-solid fa-xmark"></i>';
         styleEl(delBtn, {
             marginLeft: 'auto', background: 'transparent', border: 'none', color: '#fff',
-            cursor: 'pointer', fontSize: '10px', padding: '0 5px'
+            cursor: 'pointer', fontSize: '10px', padding: '0 5px', flexShrink: '0'
         });
+        // stopPropagation on pointerdown (not just click) so tapping delete
+        // on a narrow clip can't also register as the start of a drag.
+        delBtn.addEventListener('pointerdown', function (e) { e.stopPropagation(); });
         delBtn.addEventListener('click', function (e) {
             e.stopPropagation();
             removeClip(track, clip.id);
@@ -708,41 +719,62 @@
 
         var resizeHandle = document.createElement('div');
         styleEl(resizeHandle, {
-            position: 'absolute', right: '0', top: '0', bottom: '0', width: '8px',
-            cursor: 'ew-resize'
+            position: 'absolute', right: '0', top: '0', bottom: '0', width: '10px',
+            cursor: 'ew-resize', touchAction: 'none',
+            // A faint grip so the resize zone reads as a distinct target
+            // instead of an invisible sliver overlapping the clip body —
+            // easy to hit by accident (and to miss on purpose) on narrow
+            // clips otherwise.
+            background: 'linear-gradient(90deg, transparent, rgba(255,255,255,0.18))'
         });
         block.appendChild(resizeHandle);
 
-        // --- Drag to reposition ---
+        // --- Drag to reposition / right-edge resize (trim) ---
+        // Pointer Events (with capture) instead of separate mouse/touch
+        // handlers on `document`: one code path covers mouse, touch and
+        // pen, it keeps working correctly outside the block/lane bounds
+        // (setPointerCapture routes later move/up events straight to the
+        // element that started the gesture), and — unlike the previous
+        // approach — it doesn't add a fresh pair of document-level
+        // listeners every time this panel re-renders.
         var dragging = false, dragStartX = 0, dragStartOffset = 0;
-        block.addEventListener('mousedown', function (e) {
+        block.addEventListener('pointerdown', function (e) {
             if (e.target === resizeHandle) return;
             dragging = true;
             dragStartX = e.clientX;
             dragStartOffset = clip.timelineOffset;
+            block.style.cursor = 'grabbing';
+            try { block.setPointerCapture(e.pointerId); } catch (err) {}
             e.preventDefault();
         });
-        document.addEventListener('mousemove', function (e) {
+        block.addEventListener('pointermove', function (e) {
             if (!dragging) return;
             var laneWidth = lane.getBoundingClientRect().width || 1;
             var deltaSec = ((e.clientX - dragStartX) / laneWidth) * totalDur;
             clip.timelineOffset = clampOffset(track, clip, dragStartOffset + deltaSec);
             block.style.left = (clip.timelineOffset / totalDur) * 100 + '%';
         });
-        document.addEventListener('mouseup', function () {
-            if (dragging) { dragging = false; afterChange('Track clip moved'); }
-        });
+        function endDrag(e) {
+            if (!dragging) return;
+            dragging = false;
+            block.style.cursor = 'grab';
+            try { block.releasePointerCapture(e.pointerId); } catch (err) {}
+            afterChange('Track clip moved');
+        }
+        block.addEventListener('pointerup', endDrag);
+        block.addEventListener('pointercancel', endDrag);
 
         // --- Right-edge resize (trim) ---
         var resizing = false, resizeStartX = 0, resizeStartEnd = 0;
-        resizeHandle.addEventListener('mousedown', function (e) {
+        resizeHandle.addEventListener('pointerdown', function (e) {
             resizing = true;
             resizeStartX = e.clientX;
             resizeStartEnd = clip.sourceEnd;
+            try { resizeHandle.setPointerCapture(e.pointerId); } catch (err) {}
             e.preventDefault();
             e.stopPropagation();
         });
-        document.addEventListener('mousemove', function (e) {
+        resizeHandle.addEventListener('pointermove', function (e) {
             if (!resizing) return;
             var laneWidth = lane.getBoundingClientRect().width || 1;
             var deltaSec = ((e.clientX - resizeStartX) / laneWidth) * totalDur;
@@ -751,9 +783,14 @@
             var newDur = Math.max(0.1, clip.sourceEnd - clip.sourceStart);
             block.style.width = Math.max(1, (newDur / totalDur) * 100) + '%';
         });
-        document.addEventListener('mouseup', function () {
-            if (resizing) { resizing = false; afterChange('Track clip trimmed'); }
-        });
+        function endResize(e) {
+            if (!resizing) return;
+            resizing = false;
+            try { resizeHandle.releasePointerCapture(e.pointerId); } catch (err) {}
+            afterChange('Track clip trimmed');
+        }
+        resizeHandle.addEventListener('pointerup', endResize);
+        resizeHandle.addEventListener('pointercancel', endResize);
 
         return block;
     }

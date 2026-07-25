@@ -833,6 +833,10 @@ body {
     pointer-events: none;
 }
 
+.slider-track-fill.acrop-fill-remove {
+    background-color: #f87171;
+}
+
 .trim-slider {
     position: absolute;
     width: 100%;
