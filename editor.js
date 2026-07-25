@@ -3459,6 +3459,135 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
             };
 
+            // --- Line-by-Line Reveal (independent feature) ---
+            // Deliberately kept separate from the old animDur/stagger machinery so
+            // its per-line TIMING is simple and predictable: line k appears at
+            // exactly item.startSec + k * secondsPerLine, and stays visible after
+            // that (previous lines are never removed) until the whole overlay
+            // exits together right at item.endSec.
+            // The per-line ENTRANCE LOOK, though, still respects whichever
+            // Animation Style the person picked for this item (typewriter,
+            // letter-cascade, slide, zoom, etc.) — each line just plays that same
+            // style on its own, at its own turn, instead of all lines playing it
+            // at once.
+            const drawLineRevealUnderline = (ctx, item, text, x, y, align) => {
+                if (!item.underline || !text) return;
+                const ulW = ctx.measureText(text).width;
+                const ulX = (align === 'center') ? (x - ulW / 2) : x;
+                const ulY = y + item.fontSize * 0.38;
+                ctx.save();
+                ctx.strokeStyle = item.color;
+                ctx.lineWidth = Math.max(1.5, item.fontSize * 0.05);
+                ctx.beginPath();
+                ctx.moveTo(ulX, ulY);
+                ctx.lineTo(ulX + ulW, ulY);
+                ctx.stroke();
+                ctx.restore();
+            };
+
+            const drawLineRevealText = (ctx, item, sublines, isBulletPage, drawBoxX, drawBoxY, boxW, boxH, cx, cy, lineHeight, currentTime, style) => {
+                const numLines = sublines.length;
+                const secondsPerLine = Math.max(0.3, item.lineRevealSeconds || 2.5);
+                const firstLineY = cy - ((numLines - 1) * lineHeight) / 2;
+                const textX = isBulletPage ? (drawBoxX + Math.max(34, boxW * 0.09)) : cx;
+                const tSinceStart = currentTime - item.startSec;
+                const tUntilEnd = item.endSec - currentTime;
+                const exitDur = 0.35;
+                const exitP = Math.max(0, Math.min(1, tUntilEnd / exitDur));
+                const exitEased = 1 - Math.pow(1 - exitP, 3);
+
+                const kineticStyles = ['letter-rotate-settle', 'letter-converge', 'letter-cascade-fade', 'word-pop-stagger'];
+                const isKinetic = kineticStyles.includes(style);
+                const isTypewriter = style === 'typewriter';
+
+                sublines.forEach((lineObj, k) => {
+                    const revealAt = k * secondsPerLine;
+                    const localT = tSinceStart - revealAt;
+                    if (localT < 0) return; // this line's turn hasn't come yet — draw nothing
+
+                    const lineY = firstLineY + k * lineHeight;
+                    const lineX = isBulletPage ? (textX + lineObj.bulletWidth) : textX;
+                    const align = isBulletPage ? 'left' : 'center';
+
+                    ctx.save();
+                    ctx.globalAlpha *= Math.max(0, exitEased);
+                    ctx.textAlign = align;
+
+                    if (isTypewriter) {
+                        const typeDur = Math.min(secondsPerLine * 0.85, Math.max(0.4, lineObj.text.length * 0.045));
+                        const p = Math.max(0, Math.min(1, localT / typeDur));
+                        const revealCount = Math.max(0, Math.min(lineObj.text.length, Math.round(lineObj.text.length * p)));
+                        const textToDraw = lineObj.text.slice(0, revealCount);
+                        if (lineObj.bullet) ctx.fillText(lineObj.bullet, textX, lineY);
+                        ctx.fillText(textToDraw, lineX, lineY);
+                        if (p < 1 && Math.floor(currentTime * 2.5) % 2 === 0) {
+                            const w = ctx.measureText(textToDraw).width;
+                            const curX = (align === 'center') ? (lineX + w / 2 + Math.max(2, item.fontSize * 0.04)) : (lineX + w + Math.max(2, item.fontSize * 0.04));
+                            ctx.strokeStyle = item.color;
+                            ctx.lineWidth = Math.max(2, item.fontSize * 0.07);
+                            ctx.beginPath();
+                            ctx.moveTo(curX, lineY - item.fontSize * 0.4);
+                            ctx.lineTo(curX, lineY + item.fontSize * 0.4);
+                            ctx.stroke();
+                        } else {
+                            drawLineRevealUnderline(ctx, item, textToDraw, lineX, lineY, align);
+                        }
+                    } else if (isKinetic) {
+                        const transitionDur = Math.min(1.0, Math.max(0.3, secondsPerLine * 0.5));
+                        if (lineObj.bullet) ctx.fillText(lineObj.bullet, textX, lineY);
+                        const lineTextW = ctx.measureText(lineObj.text).width;
+                        const kineticLineX = isBulletPage ? (lineX + lineTextW / 2) : lineX;
+                        const clampedT = Math.min(localT, transitionDur);
+                        drawKineticText(ctx, item, style, lineObj.text, kineticLineX, lineY, clampedT, transitionDur, transitionDur, false);
+                        if (localT >= transitionDur) drawLineRevealUnderline(ctx, item, lineObj.text, lineX, lineY, align);
+                    } else {
+                        // fade / slide / slide-pop / zoom / zoom-pop / bounce-in / rotate-in / spin-pop / none / default
+                        const transitionDur = Math.min(0.6, secondsPerLine * 0.4);
+                        const p = Math.max(0, Math.min(1, localT / transitionDur));
+                        const eased = (style === 'slide-pop' || style === 'bounce-in' || style === 'zoom-pop')
+                            ? easeOutBackOvershoot(p)
+                            : brollEaseOut(p);
+
+                        let offX = 0, offY = 0, scale = 1, rotate = 0, alpha = 1;
+                        if (style === 'slide' || style === 'slide-pop') {
+                            const dir = item.entryDirection || 'bottom';
+                            const d = brollSlideOffset(dir, drawBoxX, drawBoxY, boxW, boxH);
+                            offX = d.x * (1 - eased);
+                            offY = d.y * (1 - eased);
+                            if (style === 'slide-pop') { scale = 0.7 + 0.3 * eased; alpha = Math.max(0.05, eased); }
+                        } else if (style === 'zoom' || style === 'zoom-pop') {
+                            scale = 0.7 + 0.3 * eased;
+                            alpha = Math.max(0.05, eased);
+                        } else if (style === 'bounce-in') {
+                            offY = -(drawBoxY + boxH) * (1 - eased);
+                            alpha = Math.max(0.05, eased);
+                        } else if (style === 'rotate-in' || style === 'spin-pop') {
+                            rotate = (1 - eased) * (style === 'spin-pop' ? Math.PI / 3 : Math.PI / 10);
+                            scale = 0.8 + 0.2 * eased;
+                            alpha = Math.max(0.05, eased);
+                        } else {
+                            // 'fade', 'none', or any other simple style: gentle rise + fade
+                            offY = (1 - eased) * Math.max(24, item.fontSize * 0.5);
+                            alpha = Math.max(0, eased);
+                        }
+
+                        ctx.globalAlpha *= alpha;
+                        const dx = lineX + offX, dy = lineY + offY;
+                        if (rotate !== 0 || scale !== 1) {
+                            ctx.translate(dx, dy);
+                            if (rotate !== 0) ctx.rotate(rotate);
+                            if (scale !== 1) ctx.scale(scale, scale);
+                            ctx.translate(-dx, -dy);
+                        }
+                        if (lineObj.bullet) ctx.fillText(lineObj.bullet, textX + offX, dy);
+                        ctx.fillText(lineObj.text, dx, dy);
+                        drawLineRevealUnderline(ctx, item, lineObj.text, dx, dy, align);
+                    }
+
+                    ctx.restore();
+                });
+            };
+
             state.brollOverlays.forEach((item) => {
                 if (item.type !== 'text' && item.type !== 'cash' && item.type !== 'built-in' && !item.imageImg) return;
 
@@ -3944,7 +4073,14 @@ document.addEventListener('DOMContentLoaded', () => {
                     state.ctx.textBaseline = 'middle';
 
                     const kineticTextStyles = ['letter-rotate-settle', 'letter-converge', 'letter-cascade-fade', 'word-pop-stagger'];
-                    const isKineticAnim = kineticTextStyles.includes(style) && brollAnimActive && (tIn < animDur || tOut < animDur);
+                    const isKineticStyle = kineticTextStyles.includes(style) && brollAnimActive;
+
+                    if (item.lineRevealMode && numLines > 1) {
+                        // Independent line-by-line reveal feature — see drawLineRevealText
+                        // above. Completely bypasses the animDur/stagger/kinetic machinery
+                        // used by every other style so its timing is simple and predictable.
+                        drawLineRevealText(state.ctx, item, sublines, isBulletPage, drawBoxX, drawBoxY, boxW, boxH, cx, cy, lineHeight, currentTime, style);
+                    } else {
                     // Always use the sublines loop so multi-line / bulleted text
                     // retains its layout during kinetic entry/exit animations.
                     {
@@ -4043,7 +4179,7 @@ document.addEventListener('DOMContentLoaded', () => {
                                 state.ctx.translate(-drawLineX, -drawLineY);
                             }
 
-                            if (isKineticAnim) {
+                            if (isKineticStyle) {
                                 // Kinetic typography: draw this subline's text animated
                                 // at its correct layout position instead of flattening all
                                 // lines to a single row at the box center.
@@ -4052,12 +4188,6 @@ document.addEventListener('DOMContentLoaded', () => {
                                     state.ctx.lineWidth = Math.max(2, item.fontSize * 0.08);
                                     state.ctx.strokeStyle = 'rgba(0,0,0,0.55)';
                                 }
-                                // Stagger each line's kinetic clock so they animate in
-                                // one-after-another rather than all at once.
-                                const kPerLineDur = Math.max(0.12, animDur * 0.55);
-                                const kStagger = (numLines > 1) ? (k / (numLines - 1)) * Math.max(0, animDur - kPerLineDur) : 0;
-                                const kIsEntry = tIn < animDur;
-                                const kLocalT = kIsEntry ? Math.max(0, tIn - kStagger) : Math.max(0, tOut - kStagger);
                                 if (lineObj.bullet) {
                                     state.ctx.textAlign = 'left';
                                     if (strokeOnFill) state.ctx.strokeText(lineObj.bullet, drawBulletX, drawLineY);
@@ -4068,7 +4198,19 @@ document.addEventListener('DOMContentLoaded', () => {
                                 // so shift cx to the midpoint of this line's text width.
                                 const lineTextW = state.ctx.measureText(lineObj.text).width;
                                 const kineticLineX = isBulletPage ? (drawLineX + lineTextW / 2) : drawLineX;
-                                drawKineticText(state.ctx, item, style, lineObj.text, kineticLineX, drawLineY, kIsEntry ? kLocalT : animDur, kIsEntry ? animDur : kLocalT, kPerLineDur, strokeOnFill);
+                                // Reuse this line's own isEntry/lineP (already computed above from
+                                // either the sequential per-line slot or the legacy short-window
+                                // stagger) instead of a separate, item-level kinetic clock — that's
+                                // what previously made every line's kinetic entrance burst in at
+                                // once regardless of the sequential-reveal setting.
+                                if (isEntry) {
+                                    const windowDur = useSequential ? seqPerLineDur : perLineDur;
+                                    const elapsed = lineP * windowDur;
+                                    drawKineticText(state.ctx, item, style, lineObj.text, kineticLineX, drawLineY, elapsed, windowDur, windowDur, strokeOnFill);
+                                } else {
+                                    // Real exit phase: all currently-visible lines animate away together.
+                                    drawKineticText(state.ctx, item, style, lineObj.text, kineticLineX, drawLineY, perLineDur, Math.max(0, tOut), perLineDur, strokeOnFill);
+                                }
                             } else {
                                 let textToDraw = lineObj.text;
                                 let isTypingLine = false;
@@ -4120,6 +4262,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
                             state.ctx.restore();
                         });
+                    }
                     }
 
                 } else if (item.type === 'cash' || item.type === 'built-in') {
@@ -8698,7 +8841,10 @@ document.addEventListener('DOMContentLoaded', () => {
     const brollExitDirSelect = document.getElementById('broll-exit-dir');
     const brollAnimSpeedSlider = document.getElementById('broll-anim-speed');
     const brollAnimSpeedVal = document.getElementById('broll-anim-speed-val');
-    const brollSequentialLinesCheckbox = document.getElementById('broll-sequential-lines');
+    const brollLineRevealModeCheckbox = document.getElementById('broll-line-reveal-mode');
+    const brollLineRevealSecondsRow = document.getElementById('broll-line-reveal-seconds-row');
+    const brollLineRevealSecondsSlider = document.getElementById('broll-line-reveal-seconds');
+    const brollLineRevealSecondsVal = document.getElementById('broll-line-reveal-seconds-val');
     const brollSoundEffectSelect = document.getElementById('broll-sound-effect');
     const brollFitContainer = document.getElementById('broll-fit-container');
     const brollFitSelect = document.getElementById('broll-fit-select');
@@ -9993,7 +10139,15 @@ document.addEventListener('DOMContentLoaded', () => {
             brollAnimSpeedSlider.value = brollSpeedSecToValue(sec);
             if (brollAnimSpeedVal) brollAnimSpeedVal.innerText = brollSpeedLabel(sec);
         }
-        if (brollSequentialLinesCheckbox) brollSequentialLinesCheckbox.checked = !!item.sequentialLines;
+        if (brollLineRevealModeCheckbox) {
+            brollLineRevealModeCheckbox.checked = !!item.lineRevealMode;
+            if (brollLineRevealSecondsRow) brollLineRevealSecondsRow.style.display = item.lineRevealMode ? 'block' : 'none';
+        }
+        if (brollLineRevealSecondsSlider) {
+            const lrSec = item.lineRevealSeconds || 2.5;
+            brollLineRevealSecondsSlider.value = Math.round(lrSec * 10);
+            if (brollLineRevealSecondsVal) brollLineRevealSecondsVal.innerText = lrSec.toFixed(1) + 's';
+        }
         if (brollSoundEffectSelect) brollSoundEffectSelect.value = item.soundEffect || 'none';
         if (brollCustomSoundContainer) {
             brollCustomSoundContainer.style.display = (item.soundEffect === 'custom') ? 'block' : 'none';
@@ -10158,11 +10312,24 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    if (brollSequentialLinesCheckbox) {
-        brollSequentialLinesCheckbox.addEventListener('change', (e) => {
+    if (brollLineRevealModeCheckbox) {
+        brollLineRevealModeCheckbox.addEventListener('change', (e) => {
             const item = state.brollOverlays.find(b => b.id === state.selectedBrollId);
             if (item) {
-                item.sequentialLines = e.target.checked;
+                item.lineRevealMode = e.target.checked;
+                if (brollLineRevealSecondsRow) brollLineRevealSecondsRow.style.display = item.lineRevealMode ? 'block' : 'none';
+                drawFrame();
+            }
+        });
+    }
+
+    if (brollLineRevealSecondsSlider) {
+        brollLineRevealSecondsSlider.addEventListener('input', (e) => {
+            const item = state.brollOverlays.find(b => b.id === state.selectedBrollId);
+            if (item) {
+                const sec = Math.max(0.5, parseInt(e.target.value) / 10);
+                item.lineRevealSeconds = sec;
+                if (brollLineRevealSecondsVal) brollLineRevealSecondsVal.innerText = sec.toFixed(1) + 's';
                 drawFrame();
             }
         });

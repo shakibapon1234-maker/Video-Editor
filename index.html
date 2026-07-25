@@ -1745,12 +1745,19 @@
                                             <span id="broll-anim-speed-val">Normal</span>
                                         </div>
                                     </div>
-                                    <div class="control-group mt-3" id="broll-sequential-lines-row">
-                                        <label class="form-check-label" style="display:flex; align-items:center; gap:6px; cursor:pointer;">
-                                            <input type="checkbox" id="broll-sequential-lines">
-                                            লাইন বাই লাইন আসবে (একটা শেষ হলে আরেকটা) — পুরো সময় জুড়ে ভাগ হবে
+                                    <div class="control-group mt-3" id="broll-line-reveal-row" style="border: 1.5px solid #6366f1; border-radius: 8px; padding: 10px; background: rgba(99,102,241,0.06);">
+                                        <label class="form-check-label" style="display:flex; align-items:center; gap:6px; cursor:pointer; color: #a5b4fc; font-weight:600;">
+                                            <input type="checkbox" id="broll-line-reveal-mode">
+                                            ✨ লাইন বাই লাইন রিভিল (নতুন, স্বাধীন ফিচার)
                                         </label>
-                                        <p class="help-text mt-1">একাধিক লাইনের টেক্সটে এটি চালু করলে প্রতিটি লাইন একে একে অ্যানিমেশন করে আসবে এবং আগের লাইনগুলো স্ক্রিনে থেকে যাবে — পুরো "Show From/Until" সময়ের মধ্যে সমানভাবে ভাগ হয়ে। বন্ধ থাকলে সবগুলো লাইন প্রায় একসাথে (দ্রুত ঝাঁক) অ্যানিমেশন হবে।</p>
+                                        <p class="help-text mt-1">এটি চালু করলে উপরের Animation Style/Speed/Direction আর প্রযোজ্য হবে না — প্রতিটি লাইন নিজে নিজে, একদম পূর্বনির্ধারিত সময় অনুযায়ী একে একে সোয়াইপ করে আসবে এবং আগেরগুলো স্ক্রিনে থেকে যাবে। শেষ লাইনটা আসার পর "Show Until" সময়ে পুরো টেক্সট একসাথে চলে যাবে।</p>
+                                        <div class="mt-2" id="broll-line-reveal-seconds-row" style="display:none;">
+                                            <label>প্রতি লাইনে কত সেকেন্ড পর পরেরটা আসবে</label>
+                                            <div class="slider-val-container">
+                                                <input type="range" id="broll-line-reveal-seconds" min="5" max="60" value="25">
+                                                <span id="broll-line-reveal-seconds-val">2.5s</span>
+                                            </div>
+                                        </div>
                                     </div>
                                     <div class="control-group mt-3">
                                         <label>Sound Effect (আসা/যাওয়ার শব্দ)</label>
