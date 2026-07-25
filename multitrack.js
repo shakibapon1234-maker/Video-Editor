@@ -338,7 +338,7 @@
         if (!state || !state.extraTracks || !state.extraTracks.length) return;
         var ctx = state.ctx, canvas = state.canvas;
         if (!ctx || !canvas || !canvas.width || !canvas.height) return;
-        var isExporting = (state.customExportTime !== undefined);
+        var isExporting = (state.customExportTime !== undefined) || !!state.isExportingVideo;
         var globalT = isExporting ? (state.exportTickerTime || 0) : computeGlobalTime();
 
         state.extraTracks.forEach(function (track) {
@@ -348,21 +348,26 @@
                 // volume/timing — during export the final mix is done offline
                 // instead (audio.js), so nothing to do here in that case.
                 if (isExporting) return;
-                var activeAudio = findActiveClipInTrack(track, globalT);
-                (track.clips || []).forEach(function (c) {
-                    if (c !== activeAudio && c._el && !c._el.paused) c._el.pause();
-                });
-                if (!activeAudio) return;
-                var relativeAudio = Math.max(0, (globalT - activeAudio.timelineOffset) + activeAudio.sourceStart);
-                var audioEl = ensureMediaEl(activeAudio, 'audio');
-                audioEl.muted = !!track.muted;
-                audioEl.volume = Math.max(0, Math.min(1, track.volume !== undefined ? track.volume : 1));
-                if (state.isPlaying) {
-                    if (audioEl.paused) audioEl.play().catch(function () {});
-                    if (Math.abs(audioEl.currentTime - relativeAudio) > 0.35) audioEl.currentTime = relativeAudio;
-                } else {
-                    if (!audioEl.paused) audioEl.pause();
-                    if (Math.abs(audioEl.currentTime - relativeAudio) > 0.05) audioEl.currentTime = relativeAudio;
+                try {
+                    var activeAudio = findActiveClipInTrack(track, globalT);
+                    (track.clips || []).forEach(function (c) {
+                        if (c !== activeAudio && c._el && typeof c._el.pause === 'function' && !c._el.paused) c._el.pause();
+                    });
+                    if (!activeAudio) return;
+                    var relativeAudio = Math.max(0, (globalT - activeAudio.timelineOffset) + activeAudio.sourceStart);
+                    var audioEl = ensureMediaEl(activeAudio, 'audio');
+                    if (!audioEl || typeof audioEl.pause !== 'function' || typeof audioEl.play !== 'function') return;
+                    audioEl.muted = !!track.muted;
+                    audioEl.volume = Math.max(0, Math.min(1, track.volume !== undefined ? track.volume : 1));
+                    if (state.isPlaying) {
+                        if (audioEl.paused) audioEl.play().catch(function () {});
+                        if (Math.abs(audioEl.currentTime - relativeAudio) > 0.35) audioEl.currentTime = relativeAudio;
+                    } else {
+                        if (!audioEl.paused) audioEl.pause();
+                        if (Math.abs(audioEl.currentTime - relativeAudio) > 0.05) audioEl.currentTime = relativeAudio;
+                    }
+                } catch (e) {
+                    // Never let extra-track audio sync crash export or preview.
                 }
                 return;
             }

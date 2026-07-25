@@ -750,6 +750,60 @@
                             </div>
                         </div>
 
+                        <!-- Punch Zoom: momentary zoom-into-a-point (video + image clips) -->
+                        <div class="card mt-4">
+                            <div class="card-header">
+                                <i class="fa-solid fa-magnifying-glass-plus card-icon"></i>
+                                <h3>Punch Zoom (কয়েক সেকেন্ডের জন্য পয়েন্ট জুম)</h3>
+                            </div>
+                            <div class="card-body">
+                                <p class="help-text">ভিডিও চলার মাঝে একটা নির্দিষ্ট পয়েন্টে কয়েক সেকেন্ডের জন্য জুম-ইন করে আবার স্বাভাবিক হয়ে আসবে। ভিডিও ও ছবি — দুই ধরনের ক্লিপেই কাজ করে।</p>
+
+                                <div class="control-group mt-2">
+                                    <div style="display: flex; justify-content: space-between; align-items: center;">
+                                        <label>Zoom Level / জুম কতটা (%)</label>
+                                        <span id="punch-zoom-scale-val" style="font-size: 12px; color: var(--text-secondary);">140%</span>
+                                    </div>
+                                    <input type="range" id="punch-zoom-scale-slider" min="110" max="250" value="140" class="form-range" style="width: 100%;">
+                                </div>
+
+                                <div class="control-group mt-2">
+                                    <div style="display: flex; justify-content: space-between; align-items: center;">
+                                        <label>স্থায়িত্ব / Duration (সেকেন্ড)</label>
+                                        <span id="punch-zoom-duration-val" style="font-size: 12px; color: var(--text-secondary);">2.0s</span>
+                                    </div>
+                                    <input type="range" id="punch-zoom-duration-slider" min="0.5" max="6" step="0.1" value="2" class="form-range" style="width: 100%;">
+                                </div>
+
+                                <div class="control-group mt-2">
+                                    <div style="display: flex; justify-content: space-between; align-items: center;">
+                                        <label>বামে-ডানে ফোকাস পয়েন্ট / Focus X (%)</label>
+                                        <span id="punch-zoom-focus-x-val" style="font-size: 12px; color: var(--text-secondary);">50%</span>
+                                    </div>
+                                    <input type="range" id="punch-zoom-focus-x-slider" min="0" max="100" value="50" class="form-range" style="width: 100%;">
+                                </div>
+
+                                <div class="control-group mt-2">
+                                    <div style="display: flex; justify-content: space-between; align-items: center;">
+                                        <label>ওপরে-নিচে ফোকাস পয়েন্ট / Focus Y (%)</label>
+                                        <span id="punch-zoom-focus-y-val" style="font-size: 12px; color: var(--text-secondary);">50%</span>
+                                    </div>
+                                    <input type="range" id="punch-zoom-focus-y-slider" min="0" max="100" value="50" class="form-range" style="width: 100%;">
+                                </div>
+
+                                <p class="help-text" style="margin-top: 6px;">টিপ: প্রিভিউতে যে মুহূর্তে জুম শুরু হবে সেখানে প্লেহেড নিয়ে গিয়ে "এই মুহূর্তে যোগ করুন" বাটনে চাপুন।</p>
+
+                                <button id="punch-zoom-add-btn" class="btn btn-secondary mt-2" style="width: 100%;">
+                                    <i class="fa-solid fa-plus"></i> এই মুহূর্তে যোগ করুন / Add at current time
+                                </button>
+                                <button id="punch-zoom-update-btn" class="btn btn-secondary mt-2" style="width: 100%; display: none;">
+                                    <i class="fa-solid fa-check"></i> নির্বাচিত পয়েন্ট আপডেট করুন / Update selected
+                                </button>
+
+                                <div id="punch-zoom-list" class="mt-3"></div>
+                            </div>
+                        </div>
+
                         <!-- Phase 9: Chroma Key -->
                         <div class="card mt-4">
                             <div class="card-header">
@@ -3168,5 +3222,6 @@
     <script src="phase9.js?v=2"></script>
     <script src="transitions-library.js?v=1"></script>
     <script src="multitrack.js?v=2"></script>
+    <script src="punch-zoom-ui.js?v=1"></script>
 </body>
 </html>

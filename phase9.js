@@ -28,6 +28,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (clip.zoom == null || isNaN(clip.zoom)) clip.zoom = 100;
         if (clip.offsetX == null || isNaN(clip.offsetX)) clip.offsetX = 0;
         if (clip.offsetY == null || isNaN(clip.offsetY)) clip.offsetY = 0;
+        if (!Array.isArray(clip.punchZooms)) clip.punchZooms = [];
         return clip;
     }
 
@@ -777,6 +778,49 @@ document.addEventListener('DOMContentLoaded', () => {
         return { drawX: nx, drawY: ny, drawW: nw, drawH: nh };
     }
 
+    // --- Punch Zoom: momentary zoom-into-a-point effect ---
+    // Unlike Ken Burns (image-only, runs across the whole clip), a punch zoom
+    // is a short, timed zoom-in-then-out at a specific moment — e.g. "at 3s
+    // into this clip, zoom in on this spot for 2 seconds" — and works on both
+    // video and image clips. clip.punchZooms is an array of:
+    //   { time: <seconds from clip start>, duration: <seconds>,
+    //     scale: <e.g. 1.4 for 40% zoomed in>, focusX: <0-1>, focusY: <0-1> }
+    // A smooth bell-curve eases in and back out over `duration`, so the point
+    // stays visually fixed on screen while everything around it grows and
+    // shrinks back — no in/out segment bookkeeping needed.
+    function applyPunchZoomTransform(drawX, drawY, drawW, drawH, clip, effectiveTime) {
+        if (!clip || !Array.isArray(clip.punchZooms) || !clip.punchZooms.length) {
+            return { drawX, drawY, drawW, drawH };
+        }
+        const elapsed = effectiveTime - (state.startTime || clip.start || 0);
+        let best = null;
+        for (let i = 0; i < clip.punchZooms.length; i++) {
+            const pz = clip.punchZooms[i];
+            const dur = Math.max(0.1, pz.duration || 1.5);
+            const t0 = pz.time || 0;
+            if (elapsed >= t0 && elapsed <= t0 + dur) {
+                const lt = (elapsed - t0) / dur; // 0..1 across this punch zoom's window
+                const bell = Math.sin(Math.PI * Math.max(0, Math.min(1, lt))); // 0 -> 1 -> 0
+                if (!best || bell > best.bell) best = { pz, bell };
+            }
+        }
+        if (!best) return { drawX, drawY, drawW, drawH };
+
+        const maxZoom = Math.max(1, (best.pz.scale != null ? best.pz.scale : 1.4));
+        const z = 1 + (maxZoom - 1) * best.bell;
+        const focusX = (best.pz.focusX != null) ? best.pz.focusX : 0.5;
+        const focusY = (best.pz.focusY != null) ? best.pz.focusY : 0.5;
+
+        const nw = drawW * z;
+        const nh = drawH * z;
+        // Zoom-toward-point: keeps (focusX, focusY) fixed on screen while the
+        // frame scales up/down around it.
+        const nx = drawX + focusX * drawW * (1 - z);
+        const ny = drawY + focusY * drawH * (1 - z);
+        return { drawX: nx, drawY: ny, drawW: nw, drawH: nh };
+    }
+    window.phase9ApplyPunchZoomTransform = applyPunchZoomTransform;
+
     // --- Static Zoom/Position and Ken Burns combined helper ---
     function applyStaticAndDynamicTransform(baseDrawX, baseDrawY, baseDrawW, baseDrawH, clip, effectiveTime) {
         // clip can be undefined for a stray frame if state.activeClipId momentarily
@@ -800,7 +844,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
         // 2. Ken Burns zoom/pan (only image clips)
         const kb = applyKenBurnsTransform(drawX, drawY, drawW, drawH, clip, effectiveTime);
-        return kb;
+
+        // 3. Punch zoom — timed zoom-into-a-point (video and image clips)
+        const pz = applyPunchZoomTransform(kb.drawX, kb.drawY, kb.drawW, kb.drawH, clip, effectiveTime);
+        return pz;
     }
     window.phase9ApplyStaticAndDynamicTransform = applyStaticAndDynamicTransform;
 

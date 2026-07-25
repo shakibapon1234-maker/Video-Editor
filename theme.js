@@ -69,7 +69,8 @@
                     '<span class="theme-swatch ' + theme.swatch + '"></span>' +
                     '<span>' + theme.label + '</span>' +
                     '<i class="fa-solid fa-check theme-check"></i>';
-                opt.addEventListener('click', function () {
+                opt.addEventListener('click', function (e) {
+                    e.stopPropagation();
                     current = theme.id;
                     applyTheme(theme.id);
                     saveTheme(theme.id);
@@ -83,8 +84,18 @@
 
         function positionPanel() {
             var rect = toggleBtn.getBoundingClientRect();
-            panel.style.top = (rect.bottom + 8) + 'px';
-            panel.style.right = (window.innerWidth - rect.right) + 'px';
+            var top = rect.bottom + 8;
+            var right = window.innerWidth - rect.right;
+
+            if (top + 300 > window.innerHeight) {
+                top = Math.max(8, rect.top - 300 - 8);
+            }
+            top = Math.max(8, top);
+
+            panel.style.top = top + 'px';
+            panel.style.right = Math.max(8, right) + 'px';
+            panel.style.bottom = 'auto';
+            panel.style.left = 'auto';
         }
 
         toggleBtn.addEventListener('click', function (e) {

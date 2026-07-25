@@ -195,6 +195,14 @@ document.addEventListener('DOMContentLoaded', () => {
             if (window.playPauseBtn) window.playPauseBtn.innerHTML = '<i class="fa-solid fa-play"></i>';
         }
 
+        // Persistent export flag (separate from the per-frame state.customExportTime
+        // toggle). customExportTime is only set WHILE a frame is actively being
+        // drawn inside the capture loop, and is briefly undefined again between
+        // frames/clips/awaits. Any other code that reacts to a stray redraw during
+        // one of those gaps (e.g. multitrack.js's extra-audio-track sync) needs a
+        // flag that stays true for the whole export, not just mid-frame — this is it.
+        state.isExportingVideo = true;
+
         // Show progress box
         exportCancelled = false;
         exportStartTimestamp = performance.now();
@@ -238,6 +246,7 @@ document.addEventListener('DOMContentLoaded', () => {
             // Ensure the overlay clock override never leaks back into the editor.
             state.customExportTime = undefined;
             state.exportTickerTime = undefined;
+            state.isExportingVideo = false;
             if (window.cleanupExtraTracksExportMedia) window.cleanupExtraTracksExportMedia();
             if (cancelRenderBtn) cancelRenderBtn.disabled = false;
         }

@@ -20,7 +20,7 @@ set "JAVA_HOME=D:\JDK21"
 
 echo [0/5] Refreshing www\ from latest source (auto-sync)...
 if not exist "www" mkdir "www"
-for %%i in (index.html style.css audio.js editor.js exporter.js render-engine.js phase9.js package.json capacitor.config.json) do (
+for %%i in (index.html style.css audio.js editor.js exporter.js render-engine.js phase9.js package.json capacitor.config.json multitrack.js punch-zoom-ui.js audio-waveform-track.js transitions-library.js theme.js color-scopes.js keyframes.js) do (
     if exist "%%i" copy /Y "%%i" "www\%%i" >nul
 )
 if exist "public" (
@@ -30,7 +30,7 @@ if exist "public" (
 
 REM Make sure Capacitor android platform exists (only first time)
 if not exist "android" (
-    echo [1/5] Adding Capacitor Android platform (first time only)...
+    echo [1/5] Adding Capacitor Android platform - first time only...
     call npx cap add android
 ) else (
     echo [1/5] Android platform already present, skipping add.
@@ -40,9 +40,9 @@ echo [2/5] Syncing latest code into Android project...
 call npx cap sync android
 
 echo [2.5/5] Pointing Gradle to the D: Android SDK and JDK 21...
-echo sdk.dir=D:\Android\Sdk>android\local.properties
+echo sdk.dir=D:/Android/Sdk>android\local.properties
 set "GRADLE_PROP=android\gradle.properties"
-findstr /C:"org.gradle.java.home" "%GRADLE_PROP%" >nul 2>&1 || echo org.gradle.java.home=D:\JDK21>>"%GRADLE_PROP%"
+findstr /C:"org.gradle.java.home" "%GRADLE_PROP%" >nul 2>&1 || echo org.gradle.java.home=D:/JDK21>>"%GRADLE_PROP%"
 
 echo [3/5] Building debug APK (this can take a few minutes)...
 cd android

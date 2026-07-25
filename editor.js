@@ -6081,6 +6081,17 @@ document.addEventListener('DOMContentLoaded', () => {
                 state.dragTextOffsetX = coords.x - (hit.x * canvasW);
                 state.dragTextOffsetY = coords.y - (hit.y * canvasH);
                 if (window.onTextOverlaySelected) window.onTextOverlaySelected(hit.id);
+
+                if (!state.isPlaying && state.currentStep === 3) {
+                    const targetTime = hit.startSec || 0;
+                    if (state.video && state.video.readyState >= 2) {
+                        state.video.currentTime = targetTime;
+                    }
+                    state.currentTime = targetTime;
+                    updatePlayhead();
+                    drawFrame();
+                }
+
                 e.preventDefault();
             } else {
                 state.selectedTextOverlayId = null;
@@ -6777,8 +6788,9 @@ document.addEventListener('DOMContentLoaded', () => {
             const ty = item.y * canvasH;
             state.ctx.font = `bold ${item.fontSize}px "${item.font}", "Plus Jakarta Sans", sans-serif`;
             const metrics = state.ctx.measureText(item.text);
-            const boxW = metrics.width + 20;
-            const boxH = item.fontSize + 16;
+            const isCustomCurve = item.curvePoints && item.curvePoints.length >= 2;
+            const boxW = metrics.width + (isCustomCurve ? 60 : 28);
+            const boxH = item.fontSize + (isCustomCurve ? 60 : 24);
             if (coords.x >= tx - boxW / 2 && coords.x <= tx + boxW / 2 &&
                 coords.y >= ty - boxH / 2 && coords.y <= ty + boxH / 2) {
                 return item;
@@ -7591,10 +7603,11 @@ document.addEventListener('DOMContentLoaded', () => {
         state.isResizingSticker = false;
         state.isDraggingSymbol = false;
         state.isResizingSymbol = false;
-        state.isRotatingSymbol = false;
+        state.isRotatingShapeOverlay = false;
         state.isDraggingShapeOverlay = false;
         state.isResizingShapeOverlay = false;
-        state.isRotatingShapeOverlay = false;
+
+        drawFrame();
 
         if (recordedAction && window.recordEditorHistory) {
             window.recordEditorHistory(recordedAction);
