@@ -1646,8 +1646,34 @@
                                                 <input type="color" id="broll-edit-text-bg-color" value="#0f172a">
                                                 <span class="color-value-text" id="broll-edit-text-bg-color-val">#0f172a</span>
                                             </div>
+                                            <!-- Animated Background Theme Selector -->
+                                            <div id="broll-edit-bg-anim-row" class="mt-2" style="display:none; padding:10px; background:rgba(0,0,0,0.3); border-radius:8px; border:1px solid rgba(255,255,255,0.1);">
+                                                <label style="font-size:11px; color:var(--primary); font-weight:600; margin-bottom:6px; display:block;">🎨 ব্যাকগ্রাউন্ড অ্যানিমেশন থিম</label>
+                                                <select id="broll-edit-bg-anim" class="form-select" style="font-size:12px;">
+                                                    <option value="none">⬛ None — Solid Color Only</option>
+                                                    <option value="space">🌌 Space — তারা ও গ্রহ (Wings Fly Site)</option>
+                                                    <option value="holographic">🔷 Holographic — Tech Grid &amp; Orbs (Academy)</option>
+                                                    <option value="aurora">🌠 Aurora — উত্তরের আলো (Bonus)</option>
+                                                </select>
+                                                <p class="help-text mt-1" style="font-size:10px; color:rgba(255,255,255,0.4);">exported video-তেও এই animation দেখাবে।</p>
+                                            </div>
+                                            <!-- Background Image Upload -->
+                                            <div id="broll-edit-bg-image-row" class="mt-2" style="display:none; padding:10px; background:rgba(0,0,0,0.3); border-radius:8px; border:1px solid rgba(255,255,255,0.1);">
+                                                <label style="font-size:11px; color:var(--primary); font-weight:600; margin-bottom:6px; display:block;">🖼️ ব্যাকগ্রাউন্ড ইমেজ আপলোড</label>
+                                                <p class="help-text" style="font-size:10px; color:rgba(255,255,255,0.45); margin-bottom:8px;">স্লাইড, টেবিল, ছবি — যেকোনো ইমেজ আপলোড করুন। টেক্সট এর উপরে দেখাবে।</p>
+                                                <input type="file" id="broll-bg-image-input" accept="image/*" style="display:none;">
+                                                <button type="button" id="broll-bg-image-btn" class="btn btn-sm btn-outline" style="width:100%; font-size:12px; padding:6px; border:1px dashed rgba(255,255,255,0.3); background:rgba(255,255,255,0.04);">
+                                                    <i class="fa-solid fa-upload"></i> ইমেজ / স্লাইড আপলোড করুন
+                                                </button>
+                                                <div id="broll-bg-image-preview" style="display:none; align-items:center; gap:8px; margin-top:8px; padding:6px; background:rgba(255,255,255,0.05); border-radius:6px;">
+                                                    <img id="broll-bg-image-thumb" src="" alt="bg" style="width:56px; height:36px; object-fit:cover; border-radius:4px; border:1px solid rgba(255,255,255,0.15);">
+                                                    <span style="flex:1; font-size:10px; color:rgba(255,255,255,0.6);">ব্যাকগ্রাউন্ড ইমেজ সেট</span>
+                                                    <button type="button" id="broll-bg-image-remove" class="btn btn-sm" style="padding:2px 8px; font-size:11px; color:#ef4444; border:1px solid rgba(239,68,68,0.3); background:transparent;"><i class="fa-solid fa-xmark"></i> সরান</button>
+                                                </div>
+                                            </div>
                                         </div>
                                         <div class="control-group mt-2">
+
                                             <label class="checkbox-label" style="display:flex; align-items:center; gap:8px;">
                                                 <input type="checkbox" id="broll-edit-text-highlight-enabled">
                                                 মার্কার-স্টাইল সলিড হাইলাইট (Solid Highlight)
@@ -3231,13 +3257,13 @@
     <script src="color-scopes.js?v=1"></script>
     <script src="public/capacitor/capacitor.js"></script>
     <script src="audio.js?v=4"></script>
-    <script src="editor.js?v=8"></script>
+    <script src="editor.js?v=9"></script>
     <script src="keyframes.js?v=1"></script>
     <script src="render-engine.js?v=2"></script>
     <script src="exporter.js?v=4"></script>
-    <script src="phase9.js?v=2"></script>
+    <script src="phase9.js?v=4"></script>
     <script src="transitions-library.js?v=1"></script>
     <script src="multitrack.js?v=2"></script>
-    <script src="punch-zoom-ui.js?v=1"></script>
+    <script src="punch-zoom-ui.js?v=3"></script>
 </body>
 </html>

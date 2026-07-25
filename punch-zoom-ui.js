@@ -72,16 +72,20 @@
                 syncLabels();
                 if (updateBtn) updateBtn.style.display = 'block';
                 renderList();
-                // Jump the playhead to this zoom point so the user can preview it.
+                // Jump the playhead to the PEAK of this zoom point (its midpoint)
+                // rather than its start — the bell-curve effect is at 0% strength
+                // right at the start/end of the window, so seeking to the start
+                // showed no zoom at all and made the sliders look broken.
+                var peakTime = (pz.time || 0) + Math.max(0.1, pz.duration || 1.5) / 2;
                 if (state.video && clip.type !== 'image') {
-                    state.currentTime = (state.startTime || 0) + (pz.time || 0);
+                    state.currentTime = (state.startTime || 0) + peakTime;
                     if (window.updatePlayhead) window.updatePlayhead();
                     state.video.currentTime = state.currentTime;
                 } else {
-                    state.currentTime = (state.startTime || 0) + (pz.time || 0);
+                    state.currentTime = (state.startTime || 0) + peakTime;
                     if (window.updatePlayhead) window.updatePlayhead();
                 }
-                if (window.drawEditorFrame) window.drawEditorFrame();
+                updateLivePreview();
             });
         });
         listEl.querySelectorAll('[data-pz-remove]').forEach(function (btn) {
@@ -107,8 +111,28 @@
         if (focusYVal) focusYVal.textContent = focusYSlider.value + '%';
     }
 
+    // While the user is actively dragging any Punch Zoom slider, show the
+    // effect on the canvas at full strength (see phase9.js's punchZoomLivePreview
+    // check) regardless of where the playhead sits, so Focus X/Y changes are
+    // visible immediately instead of only inside the effect's time window.
+    function updateLivePreview() {
+        var state = ve();
+        if (!state) return;
+        var v = currentFormValues();
+        state.punchZoomLivePreview = { scale: v.scale, focusX: v.focusX, focusY: v.focusY };
+        if (window.drawEditorFrame) window.drawEditorFrame();
+    }
+
+    function clearLivePreview() {
+        var state = ve();
+        if (!state || !state.punchZoomLivePreview) return;
+        state.punchZoomLivePreview = null;
+        if (window.drawEditorFrame) window.drawEditorFrame();
+    }
+
     function syncPunchZoomUI() {
         var clip = getActiveClip();
+        clearLivePreview();
         if (!clip) return;
         if (!Array.isArray(clip.punchZooms)) clip.punchZooms = [];
         selectedId = null;
@@ -126,16 +150,26 @@
                 if (!Array.isArray(clip.punchZooms)) clip.punchZooms = [];
                 var v = currentFormValues();
                 var timeInClip = Math.max(0, (state.currentTime || 0) - (state.startTime || 0));
-                clip.punchZooms.push({
+                var newPz = {
                     id: uid(),
                     time: timeInClip,
                     duration: v.duration,
                     scale: v.scale,
                     focusX: v.focusX,
                     focusY: v.focusY
-                });
+                };
+                clip.punchZooms.push(newPz);
+                selectedId = newPz.id;
+                if (updateBtn) updateBtn.style.display = 'block';
+                // Move the playhead to the peak of the new window so the
+                // effect is visible right away instead of sitting at the
+                // start, where it's still at 0% strength.
+                var addPeakTime = timeInClip + Math.max(0.1, v.duration) / 2;
+                state.currentTime = (state.startTime || 0) + addPeakTime;
+                if (window.updatePlayhead) window.updatePlayhead();
+                if (state.video && clip.type !== 'image') state.video.currentTime = state.currentTime;
                 if (window.recordEditorHistory) window.recordEditorHistory('Punch zoom added');
-                if (window.drawEditorFrame) window.drawEditorFrame();
+                updateLivePreview();
                 renderList();
             });
         }
@@ -151,7 +185,12 @@
                 pz.scale = v.scale;
                 pz.focusX = v.focusX;
                 pz.focusY = v.focusY;
+                var updatedPeakTime = (pz.time || 0) + Math.max(0.1, v.duration) / 2;
+                state.currentTime = (state.startTime || 0) + updatedPeakTime;
+                if (window.updatePlayhead) window.updatePlayhead();
+                if (state.video && clip.type !== 'image') state.video.currentTime = state.currentTime;
                 if (window.recordEditorHistory) window.recordEditorHistory('Punch zoom updated');
+                clearLivePreview();
                 if (window.drawEditorFrame) window.drawEditorFrame();
                 renderList();
             });
@@ -159,7 +198,16 @@
 
         [scaleSlider, durationSlider, focusXSlider, focusYSlider].forEach(function (el) {
             if (!el) return;
-            el.addEventListener('input', syncLabels);
+            el.addEventListener('input', function () {
+                syncLabels();
+                updateLivePreview();
+            });
+            // Once the user lets go of the slider, drop back to the normal
+            // timeline-based preview (the playhead is already parked at the
+            // effect's peak from add/select above, so it keeps showing
+            // correctly without the override).
+            el.addEventListener('change', clearLivePreview);
+            el.addEventListener('blur', clearLivePreview);
         });
     }
 

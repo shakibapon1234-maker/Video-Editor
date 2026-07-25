@@ -1,3 +1,308 @@
+// ============================================================
+// Blank Page Animated Background Engine (v1.0)
+// Themes extracted from Wings Fly projects by the same author:
+//   "space"       — Wings Fly Public Site (stars + glowing planets)
+//   "holographic" — Wings Fly Academy Dashboard (tech grid + orbs)
+//   "aurora"      — Bonus: sweeping aurora borealis gradients
+// ============================================================
+function drawBlankPageAnimation(ctx, W, H, item, timeSec) {
+    // During export window._bgAnimExporting is set to true so we:
+    //   1) use the deterministic timeSec (video time) instead of wall-clock
+    //   2) skip expensive per-particle loops
+    const isExporting = !!window._bgAnimExporting;
+    const t = isExporting ? (timeSec || 0) : (performance.now() / 1000);
+    const theme = item.bgAnimation || 'none';
+    if (theme === 'none') return;
+
+    ctx.save();
+
+    if (theme === 'space') {
+        // ── THEME 1: Wings Fly Public Site ──────────────────────
+        // Deep space: purple/red shifting gradient + twinkling
+        // stars + two glowing floating planets
+
+        // 1) Animated gradient backdrop (gradientShiftNight 30s)
+        const phase = (t % 30) / 30; // 0..1
+        const stops = [
+            [1.0, '#f00b51'],
+            [0.0, '#7303c0'],
+            [0.5, '#050a12'],
+            [1.0, '#000000'],
+            [0.5, '#031b33'],
+            [0.0, '#f64f59'],
+        ];
+        // Interpolate diagonal gradient position
+        const gradX = W * (0.5 + 0.5 * Math.sin(phase * Math.PI * 2));
+        const gradY = H * (0.5 + 0.5 * Math.cos(phase * Math.PI * 2));
+        const gBg = ctx.createLinearGradient(0, 0, gradX, gradY);
+        gBg.addColorStop(0,    '#000000');
+        gBg.addColorStop(0.15, '#050a12');
+        gBg.addColorStop(0.35, `rgba(115,3,192,${0.5 + 0.3 * Math.sin(phase * Math.PI * 2 + 1)})`);
+        gBg.addColorStop(0.6,  `rgba(240,11,81,${0.3 + 0.3 * Math.cos(phase * Math.PI * 2)})`);
+        gBg.addColorStop(0.85, '#031b33');
+        gBg.addColorStop(1,    '#000000');
+        ctx.fillStyle = gBg;
+        ctx.fillRect(0, 0, W, H);
+
+        // 2) Twinkling stars (two layers, moveStars 60s & 100s)
+        const starSets = [
+            { count: 35, speed: 60, size: [0.5, 1.5], opacity: [0.5, 0.9] },
+            { count: 20, speed: 100, size: [1.0, 2.5], opacity: [0.6, 1.0] },
+        ];
+        // Deterministic star positions using seeded pseudo-random
+        const rng = (seed) => {
+            const x = Math.sin(seed + 9301) * 93457;
+            return x - Math.floor(x);
+        };
+        starSets.forEach((layer, li) => {
+            const drift = (t / layer.speed) % 1; // 0..1 loop
+            for (let i = 0; i < layer.count; i++) {
+                const seed = li * 1000 + i;
+                const baseX = rng(seed * 1.1) * W;
+                const baseY = rng(seed * 2.3) * H;
+                const r = layer.size[0] + rng(seed * 3.7) * (layer.size[1] - layer.size[0]);
+                const op = layer.opacity[0] + rng(seed * 4.1) * (layer.opacity[1] - layer.opacity[0]);
+                // Twinkle: opacity pulses with its own phase
+                const twinkle = 0.5 + 0.5 * Math.sin(t * (2 + rng(seed * 5.9) * 3) + rng(seed * 6.7) * Math.PI * 2);
+                // Stars drift slowly (moveStars: translate -50% -50% over speed seconds)
+                const sx = ((baseX - drift * W * 0.5) % W + W) % W;
+                const sy = ((baseY - drift * H * 0.5) % H + H) % H;
+                ctx.beginPath();
+                ctx.arc(sx, sy, r, 0, Math.PI * 2);
+                ctx.fillStyle = `rgba(255,255,255,${op * twinkle})`;
+                ctx.fill();
+            }
+        });
+
+        // 3) Planet 1: orange/pink (floatPlanet 180s linear alternate)
+        {
+            const frac1 = (t % 360) / 360; // 0..1 back-and-forth
+            const prog1 = frac1 < 0.5 ? frac1 * 2 : (1 - frac1) * 2;
+            const p1x = W * 0.85 + prog1 * (-W * 0.20);
+            const p1y = H * 0.15 + prog1 * (H * 0.15);
+            const r1 = Math.min(W, H) * 0.12;
+            const rg1 = ctx.createRadialGradient(
+                p1x - r1 * 0.3, p1y - r1 * 0.3, r1 * 0.1,
+                p1x, p1y, r1
+            );
+            rg1.addColorStop(0, '#ff8a00');
+            rg1.addColorStop(0.45, '#e52e71');
+            rg1.addColorStop(1, '#2a0845');
+            ctx.save();
+            ctx.globalAlpha = 0.85;
+            ctx.beginPath();
+            ctx.arc(p1x, p1y, r1, 0, Math.PI * 2);
+            ctx.fillStyle = rg1;
+            ctx.fill();
+            // Inset shadow (dark crescent)
+            const sh1 = ctx.createRadialGradient(
+                p1x + r1 * 0.3, p1y + r1 * 0.3, r1 * 0.5,
+                p1x + r1 * 0.3, p1y + r1 * 0.3, r1 * 1.4
+            );
+            sh1.addColorStop(0, 'rgba(0,0,0,0.8)');
+            sh1.addColorStop(1, 'rgba(0,0,0,0)');
+            ctx.beginPath();
+            ctx.arc(p1x, p1y, r1, 0, Math.PI * 2);
+            ctx.fillStyle = sh1;
+            ctx.fill();
+            ctx.restore();
+        }
+
+        // 4) Planet 2: blue (floatPlanet2 140s linear alternate)
+        {
+            const frac2 = (t % 280) / 280;
+            const prog2 = frac2 < 0.5 ? frac2 * 2 : (1 - frac2) * 2;
+            const p2x = W * 0.08 + prog2 * (W * 0.25);
+            const p2y = H * 0.80 + prog2 * (-H * 0.10);
+            const r2 = Math.min(W, H) * 0.085;
+            const rg2 = ctx.createRadialGradient(
+                p2x - r2 * 0.25, p2y - r2 * 0.25, r2 * 0.05,
+                p2x, p2y, r2
+            );
+            rg2.addColorStop(0, '#00c6ff');
+            rg2.addColorStop(0.5, '#0072ff');
+            rg2.addColorStop(1, '#001133');
+            ctx.save();
+            ctx.globalAlpha = 0.80;
+            ctx.beginPath();
+            ctx.arc(p2x, p2y, r2, 0, Math.PI * 2);
+            ctx.fillStyle = rg2;
+            ctx.fill();
+            const sh2 = ctx.createRadialGradient(
+                p2x + r2 * 0.3, p2y + r2 * 0.3, r2 * 0.4,
+                p2x + r2 * 0.3, p2y + r2 * 0.3, r2 * 1.4
+            );
+            sh2.addColorStop(0, 'rgba(0,0,0,0.8)');
+            sh2.addColorStop(1, 'rgba(0,0,0,0)');
+            ctx.beginPath();
+            ctx.arc(p2x, p2y, r2, 0, Math.PI * 2);
+            ctx.fillStyle = sh2;
+            ctx.fill();
+            ctx.restore();
+        }
+
+    } else if (theme === 'holographic') {
+        // ── THEME 2: Wings Fly Academy Dashboard ────────────────
+        // Dark base + animated grid + glowing growing bubbles/orbs
+
+        // 1) Dark base
+        ctx.fillStyle = '#0a0e27';
+        ctx.fillRect(0, 0, W, H);
+
+        // 2) Background radial glow blobs (static-ish, slow breathe)
+        const breathe = 0.5 + 0.5 * Math.sin(t * 0.4);
+        const baseBlobs = [
+            { cx: 0.15, cy: 0.25, color: [0, 217, 255],  a: 0.12 + 0.06 * breathe },
+            { cx: 0.85, cy: 0.75, color: [181, 55, 242], a: 0.12 + 0.06 * Math.sin(t * 0.4 + 2) },
+            { cx: 0.50, cy: 0.50, color: [255, 45, 149], a: 0.06 + 0.04 * Math.sin(t * 0.5 + 1) },
+        ];
+        baseBlobs.forEach(b => {
+            const rg = ctx.createRadialGradient(b.cx*W, b.cy*H, 0, b.cx*W, b.cy*H, W * 0.55);
+            const [r,g,bl] = b.color;
+            rg.addColorStop(0, `rgba(${r},${g},${bl},${b.a.toFixed(3)})`);
+            rg.addColorStop(1, 'rgba(0,0,0,0)');
+            ctx.fillStyle = rg;
+            ctx.fillRect(0, 0, W, H);
+        });
+
+        // 3) Animated tech grid — faster movement, clearly visible
+        const gridSize = Math.min(W, H) * 0.10;
+        const gridOffset = (t % 4) / 4 * gridSize; // 4s cycle — very visible
+        ctx.save();
+        ctx.translate(gridOffset, gridOffset);
+        // Major grid lines — teal, clearly visible
+        ctx.strokeStyle = `rgba(0,217,255,${0.12 + 0.06 * Math.sin(t * 0.8)})`;
+        ctx.lineWidth = 1;
+        for (let x = -gridSize * 2; x < W + gridSize; x += gridSize) {
+            ctx.beginPath(); ctx.moveTo(x, -gridSize); ctx.lineTo(x, H + gridSize); ctx.stroke();
+        }
+        for (let y = -gridSize * 2; y < H + gridSize; y += gridSize) {
+            ctx.beginPath(); ctx.moveTo(-gridSize, y); ctx.lineTo(W + gridSize, y); ctx.stroke();
+        }
+        ctx.restore();
+
+        // 4) BUBBLES: 8 orbs that grow from small to large then fade (like the dashboard)
+        const bubbleData = [
+            { bx: 0.15, by: 0.80, color: [0, 217, 255],   period: 5.0, offset: 0.0 },
+            { bx: 0.82, by: 0.15, color: [181, 55, 242],  period: 6.5, offset: 1.3 },
+            { bx: 0.45, by: 0.35, color: [255, 45, 149],  period: 4.5, offset: 2.6 },
+            { bx: 0.65, by: 0.70, color: [0, 255, 136],   period: 7.0, offset: 3.9 },
+            { bx: 0.30, by: 0.60, color: [0, 180, 255],   period: 5.5, offset: 0.7 },
+            { bx: 0.75, by: 0.45, color: [220, 80, 255],  period: 6.0, offset: 2.0 },
+            { bx: 0.10, by: 0.40, color: [0, 217, 255],   period: 4.0, offset: 3.3 },
+            { bx: 0.90, cy: 0.60, color: [255, 100, 180], period: 5.8, offset: 1.8, by: 0.60 },
+        ];
+        bubbleData.forEach((bub, i) => {
+            const phase = ((t + bub.offset) % bub.period) / bub.period; // 0..1
+            // Size: starts small (5%), grows to big (45%), then disappears
+            const sizePhase = phase < 0.7 ? phase / 0.7 : 1 - (phase - 0.7) / 0.3;
+            const radius = Math.min(W, H) * (0.05 + sizePhase * 0.42);
+            // Alpha: fade in and out
+            const alpha = sizePhase * 0.35;
+            if (alpha < 0.01) return;
+            const bx = bub.bx * W;
+            const by = (bub.by || 0.5) * H;
+            const [r, g, b] = bub.color;
+            const rg = ctx.createRadialGradient(bx, by, 0, bx, by, radius);
+            rg.addColorStop(0,   `rgba(${r},${g},${b},${(alpha * 0.8).toFixed(3)})`);
+            rg.addColorStop(0.5, `rgba(${r},${g},${b},${(alpha * 0.4).toFixed(3)})`);
+            rg.addColorStop(1,   `rgba(${r},${g},${b},0)`);
+            ctx.save();
+            ctx.beginPath();
+            ctx.arc(bx, by, radius, 0, Math.PI * 2);
+            ctx.fillStyle = rg;
+            ctx.fill();
+            // Glowing ring at the bubble edge
+            if (sizePhase > 0.1) {
+                ctx.strokeStyle = `rgba(${r},${g},${b},${(alpha * 1.5).toFixed(3)})`;
+                ctx.lineWidth = 1.5;
+                ctx.stroke();
+            }
+            ctx.restore();
+        });
+
+        // 5) Floating particles (small dots orbiting) — reduced count for performance
+        const rngH = (seed) => { const x = Math.sin(seed * 9301 + 49297) * 23357; return x - Math.floor(x); };
+        const particleCount = isExporting ? 6 : 12;
+        for (let i = 0; i < particleCount; i++) {
+            const px = rngH(i * 1.3) * W;
+            const py = rngH(i * 2.7) * H;
+            const speed = 0.3 + rngH(i * 3.9) * 0.7;
+            const orbitR = W * 0.06 * rngH(i * 4.1);
+            const fpx = px + orbitR * Math.cos(t * speed + rngH(i * 5.3) * Math.PI * 2);
+            const fpy = py + orbitR * Math.sin(t * speed * 0.7 + rngH(i * 6.1) * Math.PI * 2);
+            const dotR = 1 + rngH(i * 7.3) * 2;
+            const twinkle = 0.4 + 0.6 * Math.sin(t * (1.5 + rngH(i*8.1)) + rngH(i*9.3) * 6);
+            const colors = [[0,217,255],[181,55,242],[255,45,149],[0,255,136]];
+            const [cr,cg,cb] = colors[i % 4];
+            ctx.beginPath();
+            ctx.arc(fpx, fpy, dotR, 0, Math.PI * 2);
+            ctx.fillStyle = `rgba(${cr},${cg},${cb},${(0.6 * twinkle).toFixed(3)})`;
+            ctx.fill();
+        }
+
+        // 6) Scan line sweep (horizontal line moving top to bottom)
+        const scanY = ((t * 0.15) % 1) * H;
+        const scanGrad = ctx.createLinearGradient(0, scanY - 60, 0, scanY + 60);
+        scanGrad.addColorStop(0,   'rgba(0,217,255,0)');
+        scanGrad.addColorStop(0.5, 'rgba(0,217,255,0.06)');
+        scanGrad.addColorStop(1,   'rgba(0,217,255,0)');
+        ctx.fillStyle = scanGrad;
+        ctx.fillRect(0, scanY - 60, W, 120);
+
+    } else if (theme === 'aurora') {
+        // ── THEME 3: Aurora Borealis (Bonus) ────────────────────
+        // Dark navy base + sweeping curtains of green/teal/purple
+
+        ctx.fillStyle = '#020c1b';
+        ctx.fillRect(0, 0, W, H);
+
+        const bands = [
+            { color1: 'rgba(0,255,136,', color2: 'rgba(0,200,100,', phase: 0,     speed: 0.15 },
+            { color1: 'rgba(0,200,255,', color2: 'rgba(0,100,200,', phase: 2.1,   speed: 0.10 },
+            { color1: 'rgba(181,55,242,', color2: 'rgba(120,0,200,', phase: 4.2,   speed: 0.12 },
+        ];
+        bands.forEach((band, bi) => {
+            const w = band.speed * t + band.phase;
+            // Aurora curtain: sinuous vertical band
+            ctx.save();
+            for (let x = 0; x < W; x += 2) {
+                const norm = x / W; // 0..1
+                const yOff = Math.sin(norm * Math.PI * 3 + w) * H * 0.18
+                           + Math.sin(norm * Math.PI * 7 + w * 1.3) * H * 0.06;
+                const bandH = H * (0.25 + 0.10 * Math.sin(norm * Math.PI * 2 + w * 0.7));
+                const top = H * (0.05 + 0.15 * bi) + yOff;
+                const alpha = 0.08 + 0.07 * Math.sin(norm * Math.PI + w * 0.5);
+                const grad = ctx.createLinearGradient(x, top, x, top + bandH);
+                grad.addColorStop(0, `${band.color1}0)`);
+                grad.addColorStop(0.3, `${band.color1}${(alpha * 1.2).toFixed(3)})`);
+                grad.addColorStop(0.7, `${band.color2}${alpha.toFixed(3)})`);
+                grad.addColorStop(1, `${band.color2}0)`);
+                ctx.fillStyle = grad;
+                ctx.fillRect(x, top, 2, bandH);
+            }
+            ctx.restore();
+        });
+
+        // Stars behind aurora
+        ctx.save();
+        const rng2 = (seed) => { const x = Math.sin(seed * 9301 + 49297) * 23357; return x - Math.floor(x); };
+        for (let i = 0; i < 60; i++) {
+            const sx = rng2(i * 1.7) * W;
+            const sy = rng2(i * 2.3) * H;
+            const sr = 0.5 + rng2(i * 3.1) * 1.2;
+            const twinkle = 0.3 + 0.7 * Math.sin(t * (1 + rng2(i * 4.7) * 2) + rng2(i * 5.3) * 6);
+            ctx.beginPath();
+            ctx.arc(sx, sy, sr, 0, Math.PI * 2);
+            ctx.fillStyle = `rgba(255,255,255,${(0.4 * twinkle).toFixed(3)})`;
+            ctx.fill();
+        }
+        ctx.restore();
+    }
+
+    ctx.restore();
+}
+
 // Global Video Editor State
 window.VideoEditor = {
     // Elements
@@ -1850,6 +2155,8 @@ document.addEventListener('DOMContentLoaded', () => {
             window.onPlaybackStop();
         }
         ensureAnimatedGifPreview();
+        // Keep animated blank-page backgrounds running after pause
+        if (window.startBgAnimLoop) window.startBgAnimLoop();
     }
     
     function updateLoop() {
@@ -1867,17 +2174,14 @@ document.addEventListener('DOMContentLoaded', () => {
         // Loop back or transition to the next clip if reached trim end
         if (state.currentTime >= state.endTime) {
             if (window.isRecordingVoiceover) {
-                // If recording voiceover, stop both recording and playback when reaching trim end
                 pauseVideo();
             } else {
                 const clipIndex = state.clips.indexOf(activeClip);
                 if (activeClip && clipIndex >= 0 && clipIndex < state.clips.length - 1) {
-                    // Transition to next clip and play!
                     const nextClip = state.clips[clipIndex + 1];
                     switchActiveClip(nextClip.id, true);
-                    return; // exit loop, playVideo in switchActiveClip will start a new loop
+                    return;
                 } else {
-                    // Loop back to the first clip!
                     const firstClip = state.clips[0];
                     if (firstClip && firstClip.id !== state.activeClipId) {
                         switchActiveClip(firstClip.id, true);
@@ -1895,7 +2199,7 @@ document.addEventListener('DOMContentLoaded', () => {
         requestAnimationFrame(updateLoop);
     }
     
-    // Standalone single-frame redraw for when video is paused (seeking, slider changes, etc.)
+    // Standalone single-frame redraw for when video is paused
     function redrawPausedFrame() {
         if (!state.isPlaying && state.duration) {
             updatePlayhead();
@@ -1905,6 +2209,46 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     window.redrawPausedFrame = redrawPausedFrame;
     window.redrawPausedFrameGlobal = redrawPausedFrame;
+
+    // ── Background Animation Loop ────────────────────────────────────────────
+    // Drives animated blank-page backgrounds (space/holographic/aurora) via
+    // real wall-clock time so they animate even when the video is paused.
+    let _bgAnimLoopId = null;
+    function _hasBgAnimActive() {
+        if (!state.brollOverlays) return false;
+        return state.brollOverlays.some(item =>
+            item.type === 'text' &&
+            item.bgEnabled &&
+            item.bgAnimation && item.bgAnimation !== 'none' &&
+            (!item.clipId || item.clipId === state.activeClipId)
+        );
+    }
+    function startBgAnimLoop() {
+        if (_bgAnimLoopId) return;
+        function _loop() {
+            // STOP during export — export pipeline calls drawFrame() itself;
+            // running alongside it causes a race condition and kills performance.
+            if (state.customExportTime !== undefined) {
+                _bgAnimLoopId = null;
+                return;
+            }
+            if (state.isPlaying || !_hasBgAnimActive()) {
+                _bgAnimLoopId = null;
+                return;
+            }
+            drawFrame();
+            _bgAnimLoopId = requestAnimationFrame(_loop);
+        }
+        _bgAnimLoopId = requestAnimationFrame(_loop);
+    }
+    function stopBgAnimLoop() {
+        if (_bgAnimLoopId) {
+            cancelAnimationFrame(_bgAnimLoopId);
+            _bgAnimLoopId = null;
+        }
+    }
+    window.startBgAnimLoop = startBgAnimLoop;
+    window.stopBgAnimLoop  = stopBgAnimLoop;
 
     let gifPreviewRefreshActive = false;
 
@@ -3200,8 +3544,10 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         state.ctx.restore();
 
-        // Image clip resize handles in Step 3 (for playhead-inserted images / freeze frames)
-        if (state.currentStep === 3 && isImageClip && activeClip.id === state.activeClipId) {
+        // Image clip resize handles — shown on Steps 1-3 (Media Import, Trim & Layout,
+        // Overlays) so the user can drag/resize the image right where they added it,
+        // not only after clicking through to the Overlays step.
+        if (state.currentStep >= 1 && state.currentStep <= 3 && isImageClip && activeClip.id === state.activeClipId) {
             state.ctx.save();
             state.ctx.strokeStyle = 'rgba(79, 70, 229, 0.9)';
             state.ctx.lineWidth = 2;
@@ -4003,6 +4349,32 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (item.type === 'text' && item.mode === 'fullscreen' && item.bgEnabled) {
                     state.ctx.fillStyle = item.bgColor || '#0f172a';
                     state.ctx.fillRect(0, 0, canvasW, canvasH);
+                    // Custom uploaded background image (slide, table, photo, etc.)
+                    if (item.bgImageEl && item.bgImageEl.complete && item.bgImageEl.naturalWidth) {
+                        const img = item.bgImageEl;
+                        const imgAR = img.naturalWidth / img.naturalHeight;
+                        const canvAR = canvasW / canvasH;
+                        let sw = img.naturalWidth, sh = img.naturalHeight, sx = 0, sy = 0;
+                        if (imgAR > canvAR) {
+                            sw = img.naturalHeight * canvAR;
+                            sx = (img.naturalWidth - sw) / 2;
+                        } else {
+                            sh = img.naturalWidth / canvAR;
+                            sy = (img.naturalHeight - sh) / 2;
+                        }
+                        state.ctx.drawImage(img, sx, sy, sw, sh, 0, 0, canvasW, canvasH);
+                        // Slight dark overlay so text stays readable
+                        state.ctx.fillStyle = 'rgba(0,0,0,0.30)';
+                        state.ctx.fillRect(0, 0, canvasW, canvasH);
+                    }
+                    // Animated background theme on top
+                    if (item.bgAnimation && item.bgAnimation !== 'none') {
+                        // Signal export mode to drawBlankPageAnimation
+                        window._bgAnimExporting = (state.customExportTime !== undefined);
+                        const animTime = (state.customExportTime !== undefined) ? state.customExportTime : (state.currentTime || 0);
+                        drawBlankPageAnimation(state.ctx, canvasW, canvasH, item, animTime);
+                        window._bgAnimExporting = false;
+                    }
                 }
 
                 if (blurPx > 0.1) state.ctx.filter = `blur(${blurPx.toFixed(1)}px)`;
@@ -6187,8 +6559,8 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         }
 
-        // Image clip resize handle check (for playhead-inserted images / freeze frames)
-        if (state.currentStep === 3 && isImageClip && activeClip.id === state.activeClipId) {
+        // Image clip resize handle check — active on Steps 1-3 (see drawFrame() above).
+        if (state.currentStep >= 1 && state.currentStep <= 3 && isImageClip && activeClip.id === state.activeClipId) {
             const resizeHandle = findImageClipResizeHandle(coords);
             if (resizeHandle) {
                 if (window.captureUndoCheckpoint) window.captureUndoCheckpoint();
@@ -7889,7 +8261,7 @@ document.addEventListener('DOMContentLoaded', () => {
         // "move" hand the instant the pointer is over something draggable, so the
         // drag-anywhere behavior is obvious without needing to read any help text.
         const idleCoords = getCanvasCoords(e);
-        if (state.currentStep === 3) {
+        if (state.currentStep >= 1 && state.currentStep <= 3) {
             const activeClip = state.clips.find(c => c.id === state.activeClipId);
             if (activeClip && activeClip.type === 'image') {
                 const handle = findImageClipResizeHandle(idleCoords);
@@ -8956,6 +9328,84 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
+    // Background animation theme binding for edit panel
+    const brollEditBgAnimSelect = document.getElementById('broll-edit-bg-anim');
+    const brollEditBgAnimRow = document.getElementById('broll-edit-bg-anim-row');
+    if (brollEditBgAnimSelect) {
+        brollEditBgAnimSelect.addEventListener('change', () => {
+            const item = state.brollOverlays.find(b => b.id === state.selectedBrollId);
+            if (item && item.type === 'text') {
+                item.bgAnimation = brollEditBgAnimSelect.value;
+                drawFrame();
+                // Start live animation loop when a theme is chosen
+                if (brollEditBgAnimSelect.value !== 'none' && window.startBgAnimLoop) {
+                    window.startBgAnimLoop();
+                } else if (brollEditBgAnimSelect.value === 'none' && window.stopBgAnimLoop) {
+                    window.stopBgAnimLoop();
+                }
+                if (typeof triggerAutoSave === 'function') triggerAutoSave();
+            }
+        });
+    }
+    // Show/hide animation row when Blank Background checkbox changes
+    if (brollEditTextBgEnabled && brollEditBgAnimRow) {
+        brollEditTextBgEnabled.addEventListener('change', () => {
+            if (brollEditBgAnimRow) brollEditBgAnimRow.style.display = brollEditTextBgEnabled.checked ? 'block' : 'none';
+            // Show/hide image upload row too
+            const imgRow = document.getElementById('broll-edit-bg-image-row');
+            if (imgRow) imgRow.style.display = brollEditTextBgEnabled.checked ? 'block' : 'none';
+        });
+    }
+
+    // ── Background Image Upload ─────────────────────────────────────────
+    const brollBgImageInput   = document.getElementById('broll-bg-image-input');
+    const brollBgImageBtn     = document.getElementById('broll-bg-image-btn');
+    const brollBgImageThumb   = document.getElementById('broll-bg-image-thumb');
+    const brollBgImageRemove  = document.getElementById('broll-bg-image-remove');
+    const brollBgImagePreview = document.getElementById('broll-bg-image-preview');
+
+    if (brollBgImageBtn && brollBgImageInput) {
+        brollBgImageBtn.addEventListener('click', () => brollBgImageInput.click());
+    }
+    if (brollBgImageInput) {
+        brollBgImageInput.addEventListener('change', (e) => {
+            const file = e.target.files[0];
+            if (!file) return;
+            const item = state.brollOverlays.find(b => b.id === state.selectedBrollId);
+            if (!item || item.type !== 'text') return;
+            const reader = new FileReader();
+            reader.onload = (ev) => {
+                const url = ev.target.result;
+                item.bgImageUrl = url;
+                // Create an HTMLImageElement so the canvas renderer can draw it
+                const img = new Image();
+                img.onload = () => {
+                    item.bgImageEl = img;
+                    drawFrame();
+                    if (window.startBgAnimLoop) window.startBgAnimLoop();
+                    // Show thumbnail
+                    if (brollBgImageThumb) { brollBgImageThumb.src = url; }
+                    if (brollBgImagePreview) brollBgImagePreview.style.display = 'flex';
+                };
+                img.src = url;
+            };
+            reader.readAsDataURL(file);
+            brollBgImageInput.value = '';
+        });
+    }
+    if (brollBgImageRemove) {
+        brollBgImageRemove.addEventListener('click', () => {
+            const item = state.brollOverlays.find(b => b.id === state.selectedBrollId);
+            if (item) {
+                item.bgImageUrl = null;
+                item.bgImageEl  = null;
+            }
+            if (brollBgImagePreview) brollBgImagePreview.style.display = 'none';
+            if (brollBgImageThumb)   brollBgImageThumb.src = '';
+            drawFrame();
+        });
+    }
+
     const brollEditTextHighlightEnabled = document.getElementById('broll-edit-text-highlight-enabled');
     const brollEditTextHighlightColor = document.getElementById('broll-edit-text-highlight-color');
     const brollEditTextHighlightColorVal = document.getElementById('broll-edit-text-highlight-color-val');
@@ -9939,6 +10389,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 color: '#ffffff',
                 bgEnabled: false,
                 bgColor: '#0f172a',
+                bgAnimation: 'none',
                 solidHighlight: false,
                 highlightColor: '#ffe600',
                 mode: brollModeSelect ? brollModeSelect.value : 'fullscreen',
@@ -10451,6 +10902,11 @@ document.addEventListener('DOMContentLoaded', () => {
                     brollEditTextBgColor.value = item.bgColor || '#0f172a';
                     if (brollEditTextBgColorVal) brollEditTextBgColorVal.innerText = item.bgColor || '#0f172a';
                 }
+                // Sync animation theme dropdown
+                const _bgAnimSel = document.getElementById('broll-edit-bg-anim');
+                const _bgAnimRow = document.getElementById('broll-edit-bg-anim-row');
+                if (_bgAnimSel) _bgAnimSel.value = item.bgAnimation || 'none';
+                if (_bgAnimRow) _bgAnimRow.style.display = item.bgEnabled ? 'block' : 'none';
                 if (brollEditTextHighlightEnabled) brollEditTextHighlightEnabled.checked = !!item.solidHighlight;
                 if (brollEditTextHighlightColorRow) brollEditTextHighlightColorRow.style.display = item.solidHighlight ? 'flex' : 'none';
                 if (brollEditTextHighlightColor) {

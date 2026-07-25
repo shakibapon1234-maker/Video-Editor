@@ -202,6 +202,9 @@ document.addEventListener('DOMContentLoaded', () => {
         // one of those gaps (e.g. multitrack.js's extra-audio-track sync) needs a
         // flag that stays true for the whole export, not just mid-frame — this is it.
         state.isExportingVideo = true;
+        // Stop the background animation rAF loop — it must not race with the
+        // export pipeline's own drawFrame() calls or rendering will be extremely slow.
+        if (window.stopBgAnimLoop) window.stopBgAnimLoop();
 
         // Show progress box
         exportCancelled = false;
@@ -534,6 +537,8 @@ document.addEventListener('DOMContentLoaded', () => {
             state.customExportTime = undefined;
             state.exportTickerTime = undefined;
             if (window.cleanupExtraTracksExportMedia) window.cleanupExtraTracksExportMedia();
+            // Resume animated backgrounds now that export is done
+            if (window.startBgAnimLoop) window.startBgAnimLoop();
         }
 
         // --- Step A: Offline Audio Rendering ---
@@ -963,7 +968,8 @@ document.addEventListener('DOMContentLoaded', () => {
         // STEP 3 — Multi-Track Timeline: release the dedicated export-only
         // <video> elements created for extra track clips (prepareExtraTracksForExportFrame).
         if (window.cleanupExtraTracksExportMedia) window.cleanupExtraTracksExportMedia();
-
+        // Resume animated backgrounds in live preview
+        if (window.startBgAnimLoop) window.startBgAnimLoop();
 
         // C3. Render Outro if enabled
         if (state.outroEnabled && outroDur > 0 && !exportCancelled) {
