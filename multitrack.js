@@ -224,6 +224,215 @@
     }
 
     // ---------------------------------------------------------------
+    // Free positioning/resizing for image & video extra-track clips.
+    //
+    // clip.transform = { x, y, w } — x/y are the box's CENTER, normalized
+    // to the canvas (0.5, 0.5 = dead center); w is the box width as a
+    // fraction of canvas width. Height always follows the media's own
+    // aspect ratio inside that box (contain-fit — the image/video is
+    // never cropped, just placed/scaled), so it can be dragged anywhere
+    // and made bigger/smaller without distortion.
+    //
+    // A clip with NO transform (every clip added before this feature, and
+    // every new clip until the user opts in) keeps the exact old
+    // behavior — drawCover(), full-screen, cropped to fill — so nothing
+    // already-saved changes appearance. Clicking a clip's position button
+    // (see buildClipBlock) is what first assigns a transform.
+    // ---------------------------------------------------------------
+    var selectedClipId = null;
+
+    function ensureTransform(clip) {
+        if (!clip.transform) clip.transform = { x: 0.5, y: 0.5, w: 1 };
+        return clip.transform;
+    }
+
+    function transformBoxPx(transform, mw, mh, canvas) {
+        var boxW = transform.w * canvas.width;
+        var aspect = (mw && mh) ? (mw / mh) : (canvas.width / canvas.height);
+        var boxH = boxW / aspect;
+        return {
+            x: transform.x * canvas.width - boxW / 2,
+            y: transform.y * canvas.height - boxH / 2,
+            w: boxW, h: boxH
+        };
+    }
+
+    function drawSelectionHandles(ctx, box) {
+        ctx.save();
+        ctx.strokeStyle = '#818cf8';
+        ctx.lineWidth = 2;
+        ctx.setLineDash([7, 5]);
+        ctx.strokeRect(box.x, box.y, box.w, box.h);
+        ctx.setLineDash([]);
+        var hs = 14;
+        ctx.fillStyle = '#4f46e5';
+        ctx.strokeStyle = '#fff';
+        ctx.lineWidth = 1.5;
+        ctx.fillRect(box.x + box.w - hs / 2, box.y + box.h - hs / 2, hs, hs);
+        ctx.strokeRect(box.x + box.w - hs / 2, box.y + box.h - hs / 2, hs, hs);
+        ctx.restore();
+    }
+
+    // Draws a clip's media either at its custom position/size (transform
+    // set) or with the original full-screen cover behavior (no transform
+    // yet). `isExporting` suppresses the selection handles — those are
+    // live-preview editing UI only and must never end up in the exported
+    // video.
+    function drawClipMedia(ctx, media, mw, mh, canvas, clip, isExporting) {
+        if (!mw || !mh || !canvas.width || !canvas.height) return;
+        if (clip.transform) {
+            var box = transformBoxPx(clip.transform, mw, mh, canvas);
+            try { ctx.drawImage(media, box.x, box.y, box.w, box.h); } catch (e) { /* not decodable yet */ }
+            if (!isExporting && selectedClipId === clip.id) drawSelectionHandles(ctx, box);
+        } else {
+            drawCover(ctx, media, mw, mh, canvas.width, canvas.height);
+        }
+    }
+
+    // Finds the clip currently selected for canvas editing, but only if
+    // it's actually the clip on-screen right now (its track's active clip
+    // at the current playhead) and its media size is already known —
+    // dragging needs both to compute/hit-test its on-screen box.
+    function findSelectedActiveClip() {
+        var state = ve();
+        if (!state || !selectedClipId || !state.extraTracks) return null;
+        var globalT = computeGlobalTime();
+        for (var i = 0; i < state.extraTracks.length; i++) {
+            var track = state.extraTracks[i];
+            if (track.type === 'audio') continue;
+            var active = findActiveClipInTrack(track, globalT);
+            if (!active || active.id !== selectedClipId) continue;
+            var natural = track.type === 'image'
+                ? ((active.imageImg && active.imageImg.naturalWidth) ? { w: active.imageImg.naturalWidth, h: active.imageImg.naturalHeight } : null)
+                : ((active._el && active._el.videoWidth) ? { w: active._el.videoWidth, h: active._el.videoHeight } : null);
+            if (!natural) return null;
+            return { clip: active, track: track, natural: natural };
+        }
+        return null;
+    }
+
+    // Same canvas-pixel-space conversion as editor.js's own getCanvasCoords
+    // (accounts for the canvas being letterboxed/pillarboxed inside its DOM
+    // element) — kept as a local copy since this module owns its own
+    // pointer handling rather than reaching into editor.js's closure.
+    function canvasCoordsFromEvent(e) {
+        var state = ve();
+        var canvas = state && state.canvas;
+        if (!canvas) return null;
+        var rect = canvas.getBoundingClientRect();
+        var clientX = e.touches ? e.touches[0].clientX : e.clientX;
+        var clientY = e.touches ? e.touches[0].clientY : e.clientY;
+        var wRect = rect.width, hRect = rect.height;
+        if (!wRect || !hRect) return null;
+        var rCanvas = canvas.width / canvas.height, rRect = wRect / hRect;
+        var wRender = wRect, hRender = hRect, xOff = 0, yOff = 0;
+        if (rCanvas > rRect) {
+            hRender = wRect / rCanvas;
+            yOff = (hRect - hRender) / 2;
+        } else {
+            wRender = hRect * rCanvas;
+            xOff = (wRect - wRender) / 2;
+        }
+        return {
+            x: ((clientX - rect.left - xOff) / wRender) * canvas.width,
+            y: ((clientY - rect.top - yOff) / hRender) * canvas.height
+        };
+    }
+
+    var dragState = null; // { mode: 'move'|'resize', clip, startCoords, startTransform }
+
+    // While the video is PLAYING, editor.js's own animation loop redraws the
+    // canvas every frame automatically. While PAUSED, that loop bails out
+    // immediately and nothing repaints the canvas on its own — so selecting
+    // a clip, dragging its box, or resetting its position would otherwise
+    // never actually show up on screen (the click/drag "worked" internally
+    // but the old frame just stayed on screen). This forces a single
+    // repaint any time the paused canvas needs to reflect a change here.
+    function requestPreviewRedraw() {
+        var state = ve();
+        if (state && !state.isPlaying && window.redrawPausedFrameGlobal) {
+            window.redrawPausedFrameGlobal();
+        }
+    }
+
+    function hitTestBox(coords, box) {
+        var hs = 22; // generous grab radius around the corner handle, in canvas px
+        if (coords.x >= box.x + box.w - hs && coords.x <= box.x + box.w + hs / 2 &&
+            coords.y >= box.y + box.h - hs && coords.y <= box.y + box.h + hs / 2) return 'resize';
+        if (coords.x >= box.x && coords.x <= box.x + box.w && coords.y >= box.y && coords.y <= box.y + box.h) return 'move';
+        return null;
+    }
+
+    // The three hooks below are called from editor.js's own canvas pointer
+    // handlers (one line each — see handlePointerDown/Move/Up) so this
+    // module's drag-to-reposition can share the same canvas without a
+    // second, conflicting listener. Each returns true only when it actually
+    // consumed the event (a selected clip's box was hit / a drag was in
+    // progress) — false means editor.js should handle the event exactly as
+    // it always has.
+    function mtCanvasPointerDown(e) {
+        var found = findSelectedActiveClip();
+        if (!found) return false;
+        var coords = canvasCoordsFromEvent(e);
+        if (!coords) return false;
+        var transform = ensureTransform(found.clip);
+        var box = transformBoxPx(transform, found.natural.w, found.natural.h, ve().canvas);
+        var hit = hitTestBox(coords, box);
+        if (!hit) return false;
+        dragState = {
+            mode: hit, clip: found.clip, startCoords: coords,
+            startTransform: { x: transform.x, y: transform.y, w: transform.w }
+        };
+        e.preventDefault();
+        requestPreviewRedraw();
+        return true;
+    }
+
+    function mtCanvasPointerMove(e) {
+        if (!dragState) return false;
+        var state = ve();
+        var canvas = state && state.canvas;
+        if (!canvas) return false;
+        var coords = canvasCoordsFromEvent(e);
+        if (!coords) return false;
+        var dx = coords.x - dragState.startCoords.x;
+        var dy = coords.y - dragState.startCoords.y;
+        var t = dragState.clip.transform;
+        if (dragState.mode === 'move') {
+            t.x = Math.max(0, Math.min(1, dragState.startTransform.x + dx / canvas.width));
+            t.y = Math.max(0, Math.min(1, dragState.startTransform.y + dy / canvas.height));
+        } else {
+            // Box is anchored at its CENTER, so a corner moving by dx only
+            // covers half the width change — double it so the handle
+            // tracks the pointer instead of lagging at half-speed.
+            var grownW = dragState.startTransform.w + (dx / canvas.width) * 2;
+            t.w = Math.max(0.05, Math.min(2.5, grownW));
+        }
+        e.preventDefault();
+        requestPreviewRedraw();
+        return true;
+    }
+
+    function mtCanvasPointerUp() {
+        if (!dragState) return false;
+        dragState = null;
+        afterChange('Extra track position/size changed');
+        requestPreviewRedraw();
+        return true;
+    }
+
+    window.__mtCanvasPointerDown = mtCanvasPointerDown;
+    window.__mtCanvasPointerMove = mtCanvasPointerMove;
+    window.__mtCanvasPointerUp = mtCanvasPointerUp;
+
+    function updateBlockSelectionStyles() {
+        document.querySelectorAll('.mt-clip-block').forEach(function (el) {
+            var isSel = el.getAttribute('data-clip-id') === selectedClipId;
+            el.style.boxShadow = isSel ? '0 0 0 2px #818cf8' : '';
+        });
+    }
+
+    // ---------------------------------------------------------------
     // RENDER-ORDER FIX (this update): extra tracks used to be drawn via a
     // POST-hook wrapped around window.drawEditorFrame/window.redrawPausedFrameGlobal
     // — i.e. strictly AFTER editor.js's entire drawFrame() had already run,
@@ -385,7 +594,7 @@
 
             if (track.type === 'image') {
                 if (active.imageImg && active.imageImg.naturalWidth) {
-                    drawCover(ctx, active.imageImg, active.imageImg.naturalWidth, active.imageImg.naturalHeight, canvas.width, canvas.height);
+                    drawClipMedia(ctx, active.imageImg, active.imageImg.naturalWidth, active.imageImg.naturalHeight, canvas, active, isExporting);
                 }
                 return;
             }
@@ -394,7 +603,7 @@
             if (isExporting) {
                 var exportEl = active._exportEl;
                 if (exportEl && exportEl.readyState >= 2 && exportEl.videoWidth) {
-                    drawCover(ctx, exportEl, exportEl.videoWidth, exportEl.videoHeight, canvas.width, canvas.height);
+                    drawClipMedia(ctx, exportEl, exportEl.videoWidth, exportEl.videoHeight, canvas, active, true);
                 }
                 return;
             }
@@ -415,7 +624,7 @@
             }
 
             if (el.readyState >= 2) {
-                drawCover(ctx, el, el.videoWidth, el.videoHeight, canvas.width, canvas.height);
+                drawClipMedia(ctx, el, el.videoWidth, el.videoHeight, canvas, active, false);
             }
         });
     }
@@ -461,7 +670,10 @@
         if (!state || !state.extraTracks) return;
         if (!confirm('এই ট্র্যাক এবং এর সব ক্লিপ মুছে ফেলতে চান?')) return;
         var target = state.extraTracks.find(function (t) { return t.id === trackId; });
-        if (target) (target.clips || []).forEach(function (c) { if (c._el) { c._el.pause(); c._el.src = ''; } });
+        if (target) (target.clips || []).forEach(function (c) {
+            if (c._el) { c._el.pause(); c._el.src = ''; }
+            if (c.id === selectedClipId) selectedClipId = null;
+        });
         state.extraTracks = state.extraTracks.filter(function (t) { return t.id !== trackId; });
         render();
         afterChange('Track removed');
@@ -532,6 +744,7 @@
         var target = (track.clips || []).find(function (c) { return c.id === clipId; });
         if (target && target._el) { target._el.pause(); target._el.src = ''; }
         track.clips = track.clips.filter(function (c) { return c.id !== clipId; });
+        if (selectedClipId === clipId) selectedClipId = null;
         render();
         afterChange('Track clip removed');
     }
@@ -702,6 +915,41 @@
         styleEl(label, { fontSize: '10px', padding: '0 6px', whiteSpace: 'nowrap', overflow: 'hidden', pointerEvents: 'none' });
         block.appendChild(label);
 
+        if (track.type !== 'audio') {
+            var posBtn = document.createElement('button');
+            posBtn.innerHTML = '<i class="fa-solid fa-arrows-up-down-left-right"></i>';
+            posBtn.title = 'ক্যানভাসে ড্র্যাগ করে পজিশন/সাইজ ঠিক করুন (Drag to position & resize on canvas)';
+            styleEl(posBtn, {
+                marginLeft: 'auto', background: 'transparent', border: 'none', color: 'rgba(255,255,255,0.75)',
+                cursor: 'pointer', fontSize: '10px', padding: '0 5px', flexShrink: '0'
+            });
+            posBtn.addEventListener('pointerdown', function (e) { e.stopPropagation(); });
+            posBtn.addEventListener('click', function (e) {
+                e.stopPropagation();
+                selectedClipId = (selectedClipId === clip.id) ? null : clip.id;
+                if (selectedClipId === clip.id) ensureTransform(clip);
+                updateBlockSelectionStyles();
+                requestPreviewRedraw();
+            });
+            block.appendChild(posBtn);
+
+            var resetBtn = document.createElement('button');
+            resetBtn.innerHTML = '<i class="fa-solid fa-rotate-left"></i>';
+            resetBtn.title = 'পুরো স্ক্রিন পজিশনে ফিরিয়ে নিন (Reset to full-screen)';
+            styleEl(resetBtn, {
+                background: 'transparent', border: 'none', color: 'rgba(255,255,255,0.55)',
+                cursor: 'pointer', fontSize: '10px', padding: '0 5px', flexShrink: '0'
+            });
+            resetBtn.addEventListener('pointerdown', function (e) { e.stopPropagation(); });
+            resetBtn.addEventListener('click', function (e) {
+                e.stopPropagation();
+                clip.transform = null;
+                afterChange('Extra track position reset');
+                requestPreviewRedraw();
+            });
+            block.appendChild(resetBtn);
+        }
+
         var delBtn = document.createElement('button');
         delBtn.innerHTML = '<i class="fa-solid fa-xmark"></i>';
         styleEl(delBtn, {
@@ -778,7 +1026,19 @@
             if (!resizing) return;
             var laneWidth = lane.getBoundingClientRect().width || 1;
             var deltaSec = ((e.clientX - resizeStartX) / laneWidth) * totalDur;
-            var newEnd = Math.min(clip.duration, Math.max(clip.sourceStart + 0.2, resizeStartEnd + deltaSec));
+            var newEnd = Math.max(clip.sourceStart + 0.2, resizeStartEnd + deltaSec);
+            if (clip.type === 'image') {
+                // Images have no real fixed length — probeDuration() only ever
+                // gave them a placeholder (5s) to seed the clip. Capping
+                // sourceEnd at that placeholder is exactly why dragging the
+                // handle past ~4-5s used to do nothing: let it grow the
+                // image's own duration too (up to a generous 10-minute
+                // ceiling) instead of silently refusing to extend.
+                newEnd = Math.min(newEnd, 600);
+                if (newEnd > clip.duration) clip.duration = newEnd;
+            } else {
+                newEnd = Math.min(clip.duration, newEnd);
+            }
             clip.sourceEnd = newEnd;
             var newDur = Math.max(0.1, clip.sourceEnd - clip.sourceStart);
             block.style.width = Math.max(1, (newDur / totalDur) * 100) + '%';

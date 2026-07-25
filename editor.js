@@ -6478,6 +6478,8 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function handlePointerDown(e) {
+        if (window.__mtCanvasPointerDown && window.__mtCanvasPointerDown(e)) return;
+
         if (state.currentStep !== 2 && state.currentStep !== 3) return;
 
         if (state.isPunchZoomPicking) {
@@ -7927,6 +7929,8 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     
     function handlePointerMove(e) {
+        if (window.__mtCanvasPointerMove && window.__mtCanvasPointerMove(e)) return;
+
         if (state.currentStep !== 2 && state.currentStep !== 3) return;
 
         if (state.isPunchZoomPicking && state.isDraggingPunchZoomFocus) {
@@ -8695,7 +8699,9 @@ document.addEventListener('DOMContentLoaded', () => {
         state.canvas.style.cursor = 'default';
     }
     
-    function handlePointerUp() {
+    function handlePointerUp(e) {
+        if (window.__mtCanvasPointerUp && window.__mtCanvasPointerUp(e)) return;
+
         if (state.isDraggingPunchZoomFocus) {
             state.isDraggingPunchZoomFocus = false;
             if (window.__finishPunchZoomFocusPick) window.__finishPunchZoomFocusPick();
