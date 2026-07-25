@@ -298,6 +298,353 @@ function drawBlankPageAnimation(ctx, W, H, item, timeSec) {
             ctx.fill();
         }
         ctx.restore();
+
+    } else if (theme === 'skyflight') {
+        // ── THEME 4: Sky Flight ──────────────────────────────────
+        // Bright daytime sky, drifting clouds, sun glow and an
+        // airplane cruising across the frame trailing a soft contrail.
+
+        // 1) Sky gradient (soft blue, brighter near the sun)
+        const skyG = ctx.createLinearGradient(0, 0, 0, H);
+        skyG.addColorStop(0, '#4a90d9');
+        skyG.addColorStop(0.45, '#7ec8f2');
+        skyG.addColorStop(1, '#cfeeff');
+        ctx.fillStyle = skyG;
+        ctx.fillRect(0, 0, W, H);
+
+        // 2) Sun glow (upper corner, gentle pulse)
+        const sunPulse = 0.85 + 0.15 * Math.sin(t * 0.5);
+        const sunX = W * 0.82, sunY = H * 0.18;
+        const sunR = Math.min(W, H) * 0.5 * sunPulse;
+        const sunG = ctx.createRadialGradient(sunX, sunY, 0, sunX, sunY, sunR);
+        sunG.addColorStop(0, 'rgba(255,250,210,0.85)');
+        sunG.addColorStop(0.25, 'rgba(255,244,180,0.35)');
+        sunG.addColorStop(1, 'rgba(255,244,180,0)');
+        ctx.fillStyle = sunG;
+        ctx.fillRect(0, 0, W, H);
+        ctx.beginPath();
+        ctx.arc(sunX, sunY, Math.min(W, H) * 0.045, 0, Math.PI * 2);
+        ctx.fillStyle = 'rgba(255,255,240,0.95)';
+        ctx.fill();
+
+        // 3) Drifting cloud layers (slow, deterministic, looping)
+        const drawCloud = (cx, cy, scale, alpha) => {
+            ctx.save();
+            ctx.globalAlpha = alpha;
+            ctx.fillStyle = '#ffffff';
+            const puffs = [
+                [0, 0, 0.55], [0.55, -0.12, 0.42], [-0.55, -0.08, 0.4],
+                [0.28, -0.32, 0.36], [-0.22, -0.30, 0.32], [1.0, 0.05, 0.30], [-1.0, 0.08, 0.28]
+            ];
+            puffs.forEach(([dx, dy, r]) => {
+                ctx.beginPath();
+                ctx.arc(cx + dx * scale, cy + dy * scale, r * scale, 0, Math.PI * 2);
+                ctx.fill();
+            });
+            ctx.restore();
+        };
+        const cloudLayers = [
+            { y: 0.22, speed: 55, scale: 0.16, alpha: 0.9, count: 3 },
+            { y: 0.42, speed: 80, scale: 0.11, alpha: 0.75, count: 4 },
+            { y: 0.65, speed: 110, scale: 0.08, alpha: 0.55, count: 4 },
+        ];
+        const rngC = (seed) => { const x = Math.sin(seed * 9301 + 12345) * 43758; return x - Math.floor(x); };
+        cloudLayers.forEach((layer, li) => {
+            const loop = (t / layer.speed) % 1;
+            for (let i = 0; i < layer.count; i++) {
+                const seedBase = li * 100 + i;
+                const startX = rngC(seedBase) * 1.4 - 0.2; // spread beyond edges
+                const cx = (((startX - loop) % 1.4) + 1.4) % 1.4 * W - W * 0.2;
+                const cy = layer.y * H + Math.sin(t * 0.15 + seedBase) * H * 0.01;
+                drawCloud(cx, cy, Math.min(W, H) * layer.scale, layer.alpha);
+            }
+        });
+
+        // 4) Airplane crossing the sky, banking slightly, with contrail
+        {
+            const period = 22; // seconds to cross full width with margin
+            const prog = (t % period) / period; // 0..1
+            const px = -W * 0.15 + prog * (W * 1.3);
+            const py = H * 0.30 + Math.sin(prog * Math.PI * 2) * H * 0.03;
+            const scale = Math.min(W, H) * 0.055;
+            const bank = Math.sin(prog * Math.PI * 2) * 0.05;
+
+            // Contrail (fades behind the plane)
+            ctx.save();
+            ctx.strokeStyle = 'rgba(255,255,255,0.55)';
+            ctx.lineWidth = scale * 0.12;
+            ctx.lineCap = 'round';
+            const trailLen = W * 0.28;
+            const trailGrad = ctx.createLinearGradient(px - trailLen, py, px, py);
+            trailGrad.addColorStop(0, 'rgba(255,255,255,0)');
+            trailGrad.addColorStop(1, 'rgba(255,255,255,0.7)');
+            ctx.strokeStyle = trailGrad;
+            ctx.beginPath();
+            ctx.moveTo(px - trailLen, py + scale * 0.15);
+            ctx.lineTo(px - scale * 0.3, py + scale * 0.1);
+            ctx.stroke();
+
+            // Airplane silhouette (simple side-profile jet)
+            ctx.translate(px, py);
+            ctx.rotate(bank);
+            ctx.fillStyle = '#f4f7fb';
+            ctx.strokeStyle = 'rgba(40,50,70,0.4)';
+            ctx.lineWidth = scale * 0.03;
+            ctx.beginPath();
+            ctx.moveTo(1.4 * scale, 0);           // nose
+            ctx.lineTo(0.5 * scale, -0.12 * scale);
+            ctx.lineTo(-0.9 * scale, -0.10 * scale);
+            ctx.lineTo(-1.3 * scale, -0.30 * scale); // tail fin top
+            ctx.lineTo(-1.1 * scale, -0.05 * scale);
+            ctx.lineTo(-1.5 * scale, 0.02 * scale);  // tail tip
+            ctx.lineTo(-1.1 * scale, 0.10 * scale);
+            ctx.lineTo(-0.9 * scale, 0.12 * scale);
+            ctx.lineTo(0.5 * scale, 0.14 * scale);
+            ctx.closePath();
+            ctx.fill();
+            ctx.stroke();
+            // Wings
+            ctx.beginPath();
+            ctx.moveTo(0.15 * scale, 0);
+            ctx.lineTo(-0.35 * scale, -0.75 * scale);
+            ctx.lineTo(-0.55 * scale, -0.72 * scale);
+            ctx.lineTo(-0.25 * scale, 0.05 * scale);
+            ctx.closePath();
+            ctx.fill();
+            ctx.stroke();
+            ctx.beginPath();
+            ctx.moveTo(0.15 * scale, 0);
+            ctx.lineTo(-0.35 * scale, 0.75 * scale);
+            ctx.lineTo(-0.55 * scale, 0.72 * scale);
+            ctx.lineTo(-0.25 * scale, 0.05 * scale);
+            ctx.closePath();
+            ctx.fill();
+            ctx.stroke();
+            ctx.restore();
+        }
+
+    } else if (theme === 'nightflight') {
+        // ── THEME 5: Night Flight ────────────────────────────────
+        // Deep night sky with stars, a city skyline glittering below,
+        // and a plane crossing with blinking navigation lights.
+
+        // 1) Night sky gradient
+        const nG = ctx.createLinearGradient(0, 0, 0, H);
+        nG.addColorStop(0, '#02040f');
+        nG.addColorStop(0.55, '#0a1230');
+        nG.addColorStop(1, '#152451');
+        ctx.fillStyle = nG;
+        ctx.fillRect(0, 0, W, H);
+
+        // 2) Moon
+        const moonX = W * 0.15, moonY = H * 0.16, moonR = Math.min(W, H) * 0.05;
+        const moonGlow = ctx.createRadialGradient(moonX, moonY, 0, moonX, moonY, moonR * 4);
+        moonGlow.addColorStop(0, 'rgba(230,240,255,0.35)');
+        moonGlow.addColorStop(1, 'rgba(230,240,255,0)');
+        ctx.fillStyle = moonGlow;
+        ctx.fillRect(0, 0, W, H);
+        ctx.beginPath();
+        ctx.arc(moonX, moonY, moonR, 0, Math.PI * 2);
+        ctx.fillStyle = '#f4f6ff';
+        ctx.fill();
+
+        // 3) Twinkling stars
+        const rngN = (seed) => { const x = Math.sin(seed * 9301 + 7213) * 51349; return x - Math.floor(x); };
+        for (let i = 0; i < 70; i++) {
+            const sx = rngN(i * 1.3) * W;
+            const sy = rngN(i * 2.9) * H * 0.7; // keep stars in upper sky
+            const sr = 0.5 + rngN(i * 3.7) * 1.3;
+            const twinkle = 0.3 + 0.7 * Math.sin(t * (1 + rngN(i * 4.3) * 2) + rngN(i * 5.1) * 6);
+            ctx.beginPath();
+            ctx.arc(sx, sy, sr, 0, Math.PI * 2);
+            ctx.fillStyle = `rgba(255,255,255,${(0.5 * twinkle).toFixed(3)})`;
+            ctx.fill();
+        }
+
+        // 4) City skyline silhouette with glittering windows
+        const skylineTop = H * 0.78;
+        const rngB = (seed) => { const x = Math.sin(seed * 9301 + 3571) * 27453; return x - Math.floor(x); };
+        let bx = 0;
+        let bi = 0;
+        ctx.fillStyle = '#060b1c';
+        while (bx < W) {
+            const bw = W * (0.035 + rngB(bi * 1.7) * 0.04);
+            const bh = H * (0.08 + rngB(bi * 2.3) * 0.20);
+            ctx.fillRect(bx, skylineTop - bh, bw, bh + H * 0.25);
+            // windows
+            const winCols = Math.max(1, Math.floor(bw / (W * 0.012)));
+            const winRows = Math.max(1, Math.floor(bh / (H * 0.03)));
+            for (let c = 0; c < winCols; c++) {
+                for (let r = 0; r < winRows; r++) {
+                    const seed = bi * 97 + c * 13 + r * 7;
+                    if (rngB(seed) > 0.55) {
+                        const flicker = 0.5 + 0.5 * Math.sin(t * (0.5 + rngB(seed * 1.9) * 1.5) + seed);
+                        ctx.fillStyle = `rgba(255,214,120,${(0.35 + 0.35 * flicker).toFixed(3)})`;
+                        ctx.fillRect(
+                            bx + W * 0.006 + c * (bw / winCols),
+                            skylineTop - bh + H * 0.01 + r * (bh / winRows),
+                            W * 0.006, H * 0.012
+                        );
+                    }
+                }
+            }
+            ctx.fillStyle = '#060b1c';
+            bx += bw + W * 0.012;
+            bi++;
+        }
+
+        // 5) Airplane with blinking nav lights, crossing diagonally
+        {
+            const period = 18;
+            const prog = (t % period) / period;
+            const px = -W * 0.1 + prog * (W * 1.2);
+            const py = H * 0.22 - Math.sin(prog * Math.PI) * H * 0.06;
+            const scale = Math.min(W, H) * 0.045;
+
+            ctx.save();
+            ctx.translate(px, py);
+            // Faint body glow
+            ctx.fillStyle = 'rgba(220,230,255,0.9)';
+            ctx.strokeStyle = 'rgba(10,15,30,0.5)';
+            ctx.lineWidth = scale * 0.03;
+            ctx.beginPath();
+            ctx.moveTo(1.3 * scale, 0);
+            ctx.lineTo(0.4 * scale, -0.10 * scale);
+            ctx.lineTo(-0.9 * scale, -0.09 * scale);
+            ctx.lineTo(-1.4 * scale, 0);
+            ctx.lineTo(-0.9 * scale, 0.09 * scale);
+            ctx.lineTo(0.4 * scale, 0.10 * scale);
+            ctx.closePath();
+            ctx.fill();
+            ctx.stroke();
+            ctx.beginPath();
+            ctx.moveTo(0.1 * scale, 0);
+            ctx.lineTo(-0.4 * scale, -0.7 * scale);
+            ctx.lineTo(-0.6 * scale, -0.68 * scale);
+            ctx.lineTo(-0.2 * scale, 0.03 * scale);
+            ctx.closePath();
+            ctx.fill();
+            ctx.beginPath();
+            ctx.moveTo(0.1 * scale, 0);
+            ctx.lineTo(-0.4 * scale, 0.7 * scale);
+            ctx.lineTo(-0.6 * scale, 0.68 * scale);
+            ctx.lineTo(-0.2 * scale, 0.03 * scale);
+            ctx.closePath();
+            ctx.fill();
+
+            // Blinking nav lights: red (left wingtip), green (right wingtip), white strobe (tail)
+            const blink = (Math.sin(t * 6) > 0.7) ? 1 : 0.15;
+            ctx.beginPath();
+            ctx.arc(-0.58 * scale, -0.69 * scale, scale * 0.06, 0, Math.PI * 2);
+            ctx.fillStyle = `rgba(255,60,60,${blink})`;
+            ctx.fill();
+            ctx.beginPath();
+            ctx.arc(-0.58 * scale, 0.69 * scale, scale * 0.06, 0, Math.PI * 2);
+            ctx.fillStyle = `rgba(60,255,120,${blink})`;
+            ctx.fill();
+            const strobe = (Math.sin(t * 9 + 1.5) > 0.85) ? 1 : 0;
+            ctx.beginPath();
+            ctx.arc(-1.35 * scale, 0, scale * 0.07, 0, Math.PI * 2);
+            ctx.fillStyle = `rgba(255,255,255,${strobe})`;
+            ctx.fill();
+            ctx.restore();
+        }
+
+    } else if (theme === 'cloudsunset') {
+        // ── THEME 6: Cloud Sunset ────────────────────────────────
+        // Warm dusk gradient over layered clouds with a plane
+        // silhouette gliding past the sun.
+
+        const phaseS = (t % 40) / 40;
+        const skyS = ctx.createLinearGradient(0, 0, 0, H);
+        skyS.addColorStop(0, '#2b1055');
+        skyS.addColorStop(0.35, '#7b3fa0');
+        skyS.addColorStop(0.6, '#ee6a5e');
+        skyS.addColorStop(0.8, '#ffb56b');
+        skyS.addColorStop(1, '#ffe4a1');
+        ctx.fillStyle = skyS;
+        ctx.fillRect(0, 0, W, H);
+
+        // Sun disc low on the horizon, slow pulse/glow
+        const sunY2 = H * (0.62 + 0.02 * Math.sin(phaseS * Math.PI * 2));
+        const sunX2 = W * 0.65;
+        const sunR2 = Math.min(W, H) * 0.11;
+        const sGlow = ctx.createRadialGradient(sunX2, sunY2, 0, sunX2, sunY2, sunR2 * 3);
+        sGlow.addColorStop(0, 'rgba(255,225,160,0.9)');
+        sGlow.addColorStop(0.4, 'rgba(255,170,120,0.35)');
+        sGlow.addColorStop(1, 'rgba(255,170,120,0)');
+        ctx.fillStyle = sGlow;
+        ctx.fillRect(0, 0, W, H);
+        ctx.beginPath();
+        ctx.arc(sunX2, sunY2, sunR2, 0, Math.PI * 2);
+        ctx.fillStyle = '#fff3d6';
+        ctx.fill();
+
+        // Layered cloud silhouettes drifting slowly, warm-lit edges
+        const rngS = (seed) => { const x = Math.sin(seed * 9301 + 2468) * 34521; return x - Math.floor(x); };
+        const cloudBands = [
+            { y: 0.55, speed: 90, scale: 0.13, alpha: 0.55, tint: '255,150,110', count: 4 },
+            { y: 0.72, speed: 130, scale: 0.10, alpha: 0.7, tint: '120,60,110', count: 5 },
+            { y: 0.88, speed: 170, scale: 0.09, alpha: 0.85, tint: '60,25,70', count: 5 },
+        ];
+        cloudBands.forEach((layer, li) => {
+            const loop = (t / layer.speed) % 1;
+            for (let i = 0; i < layer.count; i++) {
+                const seedBase = li * 100 + i;
+                const startX = rngS(seedBase) * 1.4 - 0.2;
+                const cx = (((startX - loop) % 1.4) + 1.4) % 1.4 * W - W * 0.2;
+                const cy = layer.y * H;
+                const scaleC = Math.min(W, H) * layer.scale;
+                ctx.save();
+                ctx.globalAlpha = layer.alpha;
+                ctx.fillStyle = `rgb(${layer.tint})`;
+                const puffs = [[0,0,0.55],[0.6,-0.08,0.42],[-0.6,-0.06,0.4],[0.25,-0.25,0.34],[-0.25,-0.22,0.32]];
+                puffs.forEach(([dx, dy, r]) => {
+                    ctx.beginPath();
+                    ctx.arc(cx + dx * scaleC, cy + dy * scaleC, r * scaleC, 0, Math.PI * 2);
+                    ctx.fill();
+                });
+                ctx.restore();
+            }
+        });
+
+        // Airplane silhouette gliding across the glow, dark against sunset
+        {
+            const period = 26;
+            const prog = (t % period) / period;
+            const px = -W * 0.15 + prog * (W * 1.3);
+            const py = H * 0.40 + Math.sin(prog * Math.PI * 2) * H * 0.02;
+            const scale = Math.min(W, H) * 0.05;
+            ctx.save();
+            ctx.translate(px, py);
+            ctx.fillStyle = 'rgba(30,15,25,0.85)';
+            ctx.beginPath();
+            ctx.moveTo(1.3 * scale, 0);
+            ctx.lineTo(0.4 * scale, -0.10 * scale);
+            ctx.lineTo(-0.9 * scale, -0.09 * scale);
+            ctx.lineTo(-1.3 * scale, -0.26 * scale);
+            ctx.lineTo(-1.0 * scale, -0.02 * scale);
+            ctx.lineTo(-1.4 * scale, 0.02 * scale);
+            ctx.lineTo(-1.0 * scale, 0.09 * scale);
+            ctx.lineTo(0.4 * scale, 0.10 * scale);
+            ctx.closePath();
+            ctx.fill();
+            ctx.beginPath();
+            ctx.moveTo(0.1 * scale, 0);
+            ctx.lineTo(-0.4 * scale, -0.68 * scale);
+            ctx.lineTo(-0.6 * scale, -0.66 * scale);
+            ctx.lineTo(-0.2 * scale, 0.03 * scale);
+            ctx.closePath();
+            ctx.fill();
+            ctx.beginPath();
+            ctx.moveTo(0.1 * scale, 0);
+            ctx.lineTo(-0.4 * scale, 0.68 * scale);
+            ctx.lineTo(-0.6 * scale, 0.66 * scale);
+            ctx.lineTo(-0.2 * scale, 0.03 * scale);
+            ctx.closePath();
+            ctx.fill();
+            ctx.restore();
+        }
     }
 
     ctx.restore();
