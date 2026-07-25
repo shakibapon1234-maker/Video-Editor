@@ -1548,9 +1548,11 @@
                                     <label>ফিট মোড — Fit Mode</label>
                                     <select id="broll-fit-select" class="form-select">
                                         <option value="cover">পুরো স্ক্রিন ভরাট (Cover) — কিছু অংশ কাটা যেতে পারে</option>
-                                        <option value="contain">সম্পূর্ণ দেখান (Contain) — উপরে/নিচে বা পাশে কালো ফাঁকা থাকতে পারে</option>
+                                        <option value="contain">সম্পূর্ণ দেখান (Contain) — উপরে/নিচে বা পাশে কালো ফাঁকা থাকবে</option>
+                                        <option value="contain-color">সম্পূর্ণ দেখান + Smart Color Extend — ফাঁকা জায়গা ছবির নিজের রঙে ভরবে (অটো)</option>
+                                        <option value="contain-frame">সম্পূর্ণ দেখান + Design Frame — ফাঁকা জায়গায় একটা ডিজাইন করা গ্র্যাডিয়েন্ট প্যানেল বসবে</option>
                                     </select>
-                                    <p class="help-text mt-1">আপনার ছবি/ভিডিওর অনুপাত (aspect ratio) মূল ভিডিওর সাইজের সাথে না মিললে "Cover" মোডে কিছু অংশ ক্রপ (কাটা) হয়ে যায়। পুরোটা অক্ষত দেখতে চাইলে "Contain" বেছে নিন।</p>
+                                    <p class="help-text mt-1">আপনার ছবি/ভিডিওর অনুপাত (aspect ratio) মূল ভিডিওর সাইজের সাথে না মিললে "Cover" মোডে কিছু অংশ ক্রপ (কাটা) হয়ে যায়। পুরোটা অক্ষত দেখতে চাইলে "Contain" (কালো বার), "Smart Color Extend" (ছবির প্রান্তের রঙে ফাঁকা জায়গা ভরাট — অটোমেটিক, প্রতিটা ছবির জন্য আলাদাভাবে ম্যানুয়াল কাজ লাগে না) অথবা "Design Frame" (সব B-roll-এ কনসিসটেন্ট একই ডিজাইন গ্র্যাডিয়েন্ট প্যানেল) থেকে বেছে নিন।</p>
                                 </div>
 
                                 <div class="broll-list mt-4" id="broll-list">

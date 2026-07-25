@@ -4274,7 +4274,8 @@ document.addEventListener('DOMContentLoaded', () => {
                     // Exception 2: the user explicitly picked "Contain" fit mode for a
                     // fullscreen image whose aspect ratio doesn't match the canvas, so
                     // nothing gets cropped off — letterbox bars fill the rest instead.
-                    const fsSmall = item.mode === 'fullscreen' && (((item.size !== undefined ? item.size : 100) < 99.9) || item.fitMode === 'contain');
+                    const isContainFitMode = item.fitMode === 'contain' || item.fitMode === 'contain-color' || item.fitMode === 'contain-frame';
+                    const fsSmall = item.mode === 'fullscreen' && (((item.size !== undefined ? item.size : 100) < 99.9) || isContainFitMode);
                     const imgDrawable = getItemImageDrawable(item, currentTime) || item.imageImg;
                     const imgDims = getItemImageDimensions(item);
                     const imgAspect = imgDims.width / imgDims.height;
@@ -4388,25 +4389,39 @@ document.addEventListener('DOMContentLoaded', () => {
                                 dW = boxH * imgAspect;
                                 dX = drawBoxX + (boxW - dW) / 2;
                             }
-                            // Paint the leftover space black first (only meaningful when
-                            // the box is the full fullscreen frame, i.e. item.fitMode ===
-                            // 'contain' at 100% size) so the gap reads as an intentional
-                            // letterbox bar instead of showing whatever was drawn behind it.
-                            if (item.mode === 'fullscreen' && item.fitMode === 'contain') {
-                                state.ctx.fillStyle = '#000000';
+                            // Paint the leftover space first (only meaningful when the box is
+                            // the full fullscreen frame, i.e. item.fitMode is one of the
+                            // "contain" variants at 100% size) so the gap reads as an
+                            // intentional backdrop instead of showing whatever was drawn
+                            // behind it. Three looks are available:
+                            //   'contain'       — flat black bar (original default)
+                            //   'contain-color' — Smart Color Extend: solid color sampled
+                            //                     from the image's own edge pixels
+                            //   'contain-frame' — Design Frame Template: a designed gradient
+                            //                     panel, consistent across every B-roll item
+                            if (item.mode === 'fullscreen' && (item.fitMode === 'contain' || item.fitMode === 'contain-color' || item.fitMode === 'contain-frame')) {
+                                const useColorFill = item.fitMode === 'contain-color';
+                                const useFrameFill = item.fitMode === 'contain-frame';
+                                if (!useFrameFill) {
+                                    state.ctx.fillStyle = useColorFill ? getBrollEdgeColor(item) : '#000000';
+                                }
                                 if (imgAspect > boxAspect) {
                                     if (dY > drawBoxY) {
-                                        state.ctx.fillRect(drawBoxX, drawBoxY, boxW, dY - drawBoxY);
+                                        if (useFrameFill) fillBrollFrameDesign(state.ctx, drawBoxX, drawBoxY, boxW, boxH, drawBoxX, drawBoxY, boxW, dY - drawBoxY);
+                                        else state.ctx.fillRect(drawBoxX, drawBoxY, boxW, dY - drawBoxY);
                                     }
                                     if ((drawBoxY + boxH) > (dY + dH)) {
-                                        state.ctx.fillRect(drawBoxX, dY + dH, boxW, (drawBoxY + boxH) - (dY + dH));
+                                        if (useFrameFill) fillBrollFrameDesign(state.ctx, drawBoxX, drawBoxY, boxW, boxH, drawBoxX, dY + dH, boxW, (drawBoxY + boxH) - (dY + dH));
+                                        else state.ctx.fillRect(drawBoxX, dY + dH, boxW, (drawBoxY + boxH) - (dY + dH));
                                     }
                                 } else {
                                     if (dX > drawBoxX) {
-                                        state.ctx.fillRect(drawBoxX, drawBoxY, dX - drawBoxX, boxH);
+                                        if (useFrameFill) fillBrollFrameDesign(state.ctx, drawBoxX, drawBoxY, boxW, boxH, drawBoxX, drawBoxY, dX - drawBoxX, boxH);
+                                        else state.ctx.fillRect(drawBoxX, drawBoxY, dX - drawBoxX, boxH);
                                     }
                                     if ((drawBoxX + boxW) > (dX + dW)) {
-                                        state.ctx.fillRect(dX + dW, drawBoxY, (drawBoxX + boxW) - (dX + dW), boxH);
+                                        if (useFrameFill) fillBrollFrameDesign(state.ctx, drawBoxX, drawBoxY, boxW, boxH, dX + dW, drawBoxY, (drawBoxX + boxW) - (dX + dW), boxH);
+                                        else state.ctx.fillRect(dX + dW, drawBoxY, (drawBoxX + boxW) - (dX + dW), boxH);
                                     }
                                 }
                             }
@@ -9288,6 +9303,71 @@ document.addEventListener('DOMContentLoaded', () => {
             width: (item && item.imageImg) ? (item.imageImg.naturalWidth || item.imageImg.width || 640) : 640,
             height: (item && item.imageImg) ? (item.imageImg.naturalHeight || item.imageImg.height || 360) : 360
         };
+    }
+
+    // Samples the outer ring of pixels of a B-roll image and averages them into
+    // one solid color, so "Contain" mode can fill the leftover letterbox space
+    // with a color that blends with the picture instead of a flat black bar.
+    // Cached on the item itself (item._edgeColorCache) so this only runs once
+    // per image, not on every drawFrame() tick.
+    function getBrollEdgeColor(item) {
+        if (item._edgeColorCache) return item._edgeColorCache;
+        try {
+            const drawable = item.imageImg;
+            if (!drawable || !drawable.naturalWidth) return '#000000';
+            const SZ = 32;
+            const sampleCanvas = document.createElement('canvas');
+            sampleCanvas.width = SZ;
+            sampleCanvas.height = SZ;
+            const sctx = sampleCanvas.getContext('2d', { willReadFrequently: true });
+            sctx.drawImage(drawable, 0, 0, SZ, SZ);
+            const data = sctx.getImageData(0, 0, SZ, SZ).data;
+            let r = 0, g = 0, b = 0, count = 0;
+            for (let y = 0; y < SZ; y++) {
+                for (let x = 0; x < SZ; x++) {
+                    if (x === 0 || x === SZ - 1 || y === 0 || y === SZ - 1) {
+                        const i = (y * SZ + x) * 4;
+                        r += data[i]; g += data[i + 1]; b += data[i + 2];
+                        count++;
+                    }
+                }
+            }
+            if (count === 0) return '#000000';
+            const color = `rgb(${Math.round(r / count)}, ${Math.round(g / count)}, ${Math.round(b / count)})`;
+            item._edgeColorCache = color;
+            return color;
+        } catch (e) {
+            // Cross-origin / not-yet-decoded image can throw on getImageData —
+            // fall back to plain black rather than breaking the frame.
+            return '#000000';
+        }
+    }
+
+    // Draws a soft designed gradient panel into one letterbox rectangle (either
+    // the top/bottom bars or the left/right bars around a "Contain" fit image),
+    // as an alternative to a flat black bar. The gradient spans the FULL box
+    // (not just the visible sliver) so the two bars read as one continuous
+    // backdrop rather than two independently-colored patches.
+    function fillBrollFrameDesign(ctx, boxX, boxY, boxW, boxH, rectX, rectY, rectW, rectH) {
+        ctx.save();
+        ctx.beginPath();
+        ctx.rect(rectX, rectY, rectW, rectH);
+        ctx.clip();
+        const grad = ctx.createLinearGradient(boxX, boxY, boxX + boxW, boxY + boxH);
+        grad.addColorStop(0, '#1b1f3b');
+        grad.addColorStop(0.55, '#2a2350');
+        grad.addColorStop(1, '#181425');
+        ctx.fillStyle = grad;
+        ctx.fillRect(boxX, boxY, boxW, boxH);
+        const glow = ctx.createRadialGradient(
+            boxX + boxW / 2, boxY + boxH / 2, 0,
+            boxX + boxW / 2, boxY + boxH / 2, Math.max(boxW, boxH) * 0.65
+        );
+        glow.addColorStop(0, 'rgba(255,255,255,0.06)');
+        glow.addColorStop(1, 'rgba(255,255,255,0)');
+        ctx.fillStyle = glow;
+        ctx.fillRect(boxX, boxY, boxW, boxH);
+        ctx.restore();
     }
 
     async function detectIsGifFile(file) {
