@@ -3954,16 +3954,42 @@ document.addEventListener('DOMContentLoaded', () => {
                         const perLineDur = Math.max(0.12, animDur * 0.55);
                         const staggerSpan = Math.max(0, animDur - perLineDur);
 
+                        // Sequential reveal (item.sequentialLines): instead of cramming every
+                        // line's entrance into the same short animDur window (which is why
+                        // they all appeared to animate together no matter how long the B-roll
+                        // stayed on screen), each line gets its own slot spread evenly across
+                        // the item's full visible duration (endSec - startSec). Line k doesn't
+                        // start entering until the previous lines have each had their turn, and
+                        // once revealed it just stays on screen — only the real exit (right at
+                        // item.endSec) animates lines away, and it does so all together so the
+                        // whole block leaves cleanly.
+                        const useSequential = !!item.sequentialLines && numLines > 1;
+                        const totalDur = Math.max(0.01, item.endSec - item.startSec);
+                        const seqSlot = totalDur / numLines;
+                        const seqPerLineDur = Math.min(animDur, Math.max(0.12, seqSlot * 0.7));
+
                         sublines.forEach((lineObj, k) => {
-                            const isEntry = tIn < animDur;
-                            const isExit = !isEntry;
-                            const order = isExit ? (numLines - 1 - k) : k;
-                            const delay = (numLines > 1 && brollAnimActive) ? (order / (numLines - 1)) * staggerSpan : 0;
-                            const localT = isEntry ? tIn : Math.max(0, tOut);
-                            const lineP = brollAnimActive ? Math.max(0, Math.min(1, (localT - delay) / perLineDur)) : 1;
+                            let isEntry, lineP;
+                            if (useSequential) {
+                                const isRealExit = tOut < animDur;
+                                isEntry = !isRealExit;
+                                if (isEntry) {
+                                    const delay = k * seqSlot;
+                                    lineP = brollAnimActive ? Math.max(0, Math.min(1, (tIn - delay) / seqPerLineDur)) : 1;
+                                } else {
+                                    lineP = brollAnimActive ? Math.max(0, Math.min(1, tOut / perLineDur)) : 1;
+                                }
+                            } else {
+                                isEntry = tIn < animDur;
+                                const isExit = !isEntry;
+                                const order = isExit ? (numLines - 1 - k) : k;
+                                const delay = (numLines > 1 && brollAnimActive) ? (order / (numLines - 1)) * staggerSpan : 0;
+                                const localT = isEntry ? tIn : Math.max(0, tOut);
+                                lineP = brollAnimActive ? Math.max(0, Math.min(1, (localT - delay) / perLineDur)) : 1;
+                            }
 
                             let lineEased = 1;
-                            if (brollAnimActive && (tIn < animDur || tOut < animDur)) {
+                            if (brollAnimActive) {
                                 lineEased = (style === 'slide-pop' || style === 'word-pop-stagger' || style === 'bounce-in')
                                     ? easeOutBackOvershoot(lineP)
                                     : brollEaseOut(lineP);
@@ -8672,6 +8698,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const brollExitDirSelect = document.getElementById('broll-exit-dir');
     const brollAnimSpeedSlider = document.getElementById('broll-anim-speed');
     const brollAnimSpeedVal = document.getElementById('broll-anim-speed-val');
+    const brollSequentialLinesCheckbox = document.getElementById('broll-sequential-lines');
     const brollSoundEffectSelect = document.getElementById('broll-sound-effect');
     const brollFitContainer = document.getElementById('broll-fit-container');
     const brollFitSelect = document.getElementById('broll-fit-select');
@@ -9966,6 +9993,7 @@ document.addEventListener('DOMContentLoaded', () => {
             brollAnimSpeedSlider.value = brollSpeedSecToValue(sec);
             if (brollAnimSpeedVal) brollAnimSpeedVal.innerText = brollSpeedLabel(sec);
         }
+        if (brollSequentialLinesCheckbox) brollSequentialLinesCheckbox.checked = !!item.sequentialLines;
         if (brollSoundEffectSelect) brollSoundEffectSelect.value = item.soundEffect || 'none';
         if (brollCustomSoundContainer) {
             brollCustomSoundContainer.style.display = (item.soundEffect === 'custom') ? 'block' : 'none';
@@ -10125,6 +10153,16 @@ document.addEventListener('DOMContentLoaded', () => {
                 const sec = brollSpeedValueToSec(parseInt(e.target.value));
                 item.animationSpeedSec = sec;
                 if (brollAnimSpeedVal) brollAnimSpeedVal.innerText = brollSpeedLabel(sec);
+                drawFrame();
+            }
+        });
+    }
+
+    if (brollSequentialLinesCheckbox) {
+        brollSequentialLinesCheckbox.addEventListener('change', (e) => {
+            const item = state.brollOverlays.find(b => b.id === state.selectedBrollId);
+            if (item) {
+                item.sequentialLines = e.target.checked;
                 drawFrame();
             }
         });
