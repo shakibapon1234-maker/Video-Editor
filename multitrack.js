@@ -467,6 +467,50 @@
         afterChange('Track removed');
     }
 
+    // Pauses every extra-track audio/video element that's currently playing,
+    // without touching state.extraTracks itself. drawExtraTracksMidFrame()
+    // normally does this pausing on every animation frame, but that loop only
+    // runs while state.isPlaying is true — the very frame that flips it to
+    // false exits before reaching drawFrame(), so nothing ever tells these
+    // elements to stop. Anywhere the main video/timeline is paused or stopped
+    // needs to call this explicitly, or an extra audio track just keeps
+    // playing in the background with no on-screen way to silence it.
+    function pauseAllExtraTracksMedia() {
+        var state = ve();
+        if (!state || !state.extraTracks) return;
+        state.extraTracks.forEach(function (track) {
+            (track.clips || []).forEach(function (c) {
+                if (c._el && typeof c._el.pause === 'function' && !c._el.paused) {
+                    try { c._el.pause(); } catch (e) {}
+                }
+            });
+        });
+    }
+
+    // Pauses AND fully releases every extra-track media element (src cleared,
+    // reference dropped). Used when the whole workspace/project is being
+    // cleared or reset, so a track's audio/video can't keep decoding or
+    // playing in the background after it disappears from state.extraTracks.
+    function releaseAllExtraTracksMedia() {
+        var state = ve();
+        if (!state || !state.extraTracks) return;
+        state.extraTracks.forEach(function (track) {
+            (track.clips || []).forEach(function (c) {
+                if (c._el) {
+                    try { c._el.pause(); c._el.src = ''; } catch (e) {}
+                    c._el = null;
+                }
+                if (c._exportEl) {
+                    try { c._exportEl.pause(); c._exportEl.src = ''; } catch (e) {}
+                    c._exportEl = null;
+                }
+            });
+        });
+    }
+
+    window.pauseAllExtraTracksMedia = pauseAllExtraTracksMedia;
+    window.releaseAllExtraTracksMedia = releaseAllExtraTracksMedia;
+
     async function addClipToTrack(track, file) {
         var url = URL.createObjectURL(file);
         var duration = await probeDuration(track.type, url);

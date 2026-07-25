@@ -2149,6 +2149,13 @@ document.addEventListener('DOMContentLoaded', () => {
             state.video.pause();
             state.isPlaying = false;
         }
+        // Extra-track audio/video (multitrack.js) is normally paused inside
+        // the per-frame updateLoop -> drawFrame -> drawExtraTracksMidFrame
+        // chain, but that loop bails out (`if (!state.isPlaying) return;`)
+        // the instant isPlaying goes false, before drawFrame() runs again —
+        // so without this call, an extra audio track just kept playing with
+        // no way to stop it.
+        if (window.pauseAllExtraTracksMedia) window.pauseAllExtraTracksMedia();
         playPauseBtn.innerHTML = '<i class="fa-solid fa-play"></i>';
         
         if (window.onPlaybackStop) {
@@ -13789,6 +13796,12 @@ document.addEventListener('DOMContentLoaded', () => {
         // Multi-Track Timeline (Phase 11 step 4 fix): without this, extra
         // tracks from a previous project silently carried over into a new
         // project / project switch, since nothing else here touched them.
+        // Stop/release their media FIRST — once the array below is replaced,
+        // nothing else can reach a still-playing audio/video element to
+        // silence it, and the "Clear All" button looked like it hadn't
+        // cleared anything because the multi-track panel was left showing
+        // (and playing) stale tracks.
+        if (window.releaseAllExtraTracksMedia) window.releaseAllExtraTracksMedia();
         state.extraTracks = [];
         state.introTransitionType = 'none';
         state.introTransitionDuration = 1;
@@ -13818,6 +13831,9 @@ document.addEventListener('DOMContentLoaded', () => {
         state.contrast = 100;
         state.saturation = 100;
         state.colorGradeEnabled = false;
+        state.chromaKeyEnabled = false;
+        state.chromaKeyColor = '#00ff00';
+        state.chromaKeyThreshold = 45;
         state.gradeRShadow = state.gradeRMid = state.gradeRHigh = 0;
         state.gradeGShadow = state.gradeGMid = state.gradeGHigh = 0;
         state.gradeBShadow = state.gradeBMid = state.gradeBHigh = 0;
@@ -13892,6 +13908,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (typeof renderShapeList === 'function') renderShapeList();
         if (typeof renderSubtitlesList === 'function') renderSubtitlesList();
         if (typeof renderClipTimeline === 'function') renderClipTimeline();
+        if (window.renderMultiTrackPanel) window.renderMultiTrackPanel();
         if (typeof drawFrame === 'function') drawFrame();
     }
 
@@ -14683,6 +14700,12 @@ document.addEventListener('DOMContentLoaded', () => {
             state.cropH = 1;
             state.aspectRatio = 'original';
             state.layoutMode = 'fit';
+            // These live on state (not per-clip), so "Clear All" for the
+            // current video was leaving them on — Chroma Key stayed enabled
+            // across a clear because nothing here ever touched it.
+            state.chromaKeyEnabled = false;
+            state.chromaKeyColor = '#00ff00';
+            state.chromaKeyThreshold = 45;
 
             if (activeClip) {
                 activeClip.start = 0;
@@ -14693,6 +14716,20 @@ document.addEventListener('DOMContentLoaded', () => {
                 activeClip.zoom = 100;
                 activeClip.offsetX = 0;
                 activeClip.offsetY = 0;
+                // Punch Zoom, Ken Burns, Speed/Speed-Ramp, and Transition are
+                // all per-clip edits (phase9.js / punch-zoom-ui.js) that this
+                // function never reset before, so they survived "Clear All"
+                // even though every other edit type was wiped.
+                activeClip.punchZooms = [];
+                activeClip.kenBurnsEnabled = false;
+                activeClip.kenBurnsStartZoom = 100;
+                activeClip.kenBurnsEndZoom = 115;
+                activeClip.kenBurnsPan = 'right';
+                activeClip.speed = 1;
+                activeClip.speedRamp = { enabled: false, segments: [1, 1, 1] };
+                activeClip.transitionType = 'none';
+                activeClip.transitionDuration = 0.5;
+                if (state.video) state.video.playbackRate = 1;
                 if (activeClip.type !== 'image' && state.video && state.video.duration && !isNaN(state.video.duration)) {
                     state.duration = state.video.duration;
                     activeClip.duration = state.video.duration;
@@ -14738,6 +14775,8 @@ document.addEventListener('DOMContentLoaded', () => {
             if (typeof renderHighlightList === 'function') renderHighlightList();
             if (typeof renderBlurRegionList === 'function') renderBlurRegionList();
             if (typeof renderFillList === 'function') renderFillList();
+            if (window.renderMultiTrackPanel) window.renderMultiTrackPanel();
+            if (window.syncPhase9ClipUI) window.syncPhase9ClipUI();
             drawFrame();
         } finally {
             editorIsResetting = false;
