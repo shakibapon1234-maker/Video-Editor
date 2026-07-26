@@ -7829,19 +7829,26 @@ document.addEventListener('DOMContentLoaded', () => {
             return { x: 1.14 - p * 1.28, y: item.y, angleDeg: 0, facing: 'left' };
         }
         if (path === 'loop') {
-            // A rounded loop around the frame: climbs up the left edge,
-            // flies across the top, then descends the right edge.
-            const left = 0.14, right = 0.86, top = 0.14, bottom = 0.86;
-            if (p < 0.28) {
-                const t = p / 0.28;
-                return { x: left, y: bottom - t * (bottom - top), angleDeg: -90, facing: 'right' };
-            } else if (p < 0.72) {
-                const t = (p - 0.28) / 0.44;
-                return { x: left + t * (right - left), y: top - Math.sin(t * Math.PI) * 0.07, angleDeg: 0, facing: 'right' };
-            } else {
-                const t = (p - 0.72) / 0.28;
-                return { x: right, y: top + t * (bottom - top), angleDeg: 90, facing: 'right' };
+            // A smooth oval loop around the frame. The plane keeps circling
+            // continuously; bank angle is clamped so the banner/text never
+            // tips past a mild diagonal (never goes anywhere near vertical).
+            const cx0 = 0.5, cy0 = 0.5, rx = 0.4, ry = 0.24;
+            const t = p * Math.PI * 2;
+            const x = cx0 + rx * Math.cos(t);
+            const y = cy0 + ry * Math.sin(t);
+            const dx = -rx * Math.sin(t);
+            const dy = ry * Math.cos(t);
+            let angle = Math.atan2(dy, dx) * 180 / Math.PI;
+            let facing = 'right';
+            if (angle > 90 || angle < -90) {
+                // Traveling generally leftward — mirror the plane instead of
+                // rotating past vertical, and re-base the angle to that side.
+                facing = 'left';
+                angle = angle > 90 ? angle - 180 : angle + 180;
             }
+            const maxBank = 28;
+            angle = Math.max(-maxBank, Math.min(maxBank, angle));
+            return { x, y, angleDeg: angle, facing };
         }
         // 'static' (or unknown) — no movement, just sits at its placed spot.
         return { x: item.x, y: item.y, angleDeg: 0, facing: 'right' };
@@ -7954,14 +7961,22 @@ document.addEventListener('DOMContentLoaded', () => {
                 // classic sky-writing/advertising plane. Nose points right by
                 // default; pass facing:'left' to mirror the whole group
                 // (used when flying right-to-left) without mirroring text.
+                // The plane body is drawn in its own accent color (not the
+                // banner's fill color) with a dark outline on everything, so
+                // it stays clearly visible against any photo/background.
                 const dir = (facing === 'left') ? -1 : 1;
-                const noseX = dir * halfW * 0.86;
-                const planeW = halfW * 0.42;
-                const bannerStartX = noseX - dir * planeW * 1.7;
+                const planeColor = accentColor || '#d32f2f';
+                const outline = 'rgba(0,0,0,0.55)';
+                const noseX = dir * halfW * 0.82;
+                const planeW = halfW * 0.5;
+                const bannerStartX = noseX - dir * planeW * 1.55;
                 const bannerEndX = -dir * halfW * 0.95;
 
+                ctx.lineWidth = Math.max(1.5, h * 0.025);
+                ctx.strokeStyle = outline;
+
                 // Banner ribbon (the part that carries the text)
-                const notch = Math.abs(bannerEndX - bannerStartX) * 0.08;
+                const notch = Math.abs(bannerEndX - bannerStartX) * 0.1;
                 ctx.beginPath();
                 ctx.moveTo(bannerStartX, -halfH * 0.42);
                 ctx.lineTo(bannerEndX + dir * notch, -halfH * 0.42);
@@ -7969,33 +7984,61 @@ document.addEventListener('DOMContentLoaded', () => {
                 ctx.lineTo(bannerEndX + dir * notch, halfH * 0.42);
                 ctx.lineTo(bannerStartX, halfH * 0.42);
                 ctx.closePath();
+                ctx.fillStyle = color;
                 ctx.fill();
-
-                // Tow line connecting plane tail to the banner
-                ctx.strokeStyle = color;
-                ctx.lineWidth = Math.max(1.5, h * 0.02);
-                ctx.beginPath();
-                ctx.moveTo(noseX - dir * planeW * 0.5, 0);
-                ctx.lineTo(bannerStartX, 0);
                 ctx.stroke();
 
-                // Simple biplane body: fuselage + two stacked wings + tail
+                // Tow line connecting plane tail to the banner
+                ctx.beginPath();
+                ctx.moveTo(noseX - dir * planeW * 0.35, halfH * 0.05);
+                ctx.lineTo(bannerStartX, 0);
+                ctx.lineWidth = Math.max(1, h * 0.015);
+                ctx.stroke();
+
+                // Biplane body: fuselage + two stacked wings + tail fin,
+                // scaled up and given its own fill so it reads as a distinct
+                // plane rather than blending into the banner.
                 ctx.save();
                 ctx.translate(noseX, 0);
+                ctx.fillStyle = planeColor;
+                ctx.lineWidth = Math.max(1.2, h * 0.02);
+                ctx.strokeStyle = outline;
+
+                // Fuselage (nose to tail)
                 ctx.beginPath();
-                ctx.moveTo(dir * planeW * 0.55, 0);
-                ctx.lineTo(-dir * planeW * 0.55, -halfH * 0.16);
-                ctx.lineTo(-dir * planeW * 0.75, -halfH * 0.04);
-                ctx.lineTo(-dir * planeW * 0.75, halfH * 0.04);
-                ctx.lineTo(-dir * planeW * 0.55, halfH * 0.16);
+                ctx.moveTo(dir * planeW * 0.62, 0);
+                ctx.lineTo(-dir * planeW * 0.7, -halfH * 0.22);
+                ctx.lineTo(-dir * planeW * 0.98, -halfH * 0.1);
+                ctx.lineTo(-dir * planeW * 0.98, halfH * 0.1);
+                ctx.lineTo(-dir * planeW * 0.7, halfH * 0.22);
                 ctx.closePath();
                 ctx.fill();
-                // Wings (top + bottom)
-                ctx.fillRect(-dir * planeW * 0.05 - (dir < 0 ? planeW * 0.42 : 0), -halfH * 0.5, dir * planeW * 0.42, halfH * 0.16);
-                ctx.fillRect(-dir * planeW * 0.05 - (dir < 0 ? planeW * 0.42 : 0), halfH * 0.34, dir * planeW * 0.42, halfH * 0.16);
-                // Propeller nub
+                ctx.stroke();
+
+                // Tail fin (small triangle at the back, pointing up)
                 ctx.beginPath();
-                ctx.arc(dir * planeW * 0.6, 0, halfH * 0.07, 0, Math.PI * 2);
+                ctx.moveTo(-dir * planeW * 0.75, 0);
+                ctx.lineTo(-dir * planeW * 0.98, -halfH * 0.55);
+                ctx.lineTo(-dir * planeW * 0.6, -halfH * 0.18);
+                ctx.closePath();
+                ctx.fill();
+                ctx.stroke();
+
+                // Wings (top + bottom), classic biplane double-wing look
+                const wingX = dir < 0 ? -planeW * 0.5 : planeW * 0.08;
+                ctx.beginPath();
+                ctx.rect(wingX, -halfH * 0.62, dir * planeW * 0.5, halfH * 0.2);
+                ctx.fill();
+                ctx.stroke();
+                ctx.beginPath();
+                ctx.rect(wingX, halfH * 0.42, dir * planeW * 0.5, halfH * 0.2);
+                ctx.fill();
+                ctx.stroke();
+
+                // Propeller spinner
+                ctx.beginPath();
+                ctx.arc(dir * planeW * 0.68, 0, halfH * 0.09, 0, Math.PI * 2);
+                ctx.fillStyle = outline;
                 ctx.fill();
                 ctx.restore();
                 break;
