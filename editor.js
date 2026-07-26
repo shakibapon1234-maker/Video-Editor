@@ -6412,15 +6412,18 @@ document.addEventListener('DOMContentLoaded', () => {
                 const shpAlpha = Math.max(0, Math.min(1, (item.opacity ?? 100) / 100));
 
                 state.ctx.save();
-                state.ctx.globalAlpha = shpAlpha;
-                state.ctx.translate(box.cx, box.cy);
-                state.ctx.rotate(rotation * Math.PI / 180);
-                if (shpScale !== 1) state.ctx.scale(shpScale, shpScale);
-                drawShapeOverlayPath(state.ctx, item.shapeType, box.w, box.h, item.fillColor || '#4f46e5', box.facing);
-                if (item.text) {
-                    drawShapeOverlayText(state.ctx, item, box.w, box.h, box.facing);
+                try {
+                    state.ctx.globalAlpha = shpAlpha;
+                    state.ctx.translate(box.cx, box.cy);
+                    state.ctx.rotate(rotation * Math.PI / 180);
+                    if (shpScale !== 1) state.ctx.scale(shpScale, shpScale);
+                    drawShapeOverlayPath(state.ctx, item.shapeType, box.w, box.h, item.fillColor || '#4f46e5', box.facing, item.accentColor);
+                    if (item.text) {
+                        drawShapeOverlayText(state.ctx, item, box.w, box.h, box.facing);
+                    }
+                } finally {
+                    state.ctx.restore();
                 }
-                state.ctx.restore();
 
                 // Selection outline + resize/rotate handles in Step 3 for the active shape
                 if (state.currentStep === 3 && item.id === state.selectedShapeOverlayId) {
@@ -8208,204 +8211,220 @@ document.addEventListener('DOMContentLoaded', () => {
     // Draws one Word-style shape (filled path only, no text) centered at the
     // current canvas origin inside a w x h bounding box, in the given color.
     // Caller is expected to have already translated+rotated the context.
-    function drawShapeOverlayPath(ctx, type, w, h, color, facing) {
+    function drawShapeOverlayPath(ctx, type, w, h, color, facing, accentColor) {
         const halfW = w / 2, halfH = h / 2;
         ctx.save();
-        ctx.fillStyle = color;
-        ctx.lineJoin = 'round';
+        try {
+            ctx.fillStyle = color;
+            ctx.lineJoin = 'round';
 
-        switch (type) {
-            case 'plane': {
-                // A small biplane silhouette towing a ribbon banner, like a
-                // classic sky-writing/advertising plane. Nose points right by
-                // default; pass facing:'left' to mirror the whole group
-                // (used when flying right-to-left) without mirroring text.
-                // The plane body is drawn in its own accent color (not the
-                // banner's fill color) with a dark outline on everything, so
-                // it stays clearly visible against any photo/background.
-                const dir = (facing === 'left') ? -1 : 1;
-                const planeColor = accentColor || '#d32f2f';
-                const outline = 'rgba(0,0,0,0.55)';
-                const noseX = dir * halfW * 0.82;
-                const planeW = halfW * 0.5;
-                const bannerStartX = noseX - dir * planeW * 1.55;
-                const bannerEndX = -dir * halfW * 0.95;
+            switch (type) {
+                case 'plane': {
+                    // A sleek airplane towing a banner ribbon with a V-notch tail and tow cable.
+                    const dir = (facing === 'left') ? -1 : 1;
+                    const planeColor = accentColor || '#d32f2f';
+                    const outline = 'rgba(0,0,0,0.65)';
 
-                ctx.lineWidth = Math.max(1.5, h * 0.025);
-                ctx.strokeStyle = outline;
+                    // Plane dimensions & positioning inside w x h
+                    const pw = w * 0.28; // airplane length
+                    const ph = h * 0.75; // wing span
+                    const planeCenterX = dir * (halfW - pw * 0.55);
+                    const planeTailX = planeCenterX - dir * pw * 0.45;
+                    const bannerStartX = planeCenterX - dir * pw * 0.65;
+                    const bannerEndX = -dir * (halfW - w * 0.02);
 
-                // Banner ribbon (the part that carries the text)
-                const notch = Math.abs(bannerEndX - bannerStartX) * 0.1;
-                ctx.beginPath();
-                ctx.moveTo(bannerStartX, -halfH * 0.42);
-                ctx.lineTo(bannerEndX + dir * notch, -halfH * 0.42);
-                ctx.lineTo(bannerEndX, 0);
-                ctx.lineTo(bannerEndX + dir * notch, halfH * 0.42);
-                ctx.lineTo(bannerStartX, halfH * 0.42);
-                ctx.closePath();
-                ctx.fillStyle = color;
-                ctx.fill();
-                ctx.stroke();
+                    // 1. Draw Banner Ribbon
+                    const notch = Math.abs(bannerEndX - bannerStartX) * 0.08;
+                    ctx.beginPath();
+                    ctx.moveTo(bannerStartX, -halfH * 0.45);
+                    ctx.lineTo(bannerEndX + dir * notch, -halfH * 0.45);
+                    ctx.lineTo(bannerEndX, 0);
+                    ctx.lineTo(bannerEndX + dir * notch, halfH * 0.45);
+                    ctx.lineTo(bannerStartX, halfH * 0.45);
+                    ctx.closePath();
+                    ctx.fillStyle = color;
+                    ctx.fill();
+                    ctx.lineWidth = Math.max(1.5, h * 0.025);
+                    ctx.strokeStyle = outline;
+                    ctx.stroke();
 
-                // Tow line connecting plane tail to the banner
-                ctx.beginPath();
-                ctx.moveTo(noseX - dir * planeW * 0.35, halfH * 0.05);
-                ctx.lineTo(bannerStartX, 0);
-                ctx.lineWidth = Math.max(1, h * 0.015);
-                ctx.stroke();
+                    // 2. Draw Tow Cable from plane tail to banner
+                    ctx.beginPath();
+                    ctx.moveTo(planeTailX, 0);
+                    ctx.lineTo(bannerStartX, 0);
+                    ctx.lineWidth = Math.max(1.2, h * 0.018);
+                    ctx.strokeStyle = 'rgba(0, 0, 0, 0.75)';
+                    ctx.stroke();
 
-                // Biplane body: fuselage + two stacked wings + tail fin,
-                // scaled up and given its own fill so it reads as a distinct
-                // plane rather than blending into the banner.
-                ctx.save();
-                ctx.translate(noseX, 0);
-                ctx.fillStyle = planeColor;
-                ctx.lineWidth = Math.max(1.2, h * 0.02);
-                ctx.strokeStyle = outline;
+                    // 3. Draw Airplane Silhouette
+                    ctx.save();
+                    ctx.translate(planeCenterX, 0);
+                    ctx.fillStyle = planeColor;
+                    ctx.strokeStyle = outline;
+                    ctx.lineWidth = Math.max(1.5, h * 0.02);
 
-                // Fuselage (nose to tail)
-                ctx.beginPath();
-                ctx.moveTo(dir * planeW * 0.62, 0);
-                ctx.lineTo(-dir * planeW * 0.7, -halfH * 0.22);
-                ctx.lineTo(-dir * planeW * 0.98, -halfH * 0.1);
-                ctx.lineTo(-dir * planeW * 0.98, halfH * 0.1);
-                ctx.lineTo(-dir * planeW * 0.7, halfH * 0.22);
-                ctx.closePath();
-                ctx.fill();
-                ctx.stroke();
+                    // Airplane Fuselage (sleek body)
+                    ctx.beginPath();
+                    ctx.moveTo(dir * pw * 0.48, 0); // Nose tip
+                    ctx.quadraticCurveTo(dir * pw * 0.35, -ph * 0.16, dir * pw * 0.15, -ph * 0.16); // Upper nose
+                    ctx.lineTo(-dir * pw * 0.35, -ph * 0.08); // Body to tail
+                    ctx.lineTo(-dir * pw * 0.48, -ph * 0.42); // Tail fin top
+                    ctx.lineTo(-dir * pw * 0.44, -ph * 0.04); // Tail fin back
+                    ctx.lineTo(-dir * pw * 0.44, ph * 0.04); // Tail fin lower back
+                    ctx.lineTo(-dir * pw * 0.48, ph * 0.18); // Tail fin bottom
+                    ctx.lineTo(-dir * pw * 0.35, ph * 0.08); // Lower body back
+                    ctx.quadraticCurveTo(dir * pw * 0.15, ph * 0.16, dir * pw * 0.48, 0); // Lower nose to tip
+                    ctx.closePath();
+                    ctx.fill();
+                    ctx.stroke();
 
-                // Tail fin (small triangle at the back, pointing up)
-                ctx.beginPath();
-                ctx.moveTo(-dir * planeW * 0.75, 0);
-                ctx.lineTo(-dir * planeW * 0.98, -halfH * 0.55);
-                ctx.lineTo(-dir * planeW * 0.6, -halfH * 0.18);
-                ctx.closePath();
-                ctx.fill();
-                ctx.stroke();
+                    // Main Wings (Top and Bottom wings with swept profile)
+                    ctx.beginPath();
+                    // Top wing
+                    ctx.moveTo(dir * pw * 0.12, -ph * 0.10);
+                    ctx.lineTo(-dir * pw * 0.02, -ph * 0.48);
+                    ctx.lineTo(-dir * pw * 0.15, -ph * 0.46);
+                    ctx.lineTo(-dir * pw * 0.12, -ph * 0.08);
+                    // Bottom wing
+                    ctx.moveTo(dir * pw * 0.12, ph * 0.10);
+                    ctx.lineTo(-dir * pw * 0.02, ph * 0.48);
+                    ctx.lineTo(-dir * pw * 0.15, ph * 0.46);
+                    ctx.lineTo(-dir * pw * 0.12, ph * 0.08);
+                    ctx.closePath();
+                    ctx.fill();
+                    ctx.stroke();
 
-                // Wings (top + bottom), classic biplane double-wing look
-                const wingX = dir < 0 ? -planeW * 0.5 : planeW * 0.08;
-                ctx.beginPath();
-                ctx.rect(wingX, -halfH * 0.62, dir * planeW * 0.5, halfH * 0.2);
-                ctx.fill();
-                ctx.stroke();
-                ctx.beginPath();
-                ctx.rect(wingX, halfH * 0.42, dir * planeW * 0.5, halfH * 0.2);
-                ctx.fill();
-                ctx.stroke();
+                    // Cockpit Windshield (accent highlight on nose)
+                    ctx.beginPath();
+                    ctx.ellipse(dir * pw * 0.22, -ph * 0.06, pw * 0.08, ph * 0.06, 0, 0, Math.PI * 2);
+                    ctx.fillStyle = '#ffffff';
+                    ctx.fill();
+                    ctx.strokeStyle = outline;
+                    ctx.lineWidth = Math.max(1, h * 0.012);
+                    ctx.stroke();
 
-                // Propeller spinner
-                ctx.beginPath();
-                ctx.arc(dir * planeW * 0.68, 0, halfH * 0.09, 0, Math.PI * 2);
-                ctx.fillStyle = outline;
-                ctx.fill();
-                ctx.restore();
-                break;
-            }
-            case 'ribbon': {
-                // Horizontal banner with chevron-notched (arrow-pointed) ends,
-                // like a classic headline/news ribbon.
-                const notch = w * 0.09;
-                ctx.beginPath();
-                ctx.moveTo(-halfW + notch, -halfH);
-                ctx.lineTo(halfW - notch, -halfH);
-                ctx.lineTo(halfW, 0);
-                ctx.lineTo(halfW - notch, halfH);
-                ctx.lineTo(-halfW + notch, halfH);
-                ctx.lineTo(-halfW, 0);
-                ctx.closePath();
-                ctx.fill();
-                break;
-            }
-            case 'wave': {
-                // Rectangle with a wavy top and bottom edge.
-                const humps = 3;
-                const amp = h * 0.09;
-                const segW = w / humps;
-                ctx.beginPath();
-                ctx.moveTo(-halfW, -halfH);
-                for (let i = 0; i < humps; i++) {
-                    const xStart = -halfW + i * segW;
-                    const xMid = xStart + segW / 2;
-                    const xEnd = xStart + segW;
-                    const cy = -halfH + ((i % 2 === 0) ? -amp : amp);
-                    ctx.quadraticCurveTo(xMid, cy, xEnd, -halfH);
+                    // Propeller Spinner & Spinning Arc
+                    ctx.beginPath();
+                    ctx.arc(dir * pw * 0.49, 0, ph * 0.08, 0, Math.PI * 2);
+                    ctx.fillStyle = outline;
+                    ctx.fill();
+
+                    // Propeller blades line
+                    ctx.beginPath();
+                    ctx.ellipse(dir * pw * 0.50, 0, ph * 0.03, ph * 0.26, 0, 0, Math.PI * 2);
+                    ctx.fillStyle = 'rgba(255,255,255,0.7)';
+                    ctx.fill();
+                    ctx.stroke();
+
+                    ctx.restore();
+                    break;
                 }
-                ctx.lineTo(halfW, halfH);
-                for (let i = humps - 1; i >= 0; i--) {
-                    const xEnd = -halfW + i * segW;
-                    const xMid = xEnd + segW / 2;
-                    const xStart = xEnd + segW;
-                    const cy = halfH + ((i % 2 === 0) ? amp : -amp);
-                    ctx.quadraticCurveTo(xMid, cy, xEnd, halfH);
+                case 'ribbon': {
+                    // Horizontal banner with chevron-notched (arrow-pointed) ends,
+                    // like a classic headline/news ribbon.
+                    const notch = w * 0.09;
+                    ctx.beginPath();
+                    ctx.moveTo(-halfW + notch, -halfH);
+                    ctx.lineTo(halfW - notch, -halfH);
+                    ctx.lineTo(halfW, 0);
+                    ctx.lineTo(halfW - notch, halfH);
+                    ctx.lineTo(-halfW + notch, halfH);
+                    ctx.lineTo(-halfW, 0);
+                    ctx.closePath();
+                    ctx.fill();
+                    break;
                 }
-                ctx.closePath();
-                ctx.fill();
-                break;
-            }
-            case 'cloud': {
-                // Thought/speech cloud: overlapping circles forming the body,
-                // plus two small trailing bubbles as the speech tail.
-                ctx.beginPath();
-                const bumps = [
-                    { cx: -halfW * 0.52, cy: -halfH * 0.02, r: halfH * 0.58 },
-                    { cx: -halfW * 0.12, cy: -halfH * 0.42, r: halfH * 0.7 },
-                    { cx: halfW * 0.28, cy: -halfH * 0.3, r: halfH * 0.64 },
-                    { cx: halfW * 0.55, cy: halfH * 0.05, r: halfH * 0.54 },
-                    { cx: halfW * 0.1, cy: halfH * 0.32, r: halfH * 0.6 },
-                    { cx: -halfW * 0.32, cy: halfH * 0.28, r: halfH * 0.52 }
-                ];
-                bumps.forEach((b) => {
-                    ctx.moveTo(b.cx + b.r, b.cy);
-                    ctx.arc(b.cx, b.cy, b.r, 0, Math.PI * 2);
-                });
-                ctx.moveTo(-halfW * 0.36 + halfH * 0.16, halfH * 0.78);
-                ctx.arc(-halfW * 0.36, halfH * 0.78, halfH * 0.16, 0, Math.PI * 2);
-                ctx.moveTo(-halfW * 0.5 + halfH * 0.08, halfH * 0.98);
-                ctx.arc(-halfW * 0.5, halfH * 0.98, halfH * 0.08, 0, Math.PI * 2);
-                ctx.fill();
-                break;
-            }
-            case 'star6': {
-                // Hexagram (6-point star): two overlapping equilateral triangles.
-                const R = Math.min(w, h) / 2 * 0.98;
-                ctx.beginPath();
-                for (let i = 0; i < 3; i++) {
-                    const a = -Math.PI / 2 + i * (2 * Math.PI / 3);
-                    const x = R * Math.cos(a), y = R * Math.sin(a);
-                    if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+                case 'wave': {
+                    // Rectangle with a wavy top and bottom edge.
+                    const humps = 3;
+                    const amp = h * 0.09;
+                    const segW = w / humps;
+                    ctx.beginPath();
+                    ctx.moveTo(-halfW, -halfH);
+                    for (let i = 0; i < humps; i++) {
+                        const xStart = -halfW + i * segW;
+                        const xMid = xStart + segW / 2;
+                        const xEnd = xStart + segW;
+                        const cy = -halfH + ((i % 2 === 0) ? -amp : amp);
+                        ctx.quadraticCurveTo(xMid, cy, xEnd, -halfH);
+                    }
+                    ctx.lineTo(halfW, halfH);
+                    for (let i = humps - 1; i >= 0; i--) {
+                        const xEnd = -halfW + i * segW;
+                        const xMid = xEnd + segW / 2;
+                        const xStart = xEnd + segW;
+                        const cy = halfH + ((i % 2 === 0) ? amp : -amp);
+                        ctx.quadraticCurveTo(xMid, cy, xEnd, halfH);
+                    }
+                    ctx.closePath();
+                    ctx.fill();
+                    break;
                 }
-                ctx.closePath();
-                for (let i = 0; i < 3; i++) {
-                    const a = Math.PI / 2 + i * (2 * Math.PI / 3);
-                    const x = R * Math.cos(a), y = R * Math.sin(a);
-                    if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+                case 'cloud': {
+                    // Thought/speech cloud: overlapping circles forming the body,
+                    // plus two small trailing bubbles as the speech tail.
+                    ctx.beginPath();
+                    const bumps = [
+                        { cx: -halfW * 0.52, cy: -halfH * 0.02, r: halfH * 0.58 },
+                        { cx: -halfW * 0.12, cy: -halfH * 0.42, r: halfH * 0.7 },
+                        { cx: halfW * 0.28, cy: -halfH * 0.3, r: halfH * 0.64 },
+                        { cx: halfW * 0.55, cy: halfH * 0.05, r: halfH * 0.54 },
+                        { cx: halfW * 0.1, cy: halfH * 0.32, r: halfH * 0.6 },
+                        { cx: -halfW * 0.32, cy: halfH * 0.28, r: halfH * 0.52 }
+                    ];
+                    bumps.forEach((b) => {
+                        ctx.moveTo(b.cx + b.r, b.cy);
+                        ctx.arc(b.cx, b.cy, b.r, 0, Math.PI * 2);
+                    });
+                    ctx.moveTo(-halfW * 0.36 + halfH * 0.16, halfH * 0.78);
+                    ctx.arc(-halfW * 0.36, halfH * 0.78, halfH * 0.16, 0, Math.PI * 2);
+                    ctx.moveTo(-halfW * 0.5 + halfH * 0.08, halfH * 0.98);
+                    ctx.arc(-halfW * 0.5, halfH * 0.98, halfH * 0.08, 0, Math.PI * 2);
+                    ctx.fill();
+                    break;
                 }
-                ctx.closePath();
-                ctx.fill();
-                break;
+                case 'star6': {
+                    // Hexagram (6-point star): two overlapping equilateral triangles.
+                    const R = Math.min(w, h) / 2 * 0.98;
+                    ctx.beginPath();
+                    for (let i = 0; i < 3; i++) {
+                        const a = -Math.PI / 2 + i * (2 * Math.PI / 3);
+                        const x = R * Math.cos(a), y = R * Math.sin(a);
+                        if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+                    }
+                    ctx.closePath();
+                    for (let i = 0; i < 3; i++) {
+                        const a = Math.PI / 2 + i * (2 * Math.PI / 3);
+                        const x = R * Math.cos(a), y = R * Math.sin(a);
+                        if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+                    }
+                    ctx.closePath();
+                    ctx.fill();
+                    break;
+                }
+                case 'oval': {
+                    // Oval callout with a small pointed tail (speech-bubble style).
+                    ctx.beginPath();
+                    ctx.ellipse(0, -halfH * 0.08, halfW * 0.94, halfH * 0.82, 0, 0, Math.PI * 2);
+                    ctx.closePath();
+                    ctx.fill();
+                    ctx.beginPath();
+                    ctx.moveTo(-halfW * 0.22, halfH * 0.5);
+                    ctx.lineTo(-halfW * 0.4, halfH * 1.02);
+                    ctx.lineTo(halfW * 0.02, halfH * 0.62);
+                    ctx.closePath();
+                    ctx.fill();
+                    break;
+                }
+                default: {
+                    ctx.beginPath();
+                    ctx.rect(-halfW, -halfH, w, h);
+                    ctx.fill();
+                }
             }
-            case 'oval': {
-                // Oval callout with a small pointed tail (speech-bubble style).
-                ctx.beginPath();
-                ctx.ellipse(0, -halfH * 0.08, halfW * 0.94, halfH * 0.82, 0, 0, Math.PI * 2);
-                ctx.closePath();
-                ctx.fill();
-                ctx.beginPath();
-                ctx.moveTo(-halfW * 0.22, halfH * 0.5);
-                ctx.lineTo(-halfW * 0.4, halfH * 1.02);
-                ctx.lineTo(halfW * 0.02, halfH * 0.62);
-                ctx.closePath();
-                ctx.fill();
-                break;
-            }
-            default: {
-                ctx.beginPath();
-                ctx.rect(-halfW, -halfH, w, h);
-                ctx.fill();
-            }
+        } finally {
+            ctx.restore();
         }
-        ctx.restore();
     }
 
     // Draws the user's text, word-wrapped and centered, on top of a shape
