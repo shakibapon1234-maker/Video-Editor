@@ -379,6 +379,13 @@
         var box = transformBoxPx(transform, found.natural.w, found.natural.h, ve().canvas);
         var hit = hitTestBox(coords, box);
         if (!hit) return false;
+        // An overlay (text / symbol / sticker / shape+text) drawn on top of
+        // this clip should always win the click — otherwise, whenever a
+        // background clip is selected, this box (which usually spans most or
+        // all of the frame) intercepts every pointerdown before editor.js
+        // ever gets a chance to hit-test its own overlays, making them
+        // impossible to drag or select.
+        if (window.__topOverlayHitAt && window.__topOverlayHitAt(coords)) return false;
         dragState = {
             mode: hit, clip: found.clip, startCoords: coords,
             startTransform: { x: transform.x, y: transform.y, w: transform.w }
@@ -569,8 +576,8 @@
                     audioEl.muted = !!track.muted;
                     audioEl.volume = Math.max(0, Math.min(1, track.volume !== undefined ? track.volume : 1));
                     if (state.isPlaying) {
-                        if (audioEl.paused) audioEl.play().catch(function () {});
                         if (Math.abs(audioEl.currentTime - relativeAudio) > 0.35) audioEl.currentTime = relativeAudio;
+                        if (audioEl.paused) audioEl.play().catch(function () {});
                     } else {
                         if (!audioEl.paused) audioEl.pause();
                         if (Math.abs(audioEl.currentTime - relativeAudio) > 0.05) audioEl.currentTime = relativeAudio;
@@ -614,10 +621,10 @@
             el.volume = Math.max(0, Math.min(1, track.volume !== undefined ? track.volume : 1));
 
             if (state.isPlaying) {
-                if (el.paused) el.play().catch(function () {});
                 // Loosely synced during free-running playback; hard-correct
                 // only on real drift so we don't stutter the stream every frame.
                 if (Math.abs(el.currentTime - relative) > 0.35) el.currentTime = relative;
+                if (el.paused) el.play().catch(function () {});
             } else {
                 if (!el.paused) el.pause();
                 if (Math.abs(el.currentTime - relative) > 0.05) el.currentTime = relative;
