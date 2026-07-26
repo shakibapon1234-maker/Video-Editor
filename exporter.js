@@ -363,6 +363,37 @@ document.addEventListener('DOMContentLoaded', () => {
 
 
 
+        // `WebSocket.send()` only queues a frame in the browser; it does not wait
+        // for the local render server to write it to disk.  Without a small
+        // back-pressure gate, a long export can queue hundreds of JPEGs in RAM,
+        // eventually making the UI look permanently stuck (often around 20–40%).
+        // Keep the queue bounded and fail visibly if the connection stops draining.
+        async function waitForRenderSocketDrain(ws) {
+            const maxQueuedBytes = 4 * 1024 * 1024;
+            const timeoutMs = 30000;
+            const startedAt = performance.now();
+            while (ws && ws.readyState === WebSocket.OPEN && ws.bufferedAmount > maxQueuedBytes) {
+                if (performance.now() - startedAt > timeoutMs) {
+                    throw new Error('Render server is not receiving frames. Please restart the Video Editor and try again.');
+                }
+                await new Promise(resolve => setTimeout(resolve, 25));
+            }
+            if (!ws || ws.readyState !== WebSocket.OPEN) {
+                throw new Error('Render server connection was closed while sending frames.');
+            }
+        }
+
+        function canvasToJpegBlob(canvas) {
+            return new Promise((resolve, reject) => {
+                const timeout = setTimeout(() => reject(new Error('Timed out while preparing a video frame.')), 30000);
+                canvas.toBlob((blob) => {
+                    clearTimeout(timeout);
+                    if (blob) resolve(blob);
+                    else reject(new Error('Could not prepare a video frame. Please reduce the export quality and try again.'));
+                }, 'image/jpeg', 0.85);
+            });
+        }
+
         const renderTarget = {
             type: 'ws',
             ws: null,
@@ -396,6 +427,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (this.type === 'wasm') {
                     await this.wasmEngine.sendFrame(blob);
                 } else {
+                    await waitForRenderSocketDrain(this.ws);
                     this.ws.send(blob);
                 }
             },
@@ -616,7 +648,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     }, t);
                 }
 
-                const frameBlob = await new Promise(resolve => canvas.toBlob(resolve, 'image/jpeg', 0.85));
+                const frameBlob = await canvasToJpegBlob(canvas);
                 await renderTarget.sendFrame(frameBlob);
 
                 frameIndex++;
@@ -737,8 +769,8 @@ document.addEventListener('DOMContentLoaded', () => {
                             }
                             if (window.drawEditorFrame) window.drawEditorFrame();
 
-                            const p = new Promise(async (r) => {
-                                const blob = await new Promise(res => canvas.toBlob(res, 'image/jpeg', 0.85));
+                            const p = (async () => {
+                                const blob = await canvasToJpegBlob(canvas);
                                 // NOTE: do not gate this on `!finished`. This frame has already
                                 // been counted toward clipFrameIndex/frameIndex below, so it is
                                 // owed to the output — finish() sets `finished = true` synchronously
@@ -748,8 +780,7 @@ document.addEventListener('DOMContentLoaded', () => {
                                 // reached, which is exactly what caused the exported video to
                                 // consistently come out ~1s short.
                                 if (blob && !exportCancelled) await renderTarget.sendFrame(blob);
-                                r();
-                            });
+                            })();
                             activeBlobPromises.push(p);
 
                             clipFrameIndex++;
@@ -782,14 +813,13 @@ document.addEventListener('DOMContentLoaded', () => {
                         }
                         if (window.drawEditorFrame) window.drawEditorFrame();
 
-                        const p = new Promise(async (r) => {
-                            const blob = await new Promise(res => canvas.toBlob(res, 'image/jpeg', 0.85));
+                        const p = (async () => {
+                            const blob = await canvasToJpegBlob(canvas);
                             // See note above in the overshoot loop — must not check
                             // `!finished` here, or the frame that triggers finish()
                             // (almost always the clip's LAST frame) gets dropped.
                             if (blob && !exportCancelled) await renderTarget.sendFrame(blob);
-                            r();
-                        });
+                        })();
                         activeBlobPromises.push(p);
 
                         clipFrameIndex++;
@@ -941,7 +971,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         window.drawEditorFrame();
                     }
 
-                    const frameBlob = await new Promise(resolve => canvas.toBlob(resolve, 'image/jpeg', 0.85));
+                    const frameBlob = await canvasToJpegBlob(canvas);
                     await renderTarget.sendFrame(frameBlob);
 
                     frameIndex++;
@@ -986,7 +1016,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     }, t);
                 }
 
-                const frameBlob = await new Promise(resolve => canvas.toBlob(resolve, 'image/jpeg', 0.85));
+                const frameBlob = await canvasToJpegBlob(canvas);
                 await renderTarget.sendFrame(frameBlob);
 
                 frameIndex++;
