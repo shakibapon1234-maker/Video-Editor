@@ -1351,6 +1351,8 @@
                                         <option value="speech">Speech Bubble</option>
                                         <option value="ribbon">Ribbon Banner</option>
                                         <option value="neon">Neon Glow</option>
+                                        <option value="running-border-red">🔴 Running Red Border (লাল রানিং বর্ডার অ্যানিমেশন)</option>
+                                        <option value="running-border">✨ Running Color Border (রানিং কাস্টম বর্ডার অ্যানিমেশন)</option>
                                     </select>
                                 </div>
 
@@ -1753,8 +1755,10 @@
                                             <option value="laptop">Laptop Mockup (ল্যাপটপের ভিতরে দেখান)</option>
                                             <option value="glass-caption">Glass Caption (কাঁচের মতো টেক্সট ব্যানার)</option>
                                             <option value="social-cta">Social CTA (Like + WhatsApp বাটন)</option>
+                                            <option value="running-border-red">🔴 Running Red Border Box (লাল রানিং বর্ডার বক্স)</option>
+                                            <option value="running-border">✨ Running Color Border Box (রানিং কাস্টম বর্ডার বক্স)</option>
                                         </select>
-                                        <p class="help-text mt-1">ছবি বা ভিডিওকে ফোন/ল্যাপটপ ফ্রেমে, আর টেক্সটকে glass caption-এ দেখাতে পারবেন। CTA-তে Like ও WhatsApp বাটন যুক্ত হবে।</p>
+                                        <p class="help-text mt-1">ছবি বা ভিডিওকে ফোন/ল্যাপটপ ফ্রেমে, টেক্সটকে glass caption অথবা রানিং রেড বর্ডার বক্সে দেখাতে পারবেন। CTA-তে Like ও WhatsApp বাটন যুক্ত হবে।</p>
                                     </div>
                                     
                                     <!-- After Image Uploader for Comparison Slide -->
@@ -1793,6 +1797,18 @@
                                             <input type="range" id="broll-anim-speed" min="1" max="100" value="65">
                                             <span id="broll-anim-speed-val">Normal</span>
                                         </div>
+                                    </div>
+
+                                    <div class="control-group mt-3" id="broll-auto-repeat-row" style="display:none; border: 1.5px solid #ef4444; border-radius: 8px; padding: 10px; background: rgba(239, 68, 68, 0.06);">
+                                        <label style="color: #fca5a5; font-weight: 600;"><i class="fa-solid fa-rotate"></i> অটো অ্যানিমেশন পুনরাবৃত্তি (অটো অ্যানিমেটেড লোগো)</label>
+                                        <select id="broll-auto-repeat" class="form-select mt-1">
+                                            <option value="10" selected>প্রতি ১০ সেকেন্ড পর পর (অটো রিপিট - Recommended)</option>
+                                            <option value="5">প্রতি ৫ সেকেন্ড পর পর (অটো রিপিট)</option>
+                                            <option value="8">প্রতি ৮ সেকেন্ড পর পর (অটো রিপিট)</option>
+                                            <option value="15">প্রতি ১৫ সেকেন্ড পর পর (অটো রিপিট)</option>
+                                            <option value="0">বন্ধ (শুধু শুরু ও শেষে অ্যানিমেশন)</option>
+                                        </select>
+                                        <p class="help-text mt-1">লোগো বা ছবি ভিডিও জুড়ে থাকলে নির্ধারিত সময় (যেমন ১০ সেকেন্ড) পর পর স্বয়ংক্রিয়ভাবে অ্যানিমেশন পুনরায় রিপিট হবে।</p>
                                     </div>
                                     <div class="control-group mt-3" id="broll-line-reveal-row" style="border: 1.5px solid #6366f1; border-radius: 8px; padding: 10px; background: rgba(99,102,241,0.06);">
                                         <label class="form-check-label" style="display:flex; align-items:center; gap:6px; cursor:pointer; color: #a5b4fc; font-weight:600;">

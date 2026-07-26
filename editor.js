@@ -3709,7 +3709,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // Draws a decorative background box behind a Text Overlay, centered on the
     // current canvas origin (caller is expected to have already translated to
     // the overlay's position). (w, h) are the full box dimensions.
-    function drawTextOverlayBox(ctx, style, color, w, h) {
+    function drawTextOverlayBox(ctx, style, color, w, h, currentTime) {
         if (!style || style === 'none') return;
         const x = -w / 2, y = -h / 2;
         ctx.save();
@@ -3794,6 +3794,110 @@ document.addEventListener('DOMContentLoaded', () => {
                 ctx.stroke();
                 ctx.shadowBlur = 0;
                 break;
+            case 'running-border-red':
+            case 'running-border': {
+                // Continuously running border animation: a bright color spot races
+                // around the perimeter of the box. The position is driven by
+                // currentTime so it loops smoothly as long as the overlay is visible.
+                const t = (currentTime || 0);
+                const borderRadius = 10;
+                const bw = Math.max(3, h * 0.07); // border thickness
+                const runColor = (style === 'running-border-red') ? '#ef4444' : color;
+                const runGlow = (style === 'running-border-red') ? 'rgba(239,68,68,0.6)' : color;
+                // Perimeter: top + right + bottom + left
+                const perim = 2 * (w + h);
+                const speed = 80; // px per second
+                const pos = (t * speed) % perim; // running position in px along perimeter
+
+                // Draw dark semi-transparent background
+                ctx.globalAlpha *= 0.75;
+                ctx.fillStyle = 'rgba(0,0,0,0.40)';
+                ctx.beginPath();
+                if (ctx.roundRect) ctx.roundRect(x, y, w, h, borderRadius);
+                else ctx.rect(x, y, w, h);
+                ctx.fill();
+                ctx.globalAlpha /= 0.75;
+
+                // Draw the static dim border first
+                ctx.strokeStyle = 'rgba(255,255,255,0.15)';
+                ctx.lineWidth = bw;
+                ctx.beginPath();
+                if (ctx.roundRect) ctx.roundRect(x + bw/2, y + bw/2, w - bw, h - bw, borderRadius);
+                else ctx.rect(x + bw/2, y + bw/2, w - bw, h - bw);
+                ctx.stroke();
+
+                // Now draw the glowing running dot on the border path using compositing.
+                // We draw a thick, short arc-segment of glowing color that sweeps.
+                // Convert perimeter position → border segment (top/right/bottom/left)
+                const segLen = 80; // length of the glowing segment in px
+                ctx.save();
+                ctx.shadowColor = runGlow;
+                ctx.shadowBlur = 14;
+                ctx.strokeStyle = runColor;
+                ctx.lineWidth = bw * 1.4;
+                ctx.lineCap = 'round';
+
+                // Helper: draw a segment of the border rect path between px positions a and b
+                // along the perimeter (top→right→bottom→left, clockwise).
+                // We use the canvas path and clip to just the visible stroke.
+                const drawBorderSegment = (fromPx, toPx) => {
+                    // Clamp and wrap
+                    const frac = (p) => (((p % perim) + perim) % perim);
+                    let a = frac(fromPx), b = frac(toPx);
+                    // Collect corner points of the rect path (clockwise, starting top-left)
+                    // [top-left → top-right → bottom-right → bottom-left → top-left]
+                    const corners = [
+                        { cumLen: 0,       draw: (pxLocal, ctx2) => {
+                            // Top edge: left to right
+                            const fx = x + pxLocal;
+                            ctx2.moveTo(fx, y + bw/2);
+                        }}
+                    ];
+                    // Build a set of points along the path based on pixel distance
+                    const points = [];
+                    const step = 4;
+                    for (let d = 0; d < perim; d += step) {
+                        const dd = frac(d);
+                        let px2, py2;
+                        if (dd < w) {
+                            px2 = x + dd; py2 = y + bw/2;         // top
+                        } else if (dd < w + h) {
+                            px2 = x + w - bw/2; py2 = y + (dd - w); // right
+                        } else if (dd < 2*w + h) {
+                            px2 = x + w - (dd - w - h); py2 = y + h - bw/2; // bottom
+                        } else {
+                            px2 = x + bw/2; py2 = y + h - (dd - 2*w - h); // left
+                        }
+                        points.push({ d: dd, px: px2, py: py2 });
+                    }
+
+                    // Draw sub-path from a to b
+                    ctx.beginPath();
+                    let started = false;
+                    const drawRange = (startD, endD) => {
+                        for (let i = 0; i < points.length; i++) {
+                            const pt = points[i];
+                            if (pt.d >= startD && pt.d <= endD) {
+                                if (!started) { ctx.moveTo(pt.px, pt.py); started = true; }
+                                else ctx.lineTo(pt.px, pt.py);
+                            }
+                        }
+                    };
+                    if (a < b) {
+                        drawRange(a, b);
+                    } else {
+                        // Wraps around
+                        drawRange(a, perim - step);
+                        started = false;
+                        drawRange(0, b);
+                    }
+                    ctx.stroke();
+                };
+
+                drawBorderSegment(pos, pos + segLen);
+                ctx.restore();
+                break;
+            }
         }
         ctx.restore();
     }
@@ -5206,6 +5310,83 @@ document.addEventListener('DOMContentLoaded', () => {
                         state.ctx.stroke();
                         state.ctx.restore();
                     }
+                    if (item.visualTemplate === 'running-border-red' || item.visualTemplate === 'running-border') {
+                        // Draw a continuously running border animation around the broll text box
+                        const rbColor = (item.visualTemplate === 'running-border-red') ? '#ef4444' : (item.boxColor || '#4f46e5');
+                        const rbGlow = (item.visualTemplate === 'running-border-red') ? 'rgba(239,68,68,0.65)' : rbColor;
+                        const bw = Math.max(4, boxH * 0.07);
+                        const borderRadius = 10;
+                        const bx = drawBoxX - 8, by = drawBoxY - 6, bww = boxW + 16, bhh = boxH + 12;
+                        const perim = 2 * (bww + bhh);
+                        const speed = 100; // px/sec
+                        const segLen = Math.max(60, perim * 0.18);
+                        const pos = (currentTime * speed) % perim;
+
+                        state.ctx.save();
+                        // Dark semi-transparent background
+                        state.ctx.fillStyle = 'rgba(0,0,0,0.42)';
+                        state.ctx.beginPath();
+                        if (state.ctx.roundRect) state.ctx.roundRect(bx, by, bww, bhh, borderRadius);
+                        else state.ctx.rect(bx, by, bww, bhh);
+                        state.ctx.fill();
+
+                        // Static dim border
+                        state.ctx.strokeStyle = 'rgba(255,255,255,0.12)';
+                        state.ctx.lineWidth = bw;
+                        state.ctx.beginPath();
+                        if (state.ctx.roundRect) state.ctx.roundRect(bx + bw/2, by + bw/2, bww - bw, bhh - bw, borderRadius);
+                        else state.ctx.rect(bx + bw/2, by + bw/2, bww - bw, bhh - bw);
+                        state.ctx.stroke();
+
+                        // Running glowing segment
+                        state.ctx.shadowColor = rbGlow;
+                        state.ctx.shadowBlur = 16;
+                        state.ctx.strokeStyle = rbColor;
+                        state.ctx.lineWidth = bw * 1.5;
+                        state.ctx.lineCap = 'round';
+
+                        // Build perimeter points (clockwise: top → right → bottom ← left ↑)
+                        const step = 5;
+                        const pts = [];
+                        for (let d = 0; d < perim; d += step) {
+                            const dd = ((d % perim) + perim) % perim;
+                            let px2, py2;
+                            if (dd < bww) {
+                                px2 = bx + dd; py2 = by + bw/2;                     // top
+                            } else if (dd < bww + bhh) {
+                                px2 = bx + bww - bw/2; py2 = by + (dd - bww);       // right
+                            } else if (dd < 2*bww + bhh) {
+                                px2 = bx + bww - (dd - bww - bhh); py2 = by + bhh - bw/2; // bottom
+                            } else {
+                                px2 = bx + bw/2; py2 = by + bhh - (dd - 2*bww - bhh); // left
+                            }
+                            pts.push({ d: dd, px: px2, py: py2 });
+                        }
+
+                        const frac = (p) => (((p % perim) + perim) % perim);
+                        const segA = frac(pos), segB = frac(pos + segLen);
+                        state.ctx.beginPath();
+                        let segStarted = false;
+                        const addRange = (startD, endD) => {
+                            for (let i = 0; i < pts.length; i++) {
+                                const pt = pts[i];
+                                if (pt.d >= startD && pt.d <= endD) {
+                                    if (!segStarted) { state.ctx.moveTo(pt.px, pt.py); segStarted = true; }
+                                    else state.ctx.lineTo(pt.px, pt.py);
+                                }
+                            }
+                        };
+                        if (segA < segB) {
+                            addRange(segA, segB);
+                        } else {
+                            addRange(segA, perim - step);
+                            segStarted = false;
+                            addRange(0, segB);
+                        }
+                        state.ctx.stroke();
+                        state.ctx.shadowBlur = 0;
+                        state.ctx.restore();
+                    }
                     // "Normal" mode (transparentBg explicitly off) paints a solid dark
                     // scrim/pill behind the text so it reads clearly over busy video.
                     // Default is transparent — text sits directly on the footage with
@@ -6185,7 +6366,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
 
                 if (item.boxStyle && item.boxStyle !== 'none') {
-                    drawTextOverlayBox(state.ctx, item.boxStyle, item.boxColor || '#4f46e5', boxW, boxH);
+                    drawTextOverlayBox(state.ctx, item.boxStyle, item.boxColor || '#4f46e5', boxW, boxH, currentTime);
                 }
 
                 // Subtle outline for readability over any video background,
@@ -11652,7 +11833,8 @@ document.addEventListener('DOMContentLoaded', () => {
             animationSpeedSec: 0.4,
             soundEffect: 'chime',
             transparentBg: true,
-            visualTemplate: 'standard'
+            visualTemplate: 'standard',
+            autoRepeatSec: 10  // replay animation every 10 seconds (0 = off)
         };
         state.brollOverlays.push(newItem);
         state.selectedBrollId = newItem.id;
@@ -12160,6 +12342,34 @@ document.addEventListener('DOMContentLoaded', () => {
                 brollAfterImageContainer.style.display = 'none';
             }
         }
+
+        // Sync Auto-Repeat dropdown (wings-brand and any logo overlay)
+        const brollAutoRepeatSel = document.getElementById('broll-auto-repeat');
+        const brollAutoRepeatRow = document.getElementById('broll-auto-repeat-row');
+        if (brollAutoRepeatRow) {
+            // Show this control for wings-brand, or hide for others
+            const showRepeat = (item.builtInType === 'wings-brand' || item.type === 'built-in' || item.type === 'image' || item.type === 'gif');
+            brollAutoRepeatRow.style.display = showRepeat ? 'block' : 'none';
+        }
+        if (brollAutoRepeatSel) {
+            const repeatVal = item.autoRepeatSec !== undefined ? String(item.autoRepeatSec) : '10';
+            // Pick the closest option value
+            const opts = Array.from(brollAutoRepeatSel.options).map(o => o.value);
+            brollAutoRepeatSel.value = opts.includes(repeatVal) ? repeatVal : '10';
+        }
+    }
+
+    // Auto-repeat dropdown listener
+    const brollAutoRepeatSel = document.getElementById('broll-auto-repeat');
+    if (brollAutoRepeatSel) {
+        brollAutoRepeatSel.addEventListener('change', (e) => {
+            const item = state.brollOverlays.find(b => b.id === state.selectedBrollId);
+            if (item) {
+                item.autoRepeatSec = parseFloat(e.target.value) || 0;
+                drawFrame();
+                if (window.triggerAutoSave) window.triggerAutoSave();
+            }
+        });
     }
 
     if (brollAnimStyleSelect) {
@@ -13539,7 +13749,14 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
         if (item.builtInType === 'wings-brand') {
-            drawWingsBrandBroll(ctx, item, x, y, width, height, elapsed);
+            // Auto-repeat: if autoRepeatSec > 0, replay animation every N seconds
+            // so the logo stays visually alive for the whole duration of the B-roll.
+            const repeatSec = parseFloat(item.autoRepeatSec);
+            let effectiveElapsed = elapsed;
+            if (repeatSec > 0) {
+                effectiveElapsed = elapsed % repeatSec;
+            }
+            drawWingsBrandBroll(ctx, item, x, y, width, height, effectiveElapsed);
             return;
         }
 
