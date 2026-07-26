@@ -2982,6 +2982,14 @@ document.addEventListener('DOMContentLoaded', () => {
         return !item.clipId || item.clipId === state.activeClipId;
     }
 
+    // Text overlays must be local to the clip they were created on too —
+    // otherwise a text set on image 1 leaks into every other clip's preview
+    // and export, since they all share the same currentTime range.
+    function textOverlayBelongsToActiveClip(item) {
+        return !item.clipId || item.clipId === state.activeClipId;
+    }
+    window.textOverlayBelongsToActiveClip = textOverlayBelongsToActiveClip;
+
     function refreshAnimatedGifPreview() {
         const hasVisibleGif = state.brollOverlays.some((item) => {
             if (item.type !== 'gif' || !item.imageImg) return false;
@@ -6293,6 +6301,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (state.textOverlays && state.textOverlays.length > 0) {
             const currentTime = state.currentTime;
             state.textOverlays.forEach((item) => {
+                if (!textOverlayBelongsToActiveClip(item)) return;
                 const isSelectedAndEditing = (state.currentStep === 3 && !state.isPlaying && item.id === state.selectedTextOverlayId);
                 const isVisible = isSelectedAndEditing
                     ? true
@@ -8733,6 +8742,7 @@ document.addEventListener('DOMContentLoaded', () => {
         // Search topmost (last drawn) first
         for (let i = state.textOverlays.length - 1; i >= 0; i--) {
             const item = state.textOverlays[i];
+            if (!textOverlayBelongsToActiveClip(item)) continue;
             // In overlay-edit mode the selected text is intentionally shown even
             // outside its playback range. Keep the hit-test in sync with that
             // rendering rule so the image beneath it cannot capture the drag.
@@ -10393,6 +10403,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         const newItem = {
             id: textOverlayIdCounter++,
+            clipId: state.activeClipId,
             text: text,
             x: 0.5,
             y: 0.5,
@@ -10421,7 +10432,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function renderTextOverlayList() {
         textOverlayListEl.innerHTML = '';
-        state.textOverlays.forEach((item) => {
+        state.textOverlays.filter(textOverlayBelongsToActiveClip).forEach((item) => {
             const row = document.createElement('div');
             row.className = 'text-overlay-list-item' + (item.id === state.selectedTextOverlayId ? ' active' : '');
             row.style.display = 'flex';

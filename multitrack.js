@@ -1079,11 +1079,6 @@
         var body = document.createElement('div');
         body.className = 'card-body';
 
-        var help = document.createElement('p');
-        help.className = 'help-text';
-        help.innerText = 'মূল ক্লিপ টাইমলাইনের পাশাপাশি আলাদা ভিডিও/ইমেজ/অডিও ট্র্যাক এখানে সাজানো যায় — ড্র্যাগ করে পজিশন ঠিক করুন, ডান পাশ টেনে ট্রিম করুন। এই ট্র্যাকগুলো লাইভ প্রিভিউ ক্যানভাসে দেখা যায় এবং সাউন্ড ট্র্যাকও প্রিভিউতে বাজে, এক্সপোর্ট করা ভিডিওতেও যুক্ত হয় (ভিডিও/ইমেজ ট্র্যাক ফ্রেমে বসে, ভিডিও/অডিও ট্র্যাকের সাউন্ড এক্সপোর্ট অডিও মিক্সে যোগ হয়) — পরে যোগ করা ট্র্যাক আগেরটার উপরে বসে (Premiere/CapCut-এর V1/V2 কনভেনশন)। স্ট্যাকিং অর্ডার ঠিক করা হয়েছে: এখন থেকে এই ট্র্যাকগুলো মূল ভিডিওর উপরে কিন্তু ক্যাপশন/টেক্সট/স্টিকার/সিম্বল ওভারলের নিচে বসে (প্রিভিউ ও এক্সপোর্ট দুই জায়গাতেই) — তাই এগুলো আর ক্যাপশন ঢেকে দেয় না।';
-        body.appendChild(help);
-
         var addRow = document.createElement('div');
         styleEl(addRow, { display: 'flex', gap: '6px', marginBottom: '10px' });
         [['video', 'Video Track'], ['image', 'Image Track'], ['audio', 'Audio Track']].forEach(function (pair) {
