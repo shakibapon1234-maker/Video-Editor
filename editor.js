@@ -7540,7 +7540,10 @@ document.addEventListener('DOMContentLoaded', () => {
         const currentTime = state.currentTime || 0;
         for (let i = state.brollOverlays.length - 1; i >= 0; i--) {
             const item = state.brollOverlays[i];
-            if (item.type !== 'text' && item.type !== 'cash' && item.type !== 'built-in' && !item.imageImg) continue;
+            // GIF B-roll is decoded into `gifParsed` instead of an HTMLImageElement.
+            // It still draws on the canvas and must therefore be selectable before
+            // the underlying image clip gets a chance to start its own drag.
+            if (item.type !== 'text' && item.type !== 'cash' && item.type !== 'built-in' && !item.imageImg && !item.gifParsed) continue;
 
             const isBeingEdited = state.currentStep === 3 && !state.isPlaying && item.id === state.selectedBrollId;
             const visible = brollBelongsToActiveClip(item) &&
@@ -8462,7 +8465,11 @@ document.addEventListener('DOMContentLoaded', () => {
         // Search topmost (last drawn) first
         for (let i = state.textOverlays.length - 1; i >= 0; i--) {
             const item = state.textOverlays[i];
-            if (now < (item.startSec || 0) || now > (item.endSec || 0)) continue;
+            // In overlay-edit mode the selected text is intentionally shown even
+            // outside its playback range. Keep the hit-test in sync with that
+            // rendering rule so the image beneath it cannot capture the drag.
+            const isBeingEdited = state.currentStep === 3 && !state.isPlaying && item.id === state.selectedTextOverlayId;
+            if (!isBeingEdited && (now < (item.startSec || 0) || now > (item.endSec || 0))) continue;
             const tx = item.x * canvasW;
             const ty = item.y * canvasH;
             state.ctx.font = `bold ${item.fontSize}px "${item.font}", "Plus Jakarta Sans", sans-serif`;
