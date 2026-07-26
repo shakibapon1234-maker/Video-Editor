@@ -1140,6 +1140,8 @@ window.VideoEditor = {
     isResizingTextOverlay: false,
     textOverlayResizeStartX: 0,
     textOverlayResizeStartFontSize: 32,
+    textOverlayResizeStartScale: 1,
+    textOverlayResizeStartDistance: 1,
     dragTextOffsetX: 0,
     dragTextOffsetY: 0,
 
@@ -7264,6 +7266,32 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
 
+        // Text overlay rotate/resize controls must be tested before the overlay body.
+        // Otherwise a click on a visible control falls through to the image clip below.
+        if (state.currentStep === 3 && state.selectedTextOverlayId !== null) {
+            const selectedText = state.textOverlays.find(t => t.id === state.selectedTextOverlayId);
+            if (selectedText && findTextOverlayRotateHandle(coords)) {
+                if (window.captureUndoCheckpoint) window.captureUndoCheckpoint();
+                const box = getTextOverlayBox(selectedText);
+                state.isRotatingTextOverlay = true;
+                state.textOverlayRotateStartAngle = Math.atan2(coords.y - box.cy, coords.x - box.cx) * 180 / Math.PI;
+                state.textOverlayRotateStartRotation = selectedText.rotation || 0;
+                e.preventDefault();
+                return;
+            }
+            if (selectedText && findTextOverlayResizeHandle(coords)) {
+                if (window.captureUndoCheckpoint) window.captureUndoCheckpoint();
+                state.isResizingTextOverlay = true;
+                state.textOverlayResizeStartX = coords.x;
+                state.textOverlayResizeStartFontSize = selectedText.fontSize || 32;
+                state.textOverlayResizeStartScale = Math.max(0.05, Number(selectedText.scale) || 1);
+                const box = getTextOverlayBox(selectedText);
+                state.textOverlayResizeStartDistance = Math.max(1, Math.hypot(coords.x - box.cx, coords.y - box.cy));
+                e.preventDefault();
+                return;
+            }
+        }
+
         // Text overlay drag/select (Phase 2C) — checked last so logo/crop take priority
         if (state.textOverlays && state.textOverlays.length > 0) {
             const hit = findTextOverlayAt(coords);
@@ -8458,9 +8486,49 @@ document.addEventListener('DOMContentLoaded', () => {
         return Math.abs(coords.x - handleX) <= pad && Math.abs(coords.y - handleY) <= pad;
     }
 
-    function findTextOverlayAt(coords) {
+    function getTextOverlayBox(item) {
         const canvasW = state.canvas.width;
         const canvasH = state.canvas.height;
+        state.ctx.font = `bold ${item.fontSize}px "${item.font || 'Hind Siliguri'}", "Plus Jakarta Sans", sans-serif`;
+        const metrics = state.ctx.measureText(item.text);
+        const boxPadX = Math.max(16, item.fontSize * 0.45);
+        const boxPadY = Math.max(10, item.fontSize * 0.32);
+        let w = metrics.width + boxPadX * 2;
+        let h = item.fontSize + boxPadY * 2;
+        if (item.curve) {
+            const strength = Math.min(1, Math.abs(item.curve) / 100);
+            h += item.fontSize * strength * 0.9;
+            w *= (1 + strength * 0.08);
+        }
+        return { cx: item.x * canvasW, cy: item.y * canvasH, w, h };
+    }
+
+    function findTextOverlayRotateHandle(coords) {
+        const item = state.textOverlays.find(t => t.id === state.selectedTextOverlayId);
+        if (!item) return false;
+        const box = getTextOverlayBox(item);
+        const handleDist = Math.max(28, Math.min(state.canvas.width, state.canvas.height) * 0.05);
+        const scale = Math.max(0.05, Number(item.scale) || 1);
+        const angle = (item.rotation || 0) * Math.PI / 180;
+        const world = rotatePointAround(box.cx, box.cy - (box.h / 2 + handleDist) * scale, box.cx, box.cy, angle);
+        const rect = state.canvas.getBoundingClientRect();
+        const radius = 16 * (state.canvas.width / rect.width);
+        return Math.hypot(coords.x - world.x, coords.y - world.y) < radius;
+    }
+
+    function findTextOverlayResizeHandle(coords) {
+        const item = state.textOverlays.find(t => t.id === state.selectedTextOverlayId);
+        if (!item) return false;
+        const box = getTextOverlayBox(item);
+        const scale = Math.max(0.05, Number(item.scale) || 1);
+        const angle = (item.rotation || 0) * Math.PI / 180;
+        const world = rotatePointAround(box.cx + (box.w / 2) * scale, box.cy + (box.h / 2) * scale, box.cx, box.cy, angle);
+        const rect = state.canvas.getBoundingClientRect();
+        const radius = 16 * (state.canvas.width / rect.width);
+        return Math.hypot(coords.x - world.x, coords.y - world.y) < radius;
+    }
+
+    function findTextOverlayAt(coords) {
         const now = Math.max(0, state.currentTime || 0);
         // Search topmost (last drawn) first
         for (let i = state.textOverlays.length - 1; i >= 0; i--) {
@@ -8470,15 +8538,12 @@ document.addEventListener('DOMContentLoaded', () => {
             // rendering rule so the image beneath it cannot capture the drag.
             const isBeingEdited = state.currentStep === 3 && !state.isPlaying && item.id === state.selectedTextOverlayId;
             if (!isBeingEdited && (now < (item.startSec || 0) || now > (item.endSec || 0))) continue;
-            const tx = item.x * canvasW;
-            const ty = item.y * canvasH;
-            state.ctx.font = `bold ${item.fontSize}px "${item.font}", "Plus Jakarta Sans", sans-serif`;
-            const metrics = state.ctx.measureText(item.text);
-            const isCustomCurve = item.curvePoints && item.curvePoints.length >= 2;
-            const boxW = metrics.width + (isCustomCurve ? 60 : 28);
-            const boxH = item.fontSize + (isCustomCurve ? 60 : 24);
-            if (coords.x >= tx - boxW / 2 && coords.x <= tx + boxW / 2 &&
-                coords.y >= ty - boxH / 2 && coords.y <= ty + boxH / 2) {
+            const box = getTextOverlayBox(item);
+            const scale = Math.max(0.05, Number(item.scale) || 1);
+            const angle = -(item.rotation || 0) * Math.PI / 180;
+            const local = rotatePointAround(coords.x, coords.y, box.cx, box.cy, angle);
+            if (local.x >= box.cx - (box.w * scale) / 2 && local.x <= box.cx + (box.w * scale) / 2 &&
+                local.y >= box.cy - (box.h * scale) / 2 && local.y <= box.cy + (box.h * scale) / 2) {
                 return item;
             }
         }
@@ -8984,6 +9049,39 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
 
+        // Text overlay rotate/resize controls. These run before image-clip drag so
+        // the selected overlay always owns its visible handles.
+        if (state.isRotatingTextOverlay && state.selectedTextOverlayId !== null) {
+            const coords = getCanvasCoords(e);
+            const item = state.textOverlays.find(t => t.id === state.selectedTextOverlayId);
+            if (item) {
+                const box = getTextOverlayBox(item);
+                const currentAngle = Math.atan2(coords.y - box.cy, coords.x - box.cx) * 180 / Math.PI;
+                let rotation = state.textOverlayRotateStartRotation + currentAngle - state.textOverlayRotateStartAngle;
+                if (!e.shiftKey) {
+                    const snapped = Math.round(rotation / 15) * 15;
+                    if (Math.abs(rotation - snapped) < 4) rotation = snapped;
+                }
+                item.rotation = ((rotation % 360) + 360) % 360;
+                drawFrame();
+            }
+            e.preventDefault();
+            return;
+        }
+
+        if (state.isResizingTextOverlay && state.selectedTextOverlayId !== null) {
+            const coords = getCanvasCoords(e);
+            const item = state.textOverlays.find(t => t.id === state.selectedTextOverlayId);
+            if (item) {
+                const box = getTextOverlayBox(item);
+                const currentDist = Math.hypot(coords.x - box.cx, coords.y - box.cy);
+                item.scale = Math.max(0.2, Math.min(5, state.textOverlayResizeStartScale * currentDist / state.textOverlayResizeStartDistance));
+                drawFrame();
+            }
+            e.preventDefault();
+            return;
+        }
+
         // Image clip resize drag (playhead-inserted images / freeze frames).
         // Free resize: each of the 8 handles moves only the edge(s) it sits
         // on, with the opposite edge/corner staying fixed (no aspect lock).
@@ -9385,7 +9483,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         let recordedAction = null;
         if (state.isDraggingLogo || state.isResizingLogo) recordedAction = 'Logo modified';
-        else if (state.isDraggingTextOverlay) recordedAction = 'Text overlay modified';
+        else if (state.isDraggingTextOverlay || state.isResizingTextOverlay || state.isRotatingTextOverlay) recordedAction = 'Text overlay modified';
         else if (state.isDraggingBroll || state.isResizingBroll || state.isRotatingBroll) recordedAction = 'B-roll modified';
         else if (state.isResizingImageClip) recordedAction = 'Image resized';
         else if (state.isDraggingImageClip) recordedAction = 'Image moved';
@@ -9396,6 +9494,8 @@ document.addEventListener('DOMContentLoaded', () => {
         state.isDraggingLogo = false;
         state.isResizingLogo = false;
         state.isDraggingTextOverlay = false;
+        state.isResizingTextOverlay = false;
+        state.isRotatingTextOverlay = false;
         state.isDraggingBroll = false;
         state.isResizingBroll = false;
         state.isRotatingBroll = false;
