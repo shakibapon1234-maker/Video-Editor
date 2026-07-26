@@ -1134,6 +1134,12 @@ window.VideoEditor = {
     textOverlays: [],
     selectedTextOverlayId: null,
     isDraggingTextOverlay: false,
+    isRotatingTextOverlay: false,
+    textOverlayRotateStartAngle: 0,
+    textOverlayRotateStartRotation: 0,
+    isResizingTextOverlay: false,
+    textOverlayResizeStartX: 0,
+    textOverlayResizeStartFontSize: 32,
     dragTextOffsetX: 0,
     dragTextOffsetY: 0,
 
@@ -6103,14 +6109,14 @@ document.addEventListener('DOMContentLoaded', () => {
         // --- Step F: Draw Text Overlays (Phase 2C, extended with box styles/fonts/animation/curve) ---
         if (state.textOverlays && state.textOverlays.length > 0) {
             const currentTime = state.currentTime;
-            const TO_ANIM_DUR = 0.45;
-            const isEditingStill = (state.currentStep === 3 && !state.isPlaying);
             state.textOverlays.forEach((item) => {
-                const isVisible = isEditingStill
+                const isSelectedAndEditing = (state.currentStep === 3 && !state.isPlaying && item.id === state.selectedTextOverlayId);
+                const isVisible = isSelectedAndEditing
                     ? true
                     : (currentTime >= item.startSec && currentTime <= item.endSec);
                 if (!isVisible) return;
 
+                const animDur = item.animSpeedSec !== undefined ? parseFloat(item.animSpeedSec) : 0.5;
                 const tx = item.x * canvasW;
                 const ty = item.y * canvasH;
                 const txScale = item.scale ?? 1;
@@ -6120,8 +6126,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 const curveAmount = item.curve || 0;
                 // Freeze animation to fully-settled while calmly editing in Step 3
                 // so positioning/timing controls aren't fighting a moving target.
+                const isEditingStill = (state.currentStep === 3 && !state.isPlaying);
                 const animStyle = isEditingStill ? 'none' : (item.animStyle || 'none');
-                const anim = getTextOverlayAnimProgress({ ...item, animStyle }, currentTime, TO_ANIM_DUR);
+                const anim = getTextOverlayAnimProgress({ ...item, animStyle }, currentTime, animDur);
                 const eased = easeOutCubicTO(anim.p);
 
                 let animOffX = 0, animOffY = 0, animScale = 1, animRot = 0, animAlpha = 1;
@@ -6203,13 +6210,39 @@ document.addEventListener('DOMContentLoaded', () => {
                     state.ctx.fillText(textToDraw, 0, 0);
                 }
 
-                // Selection box in Step 3 for the active overlay being edited
+                // Selection box + resize & rotate handles in Step 3 for the active text overlay
                 if (state.currentStep === 3 && item.id === state.selectedTextOverlayId) {
                     state.ctx.strokeStyle = 'rgba(79, 70, 229, 0.9)';
                     state.ctx.lineWidth = 2;
                     state.ctx.setLineDash([6, 4]);
                     state.ctx.strokeRect(-boxW / 2, -boxH / 2, boxW, boxH);
                     state.ctx.setLineDash([]);
+
+                    // Resize handle (bottom-right corner)
+                    const cornerSize = 12;
+                    state.ctx.fillStyle = '#ffffff';
+                    state.ctx.fillRect(boxW / 2 - cornerSize / 2, boxH / 2 - cornerSize / 2, cornerSize, cornerSize);
+                    state.ctx.strokeStyle = '#4f46e5';
+                    state.ctx.lineWidth = 2;
+                    state.ctx.strokeRect(boxW / 2 - cornerSize / 2, boxH / 2 - cornerSize / 2, cornerSize, cornerSize);
+
+                    // Rotate handle (circle above top-center with stem line)
+                    const handleDist = Math.max(28, Math.min(canvasW, canvasH) * 0.05);
+                    const stemTopY = -boxH / 2 - handleDist;
+                    state.ctx.beginPath();
+                    state.ctx.moveTo(0, -boxH / 2);
+                    state.ctx.lineTo(0, stemTopY);
+                    state.ctx.strokeStyle = 'rgba(79, 70, 229, 0.9)';
+                    state.ctx.lineWidth = 2;
+                    state.ctx.stroke();
+
+                    state.ctx.beginPath();
+                    state.ctx.arc(0, stemTopY, 8, 0, Math.PI * 2);
+                    state.ctx.fillStyle = '#ffffff';
+                    state.ctx.fill();
+                    state.ctx.strokeStyle = '#4f46e5';
+                    state.ctx.lineWidth = 2;
+                    state.ctx.stroke();
                 }
 
                 state.ctx.restore();
@@ -9898,6 +9931,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const textOverlayBoxColorInput = document.getElementById('text-overlay-boxcolor');
     const textOverlayBoxColorVal = document.getElementById('text-overlay-boxcolor-val');
     const textOverlayAnimSelect = document.getElementById('text-overlay-anim-select');
+    const textOverlayAnimSpeedSlider = document.getElementById('text-overlay-anim-speed');
+    const textOverlayAnimSpeedVal = document.getElementById('text-overlay-anim-speed-val');
     const textOverlayCurveSlider = document.getElementById('text-overlay-curve');
     const textOverlayCurveVal = document.getElementById('text-overlay-curve-val');
     const addTextOverlayBtn = document.getElementById('add-text-overlay-btn');
@@ -9916,6 +9951,18 @@ document.addEventListener('DOMContentLoaded', () => {
             if (item) {
                 item.text = e.target.value;
                 renderTextOverlayList();
+                drawFrame();
+                if (window.triggerAutoSave) window.triggerAutoSave();
+            }
+        });
+    }
+
+    if (textOverlayAnimSpeedSlider) {
+        textOverlayAnimSpeedSlider.addEventListener('input', (e) => {
+            if (textOverlayAnimSpeedVal) textOverlayAnimSpeedVal.innerText = e.target.value + 's';
+            const item = getSelectedTextOverlay();
+            if (item) {
+                item.animSpeedSec = parseFloat(e.target.value);
                 drawFrame();
                 if (window.triggerAutoSave) window.triggerAutoSave();
             }
@@ -10048,6 +10095,7 @@ document.addEventListener('DOMContentLoaded', () => {
             boxStyle: textOverlayBoxSelect.value || 'none',
             boxColor: textOverlayBoxColorInput.value || '#4f46e5',
             animStyle: textOverlayAnimSelect.value || 'none',
+            animSpeedSec: textOverlayAnimSpeedSlider ? parseFloat(textOverlayAnimSpeedSlider.value) || 0.5 : 0.5,
             curve: parseInt(textOverlayCurveSlider.value) || 0,
             curvePoints: [],
             startSec: 0,
@@ -10124,6 +10172,11 @@ document.addEventListener('DOMContentLoaded', () => {
         textOverlayBoxColorInput.value = item.boxColor || '#4f46e5';
         textOverlayBoxColorVal.innerText = item.boxColor || '#4f46e5';
         textOverlayAnimSelect.value = item.animStyle || 'none';
+        if (textOverlayAnimSpeedSlider) {
+            const speed = item.animSpeedSec !== undefined ? item.animSpeedSec : 0.5;
+            textOverlayAnimSpeedSlider.value = speed;
+            if (textOverlayAnimSpeedVal) textOverlayAnimSpeedVal.innerText = speed + 's';
+        }
         textOverlayCurveSlider.value = item.curve || 0;
         textOverlayCurveVal.innerText = item.curve || 0;
         refreshTextOverlayBoxColorVisibility();
