@@ -4132,6 +4132,46 @@ document.addEventListener('DOMContentLoaded', () => {
     // Positive values arch upward in the middle (rainbow/badge look), negative
     // values dip down in the middle (smile/cup look). ctx.font/fillStyle/
     // textAlign/textBaseline must already be set by the caller.
+    // Applies (or clears) the canvas shadow settings used to render a Text
+    // Overlay's shadow/glow effect. When `highlightPass` is true, uses the
+    // (dimmer, opposite-offset) highlight-layer settings instead of the main
+    // shadow settings — used for the "double-layer" bevel/3D-ish look, where a
+    // dark shadow one direction plus a light highlight the opposite direction
+    // gives the illusion of a raised/embossed edge. This is a canvas-based
+    // approximation, not a true 3D extrude/bevel render.
+    function applyTextOverlayShadow(ctx, item, highlightPass) {
+        if (!item || !item.shadowEnabled) {
+            ctx.shadowColor = 'rgba(0,0,0,0)';
+            ctx.shadowBlur = 0;
+            ctx.shadowOffsetX = 0;
+            ctx.shadowOffsetY = 0;
+            return;
+        }
+        const offX = item.shadowOffsetX !== undefined ? item.shadowOffsetX : 3;
+        const offY = item.shadowOffsetY !== undefined ? item.shadowOffsetY : 3;
+        if (highlightPass) {
+            const hlAlpha = Math.max(0, Math.min(1, (item.shadowHighlightOpacity !== undefined ? item.shadowHighlightOpacity : 40) / 100));
+            const hlBlur = Math.max(0, (item.shadowBlur !== undefined ? item.shadowBlur : 8) * 0.7);
+            ctx.shadowColor = hexToRgba(item.shadowHighlightColor || '#ffffff', hlAlpha);
+            ctx.shadowBlur = hlBlur;
+            ctx.shadowOffsetX = -offX;
+            ctx.shadowOffsetY = -offY;
+        } else {
+            const alpha = Math.max(0, Math.min(1, (item.shadowOpacity !== undefined ? item.shadowOpacity : 60) / 100));
+            ctx.shadowColor = hexToRgba(item.shadowColor || '#000000', alpha);
+            ctx.shadowBlur = item.shadowBlur !== undefined ? item.shadowBlur : 8;
+            ctx.shadowOffsetX = offX;
+            ctx.shadowOffsetY = offY;
+        }
+    }
+
+    function resetTextOverlayShadow(ctx) {
+        ctx.shadowColor = 'rgba(0,0,0,0)';
+        ctx.shadowBlur = 0;
+        ctx.shadowOffsetX = 0;
+        ctx.shadowOffsetY = 0;
+    }
+
     function drawCurvedTextOverlay(ctx, text, curveAmount, strokeColor, strokeWidth) {
         const strength = Math.min(1, Math.abs(curveAmount) / 100);
         if (strength <= 0.001 || !text) {
@@ -6573,23 +6613,34 @@ document.addEventListener('DOMContentLoaded', () => {
 
                 const fontFamily = item.font || 'Hind Siliguri';
                 state.ctx.font = `bold ${item.fontSize}px "${fontFamily}", "Plus Jakarta Sans", sans-serif`;
-                state.ctx.fillStyle = item.color;
                 state.ctx.textAlign = 'center';
                 state.ctx.textBaseline = 'middle';
                 const outlineWidth = Math.max(2, item.fontSize * 0.08);
                 const outlineColor = 'rgba(0,0,0,0.55)';
 
-                // Box sizing estimate (straight-line metrics, widened a bit if curved).
-                const metrics = state.ctx.measureText(item.text);
+                const isCurvedNow = !!(curveAmount || (item.curvePoints && item.curvePoints.length >= 2) ||
+                    (state.isDrawingTextCurve && state.textCurvePoints && state.textCurvePoints.length >= 2));
                 const boxPadX = Math.max(16, item.fontSize * 0.45);
                 const boxPadY = Math.max(10, item.fontSize * 0.32);
-                let boxW = metrics.width + boxPadX * 2;
-                let boxH = item.fontSize + boxPadY * 2;
-                if (curveAmount) {
+                let boxW, boxH, overlayLines = null, lineHeight = 0;
+
+                if (isCurvedNow) {
+                    // Curved text stays single-line (box sizing estimate, straight-line metrics).
+                    const metrics = state.ctx.measureText(item.text);
+                    boxW = metrics.width + boxPadX * 2;
+                    boxH = item.fontSize + boxPadY * 2;
                     const strength = Math.min(1, Math.abs(curveAmount) / 100);
                     boxH += item.fontSize * strength * 0.9;
                     boxW *= (1 + strength * 0.08);
+                } else {
+                    const layout = getTextOverlayLines(state.ctx, item);
+                    overlayLines = layout.lines;
+                    lineHeight = layout.lineHeight;
+                    boxW = layout.maxWidth + boxPadX * 2;
+                    boxH = overlayLines.length * lineHeight + boxPadY * 2;
                 }
+
+                state.ctx.fillStyle = getTextOverlayFillStyle(state.ctx, item, boxW, boxH);
 
                 if (item.boxStyle && item.boxStyle !== 'none') {
                     drawTextOverlayBox(state.ctx, item.boxStyle, item.boxColor || '#4f46e5', boxW, boxH, currentTime);
@@ -6603,21 +6654,50 @@ document.addEventListener('DOMContentLoaded', () => {
                     textToDraw = item.text.slice(0, revealCount);
                 }
 
-                if (curveAmount && !(item.curvePoints && item.curvePoints.length >= 2) && !(state.isDrawingTextCurve && state.textCurvePoints && state.textCurvePoints.length >= 2)) {
-                    drawCurvedTextOverlay(state.ctx, textToDraw, curveAmount, outlineColor, outlineWidth);
-                } else if ((item.curvePoints && item.curvePoints.length >= 2) || (state.isDrawingTextCurve && state.textCurvePoints && state.textCurvePoints.length >= 2)) {
-                    var activeCurvePoints = (state.isDrawingTextCurve && state.textCurvePoints && state.textCurvePoints.length >= 2) ? state.textCurvePoints : item.curvePoints;
-                    drawCustomCurveTextOverlay(state.ctx, textToDraw, activeCurvePoints, outlineColor, outlineWidth);
-                } else if (animStyle === 'letter-cascade' && anim.phase !== 'settled') {
-                    drawTextOverlayStaggered(state.ctx, textToDraw, 'letter', anim.p, outlineColor, outlineWidth);
-                } else if (animStyle === 'word-stagger' && anim.phase !== 'settled') {
-                    drawTextOverlayStaggered(state.ctx, textToDraw, 'word', anim.p, outlineColor, outlineWidth);
-                } else {
-                    state.ctx.lineWidth = outlineWidth;
-                    state.ctx.strokeStyle = outlineColor;
-                    state.ctx.strokeText(textToDraw, 0, 0);
-                    state.ctx.fillText(textToDraw, 0, 0);
+                // Renders the caption once (curved / custom-curve / staggered / default
+                // straight-line path, whichever applies) using whatever ctx.shadow*
+                // settings are currently active — called once for a normal shadow, or
+                // twice (highlight pass + main pass) for the double-layer bevel look.
+                const drawTextOverlayContentOnce = () => {
+                    if (curveAmount && !(item.curvePoints && item.curvePoints.length >= 2) && !(state.isDrawingTextCurve && state.textCurvePoints && state.textCurvePoints.length >= 2)) {
+                        drawCurvedTextOverlay(state.ctx, textToDraw.replace(/\r?\n/g, ' '), curveAmount, outlineColor, outlineWidth);
+                    } else if ((item.curvePoints && item.curvePoints.length >= 2) || (state.isDrawingTextCurve && state.textCurvePoints && state.textCurvePoints.length >= 2)) {
+                        var activeCurvePoints = (state.isDrawingTextCurve && state.textCurvePoints && state.textCurvePoints.length >= 2) ? state.textCurvePoints : item.curvePoints;
+                        drawCustomCurveTextOverlay(state.ctx, textToDraw.replace(/\r?\n/g, ' '), activeCurvePoints, outlineColor, outlineWidth);
+                    } else if (animStyle === 'letter-cascade' && anim.phase !== 'settled') {
+                        drawTextOverlayStaggered(state.ctx, textToDraw.replace(/\r?\n/g, ' '), 'letter', anim.p, outlineColor, outlineWidth);
+                    } else if (animStyle === 'word-stagger' && anim.phase !== 'settled') {
+                        drawTextOverlayStaggered(state.ctx, textToDraw.replace(/\r?\n/g, ' '), 'word', anim.p, outlineColor, outlineWidth);
+                    } else {
+                        // Default (straight, non-staggered) path: draw every manual line of
+                        // the caption, vertically centered as a block around the box origin.
+                        const drawLines = textToDraw.split(/\r?\n/);
+                        const blockH = drawLines.length * lineHeight;
+                        const startY = -blockH / 2 + lineHeight / 2;
+                        state.ctx.lineWidth = outlineWidth;
+                        state.ctx.strokeStyle = outlineColor;
+                        drawLines.forEach((lineStr, li) => {
+                            const ly = startY + li * lineHeight;
+                            state.ctx.strokeText(lineStr, 0, ly);
+                            state.ctx.fillText(lineStr, 0, ly);
+                        });
+                    }
+                };
+
+                // Text Shadow / Glow (with optional double-layer bevel illusion): a
+                // dim highlight-colored duplicate offset one way, then the real text
+                // with its dark shadow offset the opposite way drawn on top — the
+                // opposite-direction offsets are what read as a raised/embossed edge.
+                if (item.shadowEnabled && item.shadowDoubleLayer) {
+                    state.ctx.save();
+                    state.ctx.globalAlpha *= 0.92;
+                    applyTextOverlayShadow(state.ctx, item, true);
+                    drawTextOverlayContentOnce();
+                    state.ctx.restore();
                 }
+                applyTextOverlayShadow(state.ctx, item, false);
+                drawTextOverlayContentOnce();
+                resetTextOverlayShadow(state.ctx);
 
                 // Selection box + resize & rotate handles in Step 3 for the active text overlay
                 if (state.currentStep === 3 && item.id === state.selectedTextOverlayId) {
@@ -8924,19 +9004,71 @@ document.addEventListener('DOMContentLoaded', () => {
         return Math.abs(coords.x - handleX) <= pad && Math.abs(coords.y - handleY) <= pad;
     }
 
+    // A Text Overlay's text can now contain manual line breaks (multi-line
+    // captions, e.g. splitting one long point into 2–3 shorter lines for
+    // readability). Curved text (curve slider or custom drawn curve) and the
+    // per-character/word stagger animations still operate on a single line
+    // (multi-line + curved-path text is a much more complex layout problem),
+    // so this helper is only consulted for the "straight" rendering path —
+    // callers fall back to the old single-line behaviour when a curve is active.
+    function getTextOverlayLines(ctx, item) {
+        const raw = String(item.text || '');
+        const lines = raw.split(/\r?\n/);
+        const lineHeight = (item.fontSize || 32) * 1.25;
+        let maxWidth = 0;
+        lines.forEach((line) => {
+            const w = ctx.measureText(line).width;
+            if (w > maxWidth) maxWidth = w;
+        });
+        return { lines, lineHeight, maxWidth };
+    }
+
+    // Builds a solid-color or gradient fillStyle for a Text Overlay, sized to
+    // the item's own text box (in the local/rotated coordinate space, where
+    // (0,0) is the box's own center since the caller has already translated
+    // there). Gradient direction is user-selectable: left→right, top→bottom,
+    // or a corner-to-corner diagonal — this covers the common "two-tone
+    // caption" look (e.g. green→yellow) without needing a full color-stop editor.
+    function getTextOverlayFillStyle(ctx, item, boxW, boxH) {
+        if (item.colorMode === 'gradient' && item.gradientColor1 && item.gradientColor2) {
+            const w2 = Math.max(1, boxW) / 2;
+            const h2 = Math.max(1, boxH) / 2;
+            let grad;
+            if (item.gradientDirection === 'vertical') {
+                grad = ctx.createLinearGradient(0, -h2, 0, h2);
+            } else if (item.gradientDirection === 'diagonal') {
+                grad = ctx.createLinearGradient(-w2, -h2, w2, h2);
+            } else {
+                grad = ctx.createLinearGradient(-w2, 0, w2, 0);
+            }
+            grad.addColorStop(0, item.gradientColor1);
+            grad.addColorStop(1, item.gradientColor2);
+            return grad;
+        }
+        return item.color;
+    }
+
     function getTextOverlayBox(item) {
         const canvasW = state.canvas.width;
         const canvasH = state.canvas.height;
         state.ctx.font = `bold ${item.fontSize}px "${item.font || 'Hind Siliguri'}", "Plus Jakarta Sans", sans-serif`;
-        const metrics = state.ctx.measureText(item.text);
         const boxPadX = Math.max(16, item.fontSize * 0.45);
         const boxPadY = Math.max(10, item.fontSize * 0.32);
-        let w = metrics.width + boxPadX * 2;
-        let h = item.fontSize + boxPadY * 2;
-        if (item.curve) {
-            const strength = Math.min(1, Math.abs(item.curve) / 100);
+        const isCurved = !!item.curve || (item.curvePoints && item.curvePoints.length >= 2);
+        let w, h;
+        if (isCurved) {
+            // Curved text stays single-line — keep the original straight-line
+            // metrics estimate so curve math elsewhere is unaffected.
+            const metrics = state.ctx.measureText(item.text);
+            w = metrics.width + boxPadX * 2;
+            h = item.fontSize + boxPadY * 2;
+            const strength = Math.min(1, Math.abs(item.curve || 0) / 100);
             h += item.fontSize * strength * 0.9;
             w *= (1 + strength * 0.08);
+        } else {
+            const { lines, lineHeight, maxWidth } = getTextOverlayLines(state.ctx, item);
+            w = maxWidth + boxPadX * 2;
+            h = lines.length * lineHeight + boxPadY * 2;
         }
         return { cx: item.x * canvasW, cy: item.y * canvasH, w, h };
     }
@@ -10488,6 +10620,36 @@ document.addEventListener('DOMContentLoaded', () => {
     const textOverlayEndInput = document.getElementById('text-overlay-end');
     const textOverlayEditInput = document.getElementById('text-overlay-edit-input');
     const deleteTextOverlayBtn = document.getElementById('delete-text-overlay-btn');
+    const textOverlayColorModeSelect = document.getElementById('text-overlay-color-mode');
+    const textOverlayGradientGroup = document.getElementById('text-overlay-gradient-group');
+    const textOverlayGradientColor1 = document.getElementById('text-overlay-gradient-color1');
+    const textOverlayGradientColor1Val = document.getElementById('text-overlay-gradient-color1-val');
+    const textOverlayGradientColor2 = document.getElementById('text-overlay-gradient-color2');
+    const textOverlayGradientColor2Val = document.getElementById('text-overlay-gradient-color2-val');
+    const textOverlayGradientDirectionSelect = document.getElementById('text-overlay-gradient-direction');
+
+    // Shadow / Glow controls (text overlay shadow customization)
+    const textOverlayShadowEnabledToggle = document.getElementById('text-overlay-shadow-enabled');
+    const textOverlayShadowGroup = document.getElementById('text-overlay-shadow-group');
+    const textOverlayShadowColorInput = document.getElementById('text-overlay-shadow-color');
+    const textOverlayShadowColorVal = document.getElementById('text-overlay-shadow-color-val');
+    const textOverlayShadowOpacitySlider = document.getElementById('text-overlay-shadow-opacity');
+    const textOverlayShadowOpacityVal = document.getElementById('text-overlay-shadow-opacity-val');
+    const textOverlayShadowBlurSlider = document.getElementById('text-overlay-shadow-blur');
+    const textOverlayShadowBlurVal = document.getElementById('text-overlay-shadow-blur-val');
+    const textOverlayShadowOffsetXSlider = document.getElementById('text-overlay-shadow-offset-x');
+    const textOverlayShadowOffsetXVal = document.getElementById('text-overlay-shadow-offset-x-val');
+    const textOverlayShadowOffsetYSlider = document.getElementById('text-overlay-shadow-offset-y');
+    const textOverlayShadowOffsetYVal = document.getElementById('text-overlay-shadow-offset-y-val');
+    const textOverlayShadowDoubleLayerToggle = document.getElementById('text-overlay-shadow-double-layer');
+    const textOverlayShadowHighlightGroup = document.getElementById('text-overlay-shadow-highlight-group');
+    const textOverlayShadowHighlightColorInput = document.getElementById('text-overlay-shadow-highlight-color');
+    const textOverlayShadowHighlightColorVal = document.getElementById('text-overlay-shadow-highlight-color-val');
+    const textOverlayShadowHighlightOpacitySlider = document.getElementById('text-overlay-shadow-highlight-opacity');
+    const textOverlayShadowHighlightOpacityVal = document.getElementById('text-overlay-shadow-highlight-opacity-val');
+    const textShadowPresetNormalBtn = document.getElementById('text-shadow-preset-normal');
+    const textShadowPresetGlowBtn = document.getElementById('text-shadow-preset-glow');
+    const textShadowPresetBevelBtn = document.getElementById('text-shadow-preset-bevel');
 
     let textOverlayIdCounter = 1;
 
@@ -10538,6 +10700,161 @@ document.addEventListener('DOMContentLoaded', () => {
         const item = getSelectedTextOverlay();
         if (item) { item.color = e.target.value; drawFrame(); }
     });
+
+    // Solid vs Gradient text color (Phase 1 text upgrade). "Gradient" gives
+    // the two-tone caption look (e.g. green→yellow) requested — the color
+    // sweeps across the text's own bounding box in the chosen direction.
+    function refreshTextOverlayGradientVisibility() {
+        if (!textOverlayGradientGroup || !textOverlayColorModeSelect) return;
+        textOverlayGradientGroup.style.display = (textOverlayColorModeSelect.value === 'gradient') ? 'block' : 'none';
+    }
+    if (textOverlayColorModeSelect) {
+        refreshTextOverlayGradientVisibility();
+        textOverlayColorModeSelect.addEventListener('change', (e) => {
+            refreshTextOverlayGradientVisibility();
+            const item = getSelectedTextOverlay();
+            if (item) { item.colorMode = e.target.value; drawFrame(); if (window.triggerAutoSave) window.triggerAutoSave(); }
+        });
+    }
+    if (textOverlayGradientColor1) {
+        textOverlayGradientColor1.addEventListener('input', (e) => {
+            if (textOverlayGradientColor1Val) textOverlayGradientColor1Val.innerText = e.target.value;
+            const item = getSelectedTextOverlay();
+            if (item) { item.gradientColor1 = e.target.value; drawFrame(); }
+        });
+    }
+    if (textOverlayGradientColor2) {
+        textOverlayGradientColor2.addEventListener('input', (e) => {
+            if (textOverlayGradientColor2Val) textOverlayGradientColor2Val.innerText = e.target.value;
+            const item = getSelectedTextOverlay();
+            if (item) { item.gradientColor2 = e.target.value; drawFrame(); }
+        });
+    }
+    if (textOverlayGradientDirectionSelect) {
+        textOverlayGradientDirectionSelect.addEventListener('change', (e) => {
+            const item = getSelectedTextOverlay();
+            if (item) { item.gradientDirection = e.target.value; drawFrame(); if (window.triggerAutoSave) window.triggerAutoSave(); }
+        });
+    }
+
+    // --- Text Shadow / Glow controls ---
+    // Shows/hides the shadow settings group based on the enable toggle.
+    function refreshTextOverlayShadowVisibility() {
+        if (!textOverlayShadowGroup || !textOverlayShadowEnabledToggle) return;
+        textOverlayShadowGroup.style.display = textOverlayShadowEnabledToggle.checked ? 'block' : 'none';
+    }
+    // Shows/hides the highlight-layer sub-controls based on the double-layer toggle.
+    function refreshTextOverlayShadowHighlightVisibility() {
+        if (!textOverlayShadowHighlightGroup || !textOverlayShadowDoubleLayerToggle) return;
+        textOverlayShadowHighlightGroup.style.display = textOverlayShadowDoubleLayerToggle.checked ? 'block' : 'none';
+    }
+    refreshTextOverlayShadowVisibility();
+    refreshTextOverlayShadowHighlightVisibility();
+
+    if (textOverlayShadowEnabledToggle) {
+        textOverlayShadowEnabledToggle.addEventListener('change', (e) => {
+            refreshTextOverlayShadowVisibility();
+            const item = getSelectedTextOverlay();
+            if (item) { item.shadowEnabled = e.target.checked; drawFrame(); if (window.triggerAutoSave) window.triggerAutoSave(); }
+        });
+    }
+    if (textOverlayShadowColorInput) {
+        textOverlayShadowColorInput.addEventListener('input', (e) => {
+            if (textOverlayShadowColorVal) textOverlayShadowColorVal.innerText = e.target.value;
+            const item = getSelectedTextOverlay();
+            if (item) { item.shadowColor = e.target.value; drawFrame(); }
+        });
+    }
+    if (textOverlayShadowOpacitySlider) {
+        textOverlayShadowOpacitySlider.addEventListener('input', (e) => {
+            if (textOverlayShadowOpacityVal) textOverlayShadowOpacityVal.innerText = e.target.value + '%';
+            const item = getSelectedTextOverlay();
+            if (item) { item.shadowOpacity = parseInt(e.target.value); drawFrame(); }
+        });
+    }
+    if (textOverlayShadowBlurSlider) {
+        textOverlayShadowBlurSlider.addEventListener('input', (e) => {
+            if (textOverlayShadowBlurVal) textOverlayShadowBlurVal.innerText = e.target.value + 'px';
+            const item = getSelectedTextOverlay();
+            if (item) { item.shadowBlur = parseInt(e.target.value); drawFrame(); }
+        });
+    }
+    if (textOverlayShadowOffsetXSlider) {
+        textOverlayShadowOffsetXSlider.addEventListener('input', (e) => {
+            if (textOverlayShadowOffsetXVal) textOverlayShadowOffsetXVal.innerText = e.target.value + 'px';
+            const item = getSelectedTextOverlay();
+            if (item) { item.shadowOffsetX = parseInt(e.target.value); drawFrame(); }
+        });
+    }
+    if (textOverlayShadowOffsetYSlider) {
+        textOverlayShadowOffsetYSlider.addEventListener('input', (e) => {
+            if (textOverlayShadowOffsetYVal) textOverlayShadowOffsetYVal.innerText = e.target.value + 'px';
+            const item = getSelectedTextOverlay();
+            if (item) { item.shadowOffsetY = parseInt(e.target.value); drawFrame(); }
+        });
+    }
+    if (textOverlayShadowDoubleLayerToggle) {
+        textOverlayShadowDoubleLayerToggle.addEventListener('change', (e) => {
+            refreshTextOverlayShadowHighlightVisibility();
+            const item = getSelectedTextOverlay();
+            if (item) { item.shadowDoubleLayer = e.target.checked; drawFrame(); if (window.triggerAutoSave) window.triggerAutoSave(); }
+        });
+    }
+    if (textOverlayShadowHighlightColorInput) {
+        textOverlayShadowHighlightColorInput.addEventListener('input', (e) => {
+            if (textOverlayShadowHighlightColorVal) textOverlayShadowHighlightColorVal.innerText = e.target.value;
+            const item = getSelectedTextOverlay();
+            if (item) { item.shadowHighlightColor = e.target.value; drawFrame(); }
+        });
+    }
+    if (textOverlayShadowHighlightOpacitySlider) {
+        textOverlayShadowHighlightOpacitySlider.addEventListener('input', (e) => {
+            if (textOverlayShadowHighlightOpacityVal) textOverlayShadowHighlightOpacityVal.innerText = e.target.value + '%';
+            const item = getSelectedTextOverlay();
+            if (item) { item.shadowHighlightOpacity = parseInt(e.target.value); drawFrame(); }
+        });
+    }
+
+    // Applies preset values to the shadow controls (and the live-selected item, if any)
+    // so users don't have to manually dial in every slider each time.
+    function applyTextShadowPreset(preset) {
+        const item = getSelectedTextOverlay();
+        const vals = {
+            normal: { color: '#000000', opacity: 55, blur: 6, offX: 3, offY: 3, dbl: false, hlColor: '#ffffff', hlOpacity: 40 },
+            glow:   { color: (item && item.color) || '#facc15', opacity: 90, blur: 20, offX: 0, offY: 0, dbl: false, hlColor: '#ffffff', hlOpacity: 40 },
+            bevel:  { color: '#000000', opacity: 70, blur: 4, offX: 2, offY: 3, dbl: true, hlColor: '#ffffff', hlOpacity: 50 }
+        }[preset];
+        if (!vals) return;
+
+        if (textOverlayShadowEnabledToggle) textOverlayShadowEnabledToggle.checked = true;
+        if (textOverlayShadowColorInput) { textOverlayShadowColorInput.value = vals.color; if (textOverlayShadowColorVal) textOverlayShadowColorVal.innerText = vals.color; }
+        if (textOverlayShadowOpacitySlider) { textOverlayShadowOpacitySlider.value = vals.opacity; if (textOverlayShadowOpacityVal) textOverlayShadowOpacityVal.innerText = vals.opacity + '%'; }
+        if (textOverlayShadowBlurSlider) { textOverlayShadowBlurSlider.value = vals.blur; if (textOverlayShadowBlurVal) textOverlayShadowBlurVal.innerText = vals.blur + 'px'; }
+        if (textOverlayShadowOffsetXSlider) { textOverlayShadowOffsetXSlider.value = vals.offX; if (textOverlayShadowOffsetXVal) textOverlayShadowOffsetXVal.innerText = vals.offX + 'px'; }
+        if (textOverlayShadowOffsetYSlider) { textOverlayShadowOffsetYSlider.value = vals.offY; if (textOverlayShadowOffsetYVal) textOverlayShadowOffsetYVal.innerText = vals.offY + 'px'; }
+        if (textOverlayShadowDoubleLayerToggle) textOverlayShadowDoubleLayerToggle.checked = vals.dbl;
+        if (textOverlayShadowHighlightColorInput) { textOverlayShadowHighlightColorInput.value = vals.hlColor; if (textOverlayShadowHighlightColorVal) textOverlayShadowHighlightColorVal.innerText = vals.hlColor; }
+        if (textOverlayShadowHighlightOpacitySlider) { textOverlayShadowHighlightOpacitySlider.value = vals.hlOpacity; if (textOverlayShadowHighlightOpacityVal) textOverlayShadowHighlightOpacityVal.innerText = vals.hlOpacity + '%'; }
+        refreshTextOverlayShadowVisibility();
+        refreshTextOverlayShadowHighlightVisibility();
+
+        if (item) {
+            item.shadowEnabled = true;
+            item.shadowColor = vals.color;
+            item.shadowOpacity = vals.opacity;
+            item.shadowBlur = vals.blur;
+            item.shadowOffsetX = vals.offX;
+            item.shadowOffsetY = vals.offY;
+            item.shadowDoubleLayer = vals.dbl;
+            item.shadowHighlightColor = vals.hlColor;
+            item.shadowHighlightOpacity = vals.hlOpacity;
+            drawFrame();
+            if (window.triggerAutoSave) window.triggerAutoSave();
+        }
+    }
+    if (textShadowPresetNormalBtn) textShadowPresetNormalBtn.addEventListener('click', () => applyTextShadowPreset('normal'));
+    if (textShadowPresetGlowBtn) textShadowPresetGlowBtn.addEventListener('click', () => applyTextShadowPreset('glow'));
+    if (textShadowPresetBevelBtn) textShadowPresetBevelBtn.addEventListener('click', () => applyTextShadowPreset('bevel'));
 
     textOverlayFontSelect.addEventListener('change', (e) => {
         const item = getSelectedTextOverlay();
@@ -10638,6 +10955,10 @@ document.addEventListener('DOMContentLoaded', () => {
             y: 0.5,
             fontSize: parseInt(textOverlayFontsizeSlider.value),
             color: textOverlayColorInput.value,
+            colorMode: (textOverlayColorModeSelect && textOverlayColorModeSelect.value) || 'solid',
+            gradientColor1: (textOverlayGradientColor1 && textOverlayGradientColor1.value) || '#22d3ee',
+            gradientColor2: (textOverlayGradientColor2 && textOverlayGradientColor2.value) || '#a855f7',
+            gradientDirection: (textOverlayGradientDirectionSelect && textOverlayGradientDirectionSelect.value) || 'horizontal',
             font: textOverlayFontSelect.value || 'Hind Siliguri',
             boxStyle: textOverlayBoxSelect.value || 'none',
             boxColor: textOverlayBoxColorInput.value || '#4f46e5',
@@ -10645,6 +10966,15 @@ document.addEventListener('DOMContentLoaded', () => {
             animSpeedSec: textOverlayAnimSpeedSlider ? parseFloat(textOverlayAnimSpeedSlider.value) || 0.5 : 0.5,
             curve: parseInt(textOverlayCurveSlider.value) || 0,
             curvePoints: [],
+            shadowEnabled: textOverlayShadowEnabledToggle ? !!textOverlayShadowEnabledToggle.checked : false,
+            shadowColor: (textOverlayShadowColorInput && textOverlayShadowColorInput.value) || '#000000',
+            shadowOpacity: textOverlayShadowOpacitySlider ? parseInt(textOverlayShadowOpacitySlider.value) : 60,
+            shadowBlur: textOverlayShadowBlurSlider ? parseInt(textOverlayShadowBlurSlider.value) : 8,
+            shadowOffsetX: textOverlayShadowOffsetXSlider ? parseInt(textOverlayShadowOffsetXSlider.value) : 3,
+            shadowOffsetY: textOverlayShadowOffsetYSlider ? parseInt(textOverlayShadowOffsetYSlider.value) : 3,
+            shadowDoubleLayer: textOverlayShadowDoubleLayerToggle ? !!textOverlayShadowDoubleLayerToggle.checked : false,
+            shadowHighlightColor: (textOverlayShadowHighlightColorInput && textOverlayShadowHighlightColorInput.value) || '#ffffff',
+            shadowHighlightOpacity: textOverlayShadowHighlightOpacitySlider ? parseInt(textOverlayShadowHighlightOpacitySlider.value) : 40,
             startSec: 0,
             endSec: Math.max(1, state.duration || 5)
         };
@@ -10714,6 +11044,11 @@ document.addEventListener('DOMContentLoaded', () => {
         textOverlayFontsizeVal.innerText = item.fontSize + 'px';
         textOverlayColorInput.value = item.color;
         textOverlayColorVal.innerText = item.color;
+        if (textOverlayColorModeSelect) textOverlayColorModeSelect.value = item.colorMode || 'solid';
+        if (textOverlayGradientColor1) { textOverlayGradientColor1.value = item.gradientColor1 || '#22d3ee'; if (textOverlayGradientColor1Val) textOverlayGradientColor1Val.innerText = textOverlayGradientColor1.value; }
+        if (textOverlayGradientColor2) { textOverlayGradientColor2.value = item.gradientColor2 || '#a855f7'; if (textOverlayGradientColor2Val) textOverlayGradientColor2Val.innerText = textOverlayGradientColor2.value; }
+        if (textOverlayGradientDirectionSelect) textOverlayGradientDirectionSelect.value = item.gradientDirection || 'horizontal';
+        refreshTextOverlayGradientVisibility();
         textOverlayFontSelect.value = item.font || 'Hind Siliguri';
         textOverlayBoxSelect.value = item.boxStyle || 'none';
         textOverlayBoxColorInput.value = item.boxColor || '#4f46e5';
@@ -10727,6 +11062,20 @@ document.addEventListener('DOMContentLoaded', () => {
         textOverlayCurveSlider.value = item.curve || 0;
         textOverlayCurveVal.innerText = item.curve || 0;
         refreshTextOverlayBoxColorVisibility();
+
+        // Sync Shadow / Glow controls to this item
+        if (textOverlayShadowEnabledToggle) textOverlayShadowEnabledToggle.checked = !!item.shadowEnabled;
+        if (textOverlayShadowColorInput) { textOverlayShadowColorInput.value = item.shadowColor || '#000000'; if (textOverlayShadowColorVal) textOverlayShadowColorVal.innerText = textOverlayShadowColorInput.value; }
+        if (textOverlayShadowOpacitySlider) { const v = item.shadowOpacity !== undefined ? item.shadowOpacity : 60; textOverlayShadowOpacitySlider.value = v; if (textOverlayShadowOpacityVal) textOverlayShadowOpacityVal.innerText = v + '%'; }
+        if (textOverlayShadowBlurSlider) { const v = item.shadowBlur !== undefined ? item.shadowBlur : 8; textOverlayShadowBlurSlider.value = v; if (textOverlayShadowBlurVal) textOverlayShadowBlurVal.innerText = v + 'px'; }
+        if (textOverlayShadowOffsetXSlider) { const v = item.shadowOffsetX !== undefined ? item.shadowOffsetX : 3; textOverlayShadowOffsetXSlider.value = v; if (textOverlayShadowOffsetXVal) textOverlayShadowOffsetXVal.innerText = v + 'px'; }
+        if (textOverlayShadowOffsetYSlider) { const v = item.shadowOffsetY !== undefined ? item.shadowOffsetY : 3; textOverlayShadowOffsetYSlider.value = v; if (textOverlayShadowOffsetYVal) textOverlayShadowOffsetYVal.innerText = v + 'px'; }
+        if (textOverlayShadowDoubleLayerToggle) textOverlayShadowDoubleLayerToggle.checked = !!item.shadowDoubleLayer;
+        if (textOverlayShadowHighlightColorInput) { textOverlayShadowHighlightColorInput.value = item.shadowHighlightColor || '#ffffff'; if (textOverlayShadowHighlightColorVal) textOverlayShadowHighlightColorVal.innerText = textOverlayShadowHighlightColorInput.value; }
+        if (textOverlayShadowHighlightOpacitySlider) { const v = item.shadowHighlightOpacity !== undefined ? item.shadowHighlightOpacity : 40; textOverlayShadowHighlightOpacitySlider.value = v; if (textOverlayShadowHighlightOpacityVal) textOverlayShadowHighlightOpacityVal.innerText = v + '%'; }
+        if (typeof refreshTextOverlayShadowVisibility === 'function') refreshTextOverlayShadowVisibility();
+        if (typeof refreshTextOverlayShadowHighlightVisibility === 'function') refreshTextOverlayShadowHighlightVisibility();
+
         if (window.updateCurveButtonVisibility) window.updateCurveButtonVisibility();
     }
 

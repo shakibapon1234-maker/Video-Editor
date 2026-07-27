@@ -24,7 +24,10 @@
 <body>
     <div class="app-container">
         <!-- Sidebar Navigation / Workflow Tracker -->
-        <aside class="sidebar">
+        <aside class="sidebar" id="app-sidebar">
+            <button id="sidebar-toggle-btn" class="sidebar-toggle-btn" type="button" title="সাইড মেনু বন্ধ/খোলা করুন (Collapse/Expand sidebar)">
+                <i class="fa-solid fa-angles-left"></i>
+            </button>
             <div class="brand">
                 <i class="fa-solid fa-video brand-icon"></i>
                 <div class="brand-text">
@@ -79,12 +82,15 @@
 
         <!-- Main Workspace -->
         <main class="workspace">
-            <header class="workspace-header">
+            <header class="workspace-header" id="app-workspace-header">
                 <div class="header-title">
                     <h1 id="current-step-title">Media Import</h1>
                     <p id="current-step-subtitle">Start by uploading your video clip and branding logo</p>
                 </div>
                 <div class="header-actions">
+                    <button id="floating-transport-toggle-btn" class="btn btn-outline btn-sm floating-transport-toggle-btn" type="button" title="প্লেহেড/প্লেব্যাক কন্ট্রোল আলাদা ভাসমান প্যানেলে বের করুন — যেকোনো জায়গায় বসাতে পারবেন (Detach floating playhead control)">
+                        <i class="fa-solid fa-arrow-up-right-from-square"></i>
+                    </button>
                     <div id="theme-switcher-mount" style="margin-right: 8px;"></div>
                     <div class="history-controls" style="display: flex; align-items: center; gap: 4px; margin-right: 8px;">
                         <button id="undo-btn" class="btn btn-outline btn-sm" type="button" title="Undo (Ctrl+Z)" disabled>
@@ -125,6 +131,10 @@
                     </button>
                 </div>
             </header>
+
+            <button id="header-collapse-toggle" class="header-toggle-tab" type="button" title="উপরের মেনু বার বন্ধ/খোলা করুন (Collapse/Expand top bar)">
+                <i class="fa-solid fa-chevron-up"></i>
+            </button>
 
             <div class="workspace-body">
                 <!-- Preview Panel (Sticky/Always visible on larger screens) -->
@@ -1297,7 +1307,7 @@
 
                                 <div class="control-group">
                                     <label>Text Content</label>
-                                    <input type="text" id="text-overlay-input" class="form-input" placeholder="যেমনঃ আজকের অফার মাত্র ৫০০ টাকা!" maxlength="120">
+                                    <textarea id="text-overlay-input" class="form-input form-textarea" rows="3" maxlength="200" placeholder="যেমনঃ আজকের অফার মাত্র ৫০০ টাকা!&#10;(Enter চেপে একাধিক লাইনে ভাগ করতে পারবেন)"></textarea>
                                 </div>
 
                                 <div class="control-group mt-3">
@@ -1337,6 +1347,33 @@
                                         <input type="color" id="text-overlay-color" value="#ffffff">
                                         <span class="color-value-text" id="text-overlay-color-val">#ffffff</span>
                                     </div>
+                                </div>
+
+                                <div class="control-group mt-3">
+                                    <label>Color Mode (রঙের ধরন)</label>
+                                    <select id="text-overlay-color-mode" class="form-select">
+                                        <option value="solid">Solid Color (একরঙা)</option>
+                                        <option value="gradient">Gradient (গ্রেডিয়েন্ট — দুই রঙের মিশ্রণ)</option>
+                                    </select>
+                                </div>
+
+                                <div class="control-group mt-3" id="text-overlay-gradient-group" style="display:none;">
+                                    <label>Gradient Color 1</label>
+                                    <div class="color-picker-wrapper">
+                                        <input type="color" id="text-overlay-gradient-color1" value="#22d3ee">
+                                        <span class="color-value-text" id="text-overlay-gradient-color1-val">#22d3ee</span>
+                                    </div>
+                                    <label class="mt-2">Gradient Color 2</label>
+                                    <div class="color-picker-wrapper">
+                                        <input type="color" id="text-overlay-gradient-color2" value="#a855f7">
+                                        <span class="color-value-text" id="text-overlay-gradient-color2-val">#a855f7</span>
+                                    </div>
+                                    <label class="mt-2">Direction (দিক)</label>
+                                    <select id="text-overlay-gradient-direction" class="form-select">
+                                        <option value="horizontal">Horizontal (আড়াআড়ি — বাম থেকে ডান)</option>
+                                        <option value="vertical">Vertical (উপর থেকে নিচ)</option>
+                                        <option value="diagonal">Diagonal (কোনাকুনি)</option>
+                                    </select>
                                 </div>
 
                                 <div class="control-group mt-3">
@@ -1409,6 +1446,97 @@
                                 </div>
                                 <p class="help-text mt-1">"Draw Curve" চেপে ক্যানভাসে ক্লিক করলে কার্ভের পয়েন্ট যোগ হবে। আরও ক্লিক করলে কার্ভ ন smoothen হবে। "Clear Curve" চেপে রিসেট করুন।</p>
 
+                                <div class="toggle-control mt-3">
+                                    <div class="toggle-label">
+                                        <h4>Shadow / Glow (শ্যাডো বা গ্লো এফেক্ট)</h4>
+                                    </div>
+                                    <label class="switch">
+                                        <input type="checkbox" id="text-overlay-shadow-enabled">
+                                        <span class="slider round"></span>
+                                    </label>
+                                </div>
+
+                                <div id="text-overlay-shadow-group" style="display:none;">
+                                    <div class="control-group mt-2">
+                                        <label>Preset Style (প্রিসেট স্টাইল)</label>
+                                        <div style="display: flex; gap: 6px; flex-wrap: wrap;">
+                                            <button id="text-shadow-preset-normal" class="btn btn-outline btn-sm" type="button">নরমাল শ্যাডো</button>
+                                            <button id="text-shadow-preset-glow" class="btn btn-outline btn-sm" type="button">গ্লো</button>
+                                            <button id="text-shadow-preset-bevel" class="btn btn-outline btn-sm" type="button">3D-ইশ বেভেল লুক</button>
+                                        </div>
+                                        <p class="help-text mt-1">একটি প্রিসেটে ক্লিক করলে নিচের সব স্লাইডার/কালার একসাথে সেট হয়ে যাবে — চাইলে এরপর ম্যানুয়ালি ফাইন-টিউনও করতে পারবেন।</p>
+                                    </div>
+
+                                    <div class="control-group mt-2">
+                                        <label>Shadow Color (শ্যাডো/গ্লো কালার)</label>
+                                        <div class="color-picker-wrapper">
+                                            <input type="color" id="text-overlay-shadow-color" value="#000000">
+                                            <span class="color-value-text" id="text-overlay-shadow-color-val">#000000</span>
+                                        </div>
+                                    </div>
+
+                                    <div class="control-group mt-2">
+                                        <label>Shadow Opacity / Intensity (তীব্রতা)</label>
+                                        <div class="slider-val-container">
+                                            <input type="range" id="text-overlay-shadow-opacity" min="0" max="100" value="60">
+                                            <span id="text-overlay-shadow-opacity-val">60%</span>
+                                        </div>
+                                    </div>
+
+                                    <div class="control-group mt-2">
+                                        <label>Shadow Blur / Radius (ব্লার রেডিয়াস)</label>
+                                        <div class="slider-val-container">
+                                            <input type="range" id="text-overlay-shadow-blur" min="0" max="50" value="8">
+                                            <span id="text-overlay-shadow-blur-val">8px</span>
+                                        </div>
+                                    </div>
+
+                                    <div class="control-group mt-2">
+                                        <label>Shadow Offset X (কতটা ডানে/বামে)</label>
+                                        <div class="slider-val-container">
+                                            <input type="range" id="text-overlay-shadow-offset-x" min="-30" max="30" value="3">
+                                            <span id="text-overlay-shadow-offset-x-val">3px</span>
+                                        </div>
+                                    </div>
+
+                                    <div class="control-group mt-2">
+                                        <label>Shadow Offset Y (কতটা নিচে/উপরে)</label>
+                                        <div class="slider-val-container">
+                                            <input type="range" id="text-overlay-shadow-offset-y" min="-30" max="30" value="3">
+                                            <span id="text-overlay-shadow-offset-y-val">3px</span>
+                                        </div>
+                                    </div>
+
+                                    <div class="toggle-control mt-2">
+                                        <div class="toggle-label">
+                                            <h4>Double-Layer Shadow</h4>
+                                            <p>ডাবল-লেয়ার শ্যাডো — গাঢ় শ্যাডো + হালকা হাইলাইট একসাথে, বেভেল/3D-র বিভ্রম তৈরি করে</p>
+                                        </div>
+                                        <label class="switch">
+                                            <input type="checkbox" id="text-overlay-shadow-double-layer">
+                                            <span class="slider round"></span>
+                                        </label>
+                                    </div>
+
+                                    <div id="text-overlay-shadow-highlight-group" style="display:none;">
+                                        <div class="control-group mt-2">
+                                            <label>Highlight Color (হাইলাইট লেয়ারের কালার)</label>
+                                            <div class="color-picker-wrapper">
+                                                <input type="color" id="text-overlay-shadow-highlight-color" value="#ffffff">
+                                                <span class="color-value-text" id="text-overlay-shadow-highlight-color-val">#ffffff</span>
+                                            </div>
+                                        </div>
+                                        <div class="control-group mt-2">
+                                            <label>Highlight Opacity (হাইলাইটের তীব্রতা)</label>
+                                            <div class="slider-val-container">
+                                                <input type="range" id="text-overlay-shadow-highlight-opacity" min="0" max="100" value="40">
+                                                <span id="text-overlay-shadow-highlight-opacity-val">40%</span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <p class="help-text mt-1">সীমাবদ্ধতা: এটা আসল Photoshop-স্টাইল 3D extrude/bevel টেক্সট হবে না — ক্যানভাস-ভিত্তিক শ্যাডো লেয়ারিং দিয়ে যতটা কাছাকাছি লুক আনা সমভব, ততটুকু।</p>
+                                </div>
+
                                 <button id="add-text-overlay-btn" class="btn btn-primary mt-3">
                                     <i class="fa-solid fa-plus"></i> Add Text
                                 </button>
@@ -1421,7 +1549,7 @@
                                     <p class="help-text">সিলেক্ট করা টেক্সটের লেখা পরিবর্তন করুন অথবা সময়সীমা নির্ধারণ করুন।</p>
                                     <div class="control-group">
                                         <label>Edit Text (টেক্সট পরিবর্তন করুন)</label>
-                                        <input type="text" id="text-overlay-edit-input" class="form-input" placeholder="টেক্সট পরিবর্তন করুন..." maxlength="120">
+                                        <textarea id="text-overlay-edit-input" class="form-input form-textarea" rows="3" maxlength="200" placeholder="টেক্সট পরিবর্তন করুন... (Enter চেপে নতুন লাইন)"></textarea>
                                     </div>
                                     <div class="control-group mt-2">
                                         <label>Show From (সেকেন্ড)</label>
@@ -3361,6 +3489,31 @@
     <script src="phase9.js?v=4"></script>
     <script src="transitions-library.js?v=1"></script>
     <script src="multitrack.js?v=2"></script>
+    <!-- Floating/Draggable Playhead Control (mirrors main seek bar; can be repositioned anywhere) -->
+    <div class="floating-transport" id="floating-transport">
+        <div class="floating-transport-handle" id="floating-transport-handle">
+            <span class="ft-title"><i class="fa-solid fa-up-down-left-right"></i> প্লেহেড</span>
+            <button class="floating-transport-close" id="floating-transport-close" type="button" title="বন্ধ করুন">
+                <i class="fa-solid fa-xmark"></i>
+            </button>
+        </div>
+        <div class="floating-transport-body">
+            <div class="floating-transport-controls">
+                <button class="ft-play-btn" id="ft-play-btn" type="button">
+                    <i class="fa-solid fa-play" id="ft-play-icon"></i>
+                </button>
+                <span class="ft-time" id="ft-current-time">00:00.0</span>
+                <div class="ft-seek-wrapper">
+                    <div class="ft-seek-track-bg"></div>
+                    <div class="ft-seek-track-fill" id="ft-seek-fill"></div>
+                    <input type="range" id="ft-seek-slider" class="ft-seek-slider" min="0" max="100" value="0" step="0.01">
+                </div>
+                <span class="ft-time" id="ft-total-time">00:00.0</span>
+            </div>
+        </div>
+    </div>
+
     <script src="punch-zoom-ui.js?v=3"></script>
+    <script src="ui-customization.js?v=2"></script>
 </body>
 </html>

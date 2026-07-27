@@ -2811,3 +2811,278 @@ input:checked + .slider:before {
     border-radius: 4px;
     background: #000;
 }
+
+/* ============================================================
+   Panel Customization: Collapsible Sidebar, Collapsible Header,
+   and Floating/Draggable Playhead (Studio Flow layout controls)
+   ============================================================ */
+
+.sidebar {
+    position: relative;
+    transition: width 0.22s ease, padding 0.22s ease;
+}
+
+.sidebar.collapsed {
+    width: 76px;
+    padding: 24px 10px;
+}
+
+.sidebar.collapsed .brand-text,
+.sidebar.collapsed .step-info,
+.sidebar.collapsed .sidebar-footer {
+    display: none;
+}
+
+.sidebar.collapsed .brand {
+    justify-content: center;
+    margin-bottom: 28px;
+}
+
+.sidebar.collapsed .step-item {
+    justify-content: center;
+    padding: 12px 0;
+    gap: 0;
+}
+
+.sidebar-toggle-btn {
+    position: absolute;
+    top: 24px;
+    right: -13px;
+    width: 26px;
+    height: 26px;
+    border-radius: 50%;
+    background: var(--bg-surface-elevated);
+    border: 1px solid var(--border-color);
+    color: var(--text-secondary);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    z-index: 20;
+    font-size: 11px;
+    transition: var(--transition-smooth);
+}
+
+.sidebar-toggle-btn:hover {
+    color: var(--text-primary);
+    border-color: var(--primary);
+}
+
+.sidebar.collapsed .sidebar-toggle-btn i {
+    transform: rotate(180deg);
+}
+
+.workspace {
+    position: relative;
+}
+
+.workspace-header {
+    transition: min-height 0.2s ease, padding 0.2s ease, opacity 0.15s ease;
+    overflow: hidden;
+}
+
+.workspace-header.collapsed {
+    min-height: 0;
+    height: 0;
+    padding-top: 0;
+    padding-bottom: 0;
+    border-bottom: none;
+    opacity: 0;
+    pointer-events: none;
+}
+
+.header-toggle-tab {
+    position: absolute;
+    top: 0;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 46px;
+    height: 16px;
+    background: var(--bg-surface-elevated);
+    border: 1px solid var(--border-color);
+    border-top: none;
+    border-radius: 0 0 8px 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    z-index: 30;
+    color: var(--text-secondary);
+    font-size: 10px;
+    transition: var(--transition-smooth);
+}
+
+.header-toggle-tab:hover {
+    color: var(--text-primary);
+    border-color: var(--primary);
+}
+
+/* --- Floating / Draggable Playhead Widget --- */
+.floating-transport {
+    position: fixed;
+    top: 100px;
+    right: 32px;
+    z-index: 99999;
+    width: 300px;
+    background: var(--bg-surface-glass, rgba(15, 23, 42, 0.92));
+    backdrop-filter: blur(14px);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md, 10px);
+    box-shadow: 0 16px 40px rgba(0,0,0,0.45);
+    display: none;
+    flex-direction: column;
+    overflow: hidden;
+    user-select: none;
+}
+
+.floating-transport.visible {
+    display: flex;
+}
+
+.floating-transport.dragging {
+    opacity: 0.85;
+    box-shadow: 0 20px 50px rgba(0,0,0,0.6);
+}
+
+.floating-transport.just-opened {
+    animation: ftJustOpened 0.9s ease-out;
+}
+
+@keyframes ftJustOpened {
+    0% { box-shadow: 0 0 0 4px rgba(79, 70, 229, 0.55), 0 16px 40px rgba(0,0,0,0.45); }
+    100% { box-shadow: 0 16px 40px rgba(0,0,0,0.45); }
+}
+
+.floating-transport-handle {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 7px 10px;
+    background: var(--bg-surface-elevated);
+    border-bottom: 1px solid var(--border-color);
+    cursor: grab;
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--text-secondary);
+    letter-spacing: 0.3px;
+}
+
+.floating-transport-handle:active {
+    cursor: grabbing;
+}
+
+.floating-transport-handle .ft-title {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.floating-transport-close {
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    border: none;
+    background: transparent;
+    color: var(--text-secondary);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 11px;
+}
+
+.floating-transport-close:hover {
+    color: #ef4444;
+}
+
+.floating-transport-body {
+    padding: 10px 12px 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.floating-transport-controls {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.ft-play-btn {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    background: var(--primary);
+    border: none;
+    color: #fff;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    flex-shrink: 0;
+    font-size: 12px;
+}
+
+.ft-time {
+    font-size: 11px;
+    color: var(--text-secondary);
+    font-variant-numeric: tabular-nums;
+    flex-shrink: 0;
+}
+
+.ft-seek-wrapper {
+    position: relative;
+    flex-grow: 1;
+    height: 6px;
+    display: flex;
+    align-items: center;
+}
+
+.ft-seek-track-bg {
+    position: absolute;
+    left: 0; right: 0;
+    height: 4px;
+    border-radius: 2px;
+    background: rgba(255,255,255,0.12);
+}
+
+.ft-seek-track-fill {
+    position: absolute;
+    left: 0;
+    height: 4px;
+    border-radius: 2px;
+    background: var(--primary);
+    width: 0%;
+    pointer-events: none;
+}
+
+.ft-seek-slider {
+    position: relative;
+    width: 100%;
+    margin: 0;
+    height: 14px;
+    background: transparent;
+    -webkit-appearance: none;
+    cursor: pointer;
+}
+
+.ft-seek-slider::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    background: var(--primary);
+    border: 2px solid #fff;
+    cursor: pointer;
+    margin-top: -1px;
+}
+
+.floating-transport-toggle-btn.active {
+    color: var(--primary) !important;
+    border-color: var(--primary) !important;
+    background: rgba(79, 70, 229, 0.12) !important;
+}
+
+@media (max-width: 900px) {
+    .floating-transport { width: calc(100vw - 24px); right: 12px; left: 12px; }
+}
