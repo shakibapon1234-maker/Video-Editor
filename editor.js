@@ -1724,7 +1724,8 @@ document.addEventListener('DOMContentLoaded', () => {
                     cropX: 0,
                     cropY: 0,
                     cropW: 1,
-                    cropH: 1
+                    cropH: 1,
+                    volume: 1.0  // Per-clip volume multiplier (1.0 = 100%, range 0–2.0)
                 };
                 state.clips = [firstClip];
                 state.activeClipId = firstClip.id;
@@ -3119,7 +3120,8 @@ document.addEventListener('DOMContentLoaded', () => {
                     cropW: 1,
                     cropH: 1,
                     type: 'image',
-                    imageImg: img
+                    imageImg: img,
+                    volume: 1.0  // Per-clip volume multiplier
                 };
                 state.clips.push(newClip);
                 renderClipTimeline();
@@ -3144,7 +3146,8 @@ document.addEventListener('DOMContentLoaded', () => {
                     cropX: 0,
                     cropY: 0,
                     cropW: 1,
-                    cropH: 1
+                    cropH: 1,
+                    volume: 1.0  // Per-clip volume multiplier
                 };
                 state.clips.push(newClip);
                 renderClipTimeline();
@@ -3212,6 +3215,9 @@ document.addEventListener('DOMContentLoaded', () => {
                     playVideo();
                 }
                 state.isClipTransitionInProgress = false;
+
+                // Refresh overlay panels so only this clip's items are shown
+                if (window.refreshOverlayPanels) window.refreshOverlayPanels();
             }, 0);
         } else {
             let isSameSrc = false;
@@ -3241,6 +3247,12 @@ document.addEventListener('DOMContentLoaded', () => {
                 updatePlayhead();
                 updateCropDimensionsDisplay();
                 state.video.playbackRate = Math.max(0.5, Math.min(2, Number(clip.speed) || 1));
+
+                // Apply this clip's per-clip volume to the live audio graph
+                if (window.applyClipVolume) window.applyClipVolume(clip);
+                // Sync the clip-volume slider UI to the newly-active clip
+                if (window.syncClipVolumeUI) window.syncClipVolumeUI(clip);
+
                 drawFrame();
                 renderClipTimeline();
                 if (window.syncPhase9ClipUI) window.syncPhase9ClipUI();
@@ -3250,6 +3262,9 @@ document.addEventListener('DOMContentLoaded', () => {
                     playVideo();
                 }
                 state.isClipTransitionInProgress = false;
+
+                // Refresh overlay panels so only this clip's items are shown
+                if (window.refreshOverlayPanels) window.refreshOverlayPanels();
             };
 
             if (isSameSrc) {
@@ -3462,6 +3477,208 @@ document.addEventListener('DOMContentLoaded', () => {
             applyVideoVolume(parseInt(e.target.value));
         });
     }
+
+    // =========================================================================
+    // CLIP SOUND MATCHING — Per-Clip Volume + Auto Normalize
+    // =========================================================================
+
+    const clipVolumeSlider   = document.getElementById('clip-volume-slider');
+    const clipVolumeVal      = document.getElementById('clip-volume-val');
+    const clipVolumeClipName = document.getElementById('clip-volume-clip-name');
+    const clipVolumeResetBtn    = document.getElementById('clip-volume-reset-btn');
+    const clipVolumeResetAllBtn = document.getElementById('clip-volume-reset-all-btn');
+    const autoMatchSoundBtn     = document.getElementById('auto-match-sound-btn');
+    const autoMatchBtnText      = document.getElementById('auto-match-sound-btn-text');
+
+    /**
+     * Apply a clip's stored volume to the live Web Audio gain node.
+     * Called on clip switch and whenever the slider moves.
+     * Exposed on window so switchActiveClip (above) can call it.
+     */
+    window.applyClipVolume = function applyClipVolume(clip) {
+        if (!clip) return;
+        const clipVol = (clip.volume !== undefined ? clip.volume : 1.0);
+        // Scale: master videoVolume × per-clip volume
+        const effectiveGain = state.videoVolume * clipVol;
+        if (window.videoGainNode) {
+            window.videoGainNode.gain.setValueAtTime(effectiveGain, 0);
+        } else {
+            state.video.volume = Math.min(1.0, effectiveGain);
+        }
+    };
+
+    /**
+     * Sync the clip-volume slider UI to reflect the given clip's stored volume.
+     * Exposed on window so switchActiveClip can call it.
+     */
+    window.syncClipVolumeUI = function syncClipVolumeUI(clip) {
+        if (!clip || !clipVolumeSlider) return;
+        const pct = Math.round((clip.volume !== undefined ? clip.volume : 1.0) * 100);
+        clipVolumeSlider.value = pct;
+        if (clipVolumeVal)  clipVolumeVal.innerText  = pct + '%';
+        if (clipVolumeClipName) {
+            const nm = clip.name || 'ক্লিপ';
+            clipVolumeClipName.innerText = nm.length > 30 ? nm.slice(0, 30) + '…' : nm;
+        }
+    };
+
+    // Manual per-clip slider — update active clip in real time
+    if (clipVolumeSlider) {
+        clipVolumeSlider.addEventListener('input', (e) => {
+            const pct = parseInt(e.target.value);
+            if (clipVolumeVal) clipVolumeVal.innerText = pct + '%';
+            const activeClip = state.clips && state.clips.find(c => c.id === state.activeClipId);
+            if (!activeClip) return;
+            activeClip.volume = pct / 100;
+            window.applyClipVolume(activeClip);
+            if (window.recordEditorHistory) window.recordEditorHistory('Clip volume changed');
+        });
+    }
+
+    // Reset active clip volume to 100%
+    if (clipVolumeResetBtn) {
+        clipVolumeResetBtn.addEventListener('click', () => {
+            const activeClip = state.clips && state.clips.find(c => c.id === state.activeClipId);
+            if (!activeClip) return;
+            activeClip.volume = 1.0;
+            window.applyClipVolume(activeClip);
+            window.syncClipVolumeUI(activeClip);
+            if (window.recordEditorHistory) window.recordEditorHistory('Clip volume reset');
+        });
+    }
+
+    // Reset ALL clips volume to 100%
+    if (clipVolumeResetAllBtn) {
+        clipVolumeResetAllBtn.addEventListener('click', () => {
+            if (!state.clips) return;
+            state.clips.forEach(c => { c.volume = 1.0; });
+            const activeClip = state.clips.find(c => c.id === state.activeClipId);
+            window.applyClipVolume(activeClip);
+            window.syncClipVolumeUI(activeClip);
+            if (window.recordEditorHistory) window.recordEditorHistory('All clip volumes reset');
+        });
+    }
+
+    /**
+     * AUTO MATCH SOUND — Normalizes per-clip volumes so all clips play at
+     * roughly the same perceived loudness.
+     *
+     * Algorithm:
+     *  1. For each video clip that has a File object, decode its audio offline.
+     *  2. Compute the RMS (Root Mean Square) amplitude of the whole clip's
+     *     trimmed audio — this represents perceived loudness.
+     *  3. Find the maximum RMS across all clips (anchor = loudest clip).
+     *  4. Scale each clip's volume so its effective RMS matches the anchor.
+     *     This makes quiet clips louder while the loudest clip stays at its
+     *     current gain.
+     *  5. Cap the resulting gain at 2.0 (200%) to avoid extreme distortion
+     *     on nearly-silent clips.
+     */
+    async function autoMatchSoundLevels() {
+        if (!state.clips || state.clips.length < 2) {
+            alert('সাউন্ড ম্যাচিং করতে কমপক্ষে ২টি ক্লিপ থাকতে হবে।');
+            return;
+        }
+
+        // Only video clips with a real File can be decoded
+        const videoClips = state.clips.filter(c => c.type !== 'image' && c.file);
+        if (videoClips.length < 2) {
+            alert('অডিও বিশ্লেষণের জন্য কমপক্ষে ২টি ভিডিও ক্লিপ (image নয়) থাকতে হবে।');
+            return;
+        }
+
+        // Update button state
+        if (autoMatchBtnText) autoMatchBtnText.textContent = 'বিশ্লেষণ হচ্ছে… (Analyzing…)';
+        if (autoMatchSoundBtn) autoMatchSoundBtn.disabled = true;
+
+        try {
+            const rmsValues = [];
+
+            for (const clip of videoClips) {
+                try {
+                    const arrayBuffer = await clip.file.arrayBuffer();
+                    const decodeCtx = new (window.AudioContext || window.webkitAudioContext)();
+                    const buffer    = await decodeCtx.decodeAudioData(arrayBuffer);
+                    await decodeCtx.close();
+
+                    // Use trim window (clip.start → clip.end) to measure
+                    // only the portion that will actually be exported.
+                    const sampleRate = buffer.sampleRate;
+                    const channels   = buffer.numberOfChannels;
+                    const trimStart  = Math.floor(clip.start * sampleRate);
+                    const trimEnd    = Math.min(buffer.length, Math.ceil(clip.end * sampleRate));
+                    const len        = Math.max(1, trimEnd - trimStart);
+
+                    let sumSq = 0;
+                    for (let ch = 0; ch < channels; ch++) {
+                        const data = buffer.getChannelData(ch);
+                        for (let i = trimStart; i < trimEnd; i++) {
+                            sumSq += data[i] * data[i];
+                        }
+                    }
+                    const rms = Math.sqrt(sumSq / (len * channels));
+                    rmsValues.push({ clip, rms });
+                } catch (decodeErr) {
+                    console.warn('AutoMatch: could not decode clip', clip.name, decodeErr);
+                    rmsValues.push({ clip, rms: 0 });
+                }
+            }
+
+            // Find the maximum (loudest) RMS
+            const maxRms = Math.max(...rmsValues.map(r => r.rms));
+
+            if (maxRms <= 0) {
+                alert('সাউন্ড বিশ্লেষণ করা সম্ভব হয়নি — ক্লিপগুলোতে কোনো অডিও নেই।');
+                return;
+            }
+
+            // Assign per-clip gain so every clip reaches maxRms loudness
+            rmsValues.forEach(({ clip, rms }) => {
+                if (rms > 0) {
+                    const gain = Math.min(2.0, maxRms / rms);  // cap at 200%
+                    clip.volume = Math.round(gain * 100) / 100; // round to 2 dp
+                } else {
+                    clip.volume = 1.0; // can't decode → leave at default
+                }
+            });
+
+            // Refresh the live gain for the currently active clip
+            const activeClip = state.clips.find(c => c.id === state.activeClipId);
+            window.applyClipVolume(activeClip);
+            window.syncClipVolumeUI(activeClip);
+
+            if (window.recordEditorHistory) window.recordEditorHistory('Auto Match Sound applied');
+
+            // Show per-clip summary to the user
+            const summary = rmsValues.map(({ clip, rms }) => {
+                const nm  = clip.name.length > 22 ? clip.name.slice(0, 22) + '…' : clip.name;
+                const vol = Math.round((clip.volume || 1) * 100);
+                return `${nm}: ${vol}%`;
+            }).join('\n');
+            alert('✅ Auto Match Sound সম্পন্ন!\n\n' + summary + '\n\nManual slider দিয়ে যেকোনো ক্লিপের ভলিউম আরও সূক্ষ্মভাবে ঠিক করতে পারবেন।');
+
+        } catch (err) {
+            console.error('Auto Match Sound failed:', err);
+            alert('সাউন্ড ম্যাচিং ব্যর্থ হয়েছে: ' + err.message);
+        } finally {
+            if (autoMatchBtnText) autoMatchBtnText.textContent = 'Auto Match Sound (স্বয়ংক্রিয়ভাবে সমান করুন)';
+            if (autoMatchSoundBtn) autoMatchSoundBtn.disabled = false;
+        }
+    }
+
+    if (autoMatchSoundBtn) {
+        autoMatchSoundBtn.addEventListener('click', autoMatchSoundLevels);
+    }
+
+    // Initialise slider to show active clip's volume on page load
+    (function initClipVolumeUI() {
+        if (!state.clips || !state.clips.length) return;
+        const active = state.clips.find(c => c.id === state.activeClipId) || state.clips[0];
+        if (active) {
+            if (active.volume === undefined) active.volume = 1.0;
+            window.syncClipVolumeUI(active);
+        }
+    })();
 
     // Handle Manual Typing of Trim fields
     startVal.addEventListener('change', () => {
@@ -6478,6 +6695,8 @@ document.addEventListener('DOMContentLoaded', () => {
         // --- Step F2: Draw Sticker/Emoji Overlays (Phase 4A) ---
         if (state.stickers && state.stickers.length > 0) {
             state.stickers.forEach((item) => {
+                // Only render stickers that belong to the currently active clip/layer
+                if (item.clipId && item.clipId !== state.activeClipId) return;
                 const fontSize = canvasW * (item.size / 100);
                 const sx = item.x * canvasW;
                 const sy = item.y * canvasH;
@@ -6524,6 +6743,8 @@ document.addEventListener('DOMContentLoaded', () => {
         if (state.symbolOverlays && state.symbolOverlays.length > 0) {
             const symCurrentTime = state.currentTime;
             state.symbolOverlays.forEach((item) => {
+                // Only render symbols that belong to the currently active clip/layer
+                if (item.clipId && item.clipId !== state.activeClipId) return;
                 const isVisible = (state.currentStep === 3 && !state.isPlaying)
                     ? true
                     : (symCurrentTime >= item.startSec && symCurrentTime <= item.endSec);
@@ -6591,6 +6812,8 @@ document.addEventListener('DOMContentLoaded', () => {
         if (state.shapeOverlays && state.shapeOverlays.length > 0) {
             const shpCurrentTime = state.currentTime;
             state.shapeOverlays.forEach((item) => {
+                // Only render shape overlays that belong to the currently active clip/layer
+                if (item.clipId && item.clipId !== state.activeClipId) return;
                 const isVisible = (state.currentStep === 3 && !state.isPlaying)
                     ? true
                     : (shpCurrentTime >= item.startSec && shpCurrentTime <= item.endSec);
@@ -8059,6 +8282,8 @@ document.addEventListener('DOMContentLoaded', () => {
         const now = Math.max(0, state.currentTime || 0);
         for (let i = state.symbolOverlays.length - 1; i >= 0; i--) {
             const item = state.symbolOverlays[i];
+            // Skip symbols that belong to a different clip/layer
+            if (item.clipId && item.clipId !== state.activeClipId) continue;
             if (now < (item.startSec || 0) || now > (item.endSec || 0)) continue;
             const box = getSymbolBox(item, canvasW, canvasH);
             let testX = coords.x, testY = coords.y;
@@ -8336,6 +8561,8 @@ document.addEventListener('DOMContentLoaded', () => {
         const now = Math.max(0, state.currentTime || 0);
         for (let i = state.shapeOverlays.length - 1; i >= 0; i--) {
             const item = state.shapeOverlays[i];
+            // Skip shape overlays that belong to a different clip/layer
+            if (item.clipId && item.clipId !== state.activeClipId) continue;
             if (now < (item.startSec || 0) || now > (item.endSec || 0)) continue;
             const box = getShapeOverlayBox(item, canvasW, canvasH);
             let testX = coords.x, testY = coords.y;
@@ -8661,6 +8888,8 @@ document.addEventListener('DOMContentLoaded', () => {
         // Search topmost (last drawn / last added) first
         for (let i = state.stickers.length - 1; i >= 0; i--) {
             const item = state.stickers[i];
+            // Skip stickers that belong to a different clip/layer
+            if (item.clipId && item.clipId !== state.activeClipId) continue;
             if (now < (item.startSec || 0) || now > (item.endSec || 0)) continue;
             const box = getStickerBox(item, canvasW, canvasH);
             if (coords.x >= box.cx - box.boxW / 2 && coords.x <= box.cx + box.boxW / 2 &&
@@ -12859,7 +13088,8 @@ document.addEventListener('DOMContentLoaded', () => {
             emoji: emoji,
             x: 0.5,
             y: 0.5,
-            size: 12 // percent of canvas width
+            size: 12, // percent of canvas width
+            clipId: state.activeClipId   // bind to the active layer/clip
         };
         state.stickers.push(newItem);
         state.selectedStickerId = newItem.id;
@@ -12881,7 +13111,9 @@ document.addEventListener('DOMContentLoaded', () => {
     function renderStickerList() {
         if (!stickerListEl) return;
         stickerListEl.innerHTML = '';
-        state.stickers.forEach((item) => {
+        state.stickers
+            .filter(item => !item.clipId || item.clipId === state.activeClipId)
+            .forEach((item) => {
             const row = document.createElement('div');
             row.className = 'sticker-list-item' + (item.id === state.selectedStickerId ? ' active' : '');
             row.style.display = 'flex';
@@ -13008,7 +13240,8 @@ document.addEventListener('DOMContentLoaded', () => {
             rotation: 0,
             color: '#ff3b30',
             startSec: start,
-            endSec: end > start ? end : start + 3
+            endSec: end > start ? end : start + 3,
+            clipId: state.activeClipId   // bind to the active layer/clip
         };
         state.symbolOverlays.push(newItem);
         state.selectedSymbolId = newItem.id;
@@ -13030,7 +13263,9 @@ document.addEventListener('DOMContentLoaded', () => {
     function renderSymbolList() {
         if (!symbolListEl) return;
         symbolListEl.innerHTML = '';
-        state.symbolOverlays.forEach((item) => {
+        state.symbolOverlays
+            .filter(item => !item.clipId || item.clipId === state.activeClipId)
+            .forEach((item) => {
             const row = document.createElement('div');
             row.className = 'sticker-list-item' + (item.id === state.selectedSymbolId ? ' active' : '');
             row.style.display = 'flex';
@@ -13208,7 +13443,8 @@ document.addEventListener('DOMContentLoaded', () => {
             font: 'Hind Siliguri',
             flightPath: isPlane ? 'ltr' : 'static',
             startSec: start,
-            endSec: end > start ? end : start + defaultDur
+            endSec: end > start ? end : start + defaultDur,
+            clipId: state.activeClipId   // bind to the active layer/clip
         };
         state.shapeOverlays.push(newItem);
         state.selectedShapeOverlayId = newItem.id;
@@ -13230,7 +13466,9 @@ document.addEventListener('DOMContentLoaded', () => {
     function renderShapeOverlayList() {
         if (!shapeOverlayListEl) return;
         shapeOverlayListEl.innerHTML = '';
-        state.shapeOverlays.forEach((item) => {
+        state.shapeOverlays
+            .filter(item => !item.clipId || item.clipId === state.activeClipId)
+            .forEach((item) => {
             const row = document.createElement('div');
             row.className = 'sticker-list-item' + (item.id === state.selectedShapeOverlayId ? ' active' : '');
             row.style.display = 'flex';
@@ -13399,6 +13637,30 @@ document.addEventListener('DOMContentLoaded', () => {
     window.onShapeOverlaySelected = function(id) {
         renderShapeOverlayList();
         showShapeOverlayControlsFor(id);
+    };
+
+    // Called whenever the active clip/layer changes so all three overlay panels
+    // refresh and show only the items that belong to the newly active clip.
+    window.refreshOverlayPanels = function() {
+        renderStickerList();
+        renderSymbolList();
+        renderShapeOverlayList();
+        // Hide controls if the previously-selected item belongs to another clip
+        const activeSticker = state.stickers.find(s => s.id === state.selectedStickerId);
+        if (!activeSticker || (activeSticker.clipId && activeSticker.clipId !== state.activeClipId)) {
+            state.selectedStickerId = null;
+            if (stickerControlsContainer) stickerControlsContainer.style.display = 'none';
+        }
+        const activeSymbol = state.symbolOverlays.find(s => s.id === state.selectedSymbolId);
+        if (!activeSymbol || (activeSymbol.clipId && activeSymbol.clipId !== state.activeClipId)) {
+            state.selectedSymbolId = null;
+            if (symbolControlsContainer) symbolControlsContainer.style.display = 'none';
+        }
+        const activeShape = state.shapeOverlays.find(s => s.id === state.selectedShapeOverlayId);
+        if (!activeShape || (activeShape.clipId && activeShape.clipId !== state.activeClipId)) {
+            state.selectedShapeOverlayId = null;
+            if (shapeOverlayControlsContainer) shapeOverlayControlsContainer.style.display = 'none';
+        }
     };
 
     // --- Thumbnail Generator (Phase 5B) ---

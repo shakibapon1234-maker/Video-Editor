@@ -3138,7 +3138,10 @@ document.addEventListener('DOMContentLoaded', () => {
             }
 
             const clipGain = offlineCtx.createGain();
-            clipGain.gain.setValueAtTime(state.videoVolume, 0);
+            // Per-clip volume x master video volume. clip.volume defaults to
+            // 1.0 for clips created before this feature was added.
+            const perClipVol = (clip.volume !== undefined ? clip.volume : 1.0);
+            clipGain.gain.setValueAtTime(state.videoVolume * perClipVol, 0);
 
             // Connect voice changer if enabled on original video
             if (state.applyVoiceChangerToVideo && state.voiceoverProfile && state.voiceoverProfile !== 'none') {
