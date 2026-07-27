@@ -91,6 +91,75 @@
 
     function ve() { return window.VideoEditor || null; }
 
+    // Custom confirm dialog — replaces native confirm() which is unreliable in Electron.
+    // Returns a Promise<boolean>.
+    function mtConfirm(message) {
+        return new Promise(function (resolve) {
+            var overlay = document.createElement('div');
+            overlay.style.cssText = [
+                'position:fixed;inset:0;z-index:999999',
+                'background:rgba(0,0,0,0.55)',
+                'display:flex;align-items:center;justify-content:center'
+            ].join(';');
+
+            var box = document.createElement('div');
+            box.style.cssText = [
+                'background:#1e293b;border:1px solid #334155',
+                'border-radius:10px;padding:24px 28px;min-width:300px;max-width:420px',
+                'box-shadow:0 20px 50px rgba(0,0,0,0.6)',
+                'font-family:inherit;color:#e2e8f0'
+            ].join(';');
+
+            var title = document.createElement('div');
+            title.style.cssText = 'font-size:13px;font-weight:600;margin-bottom:12px;color:#f1f5f9;display:flex;align-items:center;gap:8px';
+            title.innerHTML = '<i class="fa-solid fa-triangle-exclamation" style="color:#f59e0b"></i> নিশ্চিত করুন';
+
+            var msg = document.createElement('p');
+            msg.style.cssText = 'font-size:13px;margin:0 0 20px;line-height:1.6;color:#cbd5e1';
+            msg.innerText = message;
+
+            var btnRow = document.createElement('div');
+            btnRow.style.cssText = 'display:flex;justify-content:flex-end;gap:10px';
+
+            var cancelBtn = document.createElement('button');
+            cancelBtn.innerText = 'বাতিল করুন';
+            cancelBtn.style.cssText = [
+                'padding:7px 16px;border-radius:6px;border:1px solid #475569',
+                'background:transparent;color:#94a3b8;cursor:pointer;font-size:13px'
+            ].join(';');
+
+            var okBtn = document.createElement('button');
+            okBtn.innerText = 'ঠিক আছে (OK)';
+            okBtn.style.cssText = [
+                'padding:7px 16px;border-radius:6px;border:none',
+                'background:#ef4444;color:#fff;cursor:pointer;font-size:13px;font-weight:600'
+            ].join(';');
+
+            var resolved = false;
+            function done(result) {
+                if (resolved) return;  // guard against double-call
+                resolved = true;
+                try { document.body.removeChild(overlay); } catch (e) {}
+                resolve(result);
+            }
+
+            cancelBtn.addEventListener('click', function () { done(false); });
+            okBtn.addEventListener('click', function () { done(true); });
+            overlay.addEventListener('click', function (e) {
+                if (e.target === overlay) done(false);
+            });
+
+            btnRow.appendChild(cancelBtn);
+            btnRow.appendChild(okBtn);
+            box.appendChild(title);
+            box.appendChild(msg);
+            box.appendChild(btnRow);
+            overlay.appendChild(box);
+            document.body.appendChild(overlay);
+            okBtn.focus();
+        });
+    }
+
     function mainTimelineDuration() {
         var state = ve();
         if (!state || !state.clips || !state.clips.length) return Math.max(5, (state && state.duration) || 5);
@@ -675,15 +744,50 @@
     function removeTrack(trackId) {
         var state = ve();
         if (!state || !state.extraTracks) return;
-        if (!confirm('এই ট্র্যাক এবং এর সব ক্লিপ মুছে ফেলতে চান?')) return;
-        var target = state.extraTracks.find(function (t) { return t.id === trackId; });
-        if (target) (target.clips || []).forEach(function (c) {
-            if (c._el) { c._el.pause(); c._el.src = ''; }
-            if (c.id === selectedClipId) selectedClipId = null;
+        mtConfirm('এই ট্র্যাক এবং এর সব ক্লিপ মুছে ফেলতে চান?').then(function (ok) {
+            if (!ok) return;
+            try {
+                var s = ve();
+                if (!s || !s.extraTracks) return;
+
+                // Look up by id string match — guard against type mismatch
+                var tidStr = String(trackId);
+                var target = s.extraTracks.find(function (t) {
+                    return String(t.id) === tidStr;
+                });
+
+                // Clean up audio elements — each step individually guarded so a
+                // stale element from a previous project session cannot abort the deletion.
+                if (target) {
+                    (target.clips || []).forEach(function (c) {
+                        try {
+                            if (c._el) {
+                                c._el.pause();
+                                c._el.src = '';
+                                c._el.load(); // reset pending decode
+                            }
+                        } catch (elErr) {
+                            console.warn('[multitrack] clip element cleanup error (ignored):', elErr);
+                        }
+                        if (c.id === selectedClipId) selectedClipId = null;
+                        // Revoke blob URLs created for this clip so memory is freed
+                        try { if (c.url && c.url.startsWith('blob:')) URL.revokeObjectURL(c.url); } catch (e) {}
+                    });
+                }
+
+                // Remove the track — use String comparison to survive id type drift
+                s.extraTracks = s.extraTracks.filter(function (t) {
+                    return String(t.id) !== tidStr;
+                });
+
+                render();
+                afterChange('Track removed');
+            } catch (err) {
+                console.error('[multitrack] removeTrack failed:', err);
+                // Force a re-render anyway so UI stays consistent with actual state
+                try { render(); } catch (e) {}
+            }
         });
-        state.extraTracks = state.extraTracks.filter(function (t) { return t.id !== trackId; });
-        render();
-        afterChange('Track removed');
     }
 
     // Pauses every extra-track audio/video element that's currently playing,

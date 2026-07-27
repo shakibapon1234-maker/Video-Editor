@@ -3460,11 +3460,16 @@ document.addEventListener('DOMContentLoaded', () => {
         if (videoVolumeValStep2) videoVolumeValStep2.innerText = label;
         if (videoVolumeSliderStep2) videoVolumeSliderStep2.value = newVolumePercent;
 
-        // Apply to video element directly
+        // Apply to gain node, multiplying by the active clip's per-clip volume
+        // so the master slider and per-clip slider both stay in effect together.
+        const activeClip = state.clips && state.clips.find(c => c.id === state.activeClipId);
+        const clipVol = (activeClip && activeClip.volume !== undefined) ? activeClip.volume : 1.0;
+        const effectiveGain = state.videoVolume * clipVol;
         if (window.videoGainNode) {
-            window.videoGainNode.gain.setValueAtTime(state.videoVolume, 0);
+            const ctx = window.videoGainNode.context;
+            window.videoGainNode.gain.setValueAtTime(effectiveGain, ctx ? ctx.currentTime : 0);
         } else {
-            state.video.volume = Math.min(1.0, state.videoVolume);
+            state.video.volume = Math.min(1.0, effectiveGain);
         }
     }
 
@@ -3501,7 +3506,11 @@ document.addEventListener('DOMContentLoaded', () => {
         // Scale: master videoVolume × per-clip volume
         const effectiveGain = state.videoVolume * clipVol;
         if (window.videoGainNode) {
-            window.videoGainNode.gain.setValueAtTime(effectiveGain, 0);
+            const ctx = window.videoGainNode.context;
+            // Use ctx.currentTime (not 0) so the value takes effect immediately
+            // on a running AudioContext. setValueAtTime(val, 0) on an already-running
+            // context sets a past-time event that gets ignored.
+            window.videoGainNode.gain.setValueAtTime(effectiveGain, ctx ? ctx.currentTime : 0);
         } else {
             state.video.volume = Math.min(1.0, effectiveGain);
         }
@@ -3597,9 +3606,13 @@ document.addEventListener('DOMContentLoaded', () => {
             for (const clip of videoClips) {
                 try {
                     const arrayBuffer = await clip.file.arrayBuffer();
-                    const decodeCtx = new (window.AudioContext || window.webkitAudioContext)();
-                    const buffer    = await decodeCtx.decodeAudioData(arrayBuffer);
-                    await decodeCtx.close();
+                    // Use OfflineAudioContext for decoding instead of a real AudioContext.
+                    // Creating many live AudioContexts (one per clip) exhausts the browser
+                    // limit (~6 in Chrome/Electron) and silences all subsequent audio.
+                    const OfflineCtx = window.OfflineAudioContext || window.webkitOfflineAudioContext;
+                    const probe = new OfflineCtx(1, 1, 44100); // 1ch, 1 sample — just for decoding
+                    const buffer = await probe.decodeAudioData(arrayBuffer);
+                    // No need to close — OfflineAudioContext has no system resource limit
 
                     // Use trim window (clip.start → clip.end) to measure
                     // only the portion that will actually be exported.

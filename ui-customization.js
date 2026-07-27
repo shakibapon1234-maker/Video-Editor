@@ -113,23 +113,22 @@
         const realCurrent = document.getElementById('seek-current-time');
         const realTotal = document.getElementById('seek-total-time');
 
-        // Restore saved position (clamped to viewport). IMPORTANT: this must only
-        // ever measure/adjust the panel while it is actually visible — a hidden
-        // (display:none) element reports a 0x0 rect, which previously corrupted
-        // the stored position and pushed the panel off-screen permanently.
+        // Clamp to viewport — call only while panel is visible (hidden elements
+        // report 0x0 and corrupt saved position).
         function clampToViewport() {
             if (!panel.classList.contains('visible')) return;
-            const rect = panel.getBoundingClientRect();
-            const maxLeft = Math.max(8, window.innerWidth - rect.width - 8);
-            const maxTop = Math.max(8, window.innerHeight - rect.height - 8);
+            const panelW = panel.offsetWidth || 310;
+            const panelH = panel.offsetHeight || 80;
+            const maxLeft = Math.max(8, window.innerWidth  - panelW - 8);
+            const maxTop  = Math.max(8, window.innerHeight - panelH - 8);
             let left = parseFloat(panel.style.left);
-            let top = parseFloat(panel.style.top);
-            if (isNaN(left)) left = Math.max(8, window.innerWidth - 332);
-            if (isNaN(top)) top = 100;
+            let top  = parseFloat(panel.style.top);
+            if (!isFinite(left) || left < 0 || left > window.innerWidth)  left = Math.max(8, window.innerWidth  - 332);
+            if (!isFinite(top)  || top  < 0 || top  > window.innerHeight) top  = 110;
             left = Math.min(Math.max(8, left), maxLeft);
-            top = Math.min(Math.max(8, top), maxTop);
-            panel.style.left = left + 'px';
-            panel.style.top = top + 'px';
+            top  = Math.min(Math.max(8, top),  maxTop);
+            panel.style.left  = left + 'px';
+            panel.style.top   = top  + 'px';
             panel.style.right = 'auto';
         }
 
@@ -138,30 +137,37 @@
             toggleBtn.classList.toggle('active', visible);
             try { localStorage.setItem(LS_FT_VISIBLE, visible ? '1' : '0'); } catch (e) {}
             if (visible) {
-                // Wait a frame so the panel has real layout (width/height) before clamping.
-                requestAnimationFrame(clampToViewport);
-            }
-        }
-
-        toggleBtn.addEventListener('click', function (e) {
-            e.stopPropagation();
-            const willOpen = !panel.classList.contains('visible');
-            setVisible(willOpen);
-            if (willOpen) {
-                // Don't wait on layout/rAF for the very first paint — put it
-                // at a guaranteed-visible spot immediately, then let
-                // clampToViewport (already scheduled by setVisible) refine it.
-                if (!panel.style.left && !panel.style.top) {
-                    panel.style.left = Math.max(8, window.innerWidth - 332) + 'px';
-                    panel.style.top = '100px';
+                // Apply a safe default position immediately so the panel is
+                // never invisible, then clamp after layout.
+                const left = parseFloat(panel.style.left);
+                const top  = parseFloat(panel.style.top);
+                const badPos = !isFinite(left) || !isFinite(top)
+                            || left < 0 || left > window.innerWidth
+                            || top  < 0 || top  > window.innerHeight;
+                if (badPos) {
+                    panel.style.left  = Math.max(8, window.innerWidth - 340) + 'px';
+                    panel.style.top   = '110px';
                     panel.style.right = 'auto';
+                    // Wipe stale saved position so next open also starts sane.
+                    try { localStorage.removeItem(LS_FT_POS); } catch (e) {}
                 }
-                // Brief highlight flash so it's unmistakable that something
-                // just appeared, even if it lands near other UI.
+                requestAnimationFrame(function () {
+                    requestAnimationFrame(clampToViewport);
+                });
                 panel.classList.add('just-opened');
                 setTimeout(function () { panel.classList.remove('just-opened'); }, 900);
             }
-        });
+        }
+
+        // Use both click and mousedown so the button responds even if a
+        // parent handler calls stopPropagation on one of them.
+        function onToggle(e) {
+            e.stopPropagation();
+            e.preventDefault();
+            setVisible(!panel.classList.contains('visible'));
+        }
+        toggleBtn.addEventListener('click',     onToggle);
+        toggleBtn.addEventListener('mousedown', function (e) { e.stopPropagation(); });
         if (closeBtn) {
             closeBtn.addEventListener('click', function () { setVisible(false); });
         }

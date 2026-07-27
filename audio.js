@@ -1147,7 +1147,7 @@ document.addEventListener('DOMContentLoaded', () => {
             
             // Create Gain Node for video volume
             videoGainNode = audioCtx.createGain();
-            videoGainNode.gain.setValueAtTime(state.videoVolume, 0);
+            videoGainNode.gain.setValueAtTime(state.videoVolume, audioCtx.currentTime);
             window.videoGainNode = videoGainNode;
 
             // Voice Changer for the original video's own audio. Reuses the exact
