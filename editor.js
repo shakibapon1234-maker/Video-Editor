@@ -3180,6 +3180,12 @@ document.addEventListener('DOMContentLoaded', () => {
         if (playPauseBtnEl) playPauseBtnEl.innerHTML = '<i class="fa-solid fa-play"></i>';
 
         state.activeClipId = clip.id;
+        // Highlights and background fills belong to the selected timeline clip.
+        // Do not leave a selection from the previous clip active: apart from
+        // making the controls misleading, it could let a style edit alter an
+        // item that is no longer visible.
+        state.selectedHighlightId = null;
+        state.selectedFillId = null;
 
         // Load this clip's own crop area (falls back to full-frame if it was created before this feature existed).
         state.cropX = clip.cropX || 0;
@@ -6980,6 +6986,10 @@ document.addEventListener('DOMContentLoaded', () => {
             const canvasW = state.canvas.width;
             const canvasH = state.canvas.height;
             state.fillRegions.forEach(item => {
+                // New fills are tied to a timeline clip.  Keep older projects
+                // (whose fills have no clipId) visible everywhere for backward
+                // compatibility rather than silently losing them.
+                if (item.clipId && item.clipId !== state.activeClipId) return;
                 if (currentTime < item.startSec || currentTime > item.endSec) return;
                 if (item.w <= 0 || item.h <= 0) return;
                 const rx = item.x * canvasW;
@@ -7019,6 +7029,10 @@ document.addEventListener('DOMContentLoaded', () => {
             const hDrawX = hBounds.x, hDrawY = hBounds.y;
             const hDrawW = hBounds.w, hDrawH = hBounds.h;
             state.highlights.forEach((item) => {
+                // A highlight drawn on one video must never carry into another
+                // timeline clip.  Unscoped legacy items retain their previous
+                // project-wide behavior so existing saved projects still open.
+                if (item.clipId && item.clipId !== state.activeClipId) return;
                 if (currentTime < item.startSec || currentTime > item.endSec) return;
                 const x = hDrawX + item.x * hDrawW;
                 const y = hDrawY + item.y * hDrawH;
@@ -7528,6 +7542,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
             // Check if clicking on an existing fill region for drag/resize
             const hitRegion = [...(state.fillRegions || [])].reverse().find(r => {
+                if (r.clipId && r.clipId !== state.activeClipId) return false;
                 if (now < r.startSec || now > r.endSec) return false;
                 const rx = r.x * canvasW, ry = r.y * canvasH;
                 const rw = r.w * canvasW, rh = r.h * canvasH;
@@ -7559,6 +7574,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 id: Date.now(),
                 color: fillColor,
                 opacity: fillOpacity,
+                clipId: state.activeClipId,
                 x: nx, y: ny, w: 0, h: 0,
                 startSec: now,
                 endSec: Math.max(now + 1, state.endTime || state.duration || 5)
@@ -7607,7 +7623,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     if (Math.hypot(startPoint.x - endpoint.x, startPoint.y - endpoint.y) < 0.035) item = selected;
                 }
                 if (!item) {
-                    item = { id: Date.now(), shape, color, lineWidth, fillOpacity, drawDuration, x: startPoint.x, y: startPoint.y, w: 0, h: 0, points: [startPoint], isClosed: false, startSec: now, endSec: Math.max(now + 1, state.endTime || state.duration || 5) };
+                    item = { id: Date.now(), clipId: state.activeClipId, shape, color, lineWidth, fillOpacity, drawDuration, x: startPoint.x, y: startPoint.y, w: 0, h: 0, points: [startPoint], isClosed: false, startSec: now, endSec: Math.max(now + 1, state.endTime || state.duration || 5) };
                     state.highlights.push(item);
                     state.selectedHighlightId = item.id;
                 }
@@ -7621,7 +7637,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 e.preventDefault();
                 return;
             }
-            const item = { id: Date.now(), shape, color, lineWidth, fillOpacity, drawDuration, x: startPoint.x, y: startPoint.y, w: 0, h: 0, points: shape === 'freehand' ? [startPoint] : undefined, isClosed: false, startSec: now, endSec: Math.max(now + 1, state.endTime || state.duration || 5) };
+            const item = { id: Date.now(), clipId: state.activeClipId, shape, color, lineWidth, fillOpacity, drawDuration, x: startPoint.x, y: startPoint.y, w: 0, h: 0, points: shape === 'freehand' ? [startPoint] : undefined, isClosed: false, startSec: now, endSec: Math.max(now + 1, state.endTime || state.duration || 5) };
             state.highlights.push(item);
             state.selectedHighlightId = item.id;
             state.isDrawingNewHighlight = true;
@@ -10459,7 +10475,9 @@ document.addEventListener('DOMContentLoaded', () => {
     const highlightEndInput = document.getElementById('highlight-end');
     const deleteHighlightBtn = document.getElementById('delete-highlight-btn');
 
-    function selectedHighlight() { return state.highlights.find(h => h.id === state.selectedHighlightId); }
+    function selectedHighlight() {
+        return state.highlights.find(h => h.id === state.selectedHighlightId && (!h.clipId || h.clipId === state.activeClipId));
+    }
     function syncSelectedHighlightStyle() {
         const item = selectedHighlight(); if (!item) return;
         item.shape = highlightShapeSelect.value; item.color = highlightColorInput.value;
@@ -10470,7 +10488,7 @@ document.addEventListener('DOMContentLoaded', () => {
     function renderHighlightList() {
         if (!highlightListEl) return;
         highlightListEl.innerHTML = '';
-        state.highlights.forEach((item, index) => {
+        state.highlights.filter(item => !item.clipId || item.clipId === state.activeClipId).forEach((item, index) => {
             const row = document.createElement('div');
             row.className = 'text-overlay-list-item' + (item.id === state.selectedHighlightId ? ' active' : '');
             row.style.cssText = `display:flex;align-items:center;justify-content:space-between;padding:8px 12px;border-radius:6px;margin-bottom:6px;cursor:pointer;background:${item.id === state.selectedHighlightId ? 'rgba(0,229,255,.12)' : 'rgba(255,255,255,.04)'};border:1px solid ${item.id === state.selectedHighlightId ? '#00e5ff' : 'transparent'};`;
@@ -10527,12 +10545,14 @@ document.addEventListener('DOMContentLoaded', () => {
     const fillEndInput = document.getElementById('fill-end');
     const deleteFillBtn = document.getElementById('delete-fill-btn');
 
-    function selectedFill() { return (state.fillRegions || []).find(r => r.id === state.selectedFillId); }
+    function selectedFill() {
+        return (state.fillRegions || []).find(r => r.id === state.selectedFillId && (!r.clipId || r.clipId === state.activeClipId));
+    }
 
     function renderFillList() {
         if (!fillListEl) return;
         fillListEl.innerHTML = '';
-        (state.fillRegions || []).forEach((item, index) => {
+        (state.fillRegions || []).filter(item => !item.clipId || item.clipId === state.activeClipId).forEach((item, index) => {
             const row = document.createElement('div');
             row.className = 'text-overlay-list-item' + (item.id === state.selectedFillId ? ' active' : '');
             row.style.cssText = `display:flex;align-items:center;justify-content:space-between;padding:8px 12px;border-radius:6px;margin-bottom:6px;cursor:pointer;background:${item.id === state.selectedFillId ? 'rgba(255,200,0,.12)' : 'rgba(255,255,255,.04)'};border:1px solid ${item.id === state.selectedFillId ? '#ffc800' : 'transparent'};`;

@@ -161,15 +161,26 @@
 
         // Use both click and mousedown so the button responds even if a
         // parent handler calls stopPropagation on one of them.
+        let lastPointerToggleAt = 0;
         function onToggle(e) {
+            // Some embedded WebView builds do not synthesize a click for this
+            // header button reliably.  A pointer-up listener below covers that
+            // path; ignore its follow-up click so it cannot toggle twice.
+            if (e.type === 'click' && Date.now() - lastPointerToggleAt < 600) return;
             e.stopPropagation();
             e.preventDefault();
             setVisible(!panel.classList.contains('visible'));
         }
         toggleBtn.addEventListener('click',     onToggle);
+        toggleBtn.addEventListener('pointerup', function (e) {
+            if (e.button !== 0) return;
+            lastPointerToggleAt = Date.now();
+            onToggle(e);
+        });
         toggleBtn.addEventListener('mousedown', function (e) { e.stopPropagation(); });
         if (closeBtn) {
-            closeBtn.addEventListener('click', function () { setVisible(false); });
+            closeBtn.addEventListener('mousedown', function (e) { e.stopPropagation(); });
+            closeBtn.addEventListener('click', function (e) { e.stopPropagation(); setVisible(false); });
         }
 
         try {
