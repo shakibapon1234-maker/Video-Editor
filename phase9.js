@@ -445,6 +445,14 @@ document.addEventListener('DOMContentLoaded', () => {
     if (undoBtn) undoBtn.addEventListener('click', undoEditor);
     if (redoBtn) redoBtn.addEventListener('click', redoEditor);
 
+    if (historyPanelToggle) {
+        historyPanelToggle.addEventListener('click', function (e) {
+            e.stopPropagation();
+            historyPanelToggle.classList.toggle('open');
+            updateHistoryUI();
+        });
+    }
+
     function updateHistoryUI() {
         if (undoBtn) undoBtn.disabled = state.undoStack.length === 0;
         if (redoBtn) redoBtn.disabled = state.redoStack.length === 0;

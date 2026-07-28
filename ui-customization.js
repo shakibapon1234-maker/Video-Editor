@@ -133,6 +133,7 @@
         }
 
         function setVisible(visible) {
+            panel.style.display = visible ? 'flex' : 'none';
             panel.classList.toggle('visible', visible);
             toggleBtn.classList.toggle('active', visible);
             try { localStorage.setItem(LS_FT_VISIBLE, visible ? '1' : '0'); } catch (e) {}
