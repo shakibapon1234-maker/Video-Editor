@@ -1303,10 +1303,13 @@ document.addEventListener('DOMContentLoaded', () => {
     const subtitleTranslateExportActions = document.getElementById('subtitle-translate-export-actions');
     const exportSrtTranslatedBtn = document.getElementById('export-srt-translated-btn');
     const exportVttTranslatedBtn = document.getElementById('export-vtt-translated-btn');
+    const subtitleShowBothToggleContainer = document.getElementById('subtitle-show-both-toggle-container');
+    const subtitleShowBothToggle = document.getElementById('subtitle-show-both-toggle');
 
     state.translatedSubtitles = state.translatedSubtitles || [];
     state.translatedSubtitlesLang = state.translatedSubtitlesLang || null;
     state.subtitlesUseTranslated = false;
+    state.showBothSubtitles = false;
 
     function setTranslateStatus(msg, isError) {
         if (!subtitleTranslateStatus) return;
@@ -1402,6 +1405,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (subtitleTranslateBtn) subtitleTranslateBtn.disabled = false;
         renderTranslatedSubtitlesList();
         if (subtitleTranslatePreviewToggleContainer) subtitleTranslatePreviewToggleContainer.style.display = 'flex';
+        if (subtitleShowBothToggleContainer) subtitleShowBothToggleContainer.style.display = 'flex';
         if (subtitleTranslateExportActions) subtitleTranslateExportActions.style.display = 'block';
         if (failCount > 0) {
             setTranslateStatus(`⚠️ সম্পন্ন হয়েছে, তবে ${failCount}টি লাইন অনুবাদ ব্যর্থ হয়েছে (মূল টেক্সট রাখা হয়েছে)।`, true);
@@ -1414,6 +1418,12 @@ document.addEventListener('DOMContentLoaded', () => {
     if (subtitleTranslatePreviewToggle) {
         subtitleTranslatePreviewToggle.addEventListener('change', () => {
             state.subtitlesUseTranslated = !!subtitleTranslatePreviewToggle.checked;
+            if (window.drawEditorFrame) window.drawEditorFrame();
+        });
+    }
+    if (subtitleShowBothToggle) {
+        subtitleShowBothToggle.addEventListener('change', () => {
+            state.showBothSubtitles = !!subtitleShowBothToggle.checked;
             if (window.drawEditorFrame) window.drawEditorFrame();
         });
     }

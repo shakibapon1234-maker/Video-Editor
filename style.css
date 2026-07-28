@@ -1861,6 +1861,45 @@ input:checked + .slider:before {
     font-weight: 600;
 }
 
+/* Mirror/Flip buttons (Phase 13) — visually identical to .layout-mode-btn,
+   but a separate class name so the existing document.querySelectorAll('.layout-mode-btn')
+   handlers (which set state.layoutMode from data-mode) never pick these up. */
+.flip-toggle-btn {
+    background-color: var(--bg-surface-elevated);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-sm);
+    padding: 12px;
+    color: var(--text-secondary);
+    cursor: pointer;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+    transition: var(--transition-smooth);
+    outline: none;
+}
+
+.flip-toggle-btn:hover {
+    border-color: var(--border-hover);
+    color: var(--text-primary);
+}
+
+.flip-toggle-btn.active {
+    background-color: rgba(79, 70, 229, 0.08);
+    border-color: var(--primary);
+    color: var(--text-primary);
+    box-shadow: 0 0 8px var(--primary-glow);
+}
+
+.flip-toggle-btn i {
+    font-size: 16px;
+}
+
+.flip-toggle-btn span {
+    font-size: 11px;
+    font-weight: 600;
+}
+
 /* ===================================================
    RESPONSIVE / MOBILE FIXES
    =================================================== */

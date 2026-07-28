@@ -468,6 +468,27 @@
                             </div>
                         </div>
 
+                        <!-- Mirror / Flip Card (Phase 13) -->
+                        <div class="card mt-4">
+                            <div class="card-header">
+                                <i class="fa-solid fa-arrows-left-right card-icon"></i>
+                                <h3>Mirror / Flip</h3>
+                            </div>
+                            <div class="card-body">
+                                <p class="help-text">সিলেক্টেড ক্লিপটি আনুভূমিক বা উল্লম্ব দিকে ফ্লিপ করুন — প্রতিটা ক্লিপে আলাদাভাবে সেট করা যায়।</p>
+                                <div class="layout-mode-selector">
+                                    <button class="flip-toggle-btn" id="flip-h-btn" type="button" data-tooltip="বাম-ডান ফ্লিপ (Flip horizontally)">
+                                        <i class="fa-solid fa-left-right"></i>
+                                        <span>Flip Horizontal</span>
+                                    </button>
+                                    <button class="flip-toggle-btn" id="flip-v-btn" type="button" data-tooltip="উপর-নিচ ফ্লিপ (Flip vertically)">
+                                        <i class="fa-solid fa-up-down"></i>
+                                        <span>Flip Vertical</span>
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+
                         <!-- Letterbox Background Card -->
                         <div class="card mt-4">
                             <div class="card-header">
@@ -996,6 +1017,9 @@
                                         <button class="filter-preset-btn" data-filter="cool">Cool Breeze</button>
                                         <button class="filter-preset-btn" data-filter="vintage">Vintage Sepia</button>
                                         <button class="filter-preset-btn" data-filter="bw">B&W Film</button>
+                                        <button class="filter-preset-btn" data-filter="noir">Noir</button>
+                                        <button class="filter-preset-btn" data-filter="tealorange">Teal &amp; Orange</button>
+                                        <button class="filter-preset-btn" data-filter="dreamy">Dreamy</button>
                                     </div>
                                 </div>
                                 <div class="adjustments-group mt-4">
@@ -1019,6 +1043,48 @@
                                             <input type="range" id="saturation-slider" min="0" max="200" value="100">
                                             <span id="saturation-val">100%</span>
                                         </div>
+                                    </div>
+                                    <div class="control-group mt-3">
+                                        <label>Vignette</label>
+                                        <div class="slider-val-container">
+                                            <input type="range" id="vignette-slider" min="0" max="100" value="0">
+                                            <span id="vignette-val">0%</span>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Duotone (Phase 13) -->
+                                <div class="toggle-control mt-4">
+                                    <div class="toggle-label">
+                                        <h4>Duotone</h4>
+                                        <p>দুটো রঙের মধ্যে ছবিটা ম্যাপ করে পোস্টার-স্টাইল লুক দিন</p>
+                                    </div>
+                                    <label class="switch">
+                                        <input type="checkbox" id="duotone-toggle">
+                                        <span class="slider round"></span>
+                                    </label>
+                                </div>
+                                <div id="duotone-container" class="mt-3" style="display:none;">
+                                    <div class="control-group">
+                                        <label for="duotone-highlight-color">Highlight Color</label>
+                                        <div class="color-picker-wrapper">
+                                            <input type="color" id="duotone-highlight-color" value="#ffcc00">
+                                        </div>
+                                    </div>
+                                    <div class="control-group mt-3">
+                                        <label for="duotone-shadow-color">Shadow Color</label>
+                                        <div class="color-picker-wrapper">
+                                            <input type="color" id="duotone-shadow-color" value="#1a1a4d">
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Film Grain (Phase 13) -->
+                                <div class="control-group mt-4">
+                                    <label>Film Grain</label>
+                                    <div class="slider-val-container">
+                                        <input type="range" id="film-grain-slider" min="0" max="100" value="0">
+                                        <span id="film-grain-val">0%</span>
                                     </div>
                                 </div>
 
@@ -1297,6 +1363,49 @@
                             </div>
                         </div>
 
+                        <!-- Text/Subtitle Find & Replace (Phase 12, TODO-2) -->
+                        <div class="card mt-4">
+                            <div class="card-header">
+                                <i class="fa-solid fa-magnifying-glass card-icon"></i>
+                                <h3>Find &amp; Replace (টেক্সট খুঁজুন ও বদলান)</h3>
+                            </div>
+                            <div class="card-body">
+                                <p class="help-text">Text Overlay ও Subtitle — দুই জায়গাতেই একসাথে খোঁজে। ভিডিওর ভেতরে বার্ন-ইন করা (আগে থেকে ছবিতে আঁকা) টেক্সট এর আওতার বাইরে, কারণ সেটা এডিটরের কাছে সাধারণ ছবি — কোনো টেক্সট ডেটা নেই যা খুঁজে বদলানো যায়।</p>
+
+                                <div class="control-group mt-3">
+                                    <label>Find (খুঁজুন)</label>
+                                    <input type="text" id="text-find-input" class="form-input" placeholder="যে শব্দ বা লাইন খুঁজছেন...">
+                                </div>
+                                <div class="control-group mt-2">
+                                    <label>Replace with (এটা দিয়ে বদলান)</label>
+                                    <input type="text" id="text-replace-input" class="form-input" placeholder="নতুন শব্দ বা লাইন">
+                                </div>
+
+                                <div class="toggle-control mt-2">
+                                    <div class="toggle-label">
+                                        <h4>Case Sensitive</h4>
+                                        <p>ছোট/বড় হাতের অক্ষর আলাদা ধরে খুঁজবে</p>
+                                    </div>
+                                    <label class="switch">
+                                        <input type="checkbox" id="text-find-case-toggle">
+                                        <span class="slider round"></span>
+                                    </label>
+                                </div>
+
+                                <p class="help-text mt-2" id="text-find-status" style="display:none;"></p>
+                                <div class="text-overlay-list mt-2" id="text-find-matches" style="display:none;"></div>
+
+                                <div class="record-controls mt-3">
+                                    <button id="text-find-search-btn" class="btn btn-outline" type="button">
+                                        <i class="fa-solid fa-magnifying-glass"></i> Find (খুঁজুন)
+                                    </button>
+                                    <button id="text-find-replace-all-btn" class="btn btn-primary" type="button">
+                                        <i class="fa-solid fa-repeat"></i> Replace All (সব বদলান)
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+
                         <div class="card mt-4">
                             <div class="card-header">
                                 <i class="fa-solid fa-font card-icon"></i>
@@ -1308,6 +1417,7 @@
                                 <div class="control-group">
                                     <label>Text Content</label>
                                     <textarea id="text-overlay-input" class="form-input form-textarea" rows="3" maxlength="200" placeholder="যেমনঃ আজকের অফার মাত্র ৫০০ টাকা!&#10;(Enter চেপে একাধিক লাইনে ভাগ করতে পারবেন)"></textarea>
+                                    <p class="help-text">চাইলে ডায়নামিক টোকেন লিখতে পারেন — <code>{{date}}</code> (আজকের তারিখ), <code>{{time}}</code> (এখনকার সময়), <code>{{counter}}</code> (প্লে টাইম অনুযায়ী গোনা শুরু), বা <code>{{counter:100}}</code> (১০০ থেকে গোনা শুরু) — প্রিভিউ/এক্সপোর্টের সময় আসল মান বসে যাবে।</p>
                                 </div>
 
                                 <div class="control-group mt-3">
@@ -1331,6 +1441,17 @@
                                         <option value="Pacifico">Pacifico (English Script)</option>
                                         <option value="Permanent Marker">Permanent Marker (English Marker)</option>
                                     </select>
+                                </div>
+
+                                <div class="control-group mt-3">
+                                    <label>নিজের ফন্ট আপলোড করুন (Custom Font — .ttf/.otf)</label>
+                                    <button id="custom-font-upload-btn" class="btn btn-outline btn-block" type="button">
+                                        <i class="fa-solid fa-upload"></i> Upload Font File
+                                    </button>
+                                    <input type="file" id="custom-font-upload-input" accept=".ttf,.otf,font/ttf,font/otf" style="display: none;">
+                                    <p class="help-text mt-1" id="custom-font-status" style="display:none;"></p>
+                                    <div id="custom-font-list" class="mt-1"></div>
+                                    <p class="help-text mt-1">আপলোড করা ফন্ট উপরের Font Family ড্রপডাউনে যোগ হয়ে যাবে (শুধু এই সেশনের জন্য — প্রজেক্ট রিলোড করলে আবার আপলোড করতে হবে)।</p>
                                 </div>
 
                                 <div class="control-group mt-3">
@@ -1578,6 +1699,41 @@
                                         <i class="fa-solid fa-trash-can"></i> Remove This Text
                                     </button>
                                 </div>
+                            </div>
+                        </div>
+
+                        <!-- Lower-Third / Title-Card Presets (Phase 12, TODO-5) -->
+                        <div class="card mt-4">
+                            <div class="card-header">
+                                <i class="fa-solid fa-id-card card-icon"></i>
+                                <h3>Lower-Third / Title Card (নাম + পদবি ব্যানার)</h3>
+                            </div>
+                            <div class="card-body">
+                                <p class="help-text">নাম আর পদবি লিখে একটা ডিজাইন বেছে নিন — এক ক্লিকে দুই লাইনের ব্যানার (ব্যাকগ্রাউন্ড বার + এন্ট্রি অ্যানিমেশনসহ) বসে যাবে। পরে চাইলে সাধারণ Text Overlay-এর মতোই এডিট করতে পারবেন।</p>
+
+                                <div class="control-group mt-3">
+                                    <label>Name (নাম)</label>
+                                    <input type="text" id="lower-third-name-input" class="form-input" maxlength="60" placeholder="যেমনঃ রহিম উদ্দিন">
+                                </div>
+                                <div class="control-group mt-2">
+                                    <label>Title / Designation (পদবি)</label>
+                                    <input type="text" id="lower-third-title-input" class="form-input" maxlength="80" placeholder="যেমনঃ প্রধান নির্বাহী, স্টুডিও ফ্লো">
+
+                                </div>
+
+                                <div class="control-group mt-3">
+                                    <label>Design (ডিজাইন)</label>
+                                    <select id="lower-third-preset-select" class="form-select">
+                                        <option value="preset-lt-classic">Classic Broadcast (গাঢ় ব্যাকগ্রাউন্ড বার, স্লাইড-ইন)</option>
+                                        <option value="preset-lt-minimal">Minimal Outline (হালকা আউটলাইন, ফেড-ইন)</option>
+                                        <option value="preset-lt-bold">Bold Gradient (গ্র্যাডিয়েন্ট ব্যানার, বাউন্স-ইন)</option>
+                                    </select>
+                                </div>
+
+                                <button id="lower-third-add-btn" class="btn btn-primary btn-block mt-3" type="button">
+                                    <i class="fa-solid fa-wand-magic-sparkles"></i> Add Lower-Third (ব্যানার বসান)
+                                </button>
+                                <p class="help-text mt-2" id="lower-third-status" style="display:none;"></p>
                             </div>
                         </div>
 
@@ -2558,6 +2714,12 @@
                                     <i class="fa-solid fa-circle-info"></i> ভিডিও মিউট হয়ে চলছে। ভিডিও দেখে নিজে মাইক্রোফোনে বলুন — প্রতিটি বাক্য সাথে সাথে সাবটাইটেল হবে।
                                 </p>
 
+                                <button id="subtitle-import-btn" class="btn btn-outline btn-block mt-2" type="button">
+                                    <i class="fa-solid fa-file-import"></i> Import SRT/VTT (বাইরের সাবটাইটেল ফাইল আপলোড করুন)
+                                </button>
+                                <input type="file" id="subtitle-import-input" accept=".srt,.vtt,text/vtt,application/x-subrip" style="display: none;">
+                                <p class="help-text mt-1" id="subtitle-import-status" style="display:none;"></p>
+
                                 <div class="toggle-control mt-3">
                                     <div class="toggle-label">
                                         <h4>Show Subtitles on Preview</h4>
@@ -2686,6 +2848,17 @@
                                     </label>
                                 </div>
 
+                                <div class="toggle-control mt-3" id="subtitle-show-both-toggle-container" style="display:none;">
+                                    <div class="toggle-label">
+                                        <h4>দুই ভাষাই একসাথে দেখান (Dual/Bilingual)</h4>
+                                        <p>একই সময়ে মূল ও অনুবাদ — দুই লাইন উপরে-নিচে দেখাবে (উপরের টগলটা কোনটা প্রধান/হাইলাইট হবে তা ঠিক করে)</p>
+                                    </div>
+                                    <label class="switch">
+                                        <input type="checkbox" id="subtitle-show-both-toggle">
+                                        <span class="slider round"></span>
+                                    </label>
+                                </div>
+
                                 <div class="subtitle-actions mt-3" id="subtitle-translate-export-actions" style="display:none;">
                                     <button id="export-srt-translated-btn" class="btn btn-outline mt-1" style="width: 100%;" type="button">
                                         <i class="fa-solid fa-file-lines"></i> Export Translated .SRT
@@ -2694,6 +2867,27 @@
                                         <i class="fa-solid fa-file-lines"></i> Export Translated .VTT
                                     </button>
                                 </div>
+                            </div>
+                        </div>
+
+                        <!-- Bangla Spellcheck (Phase 12, TODO-7) -->
+                        <div class="card mt-4">
+                            <div class="card-header">
+                                <i class="fa-solid fa-spell-check card-icon"></i>
+                                <h3>বাংলা বানান পরীক্ষা (পরীক্ষামূলক)</h3>
+                            </div>
+                            <div class="card-body">
+                                <p class="help-text">Auto Subtitle থেকে জেনারেট হওয়া টেক্সটে সন্দেহজনক বানান খুঁজে সাজেশন দেখাবে (bn_BD community ডিকশনারি, GPL)। এটা ফুল অটোকারেক্ট না — কোনো টেক্সট নিজে থেকে বদলে দেওয়া হবে না, শুধু লিস্টে দেখাবে, আপনি নিজে বিবেচনা করে ঠিক করবেন। প্রথমবার চালু করলে ডিকশনারি লোড হতে ~১০-২০ সেকেন্ড লাগতে পারে (এডিটর তখনও ব্যবহার করা যাবে, লোড আলাদা থ্রেডে হয়)।</p>
+
+                                <button id="bangla-spellcheck-enable-btn" class="btn btn-outline btn-block mt-2" type="button">
+                                    <i class="fa-solid fa-book"></i> চালু করুন (ডিকশনারি লোড করুন)
+                                </button>
+                                <button id="bangla-spellcheck-run-btn" class="btn btn-primary btn-block mt-2" type="button" style="display:none;">
+                                    <i class="fa-solid fa-magnifying-glass"></i> এখন চেক করুন
+                                </button>
+
+                                <p class="help-text mt-2" id="bangla-spellcheck-status" style="display:none;"></p>
+                                <div class="subtitle-list mt-2" id="bangla-spellcheck-list" style="display:none;"></div>
                             </div>
                         </div>
                     </div>
@@ -3486,9 +3680,15 @@
     <script src="keyframes.js?v=1"></script>
     <script src="render-engine.js?v=2"></script>
     <script src="exporter.js?v=4"></script>
-    <script src="phase9.js?v=5"></script>
+    <script src="phase9.js?v=4"></script>
     <script src="transitions-library.js?v=1"></script>
-    <script src="multitrack.js?v=4"></script>
+    <script src="multitrack.js?v=3"></script>
+    <script src="subtitle-import.js?v=1"></script>
+    <script src="text-find-replace.js?v=1"></script>
+    <script src="lower-third-presets.js?v=1"></script>
+    <script src="custom-fonts.js?v=1"></script>
+    <script src="bangla-spellcheck.js?v=1"></script>
+    <script src="film-grain.js?v=1"></script>
     <!-- Floating/Draggable Playhead Control (mirrors main seek bar; can be repositioned anywhere) -->
     <div class="floating-transport" id="floating-transport">
         <div class="floating-transport-handle" id="floating-transport-handle">
@@ -3514,6 +3714,6 @@
     </div>
 
     <script src="punch-zoom-ui.js?v=3"></script>
-    <script src="ui-customization.js?v=6"></script>
+    <script src="ui-customization.js?v=3"></script>
 </body>
 </html>

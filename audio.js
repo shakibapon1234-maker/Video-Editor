@@ -2748,6 +2748,10 @@ document.addEventListener('DOMContentLoaded', () => {
             subtitleListEl.appendChild(row);
         });
     }
+    // Exposed so independent modules (e.g. subtitle-import.js) can refresh
+    // the subtitle list UI after pushing new items into state.subtitles
+    // without needing to duplicate this rendering logic.
+    window.renderSubtitleList = renderSubtitleList;
 
     // --- Subtitle Styling + Silence-Aware Snap (Phase 5A enhancements) ---
     const banglaPresetBtn = document.getElementById('subtitle-bangla-preset-btn');

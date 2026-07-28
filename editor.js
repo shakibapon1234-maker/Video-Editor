@@ -1113,6 +1113,11 @@ window.VideoEditor = {
     brightness: 100,
     contrast: 100,
     saturation: 100,
+    vignetteIntensity: 0, // 0-100, independent of filterPreset — combines with any preset
+    duotoneEnabled: false,
+    duotoneShadowColor: '#1a1a4d',
+    duotoneHighlightColor: '#ffcc00',
+    filmGrainIntensity: 0, // 0-100, independent overlay — see film-grain.js
 
     // Advanced Color Grading — custom per-channel RGB curves (Phase 4C)
     colorGradeEnabled: false,
@@ -1724,8 +1729,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     cropX: 0,
                     cropY: 0,
                     cropW: 1,
-                    cropH: 1,
-                    volume: 1.0  // Per-clip volume multiplier (1.0 = 100%, range 0–2.0)
+                    cropH: 1
                 };
                 state.clips = [firstClip];
                 state.activeClipId = firstClip.id;
@@ -2255,6 +2259,54 @@ document.addEventListener('DOMContentLoaded', () => {
         drawFrame();
     });
 
+    // Vignette (Phase 13) — independent of filterPreset, so it's guarded with
+    // if() rather than assumed present, and doesn't touch the preset switch.
+    const vignetteSlider = document.getElementById('vignette-slider');
+    const vignetteVal = document.getElementById('vignette-val');
+    if (vignetteSlider) {
+        vignetteSlider.addEventListener('input', (e) => {
+            state.vignetteIntensity = parseInt(e.target.value);
+            if (vignetteVal) vignetteVal.innerText = state.vignetteIntensity + '%';
+            drawFrame();
+        });
+    }
+
+    // Duotone (Phase 13) — independent toggle, combines with any filterPreset.
+    const duotoneToggle = document.getElementById('duotone-toggle');
+    const duotoneContainer = document.getElementById('duotone-container');
+    const duotoneShadowInput = document.getElementById('duotone-shadow-color');
+    const duotoneHighlightInput = document.getElementById('duotone-highlight-color');
+    if (duotoneToggle) {
+        duotoneToggle.addEventListener('change', (e) => {
+            state.duotoneEnabled = e.target.checked;
+            if (duotoneContainer) duotoneContainer.style.display = state.duotoneEnabled ? 'block' : 'none';
+            drawFrame();
+        });
+    }
+    if (duotoneShadowInput) {
+        duotoneShadowInput.addEventListener('input', (e) => {
+            state.duotoneShadowColor = e.target.value;
+            drawFrame();
+        });
+    }
+    if (duotoneHighlightInput) {
+        duotoneHighlightInput.addEventListener('input', (e) => {
+            state.duotoneHighlightColor = e.target.value;
+            drawFrame();
+        });
+    }
+
+    // Film Grain (Phase 13) — independent slider, combines with any preset.
+    const filmGrainSlider = document.getElementById('film-grain-slider');
+    const filmGrainVal = document.getElementById('film-grain-val');
+    if (filmGrainSlider) {
+        filmGrainSlider.addEventListener('input', (e) => {
+            state.filmGrainIntensity = parseInt(e.target.value);
+            if (filmGrainVal) filmGrainVal.innerText = state.filmGrainIntensity + '%';
+            drawFrame();
+        });
+    }
+
     filterPresetBtns.forEach(btn => {
         btn.addEventListener('click', (e) => {
             filterPresetBtns.forEach(b => b.classList.remove('active'));
@@ -2327,6 +2379,48 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     });
     
+    // --- Mirror / Flip (Phase 13) ---
+    // Deliberately NOT using the .layout-mode-btn class/selector above — these
+    // buttons toggle a per-clip flag on activeClip, not state.layoutMode.
+    const flipHBtn = document.getElementById('flip-h-btn');
+    const flipVBtn = document.getElementById('flip-v-btn');
+
+    function updateFlipButtonsUI() {
+        const clip = state.clips.find(c => c.id === state.activeClipId);
+        if (flipHBtn) flipHBtn.classList.toggle('active', !!(clip && clip.flipH));
+        if (flipVBtn) flipVBtn.classList.toggle('active', !!(clip && clip.flipV));
+    }
+
+    if (flipHBtn) {
+        flipHBtn.addEventListener('click', () => {
+            const clip = state.clips.find(c => c.id === state.activeClipId);
+            if (!clip) return;
+            clip.flipH = !clip.flipH;
+            updateFlipButtonsUI();
+            drawFrame();
+            if (window.captureUndoCheckpoint) window.captureUndoCheckpoint();
+            if (window.recordEditorHistory) {
+                window.recordEditorHistory(clip.flipH ? 'Flip horizontal on' : 'Flip horizontal off');
+            }
+            if (window.triggerAutoSave) window.triggerAutoSave();
+        });
+    }
+
+    if (flipVBtn) {
+        flipVBtn.addEventListener('click', () => {
+            const clip = state.clips.find(c => c.id === state.activeClipId);
+            if (!clip) return;
+            clip.flipV = !clip.flipV;
+            updateFlipButtonsUI();
+            drawFrame();
+            if (window.captureUndoCheckpoint) window.captureUndoCheckpoint();
+            if (window.recordEditorHistory) {
+                window.recordEditorHistory(clip.flipV ? 'Flip vertical on' : 'Flip vertical off');
+            }
+            if (window.triggerAutoSave) window.triggerAutoSave();
+        });
+    }
+
     // --- Letterbox Background (None / Blur / Image / Color) ---
     const bgModeBtns = document.querySelectorAll('#bg-mode-selector .aspect-btn');
     const bgColorControl = document.getElementById('bg-color-control');
@@ -3120,8 +3214,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     cropW: 1,
                     cropH: 1,
                     type: 'image',
-                    imageImg: img,
-                    volume: 1.0  // Per-clip volume multiplier
+                    imageImg: img
                 };
                 state.clips.push(newClip);
                 renderClipTimeline();
@@ -3146,8 +3239,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     cropX: 0,
                     cropY: 0,
                     cropW: 1,
-                    cropH: 1,
-                    volume: 1.0  // Per-clip volume multiplier
+                    cropH: 1
                 };
                 state.clips.push(newClip);
                 renderClipTimeline();
@@ -3180,12 +3272,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (playPauseBtnEl) playPauseBtnEl.innerHTML = '<i class="fa-solid fa-play"></i>';
 
         state.activeClipId = clip.id;
-        // Highlights and background fills belong to the selected timeline clip.
-        // Do not leave a selection from the previous clip active: apart from
-        // making the controls misleading, it could let a style edit alter an
-        // item that is no longer visible.
-        state.selectedHighlightId = null;
-        state.selectedFillId = null;
+        if (typeof updateFlipButtonsUI === 'function') updateFlipButtonsUI();
 
         // Load this clip's own crop area (falls back to full-frame if it was created before this feature existed).
         state.cropX = clip.cropX || 0;
@@ -3221,9 +3308,6 @@ document.addEventListener('DOMContentLoaded', () => {
                     playVideo();
                 }
                 state.isClipTransitionInProgress = false;
-
-                // Refresh overlay panels so only this clip's items are shown
-                if (window.refreshOverlayPanels) window.refreshOverlayPanels();
             }, 0);
         } else {
             let isSameSrc = false;
@@ -3253,12 +3337,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 updatePlayhead();
                 updateCropDimensionsDisplay();
                 state.video.playbackRate = Math.max(0.5, Math.min(2, Number(clip.speed) || 1));
-
-                // Apply this clip's per-clip volume to the live audio graph
-                if (window.applyClipVolume) window.applyClipVolume(clip);
-                // Sync the clip-volume slider UI to the newly-active clip
-                if (window.syncClipVolumeUI) window.syncClipVolumeUI(clip);
-
                 drawFrame();
                 renderClipTimeline();
                 if (window.syncPhase9ClipUI) window.syncPhase9ClipUI();
@@ -3268,9 +3346,6 @@ document.addEventListener('DOMContentLoaded', () => {
                     playVideo();
                 }
                 state.isClipTransitionInProgress = false;
-
-                // Refresh overlay panels so only this clip's items are shown
-                if (window.refreshOverlayPanels) window.refreshOverlayPanels();
             };
 
             if (isSameSrc) {
@@ -3466,16 +3541,11 @@ document.addEventListener('DOMContentLoaded', () => {
         if (videoVolumeValStep2) videoVolumeValStep2.innerText = label;
         if (videoVolumeSliderStep2) videoVolumeSliderStep2.value = newVolumePercent;
 
-        // Apply to gain node, multiplying by the active clip's per-clip volume
-        // so the master slider and per-clip slider both stay in effect together.
-        const activeClip = state.clips && state.clips.find(c => c.id === state.activeClipId);
-        const clipVol = (activeClip && activeClip.volume !== undefined) ? activeClip.volume : 1.0;
-        const effectiveGain = state.videoVolume * clipVol;
+        // Apply to video element directly
         if (window.videoGainNode) {
-            const ctx = window.videoGainNode.context;
-            window.videoGainNode.gain.setValueAtTime(effectiveGain, ctx ? ctx.currentTime : 0);
+            window.videoGainNode.gain.setValueAtTime(state.videoVolume, 0);
         } else {
-            state.video.volume = Math.min(1.0, effectiveGain);
+            state.video.volume = Math.min(1.0, state.videoVolume);
         }
     }
 
@@ -3488,216 +3558,6 @@ document.addEventListener('DOMContentLoaded', () => {
             applyVideoVolume(parseInt(e.target.value));
         });
     }
-
-    // =========================================================================
-    // CLIP SOUND MATCHING — Per-Clip Volume + Auto Normalize
-    // =========================================================================
-
-    const clipVolumeSlider   = document.getElementById('clip-volume-slider');
-    const clipVolumeVal      = document.getElementById('clip-volume-val');
-    const clipVolumeClipName = document.getElementById('clip-volume-clip-name');
-    const clipVolumeResetBtn    = document.getElementById('clip-volume-reset-btn');
-    const clipVolumeResetAllBtn = document.getElementById('clip-volume-reset-all-btn');
-    const autoMatchSoundBtn     = document.getElementById('auto-match-sound-btn');
-    const autoMatchBtnText      = document.getElementById('auto-match-sound-btn-text');
-
-    /**
-     * Apply a clip's stored volume to the live Web Audio gain node.
-     * Called on clip switch and whenever the slider moves.
-     * Exposed on window so switchActiveClip (above) can call it.
-     */
-    window.applyClipVolume = function applyClipVolume(clip) {
-        if (!clip) return;
-        const clipVol = (clip.volume !== undefined ? clip.volume : 1.0);
-        // Scale: master videoVolume × per-clip volume
-        const effectiveGain = state.videoVolume * clipVol;
-        if (window.videoGainNode) {
-            const ctx = window.videoGainNode.context;
-            // Use ctx.currentTime (not 0) so the value takes effect immediately
-            // on a running AudioContext. setValueAtTime(val, 0) on an already-running
-            // context sets a past-time event that gets ignored.
-            window.videoGainNode.gain.setValueAtTime(effectiveGain, ctx ? ctx.currentTime : 0);
-        } else {
-            state.video.volume = Math.min(1.0, effectiveGain);
-        }
-    };
-
-    /**
-     * Sync the clip-volume slider UI to reflect the given clip's stored volume.
-     * Exposed on window so switchActiveClip can call it.
-     */
-    window.syncClipVolumeUI = function syncClipVolumeUI(clip) {
-        if (!clip || !clipVolumeSlider) return;
-        const pct = Math.round((clip.volume !== undefined ? clip.volume : 1.0) * 100);
-        clipVolumeSlider.value = pct;
-        if (clipVolumeVal)  clipVolumeVal.innerText  = pct + '%';
-        if (clipVolumeClipName) {
-            const nm = clip.name || 'ক্লিপ';
-            clipVolumeClipName.innerText = nm.length > 30 ? nm.slice(0, 30) + '…' : nm;
-        }
-    };
-
-    // Manual per-clip slider — update active clip in real time
-    if (clipVolumeSlider) {
-        clipVolumeSlider.addEventListener('input', (e) => {
-            const pct = parseInt(e.target.value);
-            if (clipVolumeVal) clipVolumeVal.innerText = pct + '%';
-            const activeClip = state.clips && state.clips.find(c => c.id === state.activeClipId);
-            if (!activeClip) return;
-            activeClip.volume = pct / 100;
-            window.applyClipVolume(activeClip);
-            if (window.recordEditorHistory) window.recordEditorHistory('Clip volume changed');
-        });
-    }
-
-    // Reset active clip volume to 100%
-    if (clipVolumeResetBtn) {
-        clipVolumeResetBtn.addEventListener('click', () => {
-            const activeClip = state.clips && state.clips.find(c => c.id === state.activeClipId);
-            if (!activeClip) return;
-            activeClip.volume = 1.0;
-            window.applyClipVolume(activeClip);
-            window.syncClipVolumeUI(activeClip);
-            if (window.recordEditorHistory) window.recordEditorHistory('Clip volume reset');
-        });
-    }
-
-    // Reset ALL clips volume to 100%
-    if (clipVolumeResetAllBtn) {
-        clipVolumeResetAllBtn.addEventListener('click', () => {
-            if (!state.clips) return;
-            state.clips.forEach(c => { c.volume = 1.0; });
-            const activeClip = state.clips.find(c => c.id === state.activeClipId);
-            window.applyClipVolume(activeClip);
-            window.syncClipVolumeUI(activeClip);
-            if (window.recordEditorHistory) window.recordEditorHistory('All clip volumes reset');
-        });
-    }
-
-    /**
-     * AUTO MATCH SOUND — Normalizes per-clip volumes so all clips play at
-     * roughly the same perceived loudness.
-     *
-     * Algorithm:
-     *  1. For each video clip that has a File object, decode its audio offline.
-     *  2. Compute the RMS (Root Mean Square) amplitude of the whole clip's
-     *     trimmed audio — this represents perceived loudness.
-     *  3. Find the maximum RMS across all clips (anchor = loudest clip).
-     *  4. Scale each clip's volume so its effective RMS matches the anchor.
-     *     This makes quiet clips louder while the loudest clip stays at its
-     *     current gain.
-     *  5. Cap the resulting gain at 2.0 (200%) to avoid extreme distortion
-     *     on nearly-silent clips.
-     */
-    async function autoMatchSoundLevels() {
-        if (!state.clips || state.clips.length < 2) {
-            alert('সাউন্ড ম্যাচিং করতে কমপক্ষে ২টি ক্লিপ থাকতে হবে।');
-            return;
-        }
-
-        // Only video clips with a real File can be decoded
-        const videoClips = state.clips.filter(c => c.type !== 'image' && c.file);
-        if (videoClips.length < 2) {
-            alert('অডিও বিশ্লেষণের জন্য কমপক্ষে ২টি ভিডিও ক্লিপ (image নয়) থাকতে হবে।');
-            return;
-        }
-
-        // Update button state
-        if (autoMatchBtnText) autoMatchBtnText.textContent = 'বিশ্লেষণ হচ্ছে… (Analyzing…)';
-        if (autoMatchSoundBtn) autoMatchSoundBtn.disabled = true;
-
-        try {
-            const rmsValues = [];
-
-            for (const clip of videoClips) {
-                try {
-                    const arrayBuffer = await clip.file.arrayBuffer();
-                    // Use OfflineAudioContext for decoding instead of a real AudioContext.
-                    // Creating many live AudioContexts (one per clip) exhausts the browser
-                    // limit (~6 in Chrome/Electron) and silences all subsequent audio.
-                    const OfflineCtx = window.OfflineAudioContext || window.webkitOfflineAudioContext;
-                    const probe = new OfflineCtx(1, 1, 44100); // 1ch, 1 sample — just for decoding
-                    const buffer = await probe.decodeAudioData(arrayBuffer);
-                    // No need to close — OfflineAudioContext has no system resource limit
-
-                    // Use trim window (clip.start → clip.end) to measure
-                    // only the portion that will actually be exported.
-                    const sampleRate = buffer.sampleRate;
-                    const channels   = buffer.numberOfChannels;
-                    const trimStart  = Math.floor(clip.start * sampleRate);
-                    const trimEnd    = Math.min(buffer.length, Math.ceil(clip.end * sampleRate));
-                    const len        = Math.max(1, trimEnd - trimStart);
-
-                    let sumSq = 0;
-                    for (let ch = 0; ch < channels; ch++) {
-                        const data = buffer.getChannelData(ch);
-                        for (let i = trimStart; i < trimEnd; i++) {
-                            sumSq += data[i] * data[i];
-                        }
-                    }
-                    const rms = Math.sqrt(sumSq / (len * channels));
-                    rmsValues.push({ clip, rms });
-                } catch (decodeErr) {
-                    console.warn('AutoMatch: could not decode clip', clip.name, decodeErr);
-                    rmsValues.push({ clip, rms: 0 });
-                }
-            }
-
-            // Find the maximum (loudest) RMS
-            const maxRms = Math.max(...rmsValues.map(r => r.rms));
-
-            if (maxRms <= 0) {
-                alert('সাউন্ড বিশ্লেষণ করা সম্ভব হয়নি — ক্লিপগুলোতে কোনো অডিও নেই।');
-                return;
-            }
-
-            // Assign per-clip gain so every clip reaches maxRms loudness
-            rmsValues.forEach(({ clip, rms }) => {
-                if (rms > 0) {
-                    const gain = Math.min(2.0, maxRms / rms);  // cap at 200%
-                    clip.volume = Math.round(gain * 100) / 100; // round to 2 dp
-                } else {
-                    clip.volume = 1.0; // can't decode → leave at default
-                }
-            });
-
-            // Refresh the live gain for the currently active clip
-            const activeClip = state.clips.find(c => c.id === state.activeClipId);
-            window.applyClipVolume(activeClip);
-            window.syncClipVolumeUI(activeClip);
-
-            if (window.recordEditorHistory) window.recordEditorHistory('Auto Match Sound applied');
-
-            // Show per-clip summary to the user
-            const summary = rmsValues.map(({ clip, rms }) => {
-                const nm  = clip.name.length > 22 ? clip.name.slice(0, 22) + '…' : clip.name;
-                const vol = Math.round((clip.volume || 1) * 100);
-                return `${nm}: ${vol}%`;
-            }).join('\n');
-            alert('✅ Auto Match Sound সম্পন্ন!\n\n' + summary + '\n\nManual slider দিয়ে যেকোনো ক্লিপের ভলিউম আরও সূক্ষ্মভাবে ঠিক করতে পারবেন।');
-
-        } catch (err) {
-            console.error('Auto Match Sound failed:', err);
-            alert('সাউন্ড ম্যাচিং ব্যর্থ হয়েছে: ' + err.message);
-        } finally {
-            if (autoMatchBtnText) autoMatchBtnText.textContent = 'Auto Match Sound (স্বয়ংক্রিয়ভাবে সমান করুন)';
-            if (autoMatchSoundBtn) autoMatchSoundBtn.disabled = false;
-        }
-    }
-
-    if (autoMatchSoundBtn) {
-        autoMatchSoundBtn.addEventListener('click', autoMatchSoundLevels);
-    }
-
-    // Initialise slider to show active clip's volume on page load
-    (function initClipVolumeUI() {
-        if (!state.clips || !state.clips.length) return;
-        const active = state.clips.find(c => c.id === state.activeClipId) || state.clips[0];
-        if (active) {
-            if (active.volume === undefined) active.volume = 1.0;
-            window.syncClipVolumeUI(active);
-        }
-    })();
 
     // Handle Manual Typing of Trim fields
     startVal.addEventListener('change', () => {
@@ -3950,6 +3810,31 @@ document.addEventListener('DOMContentLoaded', () => {
         return { p: 1, phase: 'settled' };
     }
 
+    // Resolves dynamic tokens inside a Text Overlay's raw text at draw time,
+    // so the stored item.text (shown as-typed in the editing UI/inputs) stays
+    // untouched while the rendered/exported frame shows live values.
+    // Supported: {{date}} (today's date), {{time}} (current wall-clock time),
+    // {{counter}} or {{counter:N}} (increments once per elapsed second since
+    // the overlay's startSec, optionally starting from N instead of 1).
+    function resolveTextOverlayTokens(text, item, currentTime) {
+        if (!text || text.indexOf('{{') === -1) return text;
+        const now = new Date();
+        const pad2 = (n) => String(n).padStart(2, '0');
+        const dateStr = `${now.getFullYear()}-${pad2(now.getMonth() + 1)}-${pad2(now.getDate())}`;
+        const timeStr = `${pad2(now.getHours())}:${pad2(now.getMinutes())}:${pad2(now.getSeconds())}`;
+        return text.replace(/\{\{\s*(date|time|counter)(?::(\d+))?\s*\}\}/gi, (match, token, startArg) => {
+            const key = token.toLowerCase();
+            if (key === 'date') return dateStr;
+            if (key === 'time') return timeStr;
+            if (key === 'counter') {
+                const startNum = startArg !== undefined ? parseInt(startArg, 10) : 1;
+                const elapsed = Math.max(0, Math.floor(currentTime - (item.startSec || 0)));
+                return String(startNum + elapsed);
+            }
+            return match;
+        });
+    }
+
     // Draws a decorative background box behind a Text Overlay, centered on the
     // current canvas origin (caller is expected to have already translated to
     // the overlay's position). (w, h) are the full box dimensions.
@@ -4151,46 +4036,6 @@ document.addEventListener('DOMContentLoaded', () => {
     // Positive values arch upward in the middle (rainbow/badge look), negative
     // values dip down in the middle (smile/cup look). ctx.font/fillStyle/
     // textAlign/textBaseline must already be set by the caller.
-    // Applies (or clears) the canvas shadow settings used to render a Text
-    // Overlay's shadow/glow effect. When `highlightPass` is true, uses the
-    // (dimmer, opposite-offset) highlight-layer settings instead of the main
-    // shadow settings — used for the "double-layer" bevel/3D-ish look, where a
-    // dark shadow one direction plus a light highlight the opposite direction
-    // gives the illusion of a raised/embossed edge. This is a canvas-based
-    // approximation, not a true 3D extrude/bevel render.
-    function applyTextOverlayShadow(ctx, item, highlightPass) {
-        if (!item || !item.shadowEnabled) {
-            ctx.shadowColor = 'rgba(0,0,0,0)';
-            ctx.shadowBlur = 0;
-            ctx.shadowOffsetX = 0;
-            ctx.shadowOffsetY = 0;
-            return;
-        }
-        const offX = item.shadowOffsetX !== undefined ? item.shadowOffsetX : 3;
-        const offY = item.shadowOffsetY !== undefined ? item.shadowOffsetY : 3;
-        if (highlightPass) {
-            const hlAlpha = Math.max(0, Math.min(1, (item.shadowHighlightOpacity !== undefined ? item.shadowHighlightOpacity : 40) / 100));
-            const hlBlur = Math.max(0, (item.shadowBlur !== undefined ? item.shadowBlur : 8) * 0.7);
-            ctx.shadowColor = hexToRgba(item.shadowHighlightColor || '#ffffff', hlAlpha);
-            ctx.shadowBlur = hlBlur;
-            ctx.shadowOffsetX = -offX;
-            ctx.shadowOffsetY = -offY;
-        } else {
-            const alpha = Math.max(0, Math.min(1, (item.shadowOpacity !== undefined ? item.shadowOpacity : 60) / 100));
-            ctx.shadowColor = hexToRgba(item.shadowColor || '#000000', alpha);
-            ctx.shadowBlur = item.shadowBlur !== undefined ? item.shadowBlur : 8;
-            ctx.shadowOffsetX = offX;
-            ctx.shadowOffsetY = offY;
-        }
-    }
-
-    function resetTextOverlayShadow(ctx) {
-        ctx.shadowColor = 'rgba(0,0,0,0)';
-        ctx.shadowBlur = 0;
-        ctx.shadowOffsetX = 0;
-        ctx.shadowOffsetY = 0;
-    }
-
     function drawCurvedTextOverlay(ctx, text, curveAmount, strokeColor, strokeWidth) {
         const strength = Math.min(1, Math.abs(curveAmount) / 100);
         if (strength <= 0.001 || !text) {
@@ -4453,6 +4298,25 @@ document.addEventListener('DOMContentLoaded', () => {
         state.ctx.restore();
     }
 
+    // Radial-gradient vignette — darkens the frame edges. `intensity` is 0-100.
+    // Kept as a small standalone helper (Phase 13) so it can be called from
+    // drawFrame without touching the existing filterPreset switch/CSS-filter
+    // logic above it.
+    function drawVignetteOverlay(ctx, w, h, intensity) {
+        const amount = Math.max(0, Math.min(100, intensity)) / 100;
+        const cx = w / 2;
+        const cy = h / 2;
+        const outerRadius = Math.sqrt(cx * cx + cy * cy);
+        const innerRadius = outerRadius * (0.45 - amount * 0.2); // stronger intensity = darkening starts sooner
+        ctx.save();
+        const gradient = ctx.createRadialGradient(cx, cy, Math.max(0, innerRadius), cx, cy, outerRadius);
+        gradient.addColorStop(0, 'rgba(0,0,0,0)');
+        gradient.addColorStop(1, `rgba(0,0,0,${(0.15 + amount * 0.65).toFixed(3)})`);
+        ctx.fillStyle = gradient;
+        ctx.fillRect(0, 0, w, h);
+        ctx.restore();
+    }
+
     function drawFrame() {
         if (!state.duration) return;
         
@@ -4595,6 +4459,13 @@ document.addEventListener('DOMContentLoaded', () => {
             state.ctx.rotate(transRotation);
             state.ctx.translate(-canvasW / 2, -canvasH / 2);
         }
+        if (activeClip && (activeClip.flipH || activeClip.flipV)) {
+            const flipSX = activeClip.flipH ? -1 : 1;
+            const flipSY = activeClip.flipV ? -1 : 1;
+            state.ctx.translate(canvasW / 2, canvasH / 2);
+            state.ctx.scale(flipSX, flipSY);
+            state.ctx.translate(-canvasW / 2, -canvasH / 2);
+        }
         if (transAlpha !== 1) {
             state.ctx.globalAlpha = transAlpha;
         }
@@ -4630,14 +4501,44 @@ document.addEventListener('DOMContentLoaded', () => {
                 grayscaleVal = 100;
                 cVal = cVal * 1.25;
                 break;
+            case 'noir':
+                // High-contrast, slightly darker B&W — more dramatic than 'bw'.
+                grayscaleVal = 100;
+                cVal = cVal * 1.4;
+                bVal = bVal * 0.9;
+                break;
+            case 'tealorange':
+                // Approximates the popular cinematic teal-shadows/orange-highlights
+                // grade using a single global hue-rotate + warm sepia tint, since a
+                // true per-tone split-tone would need per-pixel processing.
+                sepiaVal = 25;
+                hueVal = -8;
+                sVal = sVal * 1.25;
+                cVal = cVal * 1.15;
+                break;
+            case 'dreamy':
+                // Soft, slightly hazy romantic look — brightness up, contrast and
+                // saturation down a touch, a hint of warmth.
+                bVal = bVal * 1.1;
+                cVal = cVal * 0.85;
+                sVal = sVal * 0.95;
+                sepiaVal = 10;
+                break;
         }
         
+        if (state.duotoneEnabled) {
+            // Duotone needs a monochrome luminosity base to re-color via the
+            // 'color' composite operation below — force grayscale regardless
+            // of which filterPreset (if any) is active.
+            grayscaleVal = 100;
+        }
+
         filterVal += `brightness(${bVal}%) `;
         filterVal += `contrast(${cVal}%) `;
         filterVal += `saturate(${sVal}%) `;
         if (sepiaVal > 0) filterVal += `sepia(${sepiaVal}%) `;
         if (grayscaleVal > 0) filterVal += `grayscale(${grayscaleVal}%) `;
-        if (hueVal > 0) filterVal += `hue-rotate(${hueVal}deg) `;
+        if (hueVal !== 0) filterVal += `hue-rotate(${hueVal}deg) `;
         if (transBlur > 0.1) filterVal += `blur(${transBlur.toFixed(1)}px) `;
         
         state.ctx.filter = filterVal;
@@ -4660,7 +4561,44 @@ document.addEventListener('DOMContentLoaded', () => {
                 state.ctx.drawImage(mediaSource, sx, sy, sw, sh, imgDrawX, imgDrawY, imgDrawW, imgDrawH);
             }
         }
+
+        // Duotone — remaps the grayscale base (forced above) onto a two-color
+        // gradient using the canvas 'color' composite operation, which takes
+        // the hue/saturation of what's drawn next (the gradient) and keeps the
+        // luminosity of what's already on the canvas (the grayscale frame).
+        // This avoids getImageData/putImageData entirely.
+        if (state.duotoneEnabled) {
+            const duotoneRect = state.isAdjustingCrop
+                ? { x: drawX, y: drawY, w: drawW, h: drawH }
+                : { x: imgDrawX, y: imgDrawY, w: imgDrawW, h: imgDrawH };
+            state.ctx.save();
+            state.ctx.filter = 'none';
+            state.ctx.globalCompositeOperation = 'color';
+            const duotoneGrad = state.ctx.createLinearGradient(
+                duotoneRect.x, duotoneRect.y, duotoneRect.x, duotoneRect.y + duotoneRect.h
+            );
+            duotoneGrad.addColorStop(0, state.duotoneHighlightColor || '#ffcc00');
+            duotoneGrad.addColorStop(1, state.duotoneShadowColor || '#1a1a4d');
+            state.ctx.fillStyle = duotoneGrad;
+            state.ctx.fillRect(duotoneRect.x, duotoneRect.y, duotoneRect.w, duotoneRect.h);
+            state.ctx.restore();
+        }
         state.ctx.restore();
+
+        // Vignette overlay — a radial gradient darkening the edges. Drawn as a
+        // plain composite operation (no per-pixel read/write), so it's cheap on
+        // low-spec hardware and combines with any filterPreset since it's a
+        // separate draw call rather than part of the CSS filter string above.
+        if (state.vignetteIntensity > 0) {
+            drawVignetteOverlay(state.ctx, canvasW, canvasH, state.vignetteIntensity);
+        }
+
+        // Film grain — drawn after vignette so the grain sits on top of the
+        // darkened edges too. Delegated to film-grain.js (separate file, see
+        // its header comment for the perf reasoning).
+        if (state.filmGrainIntensity > 0 && typeof window.drawFilmGrainOverlay === 'function') {
+            window.drawFilmGrainOverlay(state.ctx, canvasW, canvasH, state.filmGrainIntensity);
+        }
 
         // Image clip resize handles — shown on Steps 1-3 (Media Import, Trim & Layout,
         // Overlays) so the user can drag/resize the image right where they added it,
@@ -6632,34 +6570,28 @@ document.addEventListener('DOMContentLoaded', () => {
 
                 const fontFamily = item.font || 'Hind Siliguri';
                 state.ctx.font = `bold ${item.fontSize}px "${fontFamily}", "Plus Jakarta Sans", sans-serif`;
+                state.ctx.fillStyle = item.color;
                 state.ctx.textAlign = 'center';
                 state.ctx.textBaseline = 'middle';
                 const outlineWidth = Math.max(2, item.fontSize * 0.08);
                 const outlineColor = 'rgba(0,0,0,0.55)';
 
-                const isCurvedNow = !!(curveAmount || (item.curvePoints && item.curvePoints.length >= 2) ||
-                    (state.isDrawingTextCurve && state.textCurvePoints && state.textCurvePoints.length >= 2));
+                // Resolve {{date}}/{{time}}/{{counter}} tokens against the current
+                // playhead time before measuring/drawing; item.text itself is left
+                // untouched so the editing UI still shows the raw token text.
+                const resolvedItemText = resolveTextOverlayTokens(item.text, item, currentTime);
+
+                // Box sizing estimate (straight-line metrics, widened a bit if curved).
+                const metrics = state.ctx.measureText(resolvedItemText);
                 const boxPadX = Math.max(16, item.fontSize * 0.45);
                 const boxPadY = Math.max(10, item.fontSize * 0.32);
-                let boxW, boxH, overlayLines = null, lineHeight = 0;
-
-                if (isCurvedNow) {
-                    // Curved text stays single-line (box sizing estimate, straight-line metrics).
-                    const metrics = state.ctx.measureText(item.text);
-                    boxW = metrics.width + boxPadX * 2;
-                    boxH = item.fontSize + boxPadY * 2;
+                let boxW = metrics.width + boxPadX * 2;
+                let boxH = item.fontSize + boxPadY * 2;
+                if (curveAmount) {
                     const strength = Math.min(1, Math.abs(curveAmount) / 100);
                     boxH += item.fontSize * strength * 0.9;
                     boxW *= (1 + strength * 0.08);
-                } else {
-                    const layout = getTextOverlayLines(state.ctx, item);
-                    overlayLines = layout.lines;
-                    lineHeight = layout.lineHeight;
-                    boxW = layout.maxWidth + boxPadX * 2;
-                    boxH = overlayLines.length * lineHeight + boxPadY * 2;
                 }
-
-                state.ctx.fillStyle = getTextOverlayFillStyle(state.ctx, item, boxW, boxH);
 
                 if (item.boxStyle && item.boxStyle !== 'none') {
                     drawTextOverlayBox(state.ctx, item.boxStyle, item.boxColor || '#4f46e5', boxW, boxH, currentTime);
@@ -6667,56 +6599,27 @@ document.addEventListener('DOMContentLoaded', () => {
 
                 // Subtle outline for readability over any video background,
                 // applied per-draw-mode below.
-                let textToDraw = item.text;
+                let textToDraw = resolvedItemText;
                 if (animStyle === 'typewriter' && anim.phase === 'in') {
-                    const revealCount = Math.max(0, Math.min(item.text.length, Math.round(item.text.length * anim.p)));
-                    textToDraw = item.text.slice(0, revealCount);
+                    const revealCount = Math.max(0, Math.min(resolvedItemText.length, Math.round(resolvedItemText.length * anim.p)));
+                    textToDraw = resolvedItemText.slice(0, revealCount);
                 }
 
-                // Renders the caption once (curved / custom-curve / staggered / default
-                // straight-line path, whichever applies) using whatever ctx.shadow*
-                // settings are currently active — called once for a normal shadow, or
-                // twice (highlight pass + main pass) for the double-layer bevel look.
-                const drawTextOverlayContentOnce = () => {
-                    if (curveAmount && !(item.curvePoints && item.curvePoints.length >= 2) && !(state.isDrawingTextCurve && state.textCurvePoints && state.textCurvePoints.length >= 2)) {
-                        drawCurvedTextOverlay(state.ctx, textToDraw.replace(/\r?\n/g, ' '), curveAmount, outlineColor, outlineWidth);
-                    } else if ((item.curvePoints && item.curvePoints.length >= 2) || (state.isDrawingTextCurve && state.textCurvePoints && state.textCurvePoints.length >= 2)) {
-                        var activeCurvePoints = (state.isDrawingTextCurve && state.textCurvePoints && state.textCurvePoints.length >= 2) ? state.textCurvePoints : item.curvePoints;
-                        drawCustomCurveTextOverlay(state.ctx, textToDraw.replace(/\r?\n/g, ' '), activeCurvePoints, outlineColor, outlineWidth);
-                    } else if (animStyle === 'letter-cascade' && anim.phase !== 'settled') {
-                        drawTextOverlayStaggered(state.ctx, textToDraw.replace(/\r?\n/g, ' '), 'letter', anim.p, outlineColor, outlineWidth);
-                    } else if (animStyle === 'word-stagger' && anim.phase !== 'settled') {
-                        drawTextOverlayStaggered(state.ctx, textToDraw.replace(/\r?\n/g, ' '), 'word', anim.p, outlineColor, outlineWidth);
-                    } else {
-                        // Default (straight, non-staggered) path: draw every manual line of
-                        // the caption, vertically centered as a block around the box origin.
-                        const drawLines = textToDraw.split(/\r?\n/);
-                        const blockH = drawLines.length * lineHeight;
-                        const startY = -blockH / 2 + lineHeight / 2;
-                        state.ctx.lineWidth = outlineWidth;
-                        state.ctx.strokeStyle = outlineColor;
-                        drawLines.forEach((lineStr, li) => {
-                            const ly = startY + li * lineHeight;
-                            state.ctx.strokeText(lineStr, 0, ly);
-                            state.ctx.fillText(lineStr, 0, ly);
-                        });
-                    }
-                };
-
-                // Text Shadow / Glow (with optional double-layer bevel illusion): a
-                // dim highlight-colored duplicate offset one way, then the real text
-                // with its dark shadow offset the opposite way drawn on top — the
-                // opposite-direction offsets are what read as a raised/embossed edge.
-                if (item.shadowEnabled && item.shadowDoubleLayer) {
-                    state.ctx.save();
-                    state.ctx.globalAlpha *= 0.92;
-                    applyTextOverlayShadow(state.ctx, item, true);
-                    drawTextOverlayContentOnce();
-                    state.ctx.restore();
+                if (curveAmount && !(item.curvePoints && item.curvePoints.length >= 2) && !(state.isDrawingTextCurve && state.textCurvePoints && state.textCurvePoints.length >= 2)) {
+                    drawCurvedTextOverlay(state.ctx, textToDraw, curveAmount, outlineColor, outlineWidth);
+                } else if ((item.curvePoints && item.curvePoints.length >= 2) || (state.isDrawingTextCurve && state.textCurvePoints && state.textCurvePoints.length >= 2)) {
+                    var activeCurvePoints = (state.isDrawingTextCurve && state.textCurvePoints && state.textCurvePoints.length >= 2) ? state.textCurvePoints : item.curvePoints;
+                    drawCustomCurveTextOverlay(state.ctx, textToDraw, activeCurvePoints, outlineColor, outlineWidth);
+                } else if (animStyle === 'letter-cascade' && anim.phase !== 'settled') {
+                    drawTextOverlayStaggered(state.ctx, textToDraw, 'letter', anim.p, outlineColor, outlineWidth);
+                } else if (animStyle === 'word-stagger' && anim.phase !== 'settled') {
+                    drawTextOverlayStaggered(state.ctx, textToDraw, 'word', anim.p, outlineColor, outlineWidth);
+                } else {
+                    state.ctx.lineWidth = outlineWidth;
+                    state.ctx.strokeStyle = outlineColor;
+                    state.ctx.strokeText(textToDraw, 0, 0);
+                    state.ctx.fillText(textToDraw, 0, 0);
                 }
-                applyTextOverlayShadow(state.ctx, item, false);
-                drawTextOverlayContentOnce();
-                resetTextOverlayShadow(state.ctx);
 
                 // Selection box + resize & rotate handles in Step 3 for the active text overlay
                 if (state.currentStep === 3 && item.id === state.selectedTextOverlayId) {
@@ -6794,8 +6697,6 @@ document.addEventListener('DOMContentLoaded', () => {
         // --- Step F2: Draw Sticker/Emoji Overlays (Phase 4A) ---
         if (state.stickers && state.stickers.length > 0) {
             state.stickers.forEach((item) => {
-                // Only render stickers that belong to the currently active clip/layer
-                if (item.clipId && item.clipId !== state.activeClipId) return;
                 const fontSize = canvasW * (item.size / 100);
                 const sx = item.x * canvasW;
                 const sy = item.y * canvasH;
@@ -6842,8 +6743,6 @@ document.addEventListener('DOMContentLoaded', () => {
         if (state.symbolOverlays && state.symbolOverlays.length > 0) {
             const symCurrentTime = state.currentTime;
             state.symbolOverlays.forEach((item) => {
-                // Only render symbols that belong to the currently active clip/layer
-                if (item.clipId && item.clipId !== state.activeClipId) return;
                 const isVisible = (state.currentStep === 3 && !state.isPlaying)
                     ? true
                     : (symCurrentTime >= item.startSec && symCurrentTime <= item.endSec);
@@ -6911,8 +6810,6 @@ document.addEventListener('DOMContentLoaded', () => {
         if (state.shapeOverlays && state.shapeOverlays.length > 0) {
             const shpCurrentTime = state.currentTime;
             state.shapeOverlays.forEach((item) => {
-                // Only render shape overlays that belong to the currently active clip/layer
-                if (item.clipId && item.clipId !== state.activeClipId) return;
                 const isVisible = (state.currentStep === 3 && !state.isPlaying)
                     ? true
                     : (shpCurrentTime >= item.startSec && shpCurrentTime <= item.endSec);
@@ -6986,10 +6883,6 @@ document.addEventListener('DOMContentLoaded', () => {
             const canvasW = state.canvas.width;
             const canvasH = state.canvas.height;
             state.fillRegions.forEach(item => {
-                // New fills are tied to a timeline clip.  Keep older projects
-                // (whose fills have no clipId) visible everywhere for backward
-                // compatibility rather than silently losing them.
-                if (item.clipId && item.clipId !== state.activeClipId) return;
                 if (currentTime < item.startSec || currentTime > item.endSec) return;
                 if (item.w <= 0 || item.h <= 0) return;
                 const rx = item.x * canvasW;
@@ -7029,10 +6922,6 @@ document.addEventListener('DOMContentLoaded', () => {
             const hDrawX = hBounds.x, hDrawY = hBounds.y;
             const hDrawW = hBounds.w, hDrawH = hBounds.h;
             state.highlights.forEach((item) => {
-                // A highlight drawn on one video must never carry into another
-                // timeline clip.  Unscoped legacy items retain their previous
-                // project-wide behavior so existing saved projects still open.
-                if (item.clipId && item.clipId !== state.activeClipId) return;
                 if (currentTime < item.startSec || currentTime > item.endSec) return;
                 const x = hDrawX + item.x * hDrawW;
                 const y = hDrawY + item.y * hDrawH;
@@ -7181,6 +7070,20 @@ document.addEventListener('DOMContentLoaded', () => {
         if (state.subtitlesEnabled && activeSubtitleTrack && activeSubtitleTrack.length > 0) {
             const currentTime = state.currentTime;
             const activeSub = activeSubtitleTrack.find(s => currentTime >= s.startSec && currentTime <= s.endSec);
+
+            // Dual/Bilingual Subtitle Display: find the matching cue in the
+            // *other* track (original vs translated) so it can be drawn as a
+            // plain secondary line stacked with the primary (highlighted) one.
+            // Only looked up when the toggle is on, so single-track behavior
+            // below is completely unchanged otherwise.
+            let secondarySub = null;
+            if (state.showBothSubtitles) {
+                const secondaryTrack = (activeSubtitleTrack === state.translatedSubtitles) ? state.subtitles : state.translatedSubtitles;
+                if (secondaryTrack && secondaryTrack.length > 0) {
+                    secondarySub = secondaryTrack.find(s => currentTime >= s.startSec && currentTime <= s.endSec);
+                }
+            }
+
             if (activeSub && activeSub.text) {
                 const st = state.subtitleStyle || {};
                 const canvasW = state.canvas.width;
@@ -7298,6 +7201,64 @@ document.addEventListener('DOMContentLoaded', () => {
                         wordCursor++;
                     }
                 }
+
+                // --- Dual/Bilingual Subtitle Display: secondary track ---
+                // Plain (no word/line highlight), wrapped and pilled the same
+                // way as the primary block, then stacked next to it on the
+                // side facing the canvas center so both stay on-screen.
+                if (secondarySub && secondarySub.text) {
+                    const secWords = secondarySub.text.split(/\s+/).filter(Boolean);
+                    const secLines = [];
+                    let secCurLine = [];
+                    let secCurWidth = 0;
+                    for (let i = 0; i < secWords.length; i++) {
+                        const w = secWords[i];
+                        const ww = ctx.measureText(w + ' ').width;
+                        if (secCurLine.length > 0 && secCurWidth + ww > maxWidth) {
+                            secLines.push(secCurLine);
+                            secCurLine = [w];
+                            secCurWidth = ww;
+                        } else {
+                            secCurLine.push(w);
+                            secCurWidth += ww;
+                        }
+                    }
+                    if (secCurLine.length) secLines.push(secCurLine);
+
+                    let secBlockW = 0;
+                    secLines.forEach(line => {
+                        const w = ctx.measureText(line.join(' ')).width;
+                        if (w > secBlockW) secBlockW = w;
+                    });
+                    const secBlockH = secLines.length * lineHeight;
+                    const stackGap = Math.max(6, fontSize * 0.25);
+                    const secBlockCenterY = (st.position === 'top')
+                        ? blockCenterY + blockH / 2 + stackGap + secBlockH / 2
+                        : blockCenterY - blockH / 2 - stackGap - secBlockH / 2;
+
+                    if (st.bgPillEnabled !== false) {
+                        const secBoxW = Math.min(maxWidth + padX * 2, secBlockW + padX * 2);
+                        const secBoxH = secBlockH + padY * 2;
+                        const rx = centerX - secBoxW / 2;
+                        const ry = secBlockCenterY - secBoxH / 2;
+                        ctx.fillStyle = st.bgPillColor || 'rgba(0, 0, 0, 0.6)';
+                        ctx.beginPath();
+                        ctx.roundRect(rx, ry, secBoxW, secBoxH, st.bgPillRadius != null ? st.bgPillRadius : 8);
+                        ctx.fill();
+                    }
+
+                    ctx.font = `${fontWeight} ${fontSize}px ${fontFamily}`;
+                    ctx.lineWidth = outlineWidth;
+                    ctx.strokeStyle = outlineColor;
+                    ctx.fillStyle = baseColor;
+                    for (let li = 0; li < secLines.length; li++) {
+                        const lineText = secLines[li].join(' ');
+                        const lineY = secBlockCenterY - secBlockH / 2 + lineHeight * (li + 0.5);
+                        ctx.strokeText(lineText, centerX, lineY);
+                        ctx.fillText(lineText, centerX, lineY);
+                    }
+                }
+
                 ctx.restore();
             }
         }
@@ -7542,7 +7503,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
             // Check if clicking on an existing fill region for drag/resize
             const hitRegion = [...(state.fillRegions || [])].reverse().find(r => {
-                if (r.clipId && r.clipId !== state.activeClipId) return false;
                 if (now < r.startSec || now > r.endSec) return false;
                 const rx = r.x * canvasW, ry = r.y * canvasH;
                 const rw = r.w * canvasW, rh = r.h * canvasH;
@@ -7574,7 +7534,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 id: Date.now(),
                 color: fillColor,
                 opacity: fillOpacity,
-                clipId: state.activeClipId,
                 x: nx, y: ny, w: 0, h: 0,
                 startSec: now,
                 endSec: Math.max(now + 1, state.endTime || state.duration || 5)
@@ -7623,7 +7582,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     if (Math.hypot(startPoint.x - endpoint.x, startPoint.y - endpoint.y) < 0.035) item = selected;
                 }
                 if (!item) {
-                    item = { id: Date.now(), clipId: state.activeClipId, shape, color, lineWidth, fillOpacity, drawDuration, x: startPoint.x, y: startPoint.y, w: 0, h: 0, points: [startPoint], isClosed: false, startSec: now, endSec: Math.max(now + 1, state.endTime || state.duration || 5) };
+                    item = { id: Date.now(), shape, color, lineWidth, fillOpacity, drawDuration, x: startPoint.x, y: startPoint.y, w: 0, h: 0, points: [startPoint], isClosed: false, startSec: now, endSec: Math.max(now + 1, state.endTime || state.duration || 5) };
                     state.highlights.push(item);
                     state.selectedHighlightId = item.id;
                 }
@@ -7637,7 +7596,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 e.preventDefault();
                 return;
             }
-            const item = { id: Date.now(), clipId: state.activeClipId, shape, color, lineWidth, fillOpacity, drawDuration, x: startPoint.x, y: startPoint.y, w: 0, h: 0, points: shape === 'freehand' ? [startPoint] : undefined, isClosed: false, startSec: now, endSec: Math.max(now + 1, state.endTime || state.duration || 5) };
+            const item = { id: Date.now(), shape, color, lineWidth, fillOpacity, drawDuration, x: startPoint.x, y: startPoint.y, w: 0, h: 0, points: shape === 'freehand' ? [startPoint] : undefined, isClosed: false, startSec: now, endSec: Math.max(now + 1, state.endTime || state.duration || 5) };
             state.highlights.push(item);
             state.selectedHighlightId = item.id;
             state.isDrawingNewHighlight = true;
@@ -8391,8 +8350,6 @@ document.addEventListener('DOMContentLoaded', () => {
         const now = Math.max(0, state.currentTime || 0);
         for (let i = state.symbolOverlays.length - 1; i >= 0; i--) {
             const item = state.symbolOverlays[i];
-            // Skip symbols that belong to a different clip/layer
-            if (item.clipId && item.clipId !== state.activeClipId) continue;
             if (now < (item.startSec || 0) || now > (item.endSec || 0)) continue;
             const box = getSymbolBox(item, canvasW, canvasH);
             let testX = coords.x, testY = coords.y;
@@ -8670,8 +8627,6 @@ document.addEventListener('DOMContentLoaded', () => {
         const now = Math.max(0, state.currentTime || 0);
         for (let i = state.shapeOverlays.length - 1; i >= 0; i--) {
             const item = state.shapeOverlays[i];
-            // Skip shape overlays that belong to a different clip/layer
-            if (item.clipId && item.clipId !== state.activeClipId) continue;
             if (now < (item.startSec || 0) || now > (item.endSec || 0)) continue;
             const box = getShapeOverlayBox(item, canvasW, canvasH);
             let testX = coords.x, testY = coords.y;
@@ -8997,8 +8952,6 @@ document.addEventListener('DOMContentLoaded', () => {
         // Search topmost (last drawn / last added) first
         for (let i = state.stickers.length - 1; i >= 0; i--) {
             const item = state.stickers[i];
-            // Skip stickers that belong to a different clip/layer
-            if (item.clipId && item.clipId !== state.activeClipId) continue;
             if (now < (item.startSec || 0) || now > (item.endSec || 0)) continue;
             const box = getStickerBox(item, canvasW, canvasH);
             if (coords.x >= box.cx - box.boxW / 2 && coords.x <= box.cx + box.boxW / 2 &&
@@ -9033,71 +8986,19 @@ document.addEventListener('DOMContentLoaded', () => {
         return Math.abs(coords.x - handleX) <= pad && Math.abs(coords.y - handleY) <= pad;
     }
 
-    // A Text Overlay's text can now contain manual line breaks (multi-line
-    // captions, e.g. splitting one long point into 2–3 shorter lines for
-    // readability). Curved text (curve slider or custom drawn curve) and the
-    // per-character/word stagger animations still operate on a single line
-    // (multi-line + curved-path text is a much more complex layout problem),
-    // so this helper is only consulted for the "straight" rendering path —
-    // callers fall back to the old single-line behaviour when a curve is active.
-    function getTextOverlayLines(ctx, item) {
-        const raw = String(item.text || '');
-        const lines = raw.split(/\r?\n/);
-        const lineHeight = (item.fontSize || 32) * 1.25;
-        let maxWidth = 0;
-        lines.forEach((line) => {
-            const w = ctx.measureText(line).width;
-            if (w > maxWidth) maxWidth = w;
-        });
-        return { lines, lineHeight, maxWidth };
-    }
-
-    // Builds a solid-color or gradient fillStyle for a Text Overlay, sized to
-    // the item's own text box (in the local/rotated coordinate space, where
-    // (0,0) is the box's own center since the caller has already translated
-    // there). Gradient direction is user-selectable: left→right, top→bottom,
-    // or a corner-to-corner diagonal — this covers the common "two-tone
-    // caption" look (e.g. green→yellow) without needing a full color-stop editor.
-    function getTextOverlayFillStyle(ctx, item, boxW, boxH) {
-        if (item.colorMode === 'gradient' && item.gradientColor1 && item.gradientColor2) {
-            const w2 = Math.max(1, boxW) / 2;
-            const h2 = Math.max(1, boxH) / 2;
-            let grad;
-            if (item.gradientDirection === 'vertical') {
-                grad = ctx.createLinearGradient(0, -h2, 0, h2);
-            } else if (item.gradientDirection === 'diagonal') {
-                grad = ctx.createLinearGradient(-w2, -h2, w2, h2);
-            } else {
-                grad = ctx.createLinearGradient(-w2, 0, w2, 0);
-            }
-            grad.addColorStop(0, item.gradientColor1);
-            grad.addColorStop(1, item.gradientColor2);
-            return grad;
-        }
-        return item.color;
-    }
-
     function getTextOverlayBox(item) {
         const canvasW = state.canvas.width;
         const canvasH = state.canvas.height;
         state.ctx.font = `bold ${item.fontSize}px "${item.font || 'Hind Siliguri'}", "Plus Jakarta Sans", sans-serif`;
+        const metrics = state.ctx.measureText(item.text);
         const boxPadX = Math.max(16, item.fontSize * 0.45);
         const boxPadY = Math.max(10, item.fontSize * 0.32);
-        const isCurved = !!item.curve || (item.curvePoints && item.curvePoints.length >= 2);
-        let w, h;
-        if (isCurved) {
-            // Curved text stays single-line — keep the original straight-line
-            // metrics estimate so curve math elsewhere is unaffected.
-            const metrics = state.ctx.measureText(item.text);
-            w = metrics.width + boxPadX * 2;
-            h = item.fontSize + boxPadY * 2;
-            const strength = Math.min(1, Math.abs(item.curve || 0) / 100);
+        let w = metrics.width + boxPadX * 2;
+        let h = item.fontSize + boxPadY * 2;
+        if (item.curve) {
+            const strength = Math.min(1, Math.abs(item.curve) / 100);
             h += item.fontSize * strength * 0.9;
             w *= (1 + strength * 0.08);
-        } else {
-            const { lines, lineHeight, maxWidth } = getTextOverlayLines(state.ctx, item);
-            w = maxWidth + boxPadX * 2;
-            h = lines.length * lineHeight + boxPadY * 2;
         }
         return { cx: item.x * canvasW, cy: item.y * canvasH, w, h };
     }
@@ -10475,9 +10376,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const highlightEndInput = document.getElementById('highlight-end');
     const deleteHighlightBtn = document.getElementById('delete-highlight-btn');
 
-    function selectedHighlight() {
-        return state.highlights.find(h => h.id === state.selectedHighlightId && (!h.clipId || h.clipId === state.activeClipId));
-    }
+    function selectedHighlight() { return state.highlights.find(h => h.id === state.selectedHighlightId); }
     function syncSelectedHighlightStyle() {
         const item = selectedHighlight(); if (!item) return;
         item.shape = highlightShapeSelect.value; item.color = highlightColorInput.value;
@@ -10488,7 +10387,7 @@ document.addEventListener('DOMContentLoaded', () => {
     function renderHighlightList() {
         if (!highlightListEl) return;
         highlightListEl.innerHTML = '';
-        state.highlights.filter(item => !item.clipId || item.clipId === state.activeClipId).forEach((item, index) => {
+        state.highlights.forEach((item, index) => {
             const row = document.createElement('div');
             row.className = 'text-overlay-list-item' + (item.id === state.selectedHighlightId ? ' active' : '');
             row.style.cssText = `display:flex;align-items:center;justify-content:space-between;padding:8px 12px;border-radius:6px;margin-bottom:6px;cursor:pointer;background:${item.id === state.selectedHighlightId ? 'rgba(0,229,255,.12)' : 'rgba(255,255,255,.04)'};border:1px solid ${item.id === state.selectedHighlightId ? '#00e5ff' : 'transparent'};`;
@@ -10545,14 +10444,12 @@ document.addEventListener('DOMContentLoaded', () => {
     const fillEndInput = document.getElementById('fill-end');
     const deleteFillBtn = document.getElementById('delete-fill-btn');
 
-    function selectedFill() {
-        return (state.fillRegions || []).find(r => r.id === state.selectedFillId && (!r.clipId || r.clipId === state.activeClipId));
-    }
+    function selectedFill() { return (state.fillRegions || []).find(r => r.id === state.selectedFillId); }
 
     function renderFillList() {
         if (!fillListEl) return;
         fillListEl.innerHTML = '';
-        (state.fillRegions || []).filter(item => !item.clipId || item.clipId === state.activeClipId).forEach((item, index) => {
+        (state.fillRegions || []).forEach((item, index) => {
             const row = document.createElement('div');
             row.className = 'text-overlay-list-item' + (item.id === state.selectedFillId ? ' active' : '');
             row.style.cssText = `display:flex;align-items:center;justify-content:space-between;padding:8px 12px;border-radius:6px;margin-bottom:6px;cursor:pointer;background:${item.id === state.selectedFillId ? 'rgba(255,200,0,.12)' : 'rgba(255,255,255,.04)'};border:1px solid ${item.id === state.selectedFillId ? '#ffc800' : 'transparent'};`;
@@ -10653,36 +10550,6 @@ document.addEventListener('DOMContentLoaded', () => {
     const textOverlayEndInput = document.getElementById('text-overlay-end');
     const textOverlayEditInput = document.getElementById('text-overlay-edit-input');
     const deleteTextOverlayBtn = document.getElementById('delete-text-overlay-btn');
-    const textOverlayColorModeSelect = document.getElementById('text-overlay-color-mode');
-    const textOverlayGradientGroup = document.getElementById('text-overlay-gradient-group');
-    const textOverlayGradientColor1 = document.getElementById('text-overlay-gradient-color1');
-    const textOverlayGradientColor1Val = document.getElementById('text-overlay-gradient-color1-val');
-    const textOverlayGradientColor2 = document.getElementById('text-overlay-gradient-color2');
-    const textOverlayGradientColor2Val = document.getElementById('text-overlay-gradient-color2-val');
-    const textOverlayGradientDirectionSelect = document.getElementById('text-overlay-gradient-direction');
-
-    // Shadow / Glow controls (text overlay shadow customization)
-    const textOverlayShadowEnabledToggle = document.getElementById('text-overlay-shadow-enabled');
-    const textOverlayShadowGroup = document.getElementById('text-overlay-shadow-group');
-    const textOverlayShadowColorInput = document.getElementById('text-overlay-shadow-color');
-    const textOverlayShadowColorVal = document.getElementById('text-overlay-shadow-color-val');
-    const textOverlayShadowOpacitySlider = document.getElementById('text-overlay-shadow-opacity');
-    const textOverlayShadowOpacityVal = document.getElementById('text-overlay-shadow-opacity-val');
-    const textOverlayShadowBlurSlider = document.getElementById('text-overlay-shadow-blur');
-    const textOverlayShadowBlurVal = document.getElementById('text-overlay-shadow-blur-val');
-    const textOverlayShadowOffsetXSlider = document.getElementById('text-overlay-shadow-offset-x');
-    const textOverlayShadowOffsetXVal = document.getElementById('text-overlay-shadow-offset-x-val');
-    const textOverlayShadowOffsetYSlider = document.getElementById('text-overlay-shadow-offset-y');
-    const textOverlayShadowOffsetYVal = document.getElementById('text-overlay-shadow-offset-y-val');
-    const textOverlayShadowDoubleLayerToggle = document.getElementById('text-overlay-shadow-double-layer');
-    const textOverlayShadowHighlightGroup = document.getElementById('text-overlay-shadow-highlight-group');
-    const textOverlayShadowHighlightColorInput = document.getElementById('text-overlay-shadow-highlight-color');
-    const textOverlayShadowHighlightColorVal = document.getElementById('text-overlay-shadow-highlight-color-val');
-    const textOverlayShadowHighlightOpacitySlider = document.getElementById('text-overlay-shadow-highlight-opacity');
-    const textOverlayShadowHighlightOpacityVal = document.getElementById('text-overlay-shadow-highlight-opacity-val');
-    const textShadowPresetNormalBtn = document.getElementById('text-shadow-preset-normal');
-    const textShadowPresetGlowBtn = document.getElementById('text-shadow-preset-glow');
-    const textShadowPresetBevelBtn = document.getElementById('text-shadow-preset-bevel');
 
     let textOverlayIdCounter = 1;
 
@@ -10733,161 +10600,6 @@ document.addEventListener('DOMContentLoaded', () => {
         const item = getSelectedTextOverlay();
         if (item) { item.color = e.target.value; drawFrame(); }
     });
-
-    // Solid vs Gradient text color (Phase 1 text upgrade). "Gradient" gives
-    // the two-tone caption look (e.g. green→yellow) requested — the color
-    // sweeps across the text's own bounding box in the chosen direction.
-    function refreshTextOverlayGradientVisibility() {
-        if (!textOverlayGradientGroup || !textOverlayColorModeSelect) return;
-        textOverlayGradientGroup.style.display = (textOverlayColorModeSelect.value === 'gradient') ? 'block' : 'none';
-    }
-    if (textOverlayColorModeSelect) {
-        refreshTextOverlayGradientVisibility();
-        textOverlayColorModeSelect.addEventListener('change', (e) => {
-            refreshTextOverlayGradientVisibility();
-            const item = getSelectedTextOverlay();
-            if (item) { item.colorMode = e.target.value; drawFrame(); if (window.triggerAutoSave) window.triggerAutoSave(); }
-        });
-    }
-    if (textOverlayGradientColor1) {
-        textOverlayGradientColor1.addEventListener('input', (e) => {
-            if (textOverlayGradientColor1Val) textOverlayGradientColor1Val.innerText = e.target.value;
-            const item = getSelectedTextOverlay();
-            if (item) { item.gradientColor1 = e.target.value; drawFrame(); }
-        });
-    }
-    if (textOverlayGradientColor2) {
-        textOverlayGradientColor2.addEventListener('input', (e) => {
-            if (textOverlayGradientColor2Val) textOverlayGradientColor2Val.innerText = e.target.value;
-            const item = getSelectedTextOverlay();
-            if (item) { item.gradientColor2 = e.target.value; drawFrame(); }
-        });
-    }
-    if (textOverlayGradientDirectionSelect) {
-        textOverlayGradientDirectionSelect.addEventListener('change', (e) => {
-            const item = getSelectedTextOverlay();
-            if (item) { item.gradientDirection = e.target.value; drawFrame(); if (window.triggerAutoSave) window.triggerAutoSave(); }
-        });
-    }
-
-    // --- Text Shadow / Glow controls ---
-    // Shows/hides the shadow settings group based on the enable toggle.
-    function refreshTextOverlayShadowVisibility() {
-        if (!textOverlayShadowGroup || !textOverlayShadowEnabledToggle) return;
-        textOverlayShadowGroup.style.display = textOverlayShadowEnabledToggle.checked ? 'block' : 'none';
-    }
-    // Shows/hides the highlight-layer sub-controls based on the double-layer toggle.
-    function refreshTextOverlayShadowHighlightVisibility() {
-        if (!textOverlayShadowHighlightGroup || !textOverlayShadowDoubleLayerToggle) return;
-        textOverlayShadowHighlightGroup.style.display = textOverlayShadowDoubleLayerToggle.checked ? 'block' : 'none';
-    }
-    refreshTextOverlayShadowVisibility();
-    refreshTextOverlayShadowHighlightVisibility();
-
-    if (textOverlayShadowEnabledToggle) {
-        textOverlayShadowEnabledToggle.addEventListener('change', (e) => {
-            refreshTextOverlayShadowVisibility();
-            const item = getSelectedTextOverlay();
-            if (item) { item.shadowEnabled = e.target.checked; drawFrame(); if (window.triggerAutoSave) window.triggerAutoSave(); }
-        });
-    }
-    if (textOverlayShadowColorInput) {
-        textOverlayShadowColorInput.addEventListener('input', (e) => {
-            if (textOverlayShadowColorVal) textOverlayShadowColorVal.innerText = e.target.value;
-            const item = getSelectedTextOverlay();
-            if (item) { item.shadowColor = e.target.value; drawFrame(); }
-        });
-    }
-    if (textOverlayShadowOpacitySlider) {
-        textOverlayShadowOpacitySlider.addEventListener('input', (e) => {
-            if (textOverlayShadowOpacityVal) textOverlayShadowOpacityVal.innerText = e.target.value + '%';
-            const item = getSelectedTextOverlay();
-            if (item) { item.shadowOpacity = parseInt(e.target.value); drawFrame(); }
-        });
-    }
-    if (textOverlayShadowBlurSlider) {
-        textOverlayShadowBlurSlider.addEventListener('input', (e) => {
-            if (textOverlayShadowBlurVal) textOverlayShadowBlurVal.innerText = e.target.value + 'px';
-            const item = getSelectedTextOverlay();
-            if (item) { item.shadowBlur = parseInt(e.target.value); drawFrame(); }
-        });
-    }
-    if (textOverlayShadowOffsetXSlider) {
-        textOverlayShadowOffsetXSlider.addEventListener('input', (e) => {
-            if (textOverlayShadowOffsetXVal) textOverlayShadowOffsetXVal.innerText = e.target.value + 'px';
-            const item = getSelectedTextOverlay();
-            if (item) { item.shadowOffsetX = parseInt(e.target.value); drawFrame(); }
-        });
-    }
-    if (textOverlayShadowOffsetYSlider) {
-        textOverlayShadowOffsetYSlider.addEventListener('input', (e) => {
-            if (textOverlayShadowOffsetYVal) textOverlayShadowOffsetYVal.innerText = e.target.value + 'px';
-            const item = getSelectedTextOverlay();
-            if (item) { item.shadowOffsetY = parseInt(e.target.value); drawFrame(); }
-        });
-    }
-    if (textOverlayShadowDoubleLayerToggle) {
-        textOverlayShadowDoubleLayerToggle.addEventListener('change', (e) => {
-            refreshTextOverlayShadowHighlightVisibility();
-            const item = getSelectedTextOverlay();
-            if (item) { item.shadowDoubleLayer = e.target.checked; drawFrame(); if (window.triggerAutoSave) window.triggerAutoSave(); }
-        });
-    }
-    if (textOverlayShadowHighlightColorInput) {
-        textOverlayShadowHighlightColorInput.addEventListener('input', (e) => {
-            if (textOverlayShadowHighlightColorVal) textOverlayShadowHighlightColorVal.innerText = e.target.value;
-            const item = getSelectedTextOverlay();
-            if (item) { item.shadowHighlightColor = e.target.value; drawFrame(); }
-        });
-    }
-    if (textOverlayShadowHighlightOpacitySlider) {
-        textOverlayShadowHighlightOpacitySlider.addEventListener('input', (e) => {
-            if (textOverlayShadowHighlightOpacityVal) textOverlayShadowHighlightOpacityVal.innerText = e.target.value + '%';
-            const item = getSelectedTextOverlay();
-            if (item) { item.shadowHighlightOpacity = parseInt(e.target.value); drawFrame(); }
-        });
-    }
-
-    // Applies preset values to the shadow controls (and the live-selected item, if any)
-    // so users don't have to manually dial in every slider each time.
-    function applyTextShadowPreset(preset) {
-        const item = getSelectedTextOverlay();
-        const vals = {
-            normal: { color: '#000000', opacity: 55, blur: 6, offX: 3, offY: 3, dbl: false, hlColor: '#ffffff', hlOpacity: 40 },
-            glow:   { color: (item && item.color) || '#facc15', opacity: 90, blur: 20, offX: 0, offY: 0, dbl: false, hlColor: '#ffffff', hlOpacity: 40 },
-            bevel:  { color: '#000000', opacity: 70, blur: 4, offX: 2, offY: 3, dbl: true, hlColor: '#ffffff', hlOpacity: 50 }
-        }[preset];
-        if (!vals) return;
-
-        if (textOverlayShadowEnabledToggle) textOverlayShadowEnabledToggle.checked = true;
-        if (textOverlayShadowColorInput) { textOverlayShadowColorInput.value = vals.color; if (textOverlayShadowColorVal) textOverlayShadowColorVal.innerText = vals.color; }
-        if (textOverlayShadowOpacitySlider) { textOverlayShadowOpacitySlider.value = vals.opacity; if (textOverlayShadowOpacityVal) textOverlayShadowOpacityVal.innerText = vals.opacity + '%'; }
-        if (textOverlayShadowBlurSlider) { textOverlayShadowBlurSlider.value = vals.blur; if (textOverlayShadowBlurVal) textOverlayShadowBlurVal.innerText = vals.blur + 'px'; }
-        if (textOverlayShadowOffsetXSlider) { textOverlayShadowOffsetXSlider.value = vals.offX; if (textOverlayShadowOffsetXVal) textOverlayShadowOffsetXVal.innerText = vals.offX + 'px'; }
-        if (textOverlayShadowOffsetYSlider) { textOverlayShadowOffsetYSlider.value = vals.offY; if (textOverlayShadowOffsetYVal) textOverlayShadowOffsetYVal.innerText = vals.offY + 'px'; }
-        if (textOverlayShadowDoubleLayerToggle) textOverlayShadowDoubleLayerToggle.checked = vals.dbl;
-        if (textOverlayShadowHighlightColorInput) { textOverlayShadowHighlightColorInput.value = vals.hlColor; if (textOverlayShadowHighlightColorVal) textOverlayShadowHighlightColorVal.innerText = vals.hlColor; }
-        if (textOverlayShadowHighlightOpacitySlider) { textOverlayShadowHighlightOpacitySlider.value = vals.hlOpacity; if (textOverlayShadowHighlightOpacityVal) textOverlayShadowHighlightOpacityVal.innerText = vals.hlOpacity + '%'; }
-        refreshTextOverlayShadowVisibility();
-        refreshTextOverlayShadowHighlightVisibility();
-
-        if (item) {
-            item.shadowEnabled = true;
-            item.shadowColor = vals.color;
-            item.shadowOpacity = vals.opacity;
-            item.shadowBlur = vals.blur;
-            item.shadowOffsetX = vals.offX;
-            item.shadowOffsetY = vals.offY;
-            item.shadowDoubleLayer = vals.dbl;
-            item.shadowHighlightColor = vals.hlColor;
-            item.shadowHighlightOpacity = vals.hlOpacity;
-            drawFrame();
-            if (window.triggerAutoSave) window.triggerAutoSave();
-        }
-    }
-    if (textShadowPresetNormalBtn) textShadowPresetNormalBtn.addEventListener('click', () => applyTextShadowPreset('normal'));
-    if (textShadowPresetGlowBtn) textShadowPresetGlowBtn.addEventListener('click', () => applyTextShadowPreset('glow'));
-    if (textShadowPresetBevelBtn) textShadowPresetBevelBtn.addEventListener('click', () => applyTextShadowPreset('bevel'));
 
     textOverlayFontSelect.addEventListener('change', (e) => {
         const item = getSelectedTextOverlay();
@@ -10988,10 +10700,6 @@ document.addEventListener('DOMContentLoaded', () => {
             y: 0.5,
             fontSize: parseInt(textOverlayFontsizeSlider.value),
             color: textOverlayColorInput.value,
-            colorMode: (textOverlayColorModeSelect && textOverlayColorModeSelect.value) || 'solid',
-            gradientColor1: (textOverlayGradientColor1 && textOverlayGradientColor1.value) || '#22d3ee',
-            gradientColor2: (textOverlayGradientColor2 && textOverlayGradientColor2.value) || '#a855f7',
-            gradientDirection: (textOverlayGradientDirectionSelect && textOverlayGradientDirectionSelect.value) || 'horizontal',
             font: textOverlayFontSelect.value || 'Hind Siliguri',
             boxStyle: textOverlayBoxSelect.value || 'none',
             boxColor: textOverlayBoxColorInput.value || '#4f46e5',
@@ -10999,15 +10707,6 @@ document.addEventListener('DOMContentLoaded', () => {
             animSpeedSec: textOverlayAnimSpeedSlider ? parseFloat(textOverlayAnimSpeedSlider.value) || 0.5 : 0.5,
             curve: parseInt(textOverlayCurveSlider.value) || 0,
             curvePoints: [],
-            shadowEnabled: textOverlayShadowEnabledToggle ? !!textOverlayShadowEnabledToggle.checked : false,
-            shadowColor: (textOverlayShadowColorInput && textOverlayShadowColorInput.value) || '#000000',
-            shadowOpacity: textOverlayShadowOpacitySlider ? parseInt(textOverlayShadowOpacitySlider.value) : 60,
-            shadowBlur: textOverlayShadowBlurSlider ? parseInt(textOverlayShadowBlurSlider.value) : 8,
-            shadowOffsetX: textOverlayShadowOffsetXSlider ? parseInt(textOverlayShadowOffsetXSlider.value) : 3,
-            shadowOffsetY: textOverlayShadowOffsetYSlider ? parseInt(textOverlayShadowOffsetYSlider.value) : 3,
-            shadowDoubleLayer: textOverlayShadowDoubleLayerToggle ? !!textOverlayShadowDoubleLayerToggle.checked : false,
-            shadowHighlightColor: (textOverlayShadowHighlightColorInput && textOverlayShadowHighlightColorInput.value) || '#ffffff',
-            shadowHighlightOpacity: textOverlayShadowHighlightOpacitySlider ? parseInt(textOverlayShadowHighlightOpacitySlider.value) : 40,
             startSec: 0,
             endSec: Math.max(1, state.duration || 5)
         };
@@ -11077,11 +10776,6 @@ document.addEventListener('DOMContentLoaded', () => {
         textOverlayFontsizeVal.innerText = item.fontSize + 'px';
         textOverlayColorInput.value = item.color;
         textOverlayColorVal.innerText = item.color;
-        if (textOverlayColorModeSelect) textOverlayColorModeSelect.value = item.colorMode || 'solid';
-        if (textOverlayGradientColor1) { textOverlayGradientColor1.value = item.gradientColor1 || '#22d3ee'; if (textOverlayGradientColor1Val) textOverlayGradientColor1Val.innerText = textOverlayGradientColor1.value; }
-        if (textOverlayGradientColor2) { textOverlayGradientColor2.value = item.gradientColor2 || '#a855f7'; if (textOverlayGradientColor2Val) textOverlayGradientColor2Val.innerText = textOverlayGradientColor2.value; }
-        if (textOverlayGradientDirectionSelect) textOverlayGradientDirectionSelect.value = item.gradientDirection || 'horizontal';
-        refreshTextOverlayGradientVisibility();
         textOverlayFontSelect.value = item.font || 'Hind Siliguri';
         textOverlayBoxSelect.value = item.boxStyle || 'none';
         textOverlayBoxColorInput.value = item.boxColor || '#4f46e5';
@@ -11095,20 +10789,6 @@ document.addEventListener('DOMContentLoaded', () => {
         textOverlayCurveSlider.value = item.curve || 0;
         textOverlayCurveVal.innerText = item.curve || 0;
         refreshTextOverlayBoxColorVisibility();
-
-        // Sync Shadow / Glow controls to this item
-        if (textOverlayShadowEnabledToggle) textOverlayShadowEnabledToggle.checked = !!item.shadowEnabled;
-        if (textOverlayShadowColorInput) { textOverlayShadowColorInput.value = item.shadowColor || '#000000'; if (textOverlayShadowColorVal) textOverlayShadowColorVal.innerText = textOverlayShadowColorInput.value; }
-        if (textOverlayShadowOpacitySlider) { const v = item.shadowOpacity !== undefined ? item.shadowOpacity : 60; textOverlayShadowOpacitySlider.value = v; if (textOverlayShadowOpacityVal) textOverlayShadowOpacityVal.innerText = v + '%'; }
-        if (textOverlayShadowBlurSlider) { const v = item.shadowBlur !== undefined ? item.shadowBlur : 8; textOverlayShadowBlurSlider.value = v; if (textOverlayShadowBlurVal) textOverlayShadowBlurVal.innerText = v + 'px'; }
-        if (textOverlayShadowOffsetXSlider) { const v = item.shadowOffsetX !== undefined ? item.shadowOffsetX : 3; textOverlayShadowOffsetXSlider.value = v; if (textOverlayShadowOffsetXVal) textOverlayShadowOffsetXVal.innerText = v + 'px'; }
-        if (textOverlayShadowOffsetYSlider) { const v = item.shadowOffsetY !== undefined ? item.shadowOffsetY : 3; textOverlayShadowOffsetYSlider.value = v; if (textOverlayShadowOffsetYVal) textOverlayShadowOffsetYVal.innerText = v + 'px'; }
-        if (textOverlayShadowDoubleLayerToggle) textOverlayShadowDoubleLayerToggle.checked = !!item.shadowDoubleLayer;
-        if (textOverlayShadowHighlightColorInput) { textOverlayShadowHighlightColorInput.value = item.shadowHighlightColor || '#ffffff'; if (textOverlayShadowHighlightColorVal) textOverlayShadowHighlightColorVal.innerText = textOverlayShadowHighlightColorInput.value; }
-        if (textOverlayShadowHighlightOpacitySlider) { const v = item.shadowHighlightOpacity !== undefined ? item.shadowHighlightOpacity : 40; textOverlayShadowHighlightOpacitySlider.value = v; if (textOverlayShadowHighlightOpacityVal) textOverlayShadowHighlightOpacityVal.innerText = v + '%'; }
-        if (typeof refreshTextOverlayShadowVisibility === 'function') refreshTextOverlayShadowVisibility();
-        if (typeof refreshTextOverlayShadowHighlightVisibility === 'function') refreshTextOverlayShadowHighlightVisibility();
-
         if (window.updateCurveButtonVisibility) window.updateCurveButtonVisibility();
     }
 
@@ -13470,8 +13150,7 @@ document.addEventListener('DOMContentLoaded', () => {
             emoji: emoji,
             x: 0.5,
             y: 0.5,
-            size: 12, // percent of canvas width
-            clipId: state.activeClipId   // bind to the active layer/clip
+            size: 12 // percent of canvas width
         };
         state.stickers.push(newItem);
         state.selectedStickerId = newItem.id;
@@ -13493,9 +13172,7 @@ document.addEventListener('DOMContentLoaded', () => {
     function renderStickerList() {
         if (!stickerListEl) return;
         stickerListEl.innerHTML = '';
-        state.stickers
-            .filter(item => !item.clipId || item.clipId === state.activeClipId)
-            .forEach((item) => {
+        state.stickers.forEach((item) => {
             const row = document.createElement('div');
             row.className = 'sticker-list-item' + (item.id === state.selectedStickerId ? ' active' : '');
             row.style.display = 'flex';
@@ -13622,8 +13299,7 @@ document.addEventListener('DOMContentLoaded', () => {
             rotation: 0,
             color: '#ff3b30',
             startSec: start,
-            endSec: end > start ? end : start + 3,
-            clipId: state.activeClipId   // bind to the active layer/clip
+            endSec: end > start ? end : start + 3
         };
         state.symbolOverlays.push(newItem);
         state.selectedSymbolId = newItem.id;
@@ -13645,9 +13321,7 @@ document.addEventListener('DOMContentLoaded', () => {
     function renderSymbolList() {
         if (!symbolListEl) return;
         symbolListEl.innerHTML = '';
-        state.symbolOverlays
-            .filter(item => !item.clipId || item.clipId === state.activeClipId)
-            .forEach((item) => {
+        state.symbolOverlays.forEach((item) => {
             const row = document.createElement('div');
             row.className = 'sticker-list-item' + (item.id === state.selectedSymbolId ? ' active' : '');
             row.style.display = 'flex';
@@ -13825,8 +13499,7 @@ document.addEventListener('DOMContentLoaded', () => {
             font: 'Hind Siliguri',
             flightPath: isPlane ? 'ltr' : 'static',
             startSec: start,
-            endSec: end > start ? end : start + defaultDur,
-            clipId: state.activeClipId   // bind to the active layer/clip
+            endSec: end > start ? end : start + defaultDur
         };
         state.shapeOverlays.push(newItem);
         state.selectedShapeOverlayId = newItem.id;
@@ -13848,9 +13521,7 @@ document.addEventListener('DOMContentLoaded', () => {
     function renderShapeOverlayList() {
         if (!shapeOverlayListEl) return;
         shapeOverlayListEl.innerHTML = '';
-        state.shapeOverlays
-            .filter(item => !item.clipId || item.clipId === state.activeClipId)
-            .forEach((item) => {
+        state.shapeOverlays.forEach((item) => {
             const row = document.createElement('div');
             row.className = 'sticker-list-item' + (item.id === state.selectedShapeOverlayId ? ' active' : '');
             row.style.display = 'flex';
@@ -14019,30 +13690,6 @@ document.addEventListener('DOMContentLoaded', () => {
     window.onShapeOverlaySelected = function(id) {
         renderShapeOverlayList();
         showShapeOverlayControlsFor(id);
-    };
-
-    // Called whenever the active clip/layer changes so all three overlay panels
-    // refresh and show only the items that belong to the newly active clip.
-    window.refreshOverlayPanels = function() {
-        renderStickerList();
-        renderSymbolList();
-        renderShapeOverlayList();
-        // Hide controls if the previously-selected item belongs to another clip
-        const activeSticker = state.stickers.find(s => s.id === state.selectedStickerId);
-        if (!activeSticker || (activeSticker.clipId && activeSticker.clipId !== state.activeClipId)) {
-            state.selectedStickerId = null;
-            if (stickerControlsContainer) stickerControlsContainer.style.display = 'none';
-        }
-        const activeSymbol = state.symbolOverlays.find(s => s.id === state.selectedSymbolId);
-        if (!activeSymbol || (activeSymbol.clipId && activeSymbol.clipId !== state.activeClipId)) {
-            state.selectedSymbolId = null;
-            if (symbolControlsContainer) symbolControlsContainer.style.display = 'none';
-        }
-        const activeShape = state.shapeOverlays.find(s => s.id === state.selectedShapeOverlayId);
-        if (!activeShape || (activeShape.clipId && activeShape.clipId !== state.activeClipId)) {
-            state.selectedShapeOverlayId = null;
-            if (shapeOverlayControlsContainer) shapeOverlayControlsContainer.style.display = 'none';
-        }
     };
 
     // --- Thumbnail Generator (Phase 5B) ---
@@ -14834,6 +14481,8 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         });
 
+        if (typeof updateFlipButtonsUI === 'function') updateFlipButtonsUI();
+
         // Sliders & values
         if (videoVolumeSlider) {
             videoVolumeSlider.value = state.videoVolume * 100;
@@ -14959,6 +14608,20 @@ document.addEventListener('DOMContentLoaded', () => {
         if (saturationSlider) {
             saturationSlider.value = state.saturation;
             if (saturationVal) saturationVal.innerText = state.saturation + '%';
+        }
+        if (vignetteSlider) {
+            vignetteSlider.value = state.vignetteIntensity || 0;
+            if (vignetteVal) vignetteVal.innerText = (state.vignetteIntensity || 0) + '%';
+        }
+        if (duotoneToggle) {
+            duotoneToggle.checked = !!state.duotoneEnabled;
+            if (duotoneContainer) duotoneContainer.style.display = state.duotoneEnabled ? 'block' : 'none';
+        }
+        if (duotoneShadowInput) duotoneShadowInput.value = state.duotoneShadowColor || '#1a1a4d';
+        if (duotoneHighlightInput) duotoneHighlightInput.value = state.duotoneHighlightColor || '#ffcc00';
+        if (filmGrainSlider) {
+            filmGrainSlider.value = state.filmGrainIntensity || 0;
+            if (filmGrainVal) filmGrainVal.innerText = (state.filmGrainIntensity || 0) + '%';
         }
 
         // Color grading curves
@@ -15140,6 +14803,11 @@ document.addEventListener('DOMContentLoaded', () => {
                     brightness: state.brightness,
                     contrast: state.contrast,
                     saturation: state.saturation,
+                    vignetteIntensity: state.vignetteIntensity,
+                    duotoneEnabled: state.duotoneEnabled,
+                    duotoneShadowColor: state.duotoneShadowColor,
+                    duotoneHighlightColor: state.duotoneHighlightColor,
+                    filmGrainIntensity: state.filmGrainIntensity,
                     colorGradeEnabled: state.colorGradeEnabled,
                     gradeRShadow: state.gradeRShadow,
                     gradeRMid: state.gradeRMid,
@@ -15853,6 +15521,11 @@ document.addEventListener('DOMContentLoaded', () => {
         state.brightness = 100;
         state.contrast = 100;
         state.saturation = 100;
+        state.vignetteIntensity = 0;
+        state.duotoneEnabled = false;
+        state.duotoneShadowColor = '#1a1a4d';
+        state.duotoneHighlightColor = '#ffcc00';
+        state.filmGrainIntensity = 0;
         state.colorGradeEnabled = false;
         state.chromaKeyEnabled = false;
         state.chromaKeyColor = '#00ff00';
@@ -15888,6 +15561,7 @@ document.addEventListener('DOMContentLoaded', () => {
         state.translatedSubtitles = [];
         state.translatedSubtitlesLang = null;
         state.subtitlesUseTranslated = false;
+        state.showBothSubtitles = false;
         state.textOverlays = [];
         state.stickers = [];
         state.highlights = [];
@@ -16203,6 +15877,11 @@ document.addEventListener('DOMContentLoaded', () => {
                     brightness: state.brightness,
                     contrast: state.contrast,
                     saturation: state.saturation,
+                    vignetteIntensity: state.vignetteIntensity,
+                    duotoneEnabled: state.duotoneEnabled,
+                    duotoneShadowColor: state.duotoneShadowColor,
+                    duotoneHighlightColor: state.duotoneHighlightColor,
+                    filmGrainIntensity: state.filmGrainIntensity,
                     colorGradeEnabled: state.colorGradeEnabled,
                     gradeRShadow: state.gradeRShadow,
                     gradeRMid: state.gradeRMid,
@@ -16270,9 +15949,6 @@ document.addEventListener('DOMContentLoaded', () => {
                         const copy = {...c};
                         delete copy.file;
                         delete copy.imageImg;
-                        delete copy._el;       // DOM audio/video element — not serialisable
-                        delete copy._exportEl; // Same
-                        delete copy.url;       // Blob URLs expire on page unload; will be recreated on restore
                         return copy;
                     })
                 }))
@@ -16452,11 +16128,6 @@ document.addEventListener('DOMContentLoaded', () => {
             // Multi-Track Timeline (extra layered tracks, Phase 11 step 1)
             for (const t of (savedData.extraTracks || [])) {
                 for (const c of (t.clips || [])) {
-                    // Always clear stale media elements — they are tied to old blob URLs
-                    // that become invalid after a page reload.
-                    c._el = null;
-                    c._exportEl = null;
-                    c.url = null; // will be set below if file is found
                     const file = await getFileFromDBWithFallback(`track_${t.id}_${c.id}`, activeProjId);
                     if (file) {
                         c.file = file;
