@@ -16270,6 +16270,9 @@ document.addEventListener('DOMContentLoaded', () => {
                         const copy = {...c};
                         delete copy.file;
                         delete copy.imageImg;
+                        delete copy._el;       // DOM audio/video element — not serialisable
+                        delete copy._exportEl; // Same
+                        delete copy.url;       // Blob URLs expire on page unload; will be recreated on restore
                         return copy;
                     })
                 }))
@@ -16449,6 +16452,11 @@ document.addEventListener('DOMContentLoaded', () => {
             // Multi-Track Timeline (extra layered tracks, Phase 11 step 1)
             for (const t of (savedData.extraTracks || [])) {
                 for (const c of (t.clips || [])) {
+                    // Always clear stale media elements — they are tied to old blob URLs
+                    // that become invalid after a page reload.
+                    c._el = null;
+                    c._exportEl = null;
+                    c.url = null; // will be set below if file is found
                     const file = await getFileFromDBWithFallback(`track_${t.id}_${c.id}`, activeProjId);
                     if (file) {
                         c.file = file;
