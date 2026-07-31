@@ -310,8 +310,46 @@
     // ---------------------------------------------------------------
     var selectedClipId = null;
 
+    function calcFitTransform(clip, canvas, mode) {
+        var mw = 0, mh = 0;
+        if (clip && clip.type === 'image') {
+            if (clip.imageImg && clip.imageImg.naturalWidth) {
+                mw = clip.imageImg.naturalWidth;
+                mh = clip.imageImg.naturalHeight;
+            }
+        } else if (clip && clip.type === 'video') {
+            if (clip._el && clip._el.videoWidth) {
+                mw = clip._el.videoWidth;
+                mh = clip._el.videoHeight;
+            }
+        }
+        var cw = (canvas && canvas.width) ? canvas.width : 1280;
+        var ch = (canvas && canvas.height) ? canvas.height : 720;
+        var mediaAspect = (mw && mh) ? (mw / mh) : (cw / ch);
+        var canvasAspect = cw / ch;
+
+        var wRatio = 1.0;
+        if (mode === 'fill') {
+            if (mediaAspect >= canvasAspect) {
+                wRatio = mediaAspect / canvasAspect;
+            } else {
+                wRatio = 1.0;
+            }
+        } else {
+            if (mediaAspect <= canvasAspect) {
+                wRatio = mediaAspect / canvasAspect;
+            } else {
+                wRatio = 1.0;
+            }
+        }
+        return { x: 0.5, y: 0.5, w: Math.max(0.05, Math.min(2.5, wRatio)) };
+    }
+
     function ensureTransform(clip) {
-        if (!clip.transform) clip.transform = { x: 0.5, y: 0.5, w: 1 };
+        if (!clip.transform) {
+            var canvas = ve() && ve().canvas;
+            clip.transform = calcFitTransform(clip, canvas, 'fit');
+        }
         return clip.transform;
     }
 
@@ -491,8 +529,9 @@
 
     function mtCanvasPointerUp() {
         if (!dragState) return false;
+        var clipName = (dragState.clip && dragState.clip.name) ? dragState.clip.name : 'Canvas item';
         dragState = null;
-        afterChange('Extra track position/size changed');
+        afterChange('Canvas: Adjusted position/size of "' + clipName + '"');
         requestPreviewRedraw();
         return true;
     }
@@ -733,12 +772,13 @@
         if (!state.extraTracks) state.extraTracks = [];
         var count = state.extraTracks.filter(function (t) { return t.type === type; }).length + 1;
         var label = type === 'video' ? 'Video' : (type === 'audio' ? 'Audio' : 'Image');
+        var trackName = label + ' Track ' + count;
         state.extraTracks.push({
-            id: uid(), name: label + ' Track ' + count, type: type,
+            id: uid(), name: trackName, type: type,
             muted: false, volume: 1, clips: []
         });
         render();
-        afterChange('Track added: ' + label);
+        afterChange('Added ' + trackName);
     }
 
     function removeTrack(trackId) {
@@ -755,6 +795,8 @@
                 var target = s.extraTracks.find(function (t) {
                     return String(t.id) === tidStr;
                 });
+
+                var trackName = target ? target.name : 'Track';
 
                 // Clean up audio elements — each step individually guarded so a
                 // stale element from a previous project session cannot abort the deletion.
@@ -781,7 +823,7 @@
                 });
 
                 render();
-                afterChange('Track removed');
+                afterChange('Deleted ' + trackName);
             } catch (err) {
                 console.error('[multitrack] removeTrack failed:', err);
                 // Force a re-render anyway so UI stays consistent with actual state
@@ -844,20 +886,40 @@
         };
         if (track.type === 'image') {
             clip.imageImg = new Image();
+            clip.imageImg.onload = function () {
+                var state = ve();
+                if (state && state.canvas) {
+                    clip.transform = calcFitTransform(clip, state.canvas, 'fit');
+                    requestPreviewRedraw();
+                }
+            };
             clip.imageImg.src = url;
+        } else if (track.type === 'video') {
+            var tempV = document.createElement('video');
+            tempV.preload = 'metadata';
+            tempV.onloadedmetadata = function () {
+                var state = ve();
+                if (state && state.canvas) {
+                    clip.transform = calcFitTransform(clip, state.canvas, 'fit');
+                    requestPreviewRedraw();
+                }
+            };
+            tempV.src = url;
         }
         track.clips.push(clip);
+        selectedClipId = clip.id;
         render();
-        afterChange('Clip added to ' + track.name);
+        afterChange(track.name + ': Added clip "' + file.name + '"');
     }
 
     function removeClip(track, clipId) {
         var target = (track.clips || []).find(function (c) { return c.id === clipId; });
+        var clipName = target ? target.name : 'clip';
         if (target && target._el) { target._el.pause(); target._el.src = ''; }
         track.clips = track.clips.filter(function (c) { return c.id !== clipId; });
         if (selectedClipId === clipId) selectedClipId = null;
         render();
-        afterChange('Track clip removed');
+        afterChange(track.name + ': Deleted clip "' + clipName + '"');
     }
 
     // ---------------------------------------------------------------
@@ -919,7 +981,7 @@
             muteBtn.addEventListener('click', function () {
                 track.muted = !track.muted;
                 render();
-                afterChange('Track mute toggled');
+                afterChange(track.name + ': Mute ' + (track.muted ? 'enabled' : 'disabled'));
             });
             ctrlRow.appendChild(muteBtn);
 
@@ -930,7 +992,7 @@
             vol.title = 'Track volume';
             vol.addEventListener('input', function () {
                 track.volume = parseFloat(vol.value);
-                afterChange('Track volume changed');
+                afterChange(track.name + ': Volume set to ' + Math.round(track.volume * 100) + '%');
             });
             ctrlRow.appendChild(vol);
         }
@@ -991,22 +1053,24 @@
         var block = document.createElement('div');
         block.className = 'mt-clip-block';
         block.setAttribute('data-clip-id', clip.id);
+        var isSelected = (selectedClipId === clip.id);
         styleEl(block, {
             position: 'absolute', top: '3px', bottom: '3px',
             left: (clip.timelineOffset / totalDur) * 100 + '%',
             width: Math.max(1, (dur / totalDur) * 100) + '%',
             background: track.type === 'video' ? 'rgba(79,70,229,0.35)' : (track.type === 'audio' ? 'rgba(16,185,129,0.35)' : 'rgba(245,158,11,0.35)'),
-            border: '1px solid rgba(255,255,255,0.25)', borderRadius: '4px',
-            display: 'flex', alignItems: 'center', overflow: 'hidden',
-            cursor: 'grab', userSelect: 'none',
-            // A real pixel floor (not just a %-based minWidth, which barely
-            // helps once the lane is wide) — otherwise a short clip like a
-            // 5s image dropped on a 113s timeline renders ~30px wide, and
-            // the 8px resize handle below eats a quarter of that, leaving
-            // almost no room to grab the body to drag it. This is the main
-            // reason image/video clips felt "stuck" compared to audio.
-            minWidth: '36px',
-            touchAction: 'none'
+            border: isSelected ? '2px solid #818cf8' : '1px solid rgba(255,255,255,0.25)',
+            boxShadow: isSelected ? '0 0 8px rgba(129, 140, 248, 0.5)' : 'none',
+            borderRadius: '4px', display: 'flex', alignItems: 'center', overflow: 'hidden',
+            cursor: 'grab', userSelect: 'none', minWidth: '36px', touchAction: 'none'
+        });
+
+        block.addEventListener('click', function (e) {
+            if (e.target === delBtn || e.target === posBtn || e.target === resetBtn || e.target === resizeHandle) return;
+            selectedClipId = (selectedClipId === clip.id) ? null : clip.id;
+            updateBlockSelectionStyles();
+            render();
+            requestPreviewRedraw();
         });
 
         if (track.type === 'audio') {
@@ -1040,6 +1104,7 @@
                 selectedClipId = (selectedClipId === clip.id) ? null : clip.id;
                 if (selectedClipId === clip.id) ensureTransform(clip);
                 updateBlockSelectionStyles();
+                render();
                 requestPreviewRedraw();
             });
             block.appendChild(posBtn);
@@ -1055,7 +1120,8 @@
             resetBtn.addEventListener('click', function (e) {
                 e.stopPropagation();
                 clip.transform = null;
-                afterChange('Extra track position reset');
+                afterChange('Canvas: Reset "' + clip.name + '" full screen');
+                render();
                 requestPreviewRedraw();
             });
             block.appendChild(resetBtn);
@@ -1067,8 +1133,6 @@
             marginLeft: 'auto', background: 'transparent', border: 'none', color: '#fff',
             cursor: 'pointer', fontSize: '10px', padding: '0 5px', flexShrink: '0'
         });
-        // stopPropagation on pointerdown (not just click) so tapping delete
-        // on a narrow clip can't also register as the start of a drag.
         delBtn.addEventListener('pointerdown', function (e) { e.stopPropagation(); });
         delBtn.addEventListener('click', function (e) {
             e.stopPropagation();
@@ -1080,22 +1144,11 @@
         styleEl(resizeHandle, {
             position: 'absolute', right: '0', top: '0', bottom: '0', width: '10px',
             cursor: 'ew-resize', touchAction: 'none',
-            // A faint grip so the resize zone reads as a distinct target
-            // instead of an invisible sliver overlapping the clip body —
-            // easy to hit by accident (and to miss on purpose) on narrow
-            // clips otherwise.
             background: 'linear-gradient(90deg, transparent, rgba(255,255,255,0.18))'
         });
         block.appendChild(resizeHandle);
 
-        // --- Drag to reposition / right-edge resize (trim) ---
-        // Pointer Events (with capture) instead of separate mouse/touch
-        // handlers on `document`: one code path covers mouse, touch and
-        // pen, it keeps working correctly outside the block/lane bounds
-        // (setPointerCapture routes later move/up events straight to the
-        // element that started the gesture), and — unlike the previous
-        // approach — it doesn't add a fresh pair of document-level
-        // listeners every time this panel re-renders.
+        // --- Drag to reposition ---
         var dragging = false, dragStartX = 0, dragStartOffset = 0;
         block.addEventListener('pointerdown', function (e) {
             if (e.target === resizeHandle) return;
@@ -1118,7 +1171,9 @@
             dragging = false;
             block.style.cursor = 'grab';
             try { block.releasePointerCapture(e.pointerId); } catch (err) {}
-            afterChange('Track clip moved');
+            afterChange(track.name + ': Moved "' + clip.name + '" to ' + formatT(clip.timelineOffset));
+            render();
+            requestPreviewRedraw();
         }
         block.addEventListener('pointerup', endDrag);
         block.addEventListener('pointercancel', endDrag);
@@ -1139,12 +1194,6 @@
             var deltaSec = ((e.clientX - resizeStartX) / laneWidth) * totalDur;
             var newEnd = Math.max(clip.sourceStart + 0.2, resizeStartEnd + deltaSec);
             if (clip.type === 'image') {
-                // Images have no real fixed length — probeDuration() only ever
-                // gave them a placeholder (5s) to seed the clip. Capping
-                // sourceEnd at that placeholder is exactly why dragging the
-                // handle past ~4-5s used to do nothing: let it grow the
-                // image's own duration too (up to a generous 10-minute
-                // ceiling) instead of silently refusing to extend.
                 newEnd = Math.min(newEnd, 600);
                 if (newEnd > clip.duration) clip.duration = newEnd;
             } else {
@@ -1158,12 +1207,218 @@
             if (!resizing) return;
             resizing = false;
             try { resizeHandle.releasePointerCapture(e.pointerId); } catch (err) {}
-            afterChange('Track clip trimmed');
+            var endSec = clip.timelineOffset + (clip.sourceEnd - clip.sourceStart);
+            afterChange(track.name + ': Trimmed "' + clip.name + '" (' + formatT(clip.timelineOffset) + ' - ' + formatT(endSec) + ')');
+            render();
+            requestPreviewRedraw();
         }
         resizeHandle.addEventListener('pointerup', endResize);
         resizeHandle.addEventListener('pointercancel', endResize);
 
         return block;
+    }
+
+    function findSelectedClip() {
+        var state = ve();
+        if (!state || !selectedClipId || !state.extraTracks) return null;
+        for (var i = 0; i < state.extraTracks.length; i++) {
+            var track = state.extraTracks[i];
+            var clips = track.clips || [];
+            for (var j = 0; j < clips.length; j++) {
+                if (clips[j].id === selectedClipId) {
+                    return { clip: clips[j], track: track };
+                }
+            }
+        }
+        return null;
+    }
+
+    function buildClipInspector(track, clip) {
+        var card = document.createElement('div');
+        styleEl(card, {
+            background: 'rgba(79, 70, 229, 0.1)',
+            border: '1px solid rgba(129, 140, 248, 0.4)',
+            borderRadius: '8px', padding: '8px 12px', marginBottom: '10px',
+            display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '12px',
+            fontSize: '12px', color: 'var(--text-primary)'
+        });
+
+        var titleEl = document.createElement('div');
+        titleEl.style.fontWeight = '600';
+        titleEl.style.display = 'flex';
+        titleEl.style.alignItems = 'center';
+        titleEl.style.gap = '6px';
+        var icon = track.type === 'video' ? 'fa-film' : (track.type === 'audio' ? 'fa-music' : 'fa-image');
+        titleEl.innerHTML = '<i class="fa-solid ' + icon + '" style="color:#818cf8;"></i> <span>' + (clip.name || 'Clip') + ' (' + track.name + ')</span>';
+        card.appendChild(titleEl);
+
+        // Start Time Input
+        var startWrap = document.createElement('div');
+        styleEl(startWrap, { display: 'flex', alignItems: 'center', gap: '5px' });
+        startWrap.innerHTML = '<span style="color:var(--text-secondary);font-weight:500;">Start (শুরু):</span>';
+        var startInput = document.createElement('input');
+        startInput.type = 'number';
+        startInput.step = '0.1';
+        startInput.min = '0';
+        startInput.value = clip.timelineOffset.toFixed(1);
+        styleEl(startInput, {
+            width: '65px', padding: '3px 6px', borderRadius: '4px',
+            border: '1px solid var(--border-color)', background: 'rgba(0,0,0,0.3)',
+            color: '#fff', fontSize: '11px', textAlign: 'center'
+        });
+        startInput.addEventListener('change', function () {
+            var val = parseFloat(startInput.value);
+            if (!isNaN(val) && val >= 0) {
+                clip.timelineOffset = val;
+                afterChange(track.name + ': Moved "' + clip.name + '" start to ' + formatT(val));
+                render();
+                requestPreviewRedraw();
+            }
+        });
+        startWrap.appendChild(startInput);
+        startWrap.appendChild(document.createTextNode('s'));
+        card.appendChild(startWrap);
+
+        // End Time Input
+        var dur = Math.max(0.1, clip.sourceEnd - clip.sourceStart);
+        var currentEnd = clip.timelineOffset + dur;
+        var endWrap = document.createElement('div');
+        styleEl(endWrap, { display: 'flex', alignItems: 'center', gap: '5px' });
+        endWrap.innerHTML = '<span style="color:var(--text-secondary);font-weight:500;">End (শেষ):</span>';
+        var endInput = document.createElement('input');
+        endInput.type = 'number';
+        endInput.step = '0.1';
+        endInput.min = '0';
+        endInput.value = currentEnd.toFixed(1);
+        styleEl(endInput, {
+            width: '65px', padding: '3px 6px', borderRadius: '4px',
+            border: '1px solid var(--border-color)', background: 'rgba(0,0,0,0.3)',
+            color: '#fff', fontSize: '11px', textAlign: 'center'
+        });
+        endInput.addEventListener('change', function () {
+            var val = parseFloat(endInput.value);
+            if (!isNaN(val) && val > clip.timelineOffset) {
+                var newDur = val - clip.timelineOffset;
+                if (track.type === 'image') {
+                    clip.sourceEnd = clip.sourceStart + newDur;
+                    if (newDur > clip.duration) clip.duration = newDur;
+                } else {
+                    clip.sourceEnd = Math.min(clip.duration, clip.sourceStart + newDur);
+                }
+                afterChange(track.name + ': Trimmed "' + clip.name + '" end to ' + formatT(clip.timelineOffset + (clip.sourceEnd - clip.sourceStart)));
+                render();
+                requestPreviewRedraw();
+            }
+        });
+        endWrap.appendChild(endInput);
+        endWrap.appendChild(document.createTextNode('s'));
+        card.appendChild(endWrap);
+
+        // Duration Input
+        var durWrap = document.createElement('div');
+        styleEl(durWrap, { display: 'flex', alignItems: 'center', gap: '5px' });
+        durWrap.innerHTML = '<span style="color:var(--text-secondary);font-weight:500;">Duration:</span>';
+        var durInput = document.createElement('input');
+        durInput.type = 'number';
+        durInput.step = '0.1';
+        durInput.min = '0.1';
+        durInput.value = dur.toFixed(1);
+        styleEl(durInput, {
+            width: '60px', padding: '3px 6px', borderRadius: '4px',
+            border: '1px solid var(--border-color)', background: 'rgba(0,0,0,0.3)',
+            color: '#fff', fontSize: '11px', textAlign: 'center'
+        });
+        durInput.addEventListener('change', function () {
+            var newDur = Math.max(0.1, parseFloat(durInput.value) || 0.1);
+            if (track.type === 'image') {
+                clip.sourceEnd = clip.sourceStart + newDur;
+                if (newDur > clip.duration) clip.duration = newDur;
+            } else {
+                clip.sourceEnd = Math.min(clip.duration, clip.sourceStart + newDur);
+            }
+            afterChange(track.name + ': Set "' + clip.name + '" duration to ' + newDur.toFixed(1) + 's');
+            render();
+            requestPreviewRedraw();
+        });
+        durWrap.appendChild(durInput);
+        durWrap.appendChild(document.createTextNode('s'));
+        card.appendChild(durWrap);
+
+        // Screen Fit & Transform Actions (for Video & Image tracks)
+        if (track.type !== 'audio') {
+            var fitGroup = document.createElement('div');
+            styleEl(fitGroup, { display: 'flex', alignItems: 'center', gap: '4px', marginLeft: 'auto' });
+
+            var fitBtn = document.createElement('button');
+            fitBtn.innerHTML = '<i class="fa-solid fa-expand"></i> Fit (ফিট)';
+            fitBtn.title = 'ক্যানভাসে ফিট করুন (Contain fit)';
+            styleEl(fitBtn, { padding: '3px 8px', borderRadius: '4px', border: '1px solid var(--primary)', background: 'rgba(79,70,229,0.2)', color: '#fff', cursor: 'pointer', fontSize: '11px' });
+            fitBtn.addEventListener('click', function () {
+                var state = ve();
+                clip.transform = calcFitTransform(clip, state && state.canvas, 'fit');
+                afterChange('Canvas: Fit "' + clip.name + '" on screen');
+                render();
+                requestPreviewRedraw();
+            });
+            fitGroup.appendChild(fitBtn);
+
+            var fillBtn = document.createElement('button');
+            fillBtn.innerHTML = '<i class="fa-solid fa-maximize"></i> Fill (কভার)';
+            fillBtn.title = 'পুরো ক্যানভাস ফিল করুন (Cover fit)';
+            styleEl(fillBtn, { padding: '3px 8px', borderRadius: '4px', border: '1px solid var(--border-color)', background: 'rgba(255,255,255,0.05)', color: '#fff', cursor: 'pointer', fontSize: '11px' });
+            fillBtn.addEventListener('click', function () {
+                var state = ve();
+                clip.transform = calcFitTransform(clip, state && state.canvas, 'fill');
+                afterChange('Canvas: Fill "' + clip.name + '" on screen');
+                render();
+                requestPreviewRedraw();
+            });
+            fitGroup.appendChild(fillBtn);
+
+            var centerBtn = document.createElement('button');
+            centerBtn.innerHTML = '<i class="fa-solid fa-crosshairs"></i> Center';
+            centerBtn.title = 'ক্যানভাস সেন্টারে আনুন';
+            styleEl(centerBtn, { padding: '3px 8px', borderRadius: '4px', border: '1px solid var(--border-color)', background: 'rgba(255,255,255,0.05)', color: '#fff', cursor: 'pointer', fontSize: '11px' });
+            centerBtn.addEventListener('click', function () {
+                var t = ensureTransform(clip);
+                t.x = 0.5; t.y = 0.5;
+                afterChange('Canvas: Centered "' + clip.name + '"');
+                render();
+                requestPreviewRedraw();
+            });
+            fitGroup.appendChild(centerBtn);
+
+            var resetCanvasBtn = document.createElement('button');
+            resetCanvasBtn.innerHTML = '<i class="fa-solid fa-rotate-left"></i> Reset';
+            resetCanvasBtn.title = 'পজিশন রিসেট করুন';
+            styleEl(resetCanvasBtn, { padding: '3px 8px', borderRadius: '4px', border: '1px solid var(--border-color)', background: 'rgba(255,255,255,0.05)', color: 'rgba(255,255,255,0.7)', cursor: 'pointer', fontSize: '11px' });
+            resetCanvasBtn.addEventListener('click', function () {
+                clip.transform = null;
+                afterChange('Canvas: Reset "' + clip.name + '" full screen');
+                render();
+                requestPreviewRedraw();
+            });
+            fitGroup.appendChild(resetCanvasBtn);
+
+            card.appendChild(fitGroup);
+        }
+
+        // Close Inspector Button
+        var closeBtn = document.createElement('button');
+        closeBtn.innerHTML = '<i class="fa-solid fa-xmark"></i>';
+        closeBtn.title = 'ইন্সপেক্টর বন্ধ করুন';
+        styleEl(closeBtn, {
+            background: 'transparent', border: 'none', color: '#94a3b8',
+            cursor: 'pointer', fontSize: '12px', padding: '2px 6px', marginLeft: track.type === 'audio' ? 'auto' : '4px'
+        });
+        closeBtn.addEventListener('click', function () {
+            selectedClipId = null;
+            render();
+            requestPreviewRedraw();
+        });
+        card.appendChild(closeBtn);
+
+        return card;
     }
 
     function render() {
@@ -1194,6 +1449,11 @@
             addRow.appendChild(btn);
         });
         body.appendChild(addRow);
+
+        var selInfo = findSelectedClip();
+        if (selInfo) {
+            body.appendChild(buildClipInspector(selInfo.track, selInfo.clip));
+        }
 
         var totalDur = mainTimelineDuration();
         if (state.extraTracks && state.extraTracks.length > 0) {
