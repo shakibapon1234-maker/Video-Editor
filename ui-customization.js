@@ -132,14 +132,47 @@
             panel.style.right = 'auto';
         }
 
+        const canvasContainer = document.getElementById('canvas-container');
+        const canvasHeader = document.getElementById('canvas-floating-header');
+        const dockPlaceholder = document.getElementById('preview-panel-dock-placeholder');
+        const cfCloseBtn = document.getElementById('cf-close-btn');
+
         function setVisible(visible) {
             panel.style.display = visible ? 'flex' : 'none';
             panel.classList.toggle('visible', visible);
             toggleBtn.classList.toggle('active', visible);
             try { localStorage.setItem(LS_FT_VISIBLE, visible ? '1' : '0'); } catch (e) {}
+
+            if (canvasContainer) {
+                canvasContainer.classList.toggle('is-floating-preview', visible);
+                if (!visible) {
+                    // Completely clear all inline positioning styles applied during dragging
+                    canvasContainer.style.left = '';
+                    canvasContainer.style.top = '';
+                    canvasContainer.style.right = '';
+                    canvasContainer.style.bottom = '';
+                    canvasContainer.style.position = '';
+                    canvasContainer.style.width = '';
+                    canvasContainer.style.height = '';
+                    if (typeof window.drawFrame === 'function') window.drawFrame();
+                    if (typeof window.drawEditorFrame === 'function') window.drawEditorFrame();
+                } else {
+                    if (!canvasContainer.style.top || canvasContainer.style.top === '') {
+                        canvasContainer.style.top = '90px';
+                        canvasContainer.style.left = Math.max(8, window.innerWidth - 500) + 'px';
+                    }
+                    canvasContainer.style.right = 'auto';
+                    canvasContainer.style.bottom = 'auto';
+                }
+            }
+            if (canvasHeader) {
+                canvasHeader.style.display = visible ? 'flex' : 'none';
+            }
+            if (dockPlaceholder) {
+                dockPlaceholder.style.display = visible ? 'flex' : 'none';
+            }
+
             if (visible) {
-                // Apply a safe default position immediately so the panel is
-                // never invisible, then clamp after layout.
                 const left = parseFloat(panel.style.left);
                 const top  = parseFloat(panel.style.top);
                 const badPos = !isFinite(left) || !isFinite(top)
@@ -149,7 +182,6 @@
                     panel.style.left  = Math.max(8, window.innerWidth - 340) + 'px';
                     panel.style.top   = '110px';
                     panel.style.right = 'auto';
-                    // Wipe stale saved position so next open also starts sane.
                     try { localStorage.removeItem(LS_FT_POS); } catch (e) {}
                 }
                 requestAnimationFrame(function () {
@@ -160,28 +192,22 @@
             }
         }
 
-        // Use both click and mousedown so the button responds even if a
-        // parent handler calls stopPropagation on one of them.
-        let lastPointerToggleAt = 0;
-        function onToggle(e) {
-            // Some embedded WebView builds do not synthesize a click for this
-            // header button reliably.  A pointer-up listener below covers that
-            // path; ignore its follow-up click so it cannot toggle twice.
-            if (e.type === 'click' && Date.now() - lastPointerToggleAt < 600) return;
+        toggleBtn.addEventListener('click', function (e) {
             e.stopPropagation();
             e.preventDefault();
             setVisible(!panel.classList.contains('visible'));
-        }
-        toggleBtn.addEventListener('click',     onToggle);
-        toggleBtn.addEventListener('pointerup', function (e) {
-            if (e.button !== 0) return;
-            lastPointerToggleAt = Date.now();
-            onToggle(e);
         });
-        toggleBtn.addEventListener('mousedown', function (e) { e.stopPropagation(); });
         if (closeBtn) {
-            closeBtn.addEventListener('mousedown', function (e) { e.stopPropagation(); });
-            closeBtn.addEventListener('click', function (e) { e.stopPropagation(); setVisible(false); });
+            closeBtn.addEventListener('click', function (e) {
+                e.stopPropagation();
+                setVisible(false);
+            });
+        }
+        if (cfCloseBtn) {
+            cfCloseBtn.addEventListener('click', function (e) {
+                e.stopPropagation();
+                setVisible(false);
+            });
         }
 
         try {
@@ -201,7 +227,7 @@
 
         window.addEventListener('resize', clampToViewport);
 
-        // --- Dragging ---
+        // --- Dragging for Floating Transport Bar ---
         let dragging = false;
         let dragOffsetX = 0;
         let dragOffsetY = 0;
@@ -238,6 +264,61 @@
                     top: parseFloat(panel.style.top) || 0
                 }));
             } catch (e) {}
+        }
+
+        // --- Dragging for Canvas Preview Header ---
+        let canvasDragging = false;
+        let canvasDragOffsetX = 0;
+        let canvasDragOffsetY = 0;
+
+        function startCanvasDrag(clientX, clientY) {
+            canvasDragging = true;
+            const rect = canvasContainer.getBoundingClientRect();
+            canvasDragOffsetX = clientX - rect.left;
+            canvasDragOffsetY = clientY - rect.top;
+        }
+
+        function moveCanvasDrag(clientX, clientY) {
+            if (!canvasDragging || !canvasContainer.classList.contains('is-floating-preview')) return;
+            let left = clientX - canvasDragOffsetX;
+            let top = clientY - canvasDragOffsetY;
+            const maxLeft = Math.max(8, window.innerWidth - canvasContainer.offsetWidth - 8);
+            const maxTop = Math.max(8, window.innerHeight - canvasContainer.offsetHeight - 8);
+            left = Math.min(Math.max(8, left), maxLeft);
+            top = Math.min(Math.max(8, top), maxTop);
+            canvasContainer.style.left = left + 'px';
+            canvasContainer.style.top = top + 'px';
+            canvasContainer.style.right = 'auto';
+            canvasContainer.style.bottom = 'auto';
+        }
+
+        function endCanvasDrag() {
+            canvasDragging = false;
+        }
+
+        if (canvasHeader && canvasContainer) {
+            canvasHeader.addEventListener('mousedown', function (e) {
+                if (e.target.closest('#cf-close-btn')) return;
+                startCanvasDrag(e.clientX, e.clientY);
+                e.preventDefault();
+            });
+            canvasHeader.addEventListener('touchstart', function (e) {
+                if (e.target.closest('#cf-close-btn')) return;
+                const t = e.touches[0];
+                startCanvasDrag(t.clientX, t.clientY);
+            }, { passive: true });
+
+            document.addEventListener('mousemove', function (e) {
+                moveCanvasDrag(e.clientX, e.clientY);
+            });
+            document.addEventListener('touchmove', function (e) {
+                if (!canvasDragging) return;
+                const t = e.touches[0];
+                moveCanvasDrag(t.clientX, t.clientY);
+            }, { passive: true });
+
+            document.addEventListener('mouseup', endCanvasDrag);
+            document.addEventListener('touchend', endCanvasDrag);
         }
 
         if (handle) {

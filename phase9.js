@@ -383,7 +383,12 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Call this BEFORE applying an action to save the pre-action state.
     function captureUndoCheckpoint() {
-        if (historySuspended || !state.clips || state.clips.length === 0) return;
+        if (historySuspended) return;
+        const hasContent = (state.clips && state.clips.length > 0) ||
+                          state.video || state.logoImg || state.image ||
+                          (state.textOverlays && state.textOverlays.length > 0) ||
+                          state.bgImage || state.audioBuffer;
+        if (!hasContent) return;
         if (state.logoImg) {
             cachedLogoImg = state.logoImg;
             cachedLogoFile = state.logoFile;
@@ -393,7 +398,12 @@ document.addEventListener('DOMContentLoaded', () => {
     window.captureUndoCheckpoint = captureUndoCheckpoint;
 
     function recordEditorHistory(label) {
-        if (historySuspended || !state.clips || state.clips.length === 0) return;
+        if (historySuspended) return;
+        const hasContent = (state.clips && state.clips.length > 0) ||
+                          state.video || state.logoImg || state.image ||
+                          (state.textOverlays && state.textOverlays.length > 0) ||
+                          state.bgImage || state.audioBuffer;
+        if (!hasContent) return;
         if (state.logoImg) {
             cachedLogoImg = state.logoImg;
             cachedLogoFile = state.logoFile;
@@ -449,7 +459,19 @@ document.addEventListener('DOMContentLoaded', () => {
         if (undoBtn) undoBtn.disabled = state.undoStack.length === 0;
         if (redoBtn) redoBtn.disabled = state.redoStack.length === 0;
         if (!historyPanelList) return;
-        historyPanelList.style.display = historyPanelToggle && historyPanelToggle.classList.contains('open') ? 'block' : 'none';
+        const isOpen = historyPanelToggle && historyPanelToggle.classList.contains('open');
+        historyPanelList.style.display = isOpen ? 'block' : 'none';
+        if (isOpen && historyPanelToggle) {
+            if (document.body && historyPanelList.parentElement !== document.body) {
+                document.body.appendChild(historyPanelList);
+            }
+            const rect = historyPanelToggle.getBoundingClientRect();
+            historyPanelList.style.position = 'fixed';
+            historyPanelList.style.top = (rect.bottom + 6) + 'px';
+            historyPanelList.style.right = Math.max(12, window.innerWidth - rect.right) + 'px';
+            historyPanelList.style.left = 'auto';
+            historyPanelList.style.zIndex = '99999999';
+        }
         historyPanelList.innerHTML = '';
         const labels = [...state.historyLabels].reverse();
         const heading = document.createElement('li');
@@ -470,7 +492,8 @@ document.addEventListener('DOMContentLoaded', () => {
             li.style.background = 'var(--bg-surface-elevated, #273449)';
             li.style.position = 'relative';
             li.title = 'Jump back to this point (undo ' + (i + 1) + ' step(s))';
-            li.addEventListener('click', () => {
+            li.addEventListener('click', (e) => {
+                e.stopPropagation();
                 for (let j = 0; j <= i; j++) undoEditor();
                 if (historyPanelToggle) historyPanelToggle.classList.remove('open');
             });
@@ -490,9 +513,16 @@ document.addEventListener('DOMContentLoaded', () => {
             historyPanelToggle.classList.toggle('open');
             updateHistoryUI();
         });
-        document.addEventListener('click', () => {
-            historyPanelToggle.classList.remove('open');
-            updateHistoryUI();
+        if (historyPanelList) {
+            historyPanelList.addEventListener('click', (e) => {
+                e.stopPropagation();
+            });
+        }
+        document.addEventListener('click', (e) => {
+            if (historyPanelToggle && !historyPanelToggle.contains(e.target) && historyPanelList && !historyPanelList.contains(e.target)) {
+                historyPanelToggle.classList.remove('open');
+                updateHistoryUI();
+            }
         });
     }
 

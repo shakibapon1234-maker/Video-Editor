@@ -103,7 +103,7 @@
                             <button id="history-panel-toggle" class="btn btn-outline btn-sm" type="button" title="History list">
                                 <i class="fa-solid fa-clock-rotate-left"></i>
                             </button>
-                            <ul id="history-panel-list" class="history-panel-dropdown" style="display: none; position: fixed; top: 92px; right: 24px; min-width: 340px; max-width: calc(100vw - 32px); max-height: calc(100vh - 116px); overflow-y: auto; background: var(--card-bg, #1e293b); border: 1px solid var(--border-color, #334155); border-radius: 10px; padding: 10px; z-index: 1000; isolation: isolate; list-style: none; font-size: 14px; box-shadow: 0 12px 30px rgba(0,0,0,0.35);"></ul>
+                            <ul id="history-panel-list" class="history-panel-dropdown" style="display: none; position: absolute; top: calc(100% + 8px); right: 0; min-width: 330px; max-width: calc(100vw - 32px); max-height: 420px; overflow-y: auto; background: var(--card-bg, #1e293b); border: 1px solid var(--border-color, #334155); border-radius: 10px; padding: 10px; z-index: 999999; list-style: none; font-size: 14px; box-shadow: 0 12px 35px rgba(0,0,0,0.5);"></ul>
                         </div>
                     </div>
                     <button id="saved-projects-btn" class="btn btn-outline" data-tooltip="আপনার সংরক্ষিত প্রজেক্টসমূহের তালিকা দেখুন (Saved Video Projects)">
@@ -138,8 +138,18 @@
 
             <div class="workspace-body">
                 <!-- Preview Panel (Sticky/Always visible on larger screens) -->
-                <div class="preview-panel">
+                <div class="preview-panel" id="main-preview-panel">
+                    <div class="preview-panel-dock-placeholder" id="preview-panel-dock-placeholder" style="display: none;">
+                        <i class="fa-solid fa-arrow-up-right-from-square" style="font-size: 32px; color: var(--primary, #6366f1); margin-bottom: 8px;"></i>
+                        <span style="font-weight: 600; font-size: 15px;">প্লেহেড ভাসমান উইন্ডোতে সক্রিয় (Floating Playhead Active)</span>
+                        <span style="font-size: 12px; opacity: 0.7;">ডক ফিরে পেতে ভাসমান উইন্ডোর 'X' বা উপরের বাটনে ক্লিক করুন</span>
+                    </div>
+
                     <div class="canvas-container" id="canvas-container">
+                        <div class="canvas-floating-header" id="canvas-floating-header" style="display: none;">
+                            <span class="cf-title"><i class="fa-solid fa-up-down-left-right"></i> ভাসমান প্লেহেড (Drag to reposition)</span>
+                            <button type="button" class="cf-close-btn" id="cf-close-btn" title="ডক প্যানেলে ফিরে যান"><i class="fa-solid fa-xmark"></i></button>
+                        </div>
                         <!-- Canvas for video rendering + logo overlay -->
                         <canvas id="editor-canvas"></canvas>
                         
@@ -1497,51 +1507,45 @@
                                     </select>
                                 </div>
 
-                                <div class="control-group mt-3">
-                                    <label>Box Style (ব্যাকগ্রাউন্ড বক্স)</label>
-                                    <select id="text-overlay-box-select" class="form-select">
-                                        <option value="none">None (কোনো বক্স নেই)</option>
-                                        <option value="solid">Solid Box</option>
-                                        <option value="outline">Outline Box</option>
-                                        <option value="gradient">Gradient Box</option>
-                                        <option value="pill">Pill / Badge</option>
-                                        <option value="marker">Highlighter Marker</option>
-                                        <option value="speech">Speech Bubble</option>
-                                        <option value="ribbon">Ribbon Banner</option>
-                                        <option value="neon">Neon Glow</option>
-                                        <option value="running-border-red">🔴 Running Red Border (লাল রানিং বর্ডার অ্যানিমেশন)</option>
-                                        <option value="running-border">✨ Running Color Border (রানিং কাস্টম বর্ডার অ্যানিমেশন)</option>
-                                    </select>
-                                </div>
+                                <hr class="mt-3 mb-2" style="border-color: rgba(255,255,255,0.08);">
+                                <p class="help-text" style="text-transform:uppercase; letter-spacing:0.5px; opacity:0.7;"><i class="fa-solid fa-i-cursor"></i>&nbsp; টেক্সটের অ্যানিমেশন (Text Animation) — শুধু লেখাটার জন্য</p>
 
-                                <div class="control-group mt-3" id="text-overlay-boxcolor-group">
-                                    <label>Box Color</label>
-                                    <div class="color-picker-wrapper">
-                                        <input type="color" id="text-overlay-boxcolor" value="#4f46e5">
-                                        <span class="color-value-text" id="text-overlay-boxcolor-val">#4f46e5</span>
-                                    </div>
-                                </div>
-
-                                <div class="control-group mt-3">
-                                    <label>Animation (এন্ট্রি/এক্সিট অ্যানিমেশন)</label>
+                                <div class="control-group mt-2">
+                                    <label>Text Animation (টেক্সট অ্যানিমেশন)</label>
                                     <select id="text-overlay-anim-select" class="form-select">
-                                        <option value="none">None</option>
-                                        <option value="fade">Fade</option>
-                                        <option value="slide-up">Slide Up</option>
-                                        <option value="slide-down">Slide Down</option>
-                                        <option value="slide-left">Slide In (Left)</option>
-                                        <option value="slide-right">Slide In (Right)</option>
-                                        <option value="zoom">Zoom</option>
-                                        <option value="bounce">Bounce Pop</option>
-                                        <option value="rotate-in">Rotate In</option>
-                                        <option value="typewriter">Typewriter</option>
-                                        <option value="letter-cascade">Letter by Letter</option>
-                                        <option value="word-stagger">Word by Word</option>
+                                        <optgroup label="Entry / Exit">
+                                            <option value="none">None</option>
+                                            <option value="fade">Fade</option>
+                                            <option value="slide-up">Slide Up</option>
+                                            <option value="slide-down">Slide Down</option>
+                                            <option value="slide-left">Slide In (Left)</option>
+                                            <option value="slide-right">Slide In (Right)</option>
+                                            <option value="zoom">Zoom In</option>
+                                            <option value="zoom-out">Zoom Out</option>
+                                            <option value="bounce">Bounce Pop</option>
+                                            <option value="pop">Pop (Elastic)</option>
+                                            <option value="rotate-in">Rotate In</option>
+                                            <option value="flip-in">Flip In (Horizontal)</option>
+                                            <option value="flip-in-vertical">Flip In (Vertical)</option>
+                                            <option value="drop-bounce">Drop &amp; Bounce</option>
+                                            <option value="swing-in">Swing In (দোলনা)</option>
+                                        </optgroup>
+                                        <optgroup label="Text Reveal (লেখা প্রকাশ)">
+                                            <option value="typewriter">Typewriter</option>
+                                            <option value="letter-cascade">Letter by Letter</option>
+                                            <option value="word-stagger">Word by Word</option>
+                                        </optgroup>
+                                        <optgroup label="Continuous / Loop (চলতে থাকবে)">
+                                            <option value="pulse">Pulse (স্পন্দন)</option>
+                                            <option value="wiggle">Wiggle (দুলুনি)</option>
+                                            <option value="float">Float (ভাসমান)</option>
+                                            <option value="glow-pulse">Glow Pulse (জ্বলা-নেভা)</option>
+                                        </optgroup>
                                     </select>
                                 </div>
 
                                 <div class="control-group mt-3" id="text-overlay-anim-speed-group">
-                                    <label>Animation Speed (অ্যানিমেশন স্পিড)</label>
+                                    <label>Text Animation Speed (টেক্সট অ্যানিমেশন স্পিড)</label>
                                     <div class="slider-val-container">
                                         <input type="range" id="text-overlay-anim-speed" min="0.1" max="2.0" step="0.1" value="0.5">
                                         <span id="text-overlay-anim-speed-val">0.5s</span>
@@ -1565,11 +1569,11 @@
                                         <i class="fa-solid fa-xmark"></i> Clear Curve
                                     </button>
                                 </div>
-                                <p class="help-text mt-1">"Draw Curve" চেপে ক্যানভাসে ক্লিক করলে কার্ভের পয়েন্ট যোগ হবে। আরও ক্লিক করলে কার্ভ ন smoothen হবে। "Clear Curve" চেপে রিসেট করুন।</p>
+                                <p class="help-text mt-1">"Draw Curve" চেপে ক্যানভাসে ক্লিক করলে কার্ভের পয়েন্ট যোগ হবে। আরও ক্লিক করলে কার্ভ ন smoothen হবে। "Clear Curve" চেপে রিসেট করুন।</p>
 
                                 <div class="toggle-control mt-3">
                                     <div class="toggle-label">
-                                        <h4>Shadow / Glow (শ্যাডো বা গ্লো এফেক্ট)</h4>
+                                        <h4>Text Shadow / Glow (টেক্সটের শ্যাডো বা গ্লো)</h4>
                                     </div>
                                     <label class="switch">
                                         <input type="checkbox" id="text-overlay-shadow-enabled">
@@ -1585,7 +1589,16 @@
                                             <button id="text-shadow-preset-glow" class="btn btn-outline btn-sm" type="button">গ্লো</button>
                                             <button id="text-shadow-preset-bevel" class="btn btn-outline btn-sm" type="button">3D-ইশ বেভেল লুক</button>
                                         </div>
-                                        <p class="help-text mt-1">একটি প্রিসেটে ক্লিক করলে নিচের সব স্লাইডার/কালার একসাথে সেট হয়ে যাবে — চাইলে এরপর ম্যানুয়ালি ফাইন-টিউনও করতে পারবেন।</p>
+                                        <p class="help-text mt-1">একটি প্রিসেটে ক্লিক করলে নিচের সব স্লাইডার/কালার একসাথে সেট হয়ে যাবে — চাইলে এরপর ম্যানুয়ালি ফাইন-টিউনও করতে পারবেন।</p>
+                                    </div>
+
+                                    <div class="control-group mt-2">
+                                        <label>Shadow Intensity (টানলেই বাড়ে/কমে)</label>
+                                        <div class="slider-val-container">
+                                            <input type="range" id="text-overlay-shadow-intensity" min="0" max="100" value="60">
+                                            <span id="text-overlay-shadow-intensity-val">60%</span>
+                                        </div>
+                                        <p class="help-text mt-1">এই একটা বার টানলেই শ্যাডোর ব্লার, অফসেট আর তীব্রতা — সবগুলো একসাথে বাড়বে/কমবে। নিচে চাইলে আলাদাভাবেও ফাইন-টিউন করতে পারবেন।</p>
                                     </div>
 
                                     <div class="control-group mt-2">
@@ -1597,7 +1610,7 @@
                                     </div>
 
                                     <div class="control-group mt-2">
-                                        <label>Shadow Opacity / Intensity (তীব্রতা)</label>
+                                        <label>Shadow Opacity (তীব্রতা, ম্যানুয়াল)</label>
                                         <div class="slider-val-container">
                                             <input type="range" id="text-overlay-shadow-opacity" min="0" max="100" value="60">
                                             <span id="text-overlay-shadow-opacity-val">60%</span>
@@ -1605,7 +1618,7 @@
                                     </div>
 
                                     <div class="control-group mt-2">
-                                        <label>Shadow Blur / Radius (ব্লার রেডিয়াস)</label>
+                                        <label>Shadow Blur / Radius (ব্লার রেডিয়াস, ম্যানুয়াল)</label>
                                         <div class="slider-val-container">
                                             <input type="range" id="text-overlay-shadow-blur" min="0" max="50" value="8">
                                             <span id="text-overlay-shadow-blur-val">8px</span>
@@ -1631,7 +1644,7 @@
                                     <div class="toggle-control mt-2">
                                         <div class="toggle-label">
                                             <h4>Double-Layer Shadow</h4>
-                                            <p>ডাবল-লেয়ার শ্যাডো — গাঢ় শ্যাডো + হালকা হাইলাইট একসাথে, বেভেল/3D-র বিভ্রম তৈরি করে</p>
+                                            <p>ডাবল-লেয়ার শ্যাডো — গাঢ় শ্যাডো + হালকা হাইলাইট একসাথে, বেভেল/3D-র বিভ্রম তৈরি করে</p>
                                         </div>
                                         <label class="switch">
                                             <input type="checkbox" id="text-overlay-shadow-double-layer">
@@ -1641,7 +1654,7 @@
 
                                     <div id="text-overlay-shadow-highlight-group" style="display:none;">
                                         <div class="control-group mt-2">
-                                            <label>Highlight Color (হাইলাইট লেয়ারের কালার)</label>
+                                            <label>Highlight Color (হাইলাইট লেয়ারের কালার)</label>
                                             <div class="color-picker-wrapper">
                                                 <input type="color" id="text-overlay-shadow-highlight-color" value="#ffffff">
                                                 <span class="color-value-text" id="text-overlay-shadow-highlight-color-val">#ffffff</span>
@@ -1655,7 +1668,73 @@
                                             </div>
                                         </div>
                                     </div>
-                                    <p class="help-text mt-1">সীমাবদ্ধতা: এটা আসল Photoshop-স্টাইল 3D extrude/bevel টেক্সট হবে না — ক্যানভাস-ভিত্তিক শ্যাডো লেয়ারিং দিয়ে যতটা কাছাকাছি লুক আনা সমভব, ততটুকু।</p>
+                                    <p class="help-text mt-1">সীমাবদ্ধতা: এটা আসল Photoshop-স্টাইল 3D extrude/bevel টেক্সট হবে না — ক্যানভাস-ভিত্তিক শ্যাডো লেয়ারিং দিয়ে যতটা কাছাকাছি লুক আনা সম্ভব, ততটুকু।</p>
+                                </div>
+
+                                <hr class="mt-3 mb-2" style="border-color: rgba(255,255,255,0.08);">
+                                <p class="help-text" style="text-transform:uppercase; letter-spacing:0.5px; opacity:0.7;"><i class="fa-solid fa-square"></i>&nbsp; বক্সের কালার ও অ্যানিমেশন (Box Style) — শুধু ব্যাকগ্রাউন্ড বক্সের জন্য</p>
+
+                                <div class="control-group mt-2">
+                                    <label>Box Style (ব্যাকগ্রাউন্ড বক্স)</label>
+                                    <select id="text-overlay-box-select" class="form-select">
+                                        <option value="none">None (কোনো বক্স নেই)</option>
+                                        <option value="solid">Solid Box</option>
+                                        <option value="outline">Outline Box</option>
+                                        <option value="gradient">Gradient Box</option>
+                                        <option value="pill">Pill / Badge</option>
+                                        <option value="marker">Highlighter Marker</option>
+                                        <option value="speech">Speech Bubble</option>
+                                        <option value="ribbon">Ribbon Banner</option>
+                                        <option value="neon">Neon Glow</option>
+                                        <option value="running-border-red">🔴 Running Red Border (লাল রানিং বর্ডার অ্যানিমেশন)</option>
+                                        <option value="running-border">✨ Running Color Border (রানিং কাস্টম বর্ডার অ্যানিমেশন)</option>
+                                    </select>
+                                </div>
+
+                                <div class="control-group mt-3" id="text-overlay-boxcolor-group">
+                                    <label>Box Color</label>
+                                    <div class="color-picker-wrapper">
+                                        <input type="color" id="text-overlay-boxcolor" value="#4f46e5">
+                                        <span class="color-value-text" id="text-overlay-boxcolor-val">#4f46e5</span>
+                                    </div>
+                                </div>
+
+                                <div class="control-group mt-3" id="text-overlay-box-anim-group">
+                                    <label>Box Animation (বক্সের অ্যানিমেশন)</label>
+                                    <select id="text-overlay-box-anim-select" class="form-select">
+                                        <optgroup label="Entry / Exit">
+                                            <option value="none">None</option>
+                                            <option value="fade">Fade</option>
+                                            <option value="slide-up">Slide Up</option>
+                                            <option value="slide-down">Slide Down</option>
+                                            <option value="slide-left">Slide In (Left)</option>
+                                            <option value="slide-right">Slide In (Right)</option>
+                                            <option value="zoom">Zoom In</option>
+                                            <option value="zoom-out">Zoom Out</option>
+                                            <option value="bounce">Bounce Pop</option>
+                                            <option value="pop">Pop (Elastic)</option>
+                                            <option value="rotate-in">Rotate In</option>
+                                            <option value="flip-in">Flip In (Horizontal)</option>
+                                            <option value="flip-in-vertical">Flip In (Vertical)</option>
+                                            <option value="drop-bounce">Drop &amp; Bounce</option>
+                                            <option value="swing-in">Swing In (দোলনা)</option>
+                                        </optgroup>
+                                        <optgroup label="Continuous / Loop (চলতে থাকবে)">
+                                            <option value="pulse">Pulse (স্পন্দন)</option>
+                                            <option value="wiggle">Wiggle (দুলুনি)</option>
+                                            <option value="float">Float (ভাসমান)</option>
+                                            <option value="glow-pulse">Glow Pulse (জ্বলা-নেভা)</option>
+                                        </optgroup>
+                                    </select>
+                                    <p class="help-text mt-1">টেক্সট আর বক্স — দুইটার অ্যানিমেশন এখন সম্পূর্ণ আলাদা, চাইলে দুইটাই একসাথে চালু করতে পারবেন।</p>
+                                </div>
+
+                                <div class="control-group mt-3" id="text-overlay-box-anim-speed-group">
+                                    <label>Box Animation Speed (বক্স অ্যানিমেশন স্পিড)</label>
+                                    <div class="slider-val-container">
+                                        <input type="range" id="text-overlay-box-anim-speed" min="0.1" max="2.0" step="0.1" value="0.5">
+                                        <span id="text-overlay-box-anim-speed-val">0.5s</span>
+                                    </div>
                                 </div>
 
                                 <button id="add-text-overlay-btn" class="btn btn-primary mt-3">

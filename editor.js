@@ -3085,6 +3085,20 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     window.textOverlayBelongsToActiveClip = textOverlayBelongsToActiveClip;
 
+    // Stickers/Emoji must be local to the clip they were added on — otherwise
+    // a sticker placed on one video/image shows up on every clip and blocks
+    // clicks meant for that other clip's own content.
+    function stickerBelongsToActiveClip(item) {
+        return !item.clipId || item.clipId === state.activeClipId;
+    }
+    window.stickerBelongsToActiveClip = stickerBelongsToActiveClip;
+
+    // Same rule for the Shape + Text overlays (plane/badge symbols).
+    function shapeOverlayBelongsToActiveClip(item) {
+        return !item.clipId || item.clipId === state.activeClipId;
+    }
+    window.shapeOverlayBelongsToActiveClip = shapeOverlayBelongsToActiveClip;
+
     function refreshAnimatedGifPreview() {
         const hasVisibleGif = state.brollOverlays.some((item) => {
             if (item.type !== 'gif' || !item.imageImg) return false;
@@ -3808,6 +3822,126 @@ document.addEventListener('DOMContentLoaded', () => {
         if (tIn < animDur) return { p: Math.max(0, Math.min(1, tIn / animDur)), phase: 'in' };
         if (tOut < animDur) return { p: Math.max(0, Math.min(1, tOut / animDur)), phase: 'out' };
         return { p: 1, phase: 'settled' };
+    }
+
+    // --- Text Overlay v3: independent Text vs Box animation engine ---
+    // Styles that loop continuously for as long as the overlay is visible
+    // (as opposed to the entry/exit-only styles above them in the dropdown).
+    const TEXT_OVERLAY_CONTINUOUS_ANIM_STYLES = new Set(['pulse', 'wiggle', 'float', 'glow-pulse']);
+    // Styles that only make sense for the *text glyphs themselves* (progressive
+    // reveal of characters/words) — never offered on the Box Animation dropdown,
+    // and handled separately at draw time rather than through the transform below.
+    const TEXT_OVERLAY_REVEAL_ANIM_STYLES = new Set(['typewriter', 'letter-cascade', 'word-stagger']);
+
+    // Shared entry/exit + continuous animation engine used for BOTH the text
+    // glyphs and the background box, called separately for each with its own
+    // style/speed/reference-size so they can move fully independently (or be
+    // combined — e.g. box fades in while text pops in).
+    // Returns { offX, offY, scale, scaleX, scaleY, rot, alpha }.
+    function computeOverlayAnimTransform(style, currentTime, startSec, endSec, animDur, refSize) {
+        const result = { offX: 0, offY: 0, scale: 1, scaleX: 1, scaleY: 1, rot: 0, alpha: 1 };
+        if (!style || style === 'none' || TEXT_OVERLAY_REVEAL_ANIM_STYLES.has(style)) return result;
+
+        if (TEXT_OVERLAY_CONTINUOUS_ANIM_STYLES.has(style)) {
+            const t = Math.max(0, currentTime - (startSec || 0));
+            switch (style) {
+                case 'pulse':
+                    result.scale = 1 + Math.sin(t * 3.2) * 0.045; break;
+                case 'wiggle':
+                    result.rot = Math.sin(t * 4.5) * 0.035; break;
+                case 'float':
+                    result.offY = Math.sin(t * 2.2) * (refSize * 0.10); break;
+                case 'glow-pulse':
+                    result.alpha = 0.82 + Math.sin(t * 3.6) * 0.18; break;
+            }
+            return result;
+        }
+
+        const anim = getTextOverlayAnimProgress({ animStyle: style, startSec, endSec }, currentTime, animDur);
+        if (anim.phase === 'settled') return result;
+        const p = anim.p;
+        const eased = easeOutCubicTO(p);
+
+        switch (style) {
+            case 'fade':
+                result.alpha = eased; break;
+            case 'slide-up':
+                result.offY = (1 - eased) * refSize * 1.2; result.alpha = eased; break;
+            case 'slide-down':
+                result.offY = -(1 - eased) * refSize * 1.2; result.alpha = eased; break;
+            case 'slide-left':
+                result.offX = (1 - eased) * refSize * 2; result.alpha = eased; break;
+            case 'slide-right':
+                result.offX = -(1 - eased) * refSize * 2; result.alpha = eased; break;
+            case 'zoom':
+                result.scale = 0.5 + 0.5 * eased; result.alpha = eased; break;
+            case 'zoom-out':
+                result.scale = 1.5 - 0.5 * eased; result.alpha = eased; break;
+            case 'bounce':
+                result.scale = Math.max(0.02, easeOutBackOvershoot(p)); result.alpha = Math.max(0.05, eased); break;
+            case 'pop':
+                result.scale = Math.max(0.02, easeOutBackOvershoot(p));
+                result.rot = (1 - eased) * 0.05 * (p < 0.6 ? 1 : -1);
+                result.alpha = Math.max(0.05, eased);
+                break;
+            case 'rotate-in':
+                result.rot = (1 - eased) * 0.3; result.scale = 0.85 + 0.15 * eased; result.alpha = eased; break;
+            case 'flip-in':
+                result.scaleX = Math.cos((1 - eased) * Math.PI / 2); result.alpha = eased; break;
+            case 'flip-in-vertical':
+                result.scaleY = Math.cos((1 - eased) * Math.PI / 2); result.alpha = eased; break;
+            case 'drop-bounce': {
+                const bounceP = Math.max(0, Math.min(1.2, easeOutBackOvershoot(p)));
+                result.offY = (1 - bounceP) * -refSize * 1.6;
+                result.alpha = Math.max(0.1, eased);
+                break;
+            }
+            case 'swing-in':
+                result.rot = (1 - p) * 0.5 * Math.sin(p * Math.PI * 2.2);
+                result.alpha = eased;
+                break;
+            default:
+                break;
+        }
+        return result;
+    }
+
+    // (reuses the existing hexToRgba(hex, alpha) helper defined below for
+    // shadow color conversion — no need to duplicate it here.)
+
+    // Applies a Text Overlay's drop-shadow/glow settings around a draw callback.
+    // `drawFn(ctx)` should perform the actual fillText/strokeText (or curved/
+    // staggered) drawing at the current origin — it may be called once (single
+    // shadow) or twice (double-layer: a soft light "highlight" pass underneath,
+    // then the main dark shadow pass on top, whose opaque text fill hides the
+    // first pass's fill while both shadows remain visible).
+    function applyTextOverlayShadow(ctx, item, drawFn) {
+        if (!item || !item.shadowEnabled) { drawFn(ctx); return; }
+        const color = item.shadowColor || '#000000';
+        const opacity = (item.shadowOpacity ?? 60) / 100;
+        const blur = item.shadowBlur ?? 8;
+        const offX = item.shadowOffsetX ?? 3;
+        const offY = item.shadowOffsetY ?? 3;
+
+        if (item.shadowDoubleLayer) {
+            const hColor = item.shadowHighlightColor || '#ffffff';
+            const hOpacity = (item.shadowHighlightOpacity ?? 40) / 100;
+            ctx.save();
+            ctx.shadowColor = hexToRgba(hColor, hOpacity);
+            ctx.shadowBlur = blur * 0.6;
+            ctx.shadowOffsetX = -offX * 0.6;
+            ctx.shadowOffsetY = -offY * 0.6;
+            drawFn(ctx);
+            ctx.restore();
+        }
+
+        ctx.save();
+        ctx.shadowColor = hexToRgba(color, opacity);
+        ctx.shadowBlur = blur;
+        ctx.shadowOffsetX = offX;
+        ctx.shadowOffsetY = offY;
+        drawFn(ctx);
+        ctx.restore();
     }
 
     // Resolves dynamic tokens inside a Text Overlay's raw text at draw time,
@@ -6522,7 +6656,12 @@ document.addEventListener('DOMContentLoaded', () => {
                     : (currentTime >= item.startSec && currentTime <= item.endSec);
                 if (!isVisible) return;
 
-                const animDur = item.animSpeedSec !== undefined ? parseFloat(item.animSpeedSec) : 0.5;
+                // Text and Box each have their own independent animation style/speed
+                // (with `animStyle`/`animSpeedSec` kept as a legacy fallback for
+                // overlays/presets saved before this split existed).
+                const textAnimDur = item.textAnimSpeedSec !== undefined ? parseFloat(item.textAnimSpeedSec)
+                    : (item.animSpeedSec !== undefined ? parseFloat(item.animSpeedSec) : 0.5);
+                const boxAnimDur = item.boxAnimSpeedSec !== undefined ? parseFloat(item.boxAnimSpeedSec) : textAnimDur;
                 const tx = item.x * canvasW;
                 const ty = item.y * canvasH;
                 const txScale = item.scale ?? 1;
@@ -6533,46 +6672,16 @@ document.addEventListener('DOMContentLoaded', () => {
                 // Freeze animation to fully-settled while calmly editing in Step 3
                 // so positioning/timing controls aren't fighting a moving target.
                 const isEditingStill = (state.currentStep === 3 && !state.isPlaying);
-                const animStyle = isEditingStill ? 'none' : (item.animStyle || 'none');
-                const anim = getTextOverlayAnimProgress({ ...item, animStyle }, currentTime, animDur);
-                const eased = easeOutCubicTO(anim.p);
-
-                let animOffX = 0, animOffY = 0, animScale = 1, animRot = 0, animAlpha = 1;
-                if (animStyle !== 'none' && anim.phase !== 'settled') {
-                    switch (animStyle) {
-                        case 'fade':
-                            animAlpha = eased; break;
-                        case 'slide-up':
-                            animOffY = (1 - eased) * (item.fontSize * 1.2); animAlpha = eased; break;
-                        case 'slide-down':
-                            animOffY = -(1 - eased) * (item.fontSize * 1.2); animAlpha = eased; break;
-                        case 'slide-left':
-                            animOffX = (1 - eased) * (item.fontSize * 2); animAlpha = eased; break;
-                        case 'slide-right':
-                            animOffX = -(1 - eased) * (item.fontSize * 2); animAlpha = eased; break;
-                        case 'zoom':
-                            animScale = 0.5 + 0.5 * eased; animAlpha = eased; break;
-                        case 'bounce':
-                            animScale = Math.max(0.02, easeOutBackOvershoot(anim.p)); animAlpha = Math.max(0.05, eased); break;
-                        case 'rotate-in':
-                            animRot = (1 - eased) * 0.3; animScale = 0.85 + 0.15 * eased; animAlpha = eased; break;
-                        default:
-                            break; // 'typewriter' / 'letter-cascade' / 'word-stagger' are handled at draw time below
-                    }
-                }
-
-                state.ctx.save();
-                state.ctx.globalAlpha = txAlpha * animAlpha;
-                state.ctx.translate(tx + animOffX, ty + animOffY);
-                if (txRotationRad || animRot) state.ctx.rotate(txRotationRad + animRot);
-                const finalScale = txScale * animScale;
-                if (finalScale !== 1) state.ctx.scale(finalScale, finalScale);
+                const textAnimStyle = isEditingStill ? 'none' : (item.textAnimStyle || item.animStyle || 'none');
+                // Legacy overlays (saved before Text/Box animation were split) never
+                // had boxAnimStyle set at all — for those, fall back to the old
+                // shared animStyle so previously-saved projects still look the same
+                // by default. Once the user explicitly picks a Box Animation (even
+                // "None"), that field exists and wins from then on.
+                const boxAnimStyle = isEditingStill ? 'none' : (item.boxAnimStyle !== undefined ? item.boxAnimStyle : (item.animStyle || 'none'));
 
                 const fontFamily = item.font || 'Hind Siliguri';
                 state.ctx.font = `bold ${item.fontSize}px "${fontFamily}", "Plus Jakarta Sans", sans-serif`;
-                state.ctx.fillStyle = item.color;
-                state.ctx.textAlign = 'center';
-                state.ctx.textBaseline = 'middle';
                 const outlineWidth = Math.max(2, item.fontSize * 0.08);
                 const outlineColor = 'rgba(0,0,0,0.55)';
 
@@ -6593,33 +6702,63 @@ document.addEventListener('DOMContentLoaded', () => {
                     boxW *= (1 + strength * 0.08);
                 }
 
+                // --- Pass 1: Box (its own animation, drawn behind the text) ---
                 if (item.boxStyle && item.boxStyle !== 'none') {
+                    const boxT = computeOverlayAnimTransform(boxAnimStyle, currentTime, item.startSec, item.endSec, boxAnimDur, boxH);
+                    state.ctx.save();
+                    state.ctx.globalAlpha = txAlpha * boxT.alpha;
+                    state.ctx.translate(tx + boxT.offX, ty + boxT.offY);
+                    if (txRotationRad || boxT.rot) state.ctx.rotate(txRotationRad + boxT.rot);
+                    const boxScaleX = txScale * boxT.scale * boxT.scaleX;
+                    const boxScaleY = txScale * boxT.scale * boxT.scaleY;
+                    if (boxScaleX !== 1 || boxScaleY !== 1) state.ctx.scale(boxScaleX, boxScaleY);
                     drawTextOverlayBox(state.ctx, item.boxStyle, item.boxColor || '#4f46e5', boxW, boxH, currentTime);
+                    state.ctx.restore();
                 }
+
+                // --- Pass 2: Text (its own animation, drawn on top of the box) ---
+                const textT = computeOverlayAnimTransform(textAnimStyle, currentTime, item.startSec, item.endSec, textAnimDur, item.fontSize);
+                const textRevealAnim = getTextOverlayAnimProgress({ animStyle: textAnimStyle, startSec: item.startSec, endSec: item.endSec }, currentTime, textAnimDur);
+
+                state.ctx.save();
+                state.ctx.globalAlpha = txAlpha * textT.alpha;
+                state.ctx.translate(tx + textT.offX, ty + textT.offY);
+                if (txRotationRad || textT.rot) state.ctx.rotate(txRotationRad + textT.rot);
+                const textScaleX = txScale * textT.scale * textT.scaleX;
+                const textScaleY = txScale * textT.scale * textT.scaleY;
+                if (textScaleX !== 1 || textScaleY !== 1) state.ctx.scale(textScaleX, textScaleY);
+
+                state.ctx.font = `bold ${item.fontSize}px "${fontFamily}", "Plus Jakarta Sans", sans-serif`;
+                state.ctx.fillStyle = item.color;
+                state.ctx.textAlign = 'center';
+                state.ctx.textBaseline = 'middle';
 
                 // Subtle outline for readability over any video background,
                 // applied per-draw-mode below.
                 let textToDraw = resolvedItemText;
-                if (animStyle === 'typewriter' && anim.phase === 'in') {
-                    const revealCount = Math.max(0, Math.min(resolvedItemText.length, Math.round(resolvedItemText.length * anim.p)));
+                if (textAnimStyle === 'typewriter' && textRevealAnim.phase === 'in') {
+                    const revealCount = Math.max(0, Math.min(resolvedItemText.length, Math.round(resolvedItemText.length * textRevealAnim.p)));
                     textToDraw = resolvedItemText.slice(0, revealCount);
                 }
 
-                if (curveAmount && !(item.curvePoints && item.curvePoints.length >= 2) && !(state.isDrawingTextCurve && state.textCurvePoints && state.textCurvePoints.length >= 2)) {
-                    drawCurvedTextOverlay(state.ctx, textToDraw, curveAmount, outlineColor, outlineWidth);
-                } else if ((item.curvePoints && item.curvePoints.length >= 2) || (state.isDrawingTextCurve && state.textCurvePoints && state.textCurvePoints.length >= 2)) {
-                    var activeCurvePoints = (state.isDrawingTextCurve && state.textCurvePoints && state.textCurvePoints.length >= 2) ? state.textCurvePoints : item.curvePoints;
-                    drawCustomCurveTextOverlay(state.ctx, textToDraw, activeCurvePoints, outlineColor, outlineWidth);
-                } else if (animStyle === 'letter-cascade' && anim.phase !== 'settled') {
-                    drawTextOverlayStaggered(state.ctx, textToDraw, 'letter', anim.p, outlineColor, outlineWidth);
-                } else if (animStyle === 'word-stagger' && anim.phase !== 'settled') {
-                    drawTextOverlayStaggered(state.ctx, textToDraw, 'word', anim.p, outlineColor, outlineWidth);
-                } else {
-                    state.ctx.lineWidth = outlineWidth;
-                    state.ctx.strokeStyle = outlineColor;
-                    state.ctx.strokeText(textToDraw, 0, 0);
-                    state.ctx.fillText(textToDraw, 0, 0);
-                }
+                const drawTextContent = (ctx2) => {
+                    if (curveAmount && !(item.curvePoints && item.curvePoints.length >= 2) && !(state.isDrawingTextCurve && state.textCurvePoints && state.textCurvePoints.length >= 2)) {
+                        drawCurvedTextOverlay(ctx2, textToDraw, curveAmount, outlineColor, outlineWidth);
+                    } else if ((item.curvePoints && item.curvePoints.length >= 2) || (state.isDrawingTextCurve && state.textCurvePoints && state.textCurvePoints.length >= 2)) {
+                        var activeCurvePoints = (state.isDrawingTextCurve && state.textCurvePoints && state.textCurvePoints.length >= 2) ? state.textCurvePoints : item.curvePoints;
+                        drawCustomCurveTextOverlay(ctx2, textToDraw, activeCurvePoints, outlineColor, outlineWidth);
+                    } else if (textAnimStyle === 'letter-cascade' && textRevealAnim.phase !== 'settled') {
+                        drawTextOverlayStaggered(ctx2, textToDraw, 'letter', textRevealAnim.p, outlineColor, outlineWidth);
+                    } else if (textAnimStyle === 'word-stagger' && textRevealAnim.phase !== 'settled') {
+                        drawTextOverlayStaggered(ctx2, textToDraw, 'word', textRevealAnim.p, outlineColor, outlineWidth);
+                    } else {
+                        ctx2.lineWidth = outlineWidth;
+                        ctx2.strokeStyle = outlineColor;
+                        ctx2.strokeText(textToDraw, 0, 0);
+                        ctx2.fillText(textToDraw, 0, 0);
+                    }
+                };
+                applyTextOverlayShadow(state.ctx, item, drawTextContent);
 
                 // Selection box + resize & rotate handles in Step 3 for the active text overlay
                 if (state.currentStep === 3 && item.id === state.selectedTextOverlayId) {
@@ -6697,6 +6836,7 @@ document.addEventListener('DOMContentLoaded', () => {
         // --- Step F2: Draw Sticker/Emoji Overlays (Phase 4A) ---
         if (state.stickers && state.stickers.length > 0) {
             state.stickers.forEach((item) => {
+                if (!stickerBelongsToActiveClip(item)) return;
                 const fontSize = canvasW * (item.size / 100);
                 const sx = item.x * canvasW;
                 const sy = item.y * canvasH;
@@ -6810,6 +6950,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (state.shapeOverlays && state.shapeOverlays.length > 0) {
             const shpCurrentTime = state.currentTime;
             state.shapeOverlays.forEach((item) => {
+                if (!shapeOverlayBelongsToActiveClip(item)) return;
                 const isVisible = (state.currentStep === 3 && !state.isPlaying)
                     ? true
                     : (shpCurrentTime >= item.startSec && shpCurrentTime <= item.endSec);
@@ -8627,6 +8768,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const now = Math.max(0, state.currentTime || 0);
         for (let i = state.shapeOverlays.length - 1; i >= 0; i--) {
             const item = state.shapeOverlays[i];
+            if (!shapeOverlayBelongsToActiveClip(item)) continue;
             if (now < (item.startSec || 0) || now > (item.endSec || 0)) continue;
             const box = getShapeOverlayBox(item, canvasW, canvasH);
             let testX = coords.x, testY = coords.y;
@@ -8952,6 +9094,7 @@ document.addEventListener('DOMContentLoaded', () => {
         // Search topmost (last drawn / last added) first
         for (let i = state.stickers.length - 1; i >= 0; i--) {
             const item = state.stickers[i];
+            if (!stickerBelongsToActiveClip(item)) continue;
             if (now < (item.startSec || 0) || now > (item.endSec || 0)) continue;
             const box = getStickerBox(item, canvasW, canvasH);
             if (coords.x >= box.cx - box.boxW / 2 && coords.x <= box.cx + box.boxW / 2 &&
@@ -9861,6 +10004,10 @@ document.addEventListener('DOMContentLoaded', () => {
             state.canvas.style.cursor = 'move';
             return;
         }
+        if (state.shapeOverlays && state.shapeOverlays.length > 0 && findShapeOverlayAt(idleCoords)) {
+            state.canvas.style.cursor = 'move';
+            return;
+        }
         if (state.textOverlays && state.textOverlays.length > 0 && findTextOverlayAt(idleCoords)) {
             state.canvas.style.cursor = 'move';
             return;
@@ -10030,10 +10177,14 @@ document.addEventListener('DOMContentLoaded', () => {
     cropToolToggle.addEventListener('change', (e) => {
         state.isAdjustingCrop = e.target.checked;
         if (state.isAdjustingCrop) {
+            if (window.captureUndoCheckpoint) window.captureUndoCheckpoint();
             cropActionsContainer.style.display = 'block';
             updateCropDimensionsDisplay();
         } else {
             cropActionsContainer.style.display = 'none';
+            if (window.recordEditorHistory) {
+                window.recordEditorHistory('Video crop saved');
+            }
         }
         updateCanvasDimensions();
         drawFrame();
@@ -10541,6 +10692,9 @@ document.addEventListener('DOMContentLoaded', () => {
     const textOverlayAnimSelect = document.getElementById('text-overlay-anim-select');
     const textOverlayAnimSpeedSlider = document.getElementById('text-overlay-anim-speed');
     const textOverlayAnimSpeedVal = document.getElementById('text-overlay-anim-speed-val');
+    const textOverlayBoxAnimSelect = document.getElementById('text-overlay-box-anim-select');
+    const textOverlayBoxAnimSpeedSlider = document.getElementById('text-overlay-box-anim-speed');
+    const textOverlayBoxAnimSpeedVal = document.getElementById('text-overlay-box-anim-speed-val');
     const textOverlayCurveSlider = document.getElementById('text-overlay-curve');
     const textOverlayCurveVal = document.getElementById('text-overlay-curve-val');
     const addTextOverlayBtn = document.getElementById('add-text-overlay-btn');
@@ -10550,6 +10704,31 @@ document.addEventListener('DOMContentLoaded', () => {
     const textOverlayEndInput = document.getElementById('text-overlay-end');
     const textOverlayEditInput = document.getElementById('text-overlay-edit-input');
     const deleteTextOverlayBtn = document.getElementById('delete-text-overlay-btn');
+
+    // Shadow / Glow controls (previously present in the DOM but never wired up)
+    const textOverlayShadowEnabled = document.getElementById('text-overlay-shadow-enabled');
+    const textOverlayShadowGroup = document.getElementById('text-overlay-shadow-group');
+    const textOverlayShadowIntensity = document.getElementById('text-overlay-shadow-intensity');
+    const textOverlayShadowIntensityVal = document.getElementById('text-overlay-shadow-intensity-val');
+    const textOverlayShadowColor = document.getElementById('text-overlay-shadow-color');
+    const textOverlayShadowColorVal = document.getElementById('text-overlay-shadow-color-val');
+    const textOverlayShadowOpacity = document.getElementById('text-overlay-shadow-opacity');
+    const textOverlayShadowOpacityVal = document.getElementById('text-overlay-shadow-opacity-val');
+    const textOverlayShadowBlur = document.getElementById('text-overlay-shadow-blur');
+    const textOverlayShadowBlurVal = document.getElementById('text-overlay-shadow-blur-val');
+    const textOverlayShadowOffsetX = document.getElementById('text-overlay-shadow-offset-x');
+    const textOverlayShadowOffsetXVal = document.getElementById('text-overlay-shadow-offset-x-val');
+    const textOverlayShadowOffsetY = document.getElementById('text-overlay-shadow-offset-y');
+    const textOverlayShadowOffsetYVal = document.getElementById('text-overlay-shadow-offset-y-val');
+    const textOverlayShadowDoubleLayer = document.getElementById('text-overlay-shadow-double-layer');
+    const textOverlayShadowHighlightGroup = document.getElementById('text-overlay-shadow-highlight-group');
+    const textOverlayShadowHighlightColor = document.getElementById('text-overlay-shadow-highlight-color');
+    const textOverlayShadowHighlightColorVal = document.getElementById('text-overlay-shadow-highlight-color-val');
+    const textOverlayShadowHighlightOpacity = document.getElementById('text-overlay-shadow-highlight-opacity');
+    const textOverlayShadowHighlightOpacityVal = document.getElementById('text-overlay-shadow-highlight-opacity-val');
+    const textShadowPresetNormal = document.getElementById('text-shadow-preset-normal');
+    const textShadowPresetGlow = document.getElementById('text-shadow-preset-glow');
+    const textShadowPresetBevel = document.getElementById('text-shadow-preset-bevel');
 
     let textOverlayIdCounter = 1;
 
@@ -10570,7 +10749,20 @@ document.addEventListener('DOMContentLoaded', () => {
             if (textOverlayAnimSpeedVal) textOverlayAnimSpeedVal.innerText = e.target.value + 's';
             const item = getSelectedTextOverlay();
             if (item) {
-                item.animSpeedSec = parseFloat(e.target.value);
+                item.textAnimSpeedSec = parseFloat(e.target.value);
+                item.animSpeedSec = item.textAnimSpeedSec; // legacy fallback field, kept in sync
+                drawFrame();
+                if (window.triggerAutoSave) window.triggerAutoSave();
+            }
+        });
+    }
+
+    if (textOverlayBoxAnimSpeedSlider) {
+        textOverlayBoxAnimSpeedSlider.addEventListener('input', (e) => {
+            if (textOverlayBoxAnimSpeedVal) textOverlayBoxAnimSpeedVal.innerText = e.target.value + 's';
+            const item = getSelectedTextOverlay();
+            if (item) {
+                item.boxAnimSpeedSec = parseFloat(e.target.value);
                 drawFrame();
                 if (window.triggerAutoSave) window.triggerAutoSave();
             }
@@ -10582,6 +10774,8 @@ document.addEventListener('DOMContentLoaded', () => {
         textOverlayBoxColorGroup.style.display = (textOverlayBoxSelect.value === 'none') ? 'none' : 'block';
     }
     refreshTextOverlayBoxColorVisibility();
+    if (typeof refreshTextOverlayShadowVisibility === 'function') refreshTextOverlayShadowVisibility();
+    if (typeof refreshTextOverlayShadowHighlightVisibility === 'function') refreshTextOverlayShadowHighlightVisibility();
 
     // While a Text Overlay is selected, these controls edit that item live in
     // addition to setting the defaults for the *next* new overlay you add.
@@ -10620,8 +10814,161 @@ document.addEventListener('DOMContentLoaded', () => {
 
     textOverlayAnimSelect.addEventListener('change', (e) => {
         const item = getSelectedTextOverlay();
-        if (item) { item.animStyle = e.target.value; drawFrame(); }
+        if (item) {
+            item.textAnimStyle = e.target.value;
+            item.animStyle = e.target.value; // legacy fallback field, kept in sync
+            drawFrame();
+            if (window.triggerAutoSave) window.triggerAutoSave();
+        }
     });
+
+    if (textOverlayBoxAnimSelect) {
+        textOverlayBoxAnimSelect.addEventListener('change', (e) => {
+            const item = getSelectedTextOverlay();
+            if (item) { item.boxAnimStyle = e.target.value; drawFrame(); if (window.triggerAutoSave) window.triggerAutoSave(); }
+        });
+    }
+
+    // --- Shadow / Glow wiring ---
+    function refreshTextOverlayShadowVisibility() {
+        if (!textOverlayShadowGroup) return;
+        textOverlayShadowGroup.style.display = (textOverlayShadowEnabled && textOverlayShadowEnabled.checked) ? 'block' : 'none';
+    }
+    function refreshTextOverlayShadowHighlightVisibility() {
+        if (!textOverlayShadowHighlightGroup) return;
+        textOverlayShadowHighlightGroup.style.display = (textOverlayShadowDoubleLayer && textOverlayShadowDoubleLayer.checked) ? 'block' : 'none';
+    }
+    // Applies the "Intensity" master slider (0-100) to blur/offset/opacity together,
+    // and reflects the resulting values back into the individual fine-tune sliders.
+    function applyTextOverlayShadowIntensity(intensity, item) {
+        const t = Math.max(0, Math.min(100, intensity)) / 100;
+        const blur = Math.round(2 + t * 26);       // 2..28px
+        const offset = Math.round(1 + t * 11);     // 1..12px
+        const opacity = Math.round(20 + t * 70);   // 20..90%
+        if (item) {
+            item.shadowBlur = blur;
+            item.shadowOffsetX = offset;
+            item.shadowOffsetY = offset;
+            item.shadowOpacity = opacity;
+        }
+        if (textOverlayShadowBlur) { textOverlayShadowBlur.value = blur; if (textOverlayShadowBlurVal) textOverlayShadowBlurVal.innerText = blur + 'px'; }
+        if (textOverlayShadowOffsetX) { textOverlayShadowOffsetX.value = offset; if (textOverlayShadowOffsetXVal) textOverlayShadowOffsetXVal.innerText = offset + 'px'; }
+        if (textOverlayShadowOffsetY) { textOverlayShadowOffsetY.value = offset; if (textOverlayShadowOffsetYVal) textOverlayShadowOffsetYVal.innerText = offset + 'px'; }
+        if (textOverlayShadowOpacity) { textOverlayShadowOpacity.value = opacity; if (textOverlayShadowOpacityVal) textOverlayShadowOpacityVal.innerText = opacity + '%'; }
+    }
+
+    if (textOverlayShadowEnabled) {
+        textOverlayShadowEnabled.addEventListener('change', (e) => {
+            refreshTextOverlayShadowVisibility();
+            const item = getSelectedTextOverlay();
+            if (item) { item.shadowEnabled = e.target.checked; drawFrame(); if (window.triggerAutoSave) window.triggerAutoSave(); }
+        });
+    }
+    if (textOverlayShadowIntensity) {
+        textOverlayShadowIntensity.addEventListener('input', (e) => {
+            const val = parseInt(e.target.value, 10);
+            if (textOverlayShadowIntensityVal) textOverlayShadowIntensityVal.innerText = val + '%';
+            const item = getSelectedTextOverlay();
+            applyTextOverlayShadowIntensity(val, item);
+            if (item) { drawFrame(); if (window.triggerAutoSave) window.triggerAutoSave(); }
+        });
+    }
+    if (textOverlayShadowColor) {
+        textOverlayShadowColor.addEventListener('input', (e) => {
+            if (textOverlayShadowColorVal) textOverlayShadowColorVal.innerText = e.target.value;
+            const item = getSelectedTextOverlay();
+            if (item) { item.shadowColor = e.target.value; drawFrame(); if (window.triggerAutoSave) window.triggerAutoSave(); }
+        });
+    }
+    if (textOverlayShadowOpacity) {
+        textOverlayShadowOpacity.addEventListener('input', (e) => {
+            const val = parseInt(e.target.value, 10);
+            if (textOverlayShadowOpacityVal) textOverlayShadowOpacityVal.innerText = val + '%';
+            const item = getSelectedTextOverlay();
+            if (item) { item.shadowOpacity = val; drawFrame(); if (window.triggerAutoSave) window.triggerAutoSave(); }
+        });
+    }
+    if (textOverlayShadowBlur) {
+        textOverlayShadowBlur.addEventListener('input', (e) => {
+            const val = parseInt(e.target.value, 10);
+            if (textOverlayShadowBlurVal) textOverlayShadowBlurVal.innerText = val + 'px';
+            const item = getSelectedTextOverlay();
+            if (item) { item.shadowBlur = val; drawFrame(); if (window.triggerAutoSave) window.triggerAutoSave(); }
+        });
+    }
+    if (textOverlayShadowOffsetX) {
+        textOverlayShadowOffsetX.addEventListener('input', (e) => {
+            const val = parseInt(e.target.value, 10);
+            if (textOverlayShadowOffsetXVal) textOverlayShadowOffsetXVal.innerText = val + 'px';
+            const item = getSelectedTextOverlay();
+            if (item) { item.shadowOffsetX = val; drawFrame(); if (window.triggerAutoSave) window.triggerAutoSave(); }
+        });
+    }
+    if (textOverlayShadowOffsetY) {
+        textOverlayShadowOffsetY.addEventListener('input', (e) => {
+            const val = parseInt(e.target.value, 10);
+            if (textOverlayShadowOffsetYVal) textOverlayShadowOffsetYVal.innerText = val + 'px';
+            const item = getSelectedTextOverlay();
+            if (item) { item.shadowOffsetY = val; drawFrame(); if (window.triggerAutoSave) window.triggerAutoSave(); }
+        });
+    }
+    if (textOverlayShadowDoubleLayer) {
+        textOverlayShadowDoubleLayer.addEventListener('change', (e) => {
+            refreshTextOverlayShadowHighlightVisibility();
+            const item = getSelectedTextOverlay();
+            if (item) { item.shadowDoubleLayer = e.target.checked; drawFrame(); if (window.triggerAutoSave) window.triggerAutoSave(); }
+        });
+    }
+    if (textOverlayShadowHighlightColor) {
+        textOverlayShadowHighlightColor.addEventListener('input', (e) => {
+            if (textOverlayShadowHighlightColorVal) textOverlayShadowHighlightColorVal.innerText = e.target.value;
+            const item = getSelectedTextOverlay();
+            if (item) { item.shadowHighlightColor = e.target.value; drawFrame(); if (window.triggerAutoSave) window.triggerAutoSave(); }
+        });
+    }
+    if (textOverlayShadowHighlightOpacity) {
+        textOverlayShadowHighlightOpacity.addEventListener('input', (e) => {
+            const val = parseInt(e.target.value, 10);
+            if (textOverlayShadowHighlightOpacityVal) textOverlayShadowHighlightOpacityVal.innerText = val + '%';
+            const item = getSelectedTextOverlay();
+            if (item) { item.shadowHighlightOpacity = val; drawFrame(); if (window.triggerAutoSave) window.triggerAutoSave(); }
+        });
+    }
+
+    // Preset buttons: one click sets every shadow field at once for a ready-made look.
+    function applyTextOverlayShadowPreset(preset) {
+        const item = getSelectedTextOverlay();
+        let fields;
+        if (preset === 'glow') {
+            fields = { shadowEnabled: true, shadowColor: '#22d3ee', shadowOpacity: 85, shadowBlur: 22, shadowOffsetX: 0, shadowOffsetY: 0, shadowDoubleLayer: false };
+        } else if (preset === 'bevel') {
+            fields = { shadowEnabled: true, shadowColor: '#000000', shadowOpacity: 65, shadowBlur: 6, shadowOffsetX: 3, shadowOffsetY: 3, shadowDoubleLayer: true, shadowHighlightColor: '#ffffff', shadowHighlightOpacity: 45 };
+        } else {
+            fields = { shadowEnabled: true, shadowColor: '#000000', shadowOpacity: 55, shadowBlur: 8, shadowOffsetX: 3, shadowOffsetY: 3, shadowDoubleLayer: false };
+        }
+        if (item) Object.assign(item, fields);
+
+        if (textOverlayShadowEnabled) textOverlayShadowEnabled.checked = true;
+        if (textOverlayShadowColor) { textOverlayShadowColor.value = fields.shadowColor; if (textOverlayShadowColorVal) textOverlayShadowColorVal.innerText = fields.shadowColor; }
+        if (textOverlayShadowOpacity) { textOverlayShadowOpacity.value = fields.shadowOpacity; if (textOverlayShadowOpacityVal) textOverlayShadowOpacityVal.innerText = fields.shadowOpacity + '%'; }
+        if (textOverlayShadowBlur) { textOverlayShadowBlur.value = fields.shadowBlur; if (textOverlayShadowBlurVal) textOverlayShadowBlurVal.innerText = fields.shadowBlur + 'px'; }
+        if (textOverlayShadowOffsetX) { textOverlayShadowOffsetX.value = fields.shadowOffsetX; if (textOverlayShadowOffsetXVal) textOverlayShadowOffsetXVal.innerText = fields.shadowOffsetX + 'px'; }
+        if (textOverlayShadowOffsetY) { textOverlayShadowOffsetY.value = fields.shadowOffsetY; if (textOverlayShadowOffsetYVal) textOverlayShadowOffsetYVal.innerText = fields.shadowOffsetY + 'px'; }
+        if (textOverlayShadowDoubleLayer) textOverlayShadowDoubleLayer.checked = !!fields.shadowDoubleLayer;
+        if (fields.shadowHighlightColor && textOverlayShadowHighlightColor) { textOverlayShadowHighlightColor.value = fields.shadowHighlightColor; if (textOverlayShadowHighlightColorVal) textOverlayShadowHighlightColorVal.innerText = fields.shadowHighlightColor; }
+        if (fields.shadowHighlightOpacity !== undefined && textOverlayShadowHighlightOpacity) { textOverlayShadowHighlightOpacity.value = fields.shadowHighlightOpacity; if (textOverlayShadowHighlightOpacityVal) textOverlayShadowHighlightOpacityVal.innerText = fields.shadowHighlightOpacity + '%'; }
+        // Roughly reflect the preset's blur/offset onto the Intensity bar too.
+        const approxIntensity = Math.max(0, Math.min(100, Math.round(((fields.shadowBlur - 2) / 26) * 100)));
+        if (textOverlayShadowIntensity) { textOverlayShadowIntensity.value = approxIntensity; if (textOverlayShadowIntensityVal) textOverlayShadowIntensityVal.innerText = approxIntensity + '%'; }
+
+        refreshTextOverlayShadowVisibility();
+        refreshTextOverlayShadowHighlightVisibility();
+        drawFrame();
+        if (window.triggerAutoSave) window.triggerAutoSave();
+    }
+    if (textShadowPresetNormal) textShadowPresetNormal.addEventListener('click', () => applyTextOverlayShadowPreset('normal'));
+    if (textShadowPresetGlow) textShadowPresetGlow.addEventListener('click', () => applyTextOverlayShadowPreset('glow'));
+    if (textShadowPresetBevel) textShadowPresetBevel.addEventListener('click', () => applyTextOverlayShadowPreset('bevel'));
 
     textOverlayCurveSlider.addEventListener('input', (e) => {
         textOverlayCurveVal.innerText = e.target.value;
@@ -10703,10 +11050,23 @@ document.addEventListener('DOMContentLoaded', () => {
             font: textOverlayFontSelect.value || 'Hind Siliguri',
             boxStyle: textOverlayBoxSelect.value || 'none',
             boxColor: textOverlayBoxColorInput.value || '#4f46e5',
-            animStyle: textOverlayAnimSelect.value || 'none',
+            textAnimStyle: textOverlayAnimSelect.value || 'none',
+            animStyle: textOverlayAnimSelect.value || 'none', // legacy fallback field, kept in sync
+            textAnimSpeedSec: textOverlayAnimSpeedSlider ? parseFloat(textOverlayAnimSpeedSlider.value) || 0.5 : 0.5,
             animSpeedSec: textOverlayAnimSpeedSlider ? parseFloat(textOverlayAnimSpeedSlider.value) || 0.5 : 0.5,
+            boxAnimStyle: textOverlayBoxAnimSelect ? (textOverlayBoxAnimSelect.value || 'none') : 'none',
+            boxAnimSpeedSec: textOverlayBoxAnimSpeedSlider ? parseFloat(textOverlayBoxAnimSpeedSlider.value) || 0.5 : 0.5,
             curve: parseInt(textOverlayCurveSlider.value) || 0,
             curvePoints: [],
+            shadowEnabled: textOverlayShadowEnabled ? !!textOverlayShadowEnabled.checked : false,
+            shadowColor: textOverlayShadowColor ? textOverlayShadowColor.value : '#000000',
+            shadowOpacity: textOverlayShadowOpacity ? parseInt(textOverlayShadowOpacity.value) : 60,
+            shadowBlur: textOverlayShadowBlur ? parseInt(textOverlayShadowBlur.value) : 8,
+            shadowOffsetX: textOverlayShadowOffsetX ? parseInt(textOverlayShadowOffsetX.value) : 3,
+            shadowOffsetY: textOverlayShadowOffsetY ? parseInt(textOverlayShadowOffsetY.value) : 3,
+            shadowDoubleLayer: textOverlayShadowDoubleLayer ? !!textOverlayShadowDoubleLayer.checked : false,
+            shadowHighlightColor: textOverlayShadowHighlightColor ? textOverlayShadowHighlightColor.value : '#ffffff',
+            shadowHighlightOpacity: textOverlayShadowHighlightOpacity ? parseInt(textOverlayShadowHighlightOpacity.value) : 40,
             startSec: 0,
             endSec: Math.max(1, state.duration || 5)
         };
@@ -10719,6 +11079,9 @@ document.addEventListener('DOMContentLoaded', () => {
         showTextOverlayTimingFor(newItem.id);
         if (window.updateCurveButtonVisibility) window.updateCurveButtonVisibility();
         drawFrame();
+        if (window.recordEditorHistory) {
+            window.recordEditorHistory(`Text overlay added: "${text.substring(0, 15)}"`);
+        }
     });
 
     function renderTextOverlayList() {
@@ -10780,14 +11143,42 @@ document.addEventListener('DOMContentLoaded', () => {
         textOverlayBoxSelect.value = item.boxStyle || 'none';
         textOverlayBoxColorInput.value = item.boxColor || '#4f46e5';
         textOverlayBoxColorVal.innerText = item.boxColor || '#4f46e5';
-        textOverlayAnimSelect.value = item.animStyle || 'none';
+        textOverlayAnimSelect.value = item.textAnimStyle || item.animStyle || 'none';
         if (textOverlayAnimSpeedSlider) {
-            const speed = item.animSpeedSec !== undefined ? item.animSpeedSec : 0.5;
+            const speed = item.textAnimSpeedSec !== undefined ? item.textAnimSpeedSec : (item.animSpeedSec !== undefined ? item.animSpeedSec : 0.5);
             textOverlayAnimSpeedSlider.value = speed;
             if (textOverlayAnimSpeedVal) textOverlayAnimSpeedVal.innerText = speed + 's';
         }
+        if (textOverlayBoxAnimSelect) {
+            textOverlayBoxAnimSelect.value = item.boxAnimStyle || 'none';
+        }
+        if (textOverlayBoxAnimSpeedSlider) {
+            const boxSpeed = item.boxAnimSpeedSec !== undefined ? item.boxAnimSpeedSec : 0.5;
+            textOverlayBoxAnimSpeedSlider.value = boxSpeed;
+            if (textOverlayBoxAnimSpeedVal) textOverlayBoxAnimSpeedVal.innerText = boxSpeed + 's';
+        }
         textOverlayCurveSlider.value = item.curve || 0;
         textOverlayCurveVal.innerText = item.curve || 0;
+
+        // Shadow / Glow controls
+        if (textOverlayShadowEnabled) textOverlayShadowEnabled.checked = !!item.shadowEnabled;
+        if (textOverlayShadowColor) { const c = item.shadowColor || '#000000'; textOverlayShadowColor.value = c; if (textOverlayShadowColorVal) textOverlayShadowColorVal.innerText = c; }
+        if (textOverlayShadowOpacity) { const v = item.shadowOpacity ?? 60; textOverlayShadowOpacity.value = v; if (textOverlayShadowOpacityVal) textOverlayShadowOpacityVal.innerText = v + '%'; }
+        if (textOverlayShadowBlur) { const v = item.shadowBlur ?? 8; textOverlayShadowBlur.value = v; if (textOverlayShadowBlurVal) textOverlayShadowBlurVal.innerText = v + 'px'; }
+        if (textOverlayShadowOffsetX) { const v = item.shadowOffsetX ?? 3; textOverlayShadowOffsetX.value = v; if (textOverlayShadowOffsetXVal) textOverlayShadowOffsetXVal.innerText = v + 'px'; }
+        if (textOverlayShadowOffsetY) { const v = item.shadowOffsetY ?? 3; textOverlayShadowOffsetY.value = v; if (textOverlayShadowOffsetYVal) textOverlayShadowOffsetYVal.innerText = v + 'px'; }
+        if (textOverlayShadowDoubleLayer) textOverlayShadowDoubleLayer.checked = !!item.shadowDoubleLayer;
+        if (textOverlayShadowHighlightColor) { const c = item.shadowHighlightColor || '#ffffff'; textOverlayShadowHighlightColor.value = c; if (textOverlayShadowHighlightColorVal) textOverlayShadowHighlightColorVal.innerText = c; }
+        if (textOverlayShadowHighlightOpacity) { const v = item.shadowHighlightOpacity ?? 40; textOverlayShadowHighlightOpacity.value = v; if (textOverlayShadowHighlightOpacityVal) textOverlayShadowHighlightOpacityVal.innerText = v + '%'; }
+        if (textOverlayShadowIntensity) {
+            const approxBlur = item.shadowBlur ?? 8;
+            const approxIntensity = Math.max(0, Math.min(100, Math.round(((approxBlur - 2) / 26) * 100)));
+            textOverlayShadowIntensity.value = approxIntensity;
+            if (textOverlayShadowIntensityVal) textOverlayShadowIntensityVal.innerText = approxIntensity + '%';
+        }
+        if (typeof refreshTextOverlayShadowVisibility === 'function') refreshTextOverlayShadowVisibility();
+        if (typeof refreshTextOverlayShadowHighlightVisibility === 'function') refreshTextOverlayShadowHighlightVisibility();
+
         refreshTextOverlayBoxColorVisibility();
         if (window.updateCurveButtonVisibility) window.updateCurveButtonVisibility();
     }
@@ -13147,6 +13538,7 @@ document.addEventListener('DOMContentLoaded', () => {
     function addSticker(emoji) {
         const newItem = {
             id: stickerIdCounter++,
+            clipId: state.activeClipId,
             emoji: emoji,
             x: 0.5,
             y: 0.5,
@@ -13172,7 +13564,7 @@ document.addEventListener('DOMContentLoaded', () => {
     function renderStickerList() {
         if (!stickerListEl) return;
         stickerListEl.innerHTML = '';
-        state.stickers.forEach((item) => {
+        state.stickers.filter(stickerBelongsToActiveClip).forEach((item) => {
             const row = document.createElement('div');
             row.className = 'sticker-list-item' + (item.id === state.selectedStickerId ? ' active' : '');
             row.style.display = 'flex';
@@ -13487,6 +13879,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const end = Math.min(state.duration || (start + defaultDur), start + defaultDur);
         const newItem = {
             id: shapeOverlayIdCounter++,
+            clipId: state.activeClipId,
             shapeType: type,
             text: isPlane ? 'YOUR TEXT HERE' : 'আপনার টেক্সট',
             x: 0.5,
@@ -13521,7 +13914,7 @@ document.addEventListener('DOMContentLoaded', () => {
     function renderShapeOverlayList() {
         if (!shapeOverlayListEl) return;
         shapeOverlayListEl.innerHTML = '';
-        state.shapeOverlays.forEach((item) => {
+        state.shapeOverlays.filter(shapeOverlayBelongsToActiveClip).forEach((item) => {
             const row = document.createElement('div');
             row.className = 'sticker-list-item' + (item.id === state.selectedShapeOverlayId ? ' active' : '');
             row.style.display = 'flex';
@@ -13907,6 +14300,53 @@ document.addEventListener('DOMContentLoaded', () => {
             });
         });
     }
+
+    // Escape clears any selected overlay (sticker, shape, text, B-roll, etc.)
+    // and forces off any drag/resize/rotate flag that might be stuck on,
+    // so a click elsewhere is never intercepted by a leftover selection.
+    window.addEventListener('keydown', (e) => {
+        if (e.key !== 'Escape') return;
+        const activeTag = document.activeElement && document.activeElement.tagName;
+        if (activeTag === 'INPUT' || activeTag === 'TEXTAREA') {
+            document.activeElement.blur();
+        }
+
+        if (state.selectedStickerId !== null && window.onStickerSelected) window.onStickerSelected(null);
+        if (state.selectedShapeOverlayId !== null && window.onShapeOverlaySelected) window.onShapeOverlaySelected(null);
+        if (state.selectedTextOverlayId !== null && window.onTextOverlaySelected) window.onTextOverlaySelected(null);
+        if (state.selectedBrollId !== null && window.onBrollSelected) window.onBrollSelected(null);
+        if (state.selectedSymbolId !== null && window.onSymbolSelected) window.onSymbolSelected(null);
+        if (state.selectedHighlightId !== null && window.onHighlightSelected) window.onHighlightSelected(null);
+        if (state.selectedBlurId !== null && window.onBlurRegionSelected) window.onBlurRegionSelected(null);
+        if (state.selectedFillId !== null && window.onFillSelected) window.onFillSelected(null);
+
+        state.isDraggingSticker = false;
+        state.isResizingSticker = false;
+        state.isDraggingShapeOverlay = false;
+        state.isResizingShapeOverlay = false;
+        state.isRotatingShapeOverlay = false;
+        state.isDraggingTextOverlay = false;
+        state.isResizingTextOverlay = false;
+        state.isRotatingTextOverlay = false;
+        state.isDraggingBroll = false;
+        state.isResizingBroll = false;
+        state.isRotatingBroll = false;
+        state.isDraggingSymbol = false;
+        state.isResizingSymbol = false;
+        state.isDraggingCrop = false;
+        state.isResizingCrop = false;
+        state.isDrawingNewCrop = false;
+        state.isDraggingBlur = false;
+        state.isResizingBlur = false;
+        state.isDrawingNewBlur = false;
+        state.isDraggingFill = false;
+        state.isResizingFill = false;
+        state.isDrawingNewFill = false;
+        state.isDrawingNewHighlight = false;
+
+        state.canvas.style.cursor = 'default';
+        drawFrame();
+    });
 
     // Attach Canvas interaction listeners (Desktop Mouse)
     state.canvas.addEventListener('mousedown', handlePointerDown);
