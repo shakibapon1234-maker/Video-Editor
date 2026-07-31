@@ -11218,10 +11218,36 @@ document.addEventListener('DOMContentLoaded', () => {
     // overlays below first, so it can back off and let them be dragged
     // instead of swallowing the click itself.
     window.__topOverlayHitAt = function(coords) {
-        if (state.symbolOverlays && state.symbolOverlays.length > 0 && findSymbolAt(coords)) return true;
-        if (state.shapeOverlays && state.shapeOverlays.length > 0 && findShapeOverlayAt(coords)) return true;
-        if (state.stickers && state.stickers.length > 0 && findStickerAt(coords)) return true;
-        if (state.textOverlays && state.textOverlays.length > 0 && findTextOverlayAt(coords)) return true;
+        if (state.brollOverlays && state.brollOverlays.length > 0) {
+            if (findBrollPipAt(coords)) return true;
+            if (state.selectedBrollId !== null) {
+                if (typeof findBrollRotateHandle === 'function' && findBrollRotateHandle(coords)) return true;
+                if (typeof findBrollResizeHandle === 'function' && findBrollResizeHandle(coords)) return true;
+            }
+        }
+        if (state.symbolOverlays && state.symbolOverlays.length > 0) {
+            if (findSymbolAt(coords)) return true;
+            if (state.selectedSymbolId !== null) {
+                if (typeof findSymbolRotateHandle === 'function' && findSymbolRotateHandle(coords)) return true;
+                if (typeof findSymbolResizeHandle === 'function' && findSymbolResizeHandle(coords)) return true;
+            }
+        }
+        if (state.shapeOverlays && state.shapeOverlays.length > 0) {
+            if (findShapeOverlayAt(coords)) return true;
+            if (state.selectedShapeOverlayId !== null) {
+                if (typeof findShapeOverlayRotateHandle === 'function' && findShapeOverlayRotateHandle(coords)) return true;
+                if (typeof findShapeOverlayResizeHandle === 'function' && findShapeOverlayResizeHandle(coords)) return true;
+            }
+        }
+        if (state.stickers && state.stickers.length > 0) {
+            if (findStickerAt(coords)) return true;
+            if (state.selectedStickerId !== null) {
+                if (typeof findStickerResizeHandle === 'function' && findStickerResizeHandle(coords)) return true;
+            }
+        }
+        if (state.textOverlays && state.textOverlays.length > 0) {
+            if (findTextOverlayAt(coords)) return true;
+        }
         return false;
     };
 
