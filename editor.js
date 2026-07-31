@@ -4549,7 +4549,9 @@ document.addEventListener('DOMContentLoaded', () => {
         const effectiveTime = isExporting ? state.customExportTime : state.currentTime;
         const elapsed = effectiveTime - state.startTime;
         const shouldAnimate = state.isPlaying || isExporting;
+        const isFirstClip = (!state.clips || state.clips.length === 0 || (activeClip && state.clips[0] && state.clips[0].id === activeClip.id));
         const transitionActive = shouldAnimate && 
+                                 isFirstClip &&
                                  state.introTransitionType && 
                                  state.introTransitionType !== 'none' && 
                                  elapsed >= 0 &&
