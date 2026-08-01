@@ -1,4 +1,5 @@
-const { app, BrowserWindow, session, dialog } = require('electron');
+const { app, BrowserWindow, session, dialog, ipcMain } = require('electron');
+const path = require('path');
 
 const gotLock = app.requestSingleInstanceLock();
 if (!gotLock) {
@@ -25,7 +26,9 @@ if (!gotLock) {
             autoHideMenuBar: true,
             webPreferences: {
                 contextIsolation: true,
-                nodeIntegration: false
+                nodeIntegration: false,
+                backgroundThrottling: false, // Prevents render slowdown when window is minimized or in background
+                preload: path.join(__dirname, 'preload.js')
             }
         });
 
@@ -34,6 +37,27 @@ if (!gotLock) {
             mainWindow = null;
         });
     }
+
+    ipcMain.handle('toggle-always-on-top', () => {
+        if (mainWindow) {
+            const newState = !mainWindow.isAlwaysOnTop();
+            mainWindow.setAlwaysOnTop(newState);
+            return newState;
+        }
+        return false;
+    });
+
+    ipcMain.handle('get-always-on-top', () => {
+        return mainWindow ? mainWindow.isAlwaysOnTop() : false;
+    });
+
+    ipcMain.handle('set-always-on-top', (event, flag) => {
+        if (mainWindow) {
+            mainWindow.setAlwaysOnTop(!!flag);
+            return mainWindow.isAlwaysOnTop();
+        }
+        return false;
+    });
 
     app.whenReady().then(() => {
         session.defaultSession.setPermissionRequestHandler((webContents, permission, callback) => {

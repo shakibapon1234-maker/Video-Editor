@@ -31,6 +31,7 @@
         setupSidebarToggle();
         setupHeaderToggle();
         setupFloatingTransport();
+        setupAlwaysOnTopPin();
     });
 
     // ---------------------------------------------------------
@@ -404,5 +405,51 @@
             requestAnimationFrame(syncLoop);
         }
         requestAnimationFrame(syncLoop);
+    }
+
+    // ---------------------------------------------------------
+    // 4) Always On Top (Pin Window) Feature - PotPlayer Style
+    // ---------------------------------------------------------
+    function setupAlwaysOnTopPin() {
+        const pinBtn = document.getElementById('always-on-top-btn');
+        const pinText = document.getElementById('always-on-top-text');
+        if (!pinBtn) return;
+
+        function updatePinState(isPinned) {
+            if (isPinned) {
+                pinBtn.classList.add('active');
+                pinBtn.style.background = '#2563eb';
+                pinBtn.style.color = '#ffffff';
+                pinBtn.style.borderColor = '#3b82f6';
+                pinBtn.title = 'উইন্ডো সবসময় সবার উপরে পিন করা আছে (Always On Top: ON)';
+                if (pinText) pinText.textContent = 'Pinned 📌';
+            } else {
+                pinBtn.classList.remove('active');
+                pinBtn.style.background = '';
+                pinBtn.style.color = '';
+                pinBtn.style.borderColor = '';
+                pinBtn.title = 'উইন্ডো সবসময় সবার উপরে পিন করে রাখুন (Always On Top - PotPlayer Style)';
+                if (pinText) pinText.textContent = 'Pin';
+            }
+        }
+
+        if (window.electronAPI && typeof window.electronAPI.getAlwaysOnTop === 'function') {
+            window.electronAPI.getAlwaysOnTop().then((state) => {
+                updatePinState(!!state);
+            }).catch(() => {});
+
+            pinBtn.addEventListener('click', async () => {
+                try {
+                    const newState = await window.electronAPI.toggleAlwaysOnTop();
+                    updatePinState(newState);
+                } catch (e) {
+                    console.error('Failed to toggle Always On Top:', e);
+                }
+            });
+        } else {
+            pinBtn.addEventListener('click', () => {
+                alert('📌 পিন অপশনটি ইলেকট্রন ডেক্সটপ অ্যাপে (Desktop App) উইন্ডোকে সবার উপরে পিন রাখার জন্য কাজ করে।');
+            });
+        }
     }
 })();
