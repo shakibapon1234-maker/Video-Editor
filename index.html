@@ -3393,9 +3393,51 @@
                                     <input type="file" id="mute-file-input" accept="video/*" style="display: none;">
                                 </div>
 
-                                <button id="mute-convert-btn" class="btn btn-primary btn-block mt-3" type="button" style="display: none;">
-                                    <i class="fa-solid fa-volume-xmark"></i> Remove Audio
-                                </button>
+                                <div id="mute-editor-box" style="display: none;">
+                                    <video id="mute-preview-player" controls style="width: 100%; margin-top: 14px; border-radius: 8px;"></video>
+
+                                    <div class="control-group mt-3">
+                                        <label>কী করতে চান? (What do you want to do?)</label>
+                                        <select id="mute-mode-select" class="form-select">
+                                            <option value="full">পুরো ভিডিওর অডিও সরান (Remove All Audio)</option>
+                                            <option value="range">নির্দিষ্ট সময়ের অডিও নিঃশব্দ করুন (Mute a Range)</option>
+                                        </select>
+                                    </div>
+                                    <p class="help-text mt-1" id="mute-mode-hint">সম্পূর্ণ ভিডিওর অডিও ট্র্যাক স্থায়ীভাবে কেটে ফেলে দেওয়া হবে — কোনো সাউন্ড থাকবে না।</p>
+
+                                    <div id="mute-range-controls" class="mt-3" style="display: none;">
+                                        <div style="display: flex; align-items: flex-end; gap: 10px;">
+                                            <div class="timeline-slider-container" style="position: relative; flex-grow: 1; height: 24px; display: flex; align-items: center;">
+                                                <div class="slider-track-bg"></div>
+                                                <div class="slider-track-fill" id="mute-fill"></div>
+                                                <input type="range" id="mute-start" class="trim-slider" min="0" max="100" value="0" step="0.01">
+                                                <input type="range" id="mute-end" class="trim-slider" min="0" max="100" value="100" step="0.01">
+                                            </div>
+                                            <div class="time-inputs" style="display: flex; align-items: flex-end; gap: 8px;">
+                                                <div class="time-field">
+                                                    <label>Start</label>
+                                                    <div style="display: flex; align-items: center; gap: 2px;">
+                                                        <button id="mute-start-minus" class="step-btn" type="button" title="-0.1s">−</button>
+                                                        <input type="text" id="mute-start-val" value="00:00.0">
+                                                        <button id="mute-start-plus" class="step-btn" type="button" title="+0.1s">+</button>
+                                                    </div>
+                                                </div>
+                                                <div class="time-field">
+                                                    <label>End</label>
+                                                    <div style="display: flex; align-items: center; gap: 2px;">
+                                                        <button id="mute-end-minus" class="step-btn" type="button" title="-0.1s">−</button>
+                                                        <input type="text" id="mute-end-val" value="00:00.0">
+                                                        <button id="mute-end-plus" class="step-btn" type="button" title="+0.1s">+</button>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <button id="mute-convert-btn" class="btn btn-primary btn-block mt-3" type="button">
+                                        <i class="fa-solid fa-volume-xmark"></i> Remove Audio
+                                    </button>
+                                </div>
 
                                 <!-- Progress -->
                                 <div class="render-progress-box mt-4" id="mute-progress-box" style="display: none;">
@@ -3458,21 +3500,31 @@
                                     </div>
                                     <p class="help-text mt-1" id="acrop-mode-hint">নিচের স্লাইডার টেনে যে অংশটুকু <strong>রাখতে</strong> চান সেটুকু বেছে নিন — বাকি অংশ বাদ চলে যাবে।</p>
 
-                                    <div class="mt-3" style="display: flex; align-items: flex-end; gap: 10px;">
-                                        <div class="timeline-slider-container" style="position: relative; flex-grow: 1; height: 24px; display: flex; align-items: center;">
-                                            <div class="slider-track-bg"></div>
-                                            <div class="slider-track-fill" id="acrop-fill"></div>
-                                            <input type="range" id="acrop-start" class="trim-slider" min="0" max="100" value="0" step="0.01">
-                                            <input type="range" id="acrop-end" class="trim-slider" min="0" max="100" value="100" step="0.01">
-                                        </div>
-                                        <div class="time-inputs" style="display: flex; align-items: flex-end; gap: 8px;">
-                                            <div class="time-field">
-                                                <label>Start</label>
-                                                <input type="text" id="acrop-start-val" value="00:00.0">
+                                    <div id="acrop-range-controls" class="mt-3">
+                                        <div style="display: flex; align-items: flex-end; gap: 10px;">
+                                            <div class="timeline-slider-container" style="position: relative; flex-grow: 1; height: 24px; display: flex; align-items: center;">
+                                                <div class="slider-track-bg"></div>
+                                                <div class="slider-track-fill" id="acrop-fill"></div>
+                                                <input type="range" id="acrop-start" class="trim-slider" min="0" max="100" value="0" step="0.01">
+                                                <input type="range" id="acrop-end" class="trim-slider" min="0" max="100" value="100" step="0.01">
                                             </div>
-                                            <div class="time-field">
-                                                <label>End</label>
-                                                <input type="text" id="acrop-end-val" value="00:00.0">
+                                            <div class="time-inputs" style="display: flex; align-items: flex-end; gap: 8px;">
+                                                <div class="time-field">
+                                                    <label>Start</label>
+                                                    <div style="display: flex; align-items: center; gap: 2px;">
+                                                        <button id="acrop-start-minus" class="step-btn" type="button" title="-0.1s">−</button>
+                                                        <input type="text" id="acrop-start-val" value="00:00.0">
+                                                        <button id="acrop-start-plus" class="step-btn" type="button" title="+0.1s">+</button>
+                                                    </div>
+                                                </div>
+                                                <div class="time-field">
+                                                    <label>End</label>
+                                                    <div style="display: flex; align-items: center; gap: 2px;">
+                                                        <button id="acrop-end-minus" class="step-btn" type="button" title="-0.1s">−</button>
+                                                        <input type="text" id="acrop-end-val" value="00:00.0">
+                                                        <button id="acrop-end-plus" class="step-btn" type="button" title="+0.1s">+</button>
+                                                    </div>
+                                                </div>
                                             </div>
                                         </div>
                                     </div>

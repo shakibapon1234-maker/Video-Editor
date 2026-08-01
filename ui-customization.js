@@ -108,6 +108,18 @@
         const ftCurrent = document.getElementById('ft-current-time');
         const ftTotal = document.getElementById('ft-total-time');
 
+        // Floating canvas window integrated controls
+        const cfPlayBtn = document.getElementById('cf-play-btn');
+        const cfPlayIcon = document.getElementById('cf-play-icon');
+        const cfHeaderPlayBtn = document.getElementById('cf-header-play-btn');
+        const cfHeaderPlayIcon = document.getElementById('cf-header-play-icon');
+        const cfRewindBtn = document.getElementById('cf-rewind-btn');
+        const cfForwardBtn = document.getElementById('cf-forward-btn');
+        const cfSlider = document.getElementById('cf-seek-slider');
+        const cfFill = document.getElementById('cf-seek-fill');
+        const cfCurrent = document.getElementById('cf-current-time');
+        const cfTotal = document.getElementById('cf-total-time');
+
         // The real, already-working controls in the main preview panel.
         const realPlayBtn = document.getElementById('play-pause-btn');
         const realSlider = document.getElementById('seek-slider');
@@ -369,9 +381,57 @@
             ftSlider.addEventListener('touchend', finishFtSeek);
         }
 
+        // --- Forward Canvas Floating Window controls ---
+        if (cfPlayBtn && realPlayBtn) {
+            cfPlayBtn.addEventListener('click', function () {
+                realPlayBtn.click();
+            });
+        }
+        if (cfHeaderPlayBtn && realPlayBtn) {
+            cfHeaderPlayBtn.addEventListener('click', function () {
+                realPlayBtn.click();
+            });
+        }
+        if (cfRewindBtn && realSlider) {
+            cfRewindBtn.addEventListener('click', function () {
+                const maxVal = parseFloat(realSlider.max) || 100;
+                const curVal = parseFloat(realSlider.value) || 0;
+                realSlider.value = Math.max(0, curVal - 5);
+                realSlider.dispatchEvent(new Event('input'));
+                realSlider.dispatchEvent(new Event('mouseup'));
+            });
+        }
+        if (cfForwardBtn && realSlider) {
+            cfForwardBtn.addEventListener('click', function () {
+                const maxVal = parseFloat(realSlider.max) || 100;
+                const curVal = parseFloat(realSlider.value) || 0;
+                realSlider.value = Math.min(maxVal, curVal + 5);
+                realSlider.dispatchEvent(new Event('input'));
+                realSlider.dispatchEvent(new Event('mouseup'));
+            });
+        }
+        if (cfSlider && realSlider) {
+            cfSlider.addEventListener('mousedown', function () {
+                realSlider.dispatchEvent(new Event('mousedown'));
+            });
+            cfSlider.addEventListener('touchstart', function () {
+                realSlider.dispatchEvent(new Event('touchstart'));
+            }, { passive: true });
+
+            cfSlider.addEventListener('input', function (e) {
+                realSlider.value = e.target.value;
+                realSlider.dispatchEvent(new Event('input'));
+            });
+
+            function finishCfSeek() {
+                realSlider.dispatchEvent(new Event('mouseup'));
+                realSlider.dispatchEvent(new Event('touchend'));
+            }
+            cfSlider.addEventListener('mouseup', finishCfSeek);
+            cfSlider.addEventListener('touchend', finishCfSeek);
+        }
+
         // --- Mirror real controls' state back into the floating panel ---
-        // (Poll via rAF rather than hooking editor.js internals, so this
-        // stays fully decoupled from the main playback engine.)
         let isFtSliderBeingDragged = false;
         if (ftSlider) {
             ftSlider.addEventListener('mousedown', () => { isFtSliderBeingDragged = true; });
@@ -380,26 +440,52 @@
             document.addEventListener('touchend', () => { isFtSliderBeingDragged = false; });
         }
 
+        let isCfSliderBeingDragged = false;
+        if (cfSlider) {
+            cfSlider.addEventListener('mousedown', () => { isCfSliderBeingDragged = true; });
+            cfSlider.addEventListener('touchstart', () => { isCfSliderBeingDragged = true; }, { passive: true });
+            document.addEventListener('mouseup', () => { isCfSliderBeingDragged = false; });
+            document.addEventListener('touchend', () => { isCfSliderBeingDragged = false; });
+        }
+
         function syncLoop() {
-            if (panel.classList.contains('visible')) {
-                if (realSlider && ftSlider && !isFtSliderBeingDragged) {
-                    if (ftSlider.max !== realSlider.max) ftSlider.max = realSlider.max;
-                    if (document.activeElement !== ftSlider) ftSlider.value = realSlider.value;
+            const isFloatingPreviewActive = canvasContainer && canvasContainer.classList.contains('is-floating-preview');
+
+            if (panel.classList.contains('visible') || isFloatingPreviewActive) {
+                if (realSlider) {
                     const max = parseFloat(realSlider.max) || 0;
                     const val = parseFloat(realSlider.value) || 0;
                     const percent = max > 0 ? Math.max(0, Math.min(100, (val / max) * 100)) : 0;
-                    if (ftFill) ftFill.style.width = percent + '%';
+
+                    // Sync Floating Transport Panel
+                    if (ftSlider && !isFtSliderBeingDragged) {
+                        if (ftSlider.max !== realSlider.max) ftSlider.max = realSlider.max;
+                        if (document.activeElement !== ftSlider) ftSlider.value = realSlider.value;
+                        if (ftFill) ftFill.style.width = percent + '%';
+                    }
+
+                    // Sync Floating Canvas Window Controls
+                    if (cfSlider && !isCfSliderBeingDragged) {
+                        if (cfSlider.max !== realSlider.max) cfSlider.max = realSlider.max;
+                        if (document.activeElement !== cfSlider) cfSlider.value = realSlider.value;
+                        if (cfFill) cfFill.style.width = percent + '%';
+                    }
                 }
-                if (realCurrent && ftCurrent && realCurrent.innerHTML !== ftCurrent.innerHTML) {
-                    ftCurrent.innerHTML = realCurrent.innerHTML;
+
+                if (realCurrent) {
+                    if (ftCurrent && realCurrent.innerHTML !== ftCurrent.innerHTML) ftCurrent.innerHTML = realCurrent.innerHTML;
+                    if (cfCurrent && realCurrent.innerHTML !== cfCurrent.innerHTML) cfCurrent.innerHTML = realCurrent.innerHTML;
                 }
-                if (realTotal && ftTotal && realTotal.innerHTML !== ftTotal.innerHTML) {
-                    ftTotal.innerHTML = realTotal.innerHTML;
+                if (realTotal) {
+                    if (ftTotal && realTotal.innerHTML !== ftTotal.innerHTML) ftTotal.innerHTML = realTotal.innerHTML;
+                    if (cfTotal && realTotal.innerHTML !== cfTotal.innerHTML) cfTotal.innerHTML = realTotal.innerHTML;
                 }
-                if (realPlayBtn && ftPlayIcon) {
+                if (realPlayBtn) {
                     const isPlaying = !!realPlayBtn.querySelector('.fa-pause');
                     const wantClass = isPlaying ? 'fa-solid fa-pause' : 'fa-solid fa-play';
-                    if (ftPlayIcon.className !== wantClass) ftPlayIcon.className = wantClass;
+                    if (ftPlayIcon && ftPlayIcon.className !== wantClass) ftPlayIcon.className = wantClass;
+                    if (cfPlayIcon && cfPlayIcon.className !== wantClass) cfPlayIcon.className = wantClass;
+                    if (cfHeaderPlayIcon && cfHeaderPlayIcon.className !== wantClass) cfHeaderPlayIcon.className = wantClass;
                 }
             }
             requestAnimationFrame(syncLoop);

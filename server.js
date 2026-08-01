@@ -539,8 +539,11 @@ app.post('/api/remove-audio', express.raw({ type: '*/*', limit: '2gb' }), (req, 
     if (!req.body || !req.body.length) {
         return res.status(400).json({ error: 'No video data received.' });
     }
-
     const originalName = decodeURIComponent(req.query.filename || 'video.mp4');
+    const mode = req.query.mode || 'full';
+    const startSec = parseFloat(req.query.start) || 0;
+    const endSec = parseFloat(req.query.end) || 0;
+
     const ext = path.extname(originalName) || '.mp4';
     const baseName = path.basename(originalName, ext) || 'video';
     const inputPath = path.join(MUTE_TEMP_DIR, `mute_in_${Date.now()}${ext}`);
@@ -559,14 +562,22 @@ app.post('/api/remove-audio', express.raw({ type: '*/*', limit: '2gb' }), (req, 
             counter++;
         }
 
-        console.log(`Removing audio: ${inputPath} -> ${outputPath}`);
+        console.log(`Removing audio (mode: ${mode}): ${inputPath} -> ${outputPath}`);
+
+        const outputOptions = [
+            '-c:v copy', // don't re-encode video -- fast copy
+            '-movflags +faststart'
+        ];
+
+        if (mode === 'range' && endSec > startSec) {
+            outputOptions.push(`-af`, `volume=0:enable='between(t,${startSec.toFixed(3)},${endSec.toFixed(3)})'`);
+            outputOptions.push('-c:a', 'aac');
+        } else {
+            outputOptions.push('-an'); // "-an" = no audio at all
+        }
 
         ffmpeg(inputPath)
-            .outputOptions([
-                '-c:v copy', // don't re-encode video -- just drop the audio stream, so this is near-instant
-                '-an',       // "-an" = no audio in the output at all
-                '-movflags +faststart'
-            ])
+            .outputOptions(outputOptions)
             .output(outputPath)
             .on('end', () => {
                 console.log('Audio removed successfully:', outputPath);

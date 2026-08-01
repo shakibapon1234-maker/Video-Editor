@@ -1627,9 +1627,65 @@ document.addEventListener('DOMContentLoaded', () => {
     // a fast ffmpeg stream-copy (-c:v copy -an) — no video re-encode, just the
     // audio track discarded — and hands back a download link, same as the
     // main exporter's WebSocket render pipeline does for full exports.
+    // --- Helper for Time Stepper Buttons (-0.1s / +0.1s) ---
+    function attachTimeStepper(minusBtnId, plusBtnId, stepChangeFn) {
+        const minusBtn = document.getElementById(minusBtnId);
+        const plusBtn = document.getElementById(plusBtnId);
+        if (!minusBtn || !plusBtn) return;
+
+        let timer = null;
+
+        const startAction = (delta) => {
+            stepChangeFn(delta);
+            timer = setInterval(() => stepChangeFn(delta), 120);
+        };
+
+        const stopAction = () => {
+            if (timer) { clearInterval(timer); timer = null; }
+        };
+
+        const bindStepperButton = (button, delta) => {
+            const start = (event) => {
+                event.preventDefault();
+                stopAction();
+                startAction(delta);
+                if (button.setPointerCapture && event.pointerId !== undefined) {
+                    button.setPointerCapture(event.pointerId);
+                }
+            };
+
+            // Pointer events cover mouse, touch, and pen in current browsers.
+            // Keep the mouse fallback for older WebViews that lack PointerEvent.
+            if (window.PointerEvent) {
+                button.addEventListener('pointerdown', start);
+                button.addEventListener('pointerup', stopAction);
+                button.addEventListener('pointercancel', stopAction);
+                button.addEventListener('lostpointercapture', stopAction);
+            } else {
+                button.addEventListener('mousedown', start);
+                button.addEventListener('mouseup', stopAction);
+                button.addEventListener('mouseleave', stopAction);
+            }
+        };
+
+        bindStepperButton(minusBtn, -0.1);
+        bindStepperButton(plusBtn, 0.1);
+    }
+
+    // --- Remove Audio (Mute Video) ---
     const muteDropzone = document.getElementById('mute-dropzone');
     const muteFileInput = document.getElementById('mute-file-input');
     const muteDropzoneLabel = document.getElementById('mute-dropzone-label');
+    const muteEditorBox = document.getElementById('mute-editor-box');
+    const mutePreviewPlayer = document.getElementById('mute-preview-player');
+    const muteModeSelect = document.getElementById('mute-mode-select');
+    const muteModeHint = document.getElementById('mute-mode-hint');
+    const muteRangeControls = document.getElementById('mute-range-controls');
+    const muteStartSlider = document.getElementById('mute-start');
+    const muteEndSlider = document.getElementById('mute-end');
+    const muteFill = document.getElementById('mute-fill');
+    const muteStartVal = document.getElementById('mute-start-val');
+    const muteEndVal = document.getElementById('mute-end-val');
     const muteConvertBtn = document.getElementById('mute-convert-btn');
     const muteProgressBox = document.getElementById('mute-progress-box');
     const muteSuccessBox = document.getElementById('mute-success-box');
@@ -1639,6 +1695,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const muteErrorDesc = document.getElementById('mute-error-desc');
 
     let muteSelectedFile = null;
+    let muteObjectURL = null;
+    let muteDuration = 0;
 
     if (muteDropzone && muteFileInput) {
         muteDropzone.addEventListener('click', () => muteFileInput.click());
@@ -1669,11 +1727,126 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         muteSelectedFile = file;
         if (muteDropzoneLabel) muteDropzoneLabel.innerText = file.name;
-        if (muteConvertBtn) muteConvertBtn.style.display = 'block';
+        if (muteObjectURL) URL.revokeObjectURL(muteObjectURL);
+        muteObjectURL = URL.createObjectURL(file);
+        if (mutePreviewPlayer) mutePreviewPlayer.src = muteObjectURL;
+
+        if (muteEditorBox) muteEditorBox.style.display = 'block';
         if (muteProgressBox) muteProgressBox.style.display = 'none';
         if (muteSuccessBox) muteSuccessBox.style.display = 'none';
         if (muteErrorBox) muteErrorBox.style.display = 'none';
+
+        if (mutePreviewPlayer) {
+            mutePreviewPlayer.onloadedmetadata = () => {
+                muteDuration = mutePreviewPlayer.duration;
+                if (!isFinite(muteDuration) || muteDuration <= 0) {
+                    mutePreviewPlayer.currentTime = 1e9;
+                    mutePreviewPlayer.ontimeupdate = () => {
+                        mutePreviewPlayer.ontimeupdate = null;
+                        muteDuration = mutePreviewPlayer.duration;
+                        mutePreviewPlayer.currentTime = 0;
+                        muteSetupSliders();
+                    };
+                    return;
+                }
+                muteSetupSliders();
+            };
+        }
     }
+
+    function muteSetupSliders() {
+        if (!muteStartSlider || !muteEndSlider) return;
+        muteStartSlider.min = 0;
+        muteStartSlider.max = muteDuration;
+        muteStartSlider.step = 0.01;
+        muteStartSlider.value = 0;
+
+        muteEndSlider.min = 0;
+        muteEndSlider.max = muteDuration;
+        muteEndSlider.step = 0.01;
+        muteEndSlider.value = muteDuration;
+
+        if (muteStartVal) muteStartVal.value = acropFormatTime(0);
+        if (muteEndVal) muteEndVal.value = acropFormatTime(muteDuration);
+        if (muteModeSelect) muteModeSelect.value = 'full';
+        muteUpdateFill();
+        muteUpdateModeUI();
+    }
+
+    function muteUpdateFill() {
+        const total = muteDuration || 1;
+        const startPercent = (parseFloat(muteStartSlider.value) / total) * 100;
+        const endPercent = (parseFloat(muteEndSlider.value) / total) * 100;
+        if (muteFill) {
+            muteFill.style.left = startPercent + '%';
+            muteFill.style.width = Math.max(0, endPercent - startPercent) + '%';
+        }
+    }
+
+    function muteUpdateModeUI() {
+        const mode = muteModeSelect ? muteModeSelect.value : 'full';
+        const isRange = mode === 'range';
+        if (muteRangeControls) muteRangeControls.style.display = isRange ? 'block' : 'none';
+        if (muteModeHint) {
+            muteModeHint.innerHTML = isRange
+                ? 'নিচের স্লাইডার টেনে যে অংশটুকুর <strong>অডিও নিঃশব্দ (Mute) করতে</strong> চান সেটুকু বেছে নিন — বাকি অংশ স্বাভাবিক থাকবে।'
+                : 'সম্পূর্ণ ভিডিওর অডিও ট্র্যাক স্থায়ীভাবে কেটে ফেলে দেওয়া হবে — কোনো সাউন্ড থাকবে না।';
+        }
+    }
+
+    if (muteModeSelect) {
+        muteModeSelect.addEventListener('change', muteUpdateModeUI);
+    }
+
+    if (muteStartSlider) {
+        muteStartSlider.addEventListener('input', () => {
+            let startV = parseFloat(muteStartSlider.value);
+            const endV = parseFloat(muteEndSlider.value);
+            if (startV >= endV) {
+                startV = Math.max(0, endV - 0.05);
+                muteStartSlider.value = startV;
+            }
+            if (muteStartVal) muteStartVal.value = acropFormatTime(startV);
+            if (mutePreviewPlayer) mutePreviewPlayer.currentTime = startV;
+            muteUpdateFill();
+        });
+    }
+
+    if (muteEndSlider) {
+        muteEndSlider.addEventListener('input', () => {
+            const startV = parseFloat(muteStartSlider.value);
+            let endV = parseFloat(muteEndSlider.value);
+            if (endV <= startV) {
+                endV = Math.min(muteDuration, startV + 0.05);
+                muteEndSlider.value = endV;
+            }
+            if (muteEndVal) muteEndVal.value = acropFormatTime(endV);
+            if (mutePreviewPlayer) mutePreviewPlayer.currentTime = endV;
+            muteUpdateFill();
+        });
+    }
+
+    attachTimeStepper('mute-start-minus', 'mute-start-plus', (delta) => {
+        if (!muteDuration || !muteStartSlider || !muteEndSlider) return;
+        let val = parseFloat(muteStartSlider.value) + delta;
+        const endV = parseFloat(muteEndSlider.value);
+        val = Math.max(0, Math.min(val, endV - 0.05));
+        muteStartSlider.value = val;
+        if (muteStartVal) muteStartVal.value = acropFormatTime(val);
+        if (mutePreviewPlayer) mutePreviewPlayer.currentTime = val;
+        muteUpdateFill();
+    });
+
+    attachTimeStepper('mute-end-minus', 'mute-end-plus', (delta) => {
+        if (!muteDuration || !muteStartSlider || !muteEndSlider) return;
+        let val = parseFloat(muteEndSlider.value) + delta;
+        const startV = parseFloat(muteStartSlider.value);
+        val = Math.min(muteDuration, Math.max(val, startV + 0.05));
+        muteEndSlider.value = val;
+        if (muteEndVal) muteEndVal.value = acropFormatTime(val);
+        if (mutePreviewPlayer) mutePreviewPlayer.currentTime = val;
+        muteUpdateFill();
+    });
 
     if (muteConvertBtn) {
         muteConvertBtn.addEventListener('click', runRemoveAudio);
@@ -1682,13 +1855,25 @@ document.addEventListener('DOMContentLoaded', () => {
     async function runRemoveAudio() {
         if (!muteSelectedFile) return;
 
+        const mode = muteModeSelect ? muteModeSelect.value : 'full';
+        let queryUrl = `/api/remove-audio?filename=${encodeURIComponent(muteSelectedFile.name)}&mode=${mode}`;
+        if (mode === 'range' && muteStartSlider && muteEndSlider) {
+            const startSec = parseFloat(muteStartSlider.value) || 0;
+            const endSec = parseFloat(muteEndSlider.value) || muteDuration;
+            if (endSec - startSec < 0.05) {
+                alert('দয়া করে কমপক্ষে কিছু সময়ের একটি অংশ সিলেক্ট করুন।');
+                return;
+            }
+            queryUrl += `&start=${startSec}&end=${endSec}`;
+        }
+
         muteConvertBtn.disabled = true;
         if (muteProgressBox) muteProgressBox.style.display = 'block';
         if (muteSuccessBox) muteSuccessBox.style.display = 'none';
         if (muteErrorBox) muteErrorBox.style.display = 'none';
 
         try {
-            const response = await fetch(`/api/remove-audio?filename=${encodeURIComponent(muteSelectedFile.name)}`, {
+            const response = await fetch(queryUrl, {
                 method: 'POST',
                 headers: { 'Content-Type': muteSelectedFile.type || 'application/octet-stream' },
                 body: muteSelectedFile
@@ -1704,7 +1889,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 muteDownloadLink.download = result.filename;
             }
             if (muteSuccessDesc) {
-                muteSuccessDesc.innerText = `"${result.filename}" প্রস্তুত — কোনো সাউন্ড নেই।`;
+                muteSuccessDesc.innerText = `"${result.filename}" প্রস্তুত (${mode === 'range' ? 'নির্দিষ্ট সময় নিঃশব্দ' : 'সম্পূর্ণ নিঃশব্দ'})।`;
             }
             if (muteProgressBox) muteProgressBox.style.display = 'none';
             if (muteSuccessBox) muteSuccessBox.style.display = 'block';
@@ -1978,6 +2163,51 @@ document.addEventListener('DOMContentLoaded', () => {
             acropUpdateFill();
         });
     }
+
+    attachTimeStepper('acrop-start-minus', 'acrop-start-plus', (delta) => {
+        if (!acropDuration || !acropStartSlider || !acropEndSlider) return;
+        let val = parseFloat(acropStartSlider.value) + delta;
+        const endV = parseFloat(acropEndSlider.value);
+        val = Math.max(0, Math.min(val, endV - 0.05));
+        acropStartSlider.value = val;
+        if (acropStartVal) acropStartVal.value = acropFormatTime(val);
+        if (acropPreviewPlayer) acropPreviewPlayer.currentTime = val;
+        acropUpdateFill();
+    });
+
+    attachTimeStepper('acrop-end-minus', 'acrop-end-plus', (delta) => {
+        if (!acropDuration || !acropStartSlider || !acropEndSlider) return;
+        let val = parseFloat(acropEndSlider.value) + delta;
+        const startV = parseFloat(acropStartSlider.value);
+        val = Math.min(acropDuration, Math.max(val, startV + 0.05));
+        acropEndSlider.value = val;
+        if (acropEndVal) acropEndVal.value = acropFormatTime(val);
+        if (acropPreviewPlayer) acropPreviewPlayer.currentTime = val;
+        acropUpdateFill();
+    });
+
+    attachTimeStepper('trim-start-minus', 'trim-start-plus', (delta) => {
+        const trimStart = document.getElementById('trim-start');
+        const trimEnd = document.getElementById('trim-end');
+        if (!trimStart || !trimEnd) return;
+        let val = parseFloat(trimStart.value) + delta;
+        const endV = parseFloat(trimEnd.value);
+        val = Math.max(0, Math.min(val, endV - 0.05));
+        trimStart.value = val;
+        trimStart.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+
+    attachTimeStepper('trim-end-minus', 'trim-end-plus', (delta) => {
+        const trimStart = document.getElementById('trim-start');
+        const trimEnd = document.getElementById('trim-end');
+        if (!trimStart || !trimEnd) return;
+        let val = parseFloat(trimEnd.value) + delta;
+        const maxV = parseFloat(trimEnd.max) || 100;
+        const startV = parseFloat(trimStart.value);
+        val = Math.min(maxV, Math.max(val, startV + 0.05));
+        trimEnd.value = val;
+        trimEnd.dispatchEvent(new Event('input', { bubbles: true }));
+    });
 
     function setAcropProgress(percent, statusText) {
         if (acropProgressFill) acropProgressFill.style.width = percent + '%';
