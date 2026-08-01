@@ -17931,8 +17931,145 @@ document.addEventListener('DOMContentLoaded', () => {
         updateSilenceTrimmerVisibility();
     }, 1000);
 
-    // --- Keyboard Shortcuts (Phase 7F) ---
+    // --- Step 3 Sub-Tab Quick Navigation & Filter Logic ---
+    const step3SubtabBtns = document.querySelectorAll('.step3-subtab-btn');
+    const step3CompactToggle = document.getElementById('step3-compact-mode-toggle');
+
+    function switchStep3Subtab(targetCardKey) {
+        if (!step3SubtabBtns || step3SubtabBtns.length === 0) return;
+        step3SubtabBtns.forEach(btn => {
+            if (btn.getAttribute('data-card') === targetCardKey) {
+                btn.classList.add('active');
+            } else {
+                btn.classList.remove('active');
+            }
+        });
+
+        const cardMap = {
+            'text-overlay': 'card-text-overlay',
+            'broll': 'card-broll',
+            'lower-thirds': 'card-lower-thirds',
+            'news-ticker': 'card-news-ticker',
+            'find-replace': 'card-find-replace',
+            'highlight': 'card-highlight',
+            'stickers': 'card-stickers'
+        };
+
+        const isCompact = step3CompactToggle ? step3CompactToggle.checked : true;
+        const allStep3Cards = document.querySelectorAll('#panel-3 .card');
+
+        if (targetCardKey === 'all' || !isCompact) {
+            allStep3Cards.forEach(card => card.style.display = 'block');
+            if (targetCardKey !== 'all' && cardMap[targetCardKey]) {
+                const targetEl = document.getElementById(cardMap[targetCardKey]);
+                if (targetEl) targetEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            }
+        } else {
+            const activeId = cardMap[targetCardKey];
+            allStep3Cards.forEach(card => {
+                if (card.id === activeId) {
+                    card.style.display = 'block';
+                    card.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+                } else {
+                    card.style.display = 'none';
+                }
+            });
+        }
+    }
+    window.switchStep3Subtab = switchStep3Subtab;
+
+    step3SubtabBtns.forEach(btn => {
+        btn.addEventListener('click', () => {
+            const target = btn.getAttribute('data-card');
+            switchStep3Subtab(target);
+        });
+    });
+
+    if (step3CompactToggle) {
+        step3CompactToggle.addEventListener('change', () => {
+            const activeBtn = document.querySelector('.step3-subtab-btn.active');
+            const target = activeBtn ? activeBtn.getAttribute('data-card') : 'all';
+            switchStep3Subtab(target);
+        });
+    }
+
+    // Modal Shortcuts Handlers (Global Delegation)
+    function openShortcutsModal() {
+        const modal = document.getElementById('shortcuts-modal');
+        if (modal) {
+            modal.style.setProperty('display', 'flex', 'important');
+            modal.classList.add('active');
+        }
+    }
+    function closeShortcutsModal() {
+        const modal = document.getElementById('shortcuts-modal');
+        if (modal) {
+            modal.style.setProperty('display', 'none', 'important');
+            modal.classList.remove('active');
+        }
+    }
+    window.openShortcutsModal = openShortcutsModal;
+    window.closeShortcutsModal = closeShortcutsModal;
+
+    document.addEventListener('click', (e) => {
+        const triggerBtn = e.target.closest('#shortcuts-header-btn, #show-shortcuts-modal-btn');
+        if (triggerBtn) {
+            e.preventDefault();
+            e.stopPropagation();
+            openShortcutsModal();
+            return;
+        }
+        const closeBtn = e.target.closest('#close-shortcuts-modal, #close-shortcuts-modal-btn');
+        if (closeBtn) {
+            e.preventDefault();
+            e.stopPropagation();
+            closeShortcutsModal();
+            return;
+        }
+        const modal = document.getElementById('shortcuts-modal');
+        if (modal && e.target === modal) {
+            closeShortcutsModal();
+        }
+    });
+
+    // Helper: Jump directly to a step by number (1..5)
+    function jumpToStep(stepNumber) {
+        const stepBtn = document.getElementById(`step-btn-${stepNumber}`);
+        if (stepBtn) stepBtn.click();
+    }
+    window.jumpToStep = jumpToStep;
+
+    // --- Keyboard Shortcuts (Phase 7F & Quick Navigation) ---
     window.addEventListener('keydown', (e) => {
+        // Handle Alt + Number shortcuts (Alt+1 to Alt+5)
+        if (e.altKey && e.key >= '1' && e.key <= '5') {
+            e.preventDefault();
+            jumpToStep(parseInt(e.key));
+            return;
+        }
+
+        // Handle Alt+T, Alt+B, Alt+E
+        if (e.altKey) {
+            const k = e.key.toLowerCase();
+            if (k === 't') {
+                e.preventDefault();
+                jumpToStep(3);
+                switchStep3Subtab('text-overlay');
+                const txtInput = document.getElementById('text-overlay-input');
+                if (txtInput) setTimeout(() => txtInput.focus(), 150);
+                return;
+            } else if (k === 'b') {
+                e.preventDefault();
+                jumpToStep(3);
+                switchStep3Subtab('broll');
+                return;
+            } else if (k === 'e') {
+                e.preventDefault();
+                jumpToStep(5);
+                return;
+            }
+        }
+
         // Ignore shortcuts if the user is typing in any input field or textarea
         const activeEl = document.activeElement;
         if (activeEl && (
@@ -17946,7 +18083,28 @@ document.addEventListener('DOMContentLoaded', () => {
         const activeClip = state.clips.find(c => c.id === state.activeClipId);
         if (!activeClip) return;
 
-        switch (e.key.toLowerCase()) {
+        const kLow = e.key.toLowerCase();
+
+        // Direct single key shortcuts when NOT typing
+        if (kLow === 't') {
+            e.preventDefault();
+            jumpToStep(3);
+            switchStep3Subtab('text-overlay');
+            const txtInput = document.getElementById('text-overlay-input');
+            if (txtInput) setTimeout(() => txtInput.focus(), 150);
+            return;
+        } else if (kLow === 'b') {
+            e.preventDefault();
+            jumpToStep(3);
+            switchStep3Subtab('broll');
+            return;
+        } else if (kLow === 'e') {
+            e.preventDefault();
+            jumpToStep(5);
+            return;
+        }
+
+        switch (kLow) {
             case ' ':
                 // Spacebar: Toggle play / pause
                 e.preventDefault(); // Prevent page scrolling
@@ -17983,18 +18141,20 @@ document.addEventListener('DOMContentLoaded', () => {
                 drawFrame();
                 break;
             case 'arrowleft':
-                // Step backward by 1s
+                // Step backward by 1s (or 5s if Shift)
                 e.preventDefault();
-                let targetPrevTime = Math.max(0, state.currentTime - 1.0);
+                const stepBack = e.shiftKey ? 5.0 : 1.0;
+                let targetPrevTime = Math.max(0, state.currentTime - stepBack);
                 state.currentTime = targetPrevTime;
                 updatePlayhead();
                 drawFrame();
                 break;
             case 'arrowright':
-                // Step forward by 1s
+                // Step forward by 1s (or 5s if Shift)
                 e.preventDefault();
                 let maxDuration = activeClip.duration || state.duration || 5;
-                let targetNextTime = Math.min(maxDuration, state.currentTime + 1.0);
+                const stepFwd = e.shiftKey ? 5.0 : 1.0;
+                let targetNextTime = Math.min(maxDuration, state.currentTime + stepFwd);
                 state.currentTime = targetNextTime;
                 updatePlayhead();
                 drawFrame();

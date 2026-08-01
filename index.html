@@ -19,6 +19,19 @@
                 if (t !== 'dark') document.documentElement.setAttribute('data-theme', t);
             } catch (e) {}
         })();
+        function openShortcutsModal() {
+            var modal = document.getElementById('shortcuts-modal');
+            if (modal) {
+                modal.style.setProperty('display', 'flex', 'important');
+                modal.style.setProperty('z-index', '9999999', 'important');
+            }
+        }
+        function closeShortcutsModal() {
+            var modal = document.getElementById('shortcuts-modal');
+            if (modal) {
+                modal.style.setProperty('display', 'none', 'important');
+            }
+        }
     </script>
 </head>
 <body>
@@ -108,6 +121,9 @@
                             </button>
                             <ul id="history-panel-list" class="history-panel-dropdown" style="display: none; position: absolute; top: calc(100% + 8px); right: 0; min-width: 330px; max-width: calc(100vw - 32px); max-height: 420px; overflow-y: auto; background: var(--card-bg, #1e293b); border: 1px solid var(--border-color, #334155); border-radius: 10px; padding: 10px; z-index: 999999; list-style: none; font-size: 14px; box-shadow: 0 12px 35px rgba(0,0,0,0.5);"></ul>
                         </div>
+                        <button id="shortcuts-header-btn" class="shortcuts-help-btn" type="button" title="কীবোর্ড শর্টকাট কি তালিকা দেখুন" onclick="openShortcutsModal();">
+                            <i class="fa-solid fa-keyboard"></i> Shortcuts
+                        </button>
                     </div>
                     <button id="saved-projects-btn" class="btn btn-outline" data-tooltip="আপনার সংরক্ষিত প্রজেক্টসমূহের তালিকা দেখুন (Saved Video Projects)">
                         <i class="fa-solid fa-list-check"></i> Projects (প্রজেক্টসমূহ)
@@ -1213,8 +1229,41 @@
 
                     <!-- Step 3: Overlays & B-roll -->
                     <div class="step-panel" id="panel-3">
+                        <!-- Step 3 Quick Navigation & Sub-Tab Filter Bar -->
+                        <div class="step3-quick-nav-bar" id="step3-quick-nav-bar">
+                            <div class="step3-subtab-pills">
+                                <button type="button" class="step3-subtab-btn active" data-card="all" id="subtab-btn-all">
+                                    <i class="fa-solid fa-layer-group"></i> All (সব)
+                                </button>
+                                <button type="button" class="step3-subtab-btn" data-card="text-overlay" id="subtab-btn-text">
+                                    <i class="fa-solid fa-font"></i> 🔤 Text Overlay (টেক্সট) <span class="badge-key">T / Alt+T</span>
+                                </button>
+                                <button type="button" class="step3-subtab-btn" data-card="broll" id="subtab-btn-broll">
+                                    <i class="fa-solid fa-photo-film"></i> 🎞️ B-roll Media (বি-রোল) <span class="badge-key">B / Alt+B</span>
+                                </button>
+                                <button type="button" class="step3-subtab-btn" data-card="lower-thirds" id="subtab-btn-lower-third">
+                                    <i class="fa-solid fa-id-card"></i> 🏷️ Lower Thirds
+                                </button>
+                                <button type="button" class="step3-subtab-btn" data-card="news-ticker" id="subtab-btn-ticker">
+                                    <i class="fa-solid fa-rss"></i> 📰 Ticker
+                                </button>
+                                <button type="button" class="step3-subtab-btn" data-card="find-replace" id="subtab-btn-find">
+                                    <i class="fa-solid fa-magnifying-glass"></i> 🔍 Find &amp; Replace
+                                </button>
+                            </div>
+                            <div class="step3-filter-row">
+                                <label class="step3-single-view-toggle">
+                                    <input type="checkbox" id="step3-compact-mode-toggle" checked>
+                                    <span>Focus Sub-Tab View (সিলেক্ট করা অপশন ফোকাস রেখে লম্বা স্ক্রল বন্ধ রাখা)</span>
+                                </label>
+                                <button type="button" class="shortcuts-help-btn" id="show-shortcuts-modal-btn" onclick="openShortcutsModal();">
+                                    <i class="fa-solid fa-keyboard"></i> ⌨️ Shortcuts Help
+                                </button>
+                            </div>
+                        </div>
+
                         <!-- News Ticker (Breaking News style scrolling strip) -->
-                        <div class="card">
+                        <div class="card" id="card-news-ticker">
                             <div class="card-header">
                                 <i class="fa-solid fa-rss card-icon"></i>
                                 <h3>News Ticker (নিউজ স্ক্রলিং টেক্সট)</h3>
@@ -1290,7 +1339,7 @@
 
                         <!-- Text Overlay (Phase 2C) -->
                         <!-- Video Highlight / Callout -->
-                        <div class="card mt-4">
+                        <div class="card mt-4" id="card-highlight">
                             <div class="card-header">
                                 <i class="fa-solid fa-highlighter card-icon"></i>
                                 <h3>Video Highlight (ভিডিও হাইলাইট)</h3>
@@ -1339,7 +1388,7 @@
                         </div>
 
                         <!-- Background Fill Tool (ব্যাকগ্রাউন্ড ফিল) -->
-                        <div class="card mt-4">
+                        <div class="card mt-4" id="card-bg-fill">
                             <div class="card-header">
                                 <i class="fa-solid fa-fill-drip card-icon"></i>
                                 <h3>Background Fill (ব্যাকগ্রাউন্ড ফিল)</h3>
@@ -1377,7 +1426,7 @@
                         </div>
 
                         <!-- Text/Subtitle Find & Replace (Phase 12, TODO-2) -->
-                        <div class="card mt-4">
+                        <div class="card mt-4" id="card-find-replace">
                             <div class="card-header">
                                 <i class="fa-solid fa-magnifying-glass card-icon"></i>
                                 <h3>Find &amp; Replace (টেক্সট খুঁজুন ও বদলান)</h3>
@@ -1419,7 +1468,7 @@
                             </div>
                         </div>
 
-                        <div class="card mt-4">
+                        <div class="card mt-4" id="card-text-overlay">
                             <div class="card-header">
                                 <i class="fa-solid fa-font card-icon"></i>
                                 <h3>Text Overlay (টেক্সট ওভারলে)</h3>
@@ -1803,7 +1852,7 @@
                         </div>
 
                         <!-- Lower-Third / Title-Card Presets (Phase 12, TODO-5) -->
-                        <div class="card mt-4">
+                        <div class="card mt-4" id="card-lower-thirds">
                             <div class="card-header">
                                 <i class="fa-solid fa-id-card card-icon"></i>
                                 <h3>Lower-Third / Title Card (নাম + পদবি ব্যানার)</h3>
@@ -1838,7 +1887,7 @@
                         </div>
 
                         <!-- B-roll / Topic Image or Text Overlay (Phase 5D) -->
-                        <div class="card mt-4">
+                        <div class="card mt-4" id="card-broll">
                             <div class="card-header">
                                 <i class="fa-solid fa-images card-icon"></i>
                                 <h3>B-roll / Topic Image (টপিক ছবি ওভারলে)</h3>
@@ -3809,6 +3858,52 @@
                     <input type="range" id="ft-seek-slider" class="ft-seek-slider" min="0" max="100" value="0" step="0.01">
                 </div>
                 <span class="ft-time" id="ft-total-time">00:00.0</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Keyboard Shortcuts Cheat-Sheet Modal -->
+    <script>
+        function openShortcutsModal() {
+            var modal = document.getElementById('shortcuts-modal');
+            if (modal) {
+                modal.style.setProperty('display', 'flex', 'important');
+                modal.style.setProperty('z-index', '9999999', 'important');
+            }
+        }
+        function closeShortcutsModal() {
+            var modal = document.getElementById('shortcuts-modal');
+            if (modal) {
+                modal.style.setProperty('display', 'none', 'important');
+            }
+        }
+    </script>
+    <div id="shortcuts-modal" class="modal-overlay" style="display: none; z-index: 9999999;" onclick="if(event.target === this) closeShortcutsModal();">
+        <div class="modal-card" style="max-width: 600px; width: 90%;">
+            <div class="modal-header">
+                <h3><i class="fa-solid fa-keyboard" style="color: #818cf8; margin-right: 8px;"></i> কীবোর্ড শর্টকাট কি (Keyboard Shortcuts)</h3>
+                <button id="close-shortcuts-modal" class="modal-close" type="button" onclick="closeShortcutsModal();"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+            <div class="modal-body" style="padding: 20px;">
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 14px; font-size: 13px;">
+                    <div style="background: rgba(255,255,255,0.04); padding: 12px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.08);">
+                        <div style="color: #a5b4fc; font-weight: 600; margin-bottom: 8px;">🚀 কুইক নেভিগেশন:</div>
+                        <div style="display: flex; justify-content: space-between; margin-bottom: 6px;"><span>🔤 টেক্সট ওভারলে:</span><kbd style="background: #334155; color: #fff; padding: 2px 6px; border-radius: 4px; font-family: monospace;">T / Alt+T</kbd></div>
+                        <div style="display: flex; justify-content: space-between; margin-bottom: 6px;"><span>🎞️ B-roll মিডিয়া:</span><kbd style="background: #334155; color: #fff; padding: 2px 6px; border-radius: 4px; font-family: monospace;">B / Alt+B</kbd></div>
+                        <div style="display: flex; justify-content: space-between; margin-bottom: 6px;"><span>🎬 এক্সপোর্ট / রেন্ডার:</span><kbd style="background: #334155; color: #fff; padding: 2px 6px; border-radius: 4px; font-family: monospace;">E / Alt+E</kbd></div>
+                        <div style="display: flex; justify-content: space-between;"><span>📌 স্টেপ ১-৫ পরিবর্তন:</span><kbd style="background: #334155; color: #fff; padding: 2px 6px; border-radius: 4px; font-family: monospace;">Alt + 1 ~ 5</kbd></div>
+                    </div>
+                    <div style="background: rgba(255,255,255,0.04); padding: 12px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.08);">
+                        <div style="color: #a5b4fc; font-weight: 600; margin-bottom: 8px;">⏪ এডিটিং ও প্লেব্যাক:</div>
+                        <div style="display: flex; justify-content: space-between; margin-bottom: 6px;"><span>↩️ আনডু (Undo):</span><kbd style="background: #334155; color: #fff; padding: 2px 6px; border-radius: 4px; font-family: monospace;">Ctrl + Z</kbd></div>
+                        <div style="display: flex; justify-content: space-between; margin-bottom: 6px;"><span>↪️ রিডু (Redo):</span><kbd style="background: #334155; color: #fff; padding: 2px 6px; border-radius: 4px; font-family: monospace;">Ctrl + Y</kbd></div>
+                        <div style="display: flex; justify-content: space-between; margin-bottom: 6px;"><span>▶️ প্লে / পজ:</span><kbd style="background: #334155; color: #fff; padding: 2px 6px; border-radius: 4px; font-family: monospace;">Spacebar</kbd></div>
+                        <div style="display: flex; justify-content: space-between;"><span>✂️ ট্রিম In / Out:</span><kbd style="background: #334155; color: #fff; padding: 2px 6px; border-radius: 4px; font-family: monospace;">I / O</kbd></div>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer" style="padding: 12px 20px; text-align: right;">
+                <button id="close-shortcuts-modal-btn" class="btn btn-primary" type="button" onclick="closeShortcutsModal();">ঠিক আছে (Got it)</button>
             </div>
         </div>
     </div>

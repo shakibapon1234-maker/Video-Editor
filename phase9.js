@@ -920,24 +920,32 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function drawMediaWithChroma(ctx, mediaSource, sx, sy, sw, sh, drawX, drawY, drawW, drawH, isFullCanvas) {
-        if (!state.chromaKeyEnabled) {
-            ctx.drawImage(mediaSource, sx, sy, sw, sh, drawX, drawY, drawW, drawH);
+        if (!mediaSource) return;
+        if (typeof mediaSource === 'string') return;
+        if (!(mediaSource instanceof HTMLImageElement || mediaSource instanceof HTMLVideoElement || mediaSource instanceof HTMLCanvasElement || mediaSource instanceof ImageBitmap || (typeof OffscreenCanvas !== 'undefined' && mediaSource instanceof OffscreenCanvas) || (typeof CSSImageValue !== 'undefined' && mediaSource instanceof CSSImageValue))) {
             return;
         }
-        const scale = state.chromaKeyPreviewQuality ? 0.5 : 1;
-        const tw = Math.max(2, Math.round(drawW * scale));
-        const th = Math.max(2, Math.round(drawH * scale));
-        transitionCanvas.width = tw;
-        transitionCanvas.height = th;
-        transitionCtx.clearRect(0, 0, tw, th);
-        transitionCtx.drawImage(mediaSource, sx, sy, sw, sh, 0, 0, tw, th);
+        if (mediaSource instanceof HTMLImageElement && (!mediaSource.complete || mediaSource.naturalWidth === 0)) return;
+        if (mediaSource instanceof HTMLVideoElement && (mediaSource.readyState < 2 || mediaSource.videoWidth === 0)) return;
+
         try {
+            if (!state.chromaKeyEnabled) {
+                ctx.drawImage(mediaSource, sx, sy, sw, sh, drawX, drawY, drawW, drawH);
+                return;
+            }
+            const scale = state.chromaKeyPreviewQuality ? 0.5 : 1;
+            const tw = Math.max(2, Math.round(drawW * scale));
+            const th = Math.max(2, Math.round(drawH * scale));
+            transitionCanvas.width = tw;
+            transitionCanvas.height = th;
+            transitionCtx.clearRect(0, 0, tw, th);
+            transitionCtx.drawImage(mediaSource, sx, sy, sw, sh, 0, 0, tw, th);
             const id = transitionCtx.getImageData(0, 0, tw, th);
             applyChromaKeyToImageData(id, state.chromaKeyColor, state.chromaKeyThreshold);
             transitionCtx.putImageData(id, 0, 0);
             ctx.drawImage(transitionCanvas, 0, 0, tw, th, drawX, drawY, drawW, drawH);
         } catch (err) {
-            ctx.drawImage(mediaSource, sx, sy, sw, sh, drawX, drawY, drawW, drawH);
+            // Silently swallow decodable frame errors to prevent loop crash
         }
     }
 
