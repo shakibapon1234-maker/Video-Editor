@@ -3827,11 +3827,11 @@ document.addEventListener('DOMContentLoaded', () => {
     // --- Text Overlay v3: independent Text vs Box animation engine ---
     // Styles that loop continuously for as long as the overlay is visible
     // (as opposed to the entry/exit-only styles above them in the dropdown).
-    const TEXT_OVERLAY_CONTINUOUS_ANIM_STYLES = new Set(['pulse', 'wiggle', 'float', 'glow-pulse']);
+    const TEXT_OVERLAY_CONTINUOUS_ANIM_STYLES = new Set(['pulse', 'wiggle', 'float', 'glow-pulse', 'breathe', 'rainbow-flow', 'neon-flash', 'shine-sweep']);
     // Styles that only make sense for the *text glyphs themselves* (progressive
-    // reveal of characters/words) — never offered on the Box Animation dropdown,
+    // reveal of characters/words/particles) — never offered on the Box Animation dropdown,
     // and handled separately at draw time rather than through the transform below.
-    const TEXT_OVERLAY_REVEAL_ANIM_STYLES = new Set(['typewriter', 'letter-cascade', 'word-stagger']);
+    const TEXT_OVERLAY_REVEAL_ANIM_STYLES = new Set(['typewriter', 'letter-cascade', 'word-stagger', 'particle-dust', 'glitch', 'wave-reveal', 'blur-fade', 'smoke-vapor']);
 
     // Shared entry/exit + continuous animation engine used for BOTH the text
     // glyphs and the background box, called separately for each with its own
@@ -3853,6 +3853,15 @@ document.addEventListener('DOMContentLoaded', () => {
                     result.offY = Math.sin(t * 2.2) * (refSize * 0.10); break;
                 case 'glow-pulse':
                     result.alpha = 0.82 + Math.sin(t * 3.6) * 0.18; break;
+                case 'breathe':
+                    result.scale = 1 + Math.sin(t * 1.8) * 0.05;
+                    result.alpha = 0.90 + Math.sin(t * 1.8) * 0.10;
+                    break;
+                case 'neon-flash': {
+                    const flicker = (Math.sin(t * 15) > -0.2 ? 1 : 0.6) * (Math.sin(t * 27) > -0.5 ? 1 : 0.85);
+                    result.alpha = flicker;
+                    break;
+                }
             }
             return result;
         }
@@ -3898,6 +3907,20 @@ document.addEventListener('DOMContentLoaded', () => {
             }
             case 'swing-in':
                 result.rot = (1 - p) * 0.5 * Math.sin(p * Math.PI * 2.2);
+                result.alpha = eased;
+                break;
+            case 'wipe-horizontal':
+                result.scaleX = Math.max(0.01, eased);
+                result.alpha = eased;
+                break;
+            case 'wipe-vertical':
+                result.scaleY = Math.max(0.01, eased);
+                result.alpha = eased;
+                break;
+            case 'expand-corner':
+                result.scale = 0.2 + 0.8 * eased;
+                result.offX = (1 - eased) * (-refSize * 0.8);
+                result.offY = (1 - eased) * (-refSize * 0.4);
                 result.alpha = eased;
                 break;
             default:
@@ -4057,6 +4080,162 @@ document.addEventListener('DOMContentLoaded', () => {
                 ctx.stroke();
                 ctx.shadowBlur = 0;
                 break;
+            case 'glassmorphism':
+                ctx.save();
+                ctx.shadowColor = 'rgba(0, 0, 0, 0.4)';
+                ctx.shadowBlur = 16;
+                ctx.shadowOffsetY = 6;
+                ctx.fillStyle = 'rgba(255, 255, 255, 0.15)';
+                ctx.beginPath();
+                ctx.roundRect(x, y, w, h, 14);
+                ctx.fill();
+                ctx.shadowBlur = 0;
+                ctx.strokeStyle = 'rgba(255, 255, 255, 0.45)';
+                ctx.lineWidth = Math.max(1.5, h * 0.04);
+                ctx.stroke();
+                ctx.restore();
+                break;
+            case 'cyber-cut': {
+                const cut = Math.min(16, h * 0.3);
+                ctx.save();
+                ctx.fillStyle = 'rgba(10, 15, 30, 0.75)';
+                ctx.beginPath();
+                ctx.moveTo(x + cut, y);
+                ctx.lineTo(x + w, y);
+                ctx.lineTo(x + w, y + h - cut);
+                ctx.lineTo(x + w - cut, y + h);
+                ctx.lineTo(x, y + h);
+                ctx.lineTo(x, y + cut);
+                ctx.closePath();
+                ctx.fill();
+
+                ctx.shadowColor = color || '#00f0ff';
+                ctx.shadowBlur = 10;
+                ctx.strokeStyle = color || '#00f0ff';
+                ctx.lineWidth = Math.max(2, h * 0.05);
+                ctx.stroke();
+                ctx.restore();
+                break;
+            }
+            case 'double-border': {
+                const pad = Math.max(3, h * 0.06);
+                ctx.save();
+                ctx.fillStyle = color;
+                ctx.globalAlpha *= 0.85;
+                ctx.beginPath();
+                ctx.roundRect(x, y, w, h, 8);
+                ctx.fill();
+
+                ctx.strokeStyle = '#ffffff';
+                ctx.lineWidth = Math.max(1.5, h * 0.03);
+                ctx.beginPath();
+                ctx.roundRect(x + pad, y + pad, w - pad * 2, h - pad * 2, 6);
+                ctx.stroke();
+                ctx.restore();
+                break;
+            }
+            case 'shimmer-border': {
+                const t = (currentTime || 0);
+                const bw = Math.max(3, h * 0.06);
+                ctx.save();
+                ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
+                ctx.beginPath();
+                ctx.roundRect(x, y, w, h, 10);
+                ctx.fill();
+
+                const grad = ctx.createLinearGradient(x + Math.sin(t * 3) * w, y, x + w + Math.cos(t * 3) * w, y + h);
+                grad.addColorStop(0, color);
+                grad.addColorStop(0.5, '#ffffff');
+                grad.addColorStop(1, color);
+
+                ctx.shadowColor = color;
+                ctx.shadowBlur = 12;
+                ctx.strokeStyle = grad;
+                ctx.lineWidth = bw;
+                ctx.beginPath();
+                ctx.roundRect(x + bw/2, y + bw/2, w - bw, h - bw, 10);
+                ctx.stroke();
+                ctx.restore();
+                break;
+            }
+            case 'bracket-frame': {
+                const bracketLen = Math.min(w * 0.2, h * 0.4, 20);
+                const bw = Math.max(2.5, h * 0.06);
+                ctx.save();
+                ctx.fillStyle = 'rgba(0, 0, 0, 0.45)';
+                ctx.beginPath();
+                ctx.roundRect(x, y, w, h, 4);
+                ctx.fill();
+
+                ctx.strokeStyle = color || '#fbbf24';
+                ctx.lineWidth = bw;
+                ctx.lineCap = 'square';
+
+                ctx.beginPath();
+                ctx.moveTo(x, y + bracketLen);
+                ctx.lineTo(x, y);
+                ctx.lineTo(x + bracketLen, y);
+                ctx.stroke();
+
+                ctx.beginPath();
+                ctx.moveTo(x + w - bracketLen, y);
+                ctx.lineTo(x + w, y);
+                ctx.lineTo(x + w, y + bracketLen);
+                ctx.stroke();
+
+                ctx.beginPath();
+                ctx.moveTo(x + w, y + h - bracketLen);
+                ctx.lineTo(x + w, y + h);
+                ctx.lineTo(x + w - bracketLen, y + h);
+                ctx.stroke();
+
+                ctx.beginPath();
+                ctx.moveTo(x + bracketLen, y + h);
+                ctx.lineTo(x, y + h);
+                ctx.lineTo(x, y + h - bracketLen);
+                ctx.stroke();
+
+                ctx.restore();
+                break;
+            }
+            case 'glow-aura': {
+                const t = (currentTime || 0);
+                const pulseBlur = Math.max(12, h * 0.4) + Math.sin(t * 3.5) * (h * 0.1);
+                ctx.save();
+                ctx.shadowColor = color;
+                ctx.shadowBlur = pulseBlur;
+                ctx.fillStyle = color;
+                ctx.beginPath();
+                ctx.roundRect(x, y, w, h, 12);
+                ctx.fill();
+                ctx.restore();
+                break;
+            }
+            case 'stripes-box': {
+                const t = (currentTime || 0);
+                ctx.save();
+                ctx.beginPath();
+                ctx.roundRect(x, y, w, h, 10);
+                ctx.clip();
+
+                ctx.fillStyle = color;
+                ctx.fillRect(x, y, w, h);
+
+                ctx.fillStyle = shadeColorTO(color, -25);
+                const stripeWidth = 14;
+                const offset = (t * 24) % (stripeWidth * 2);
+                for (let sx = -h - w; sx < w + h; sx += stripeWidth * 2) {
+                    ctx.beginPath();
+                    ctx.moveTo(x + sx + offset, y);
+                    ctx.lineTo(x + sx + offset + stripeWidth, y);
+                    ctx.lineTo(x + sx + offset + stripeWidth - h, y + h);
+                    ctx.lineTo(x + sx + offset - h, y + h);
+                    ctx.closePath();
+                    ctx.fill();
+                }
+                ctx.restore();
+                break;
+            }
             case 'running-border-red':
             case 'running-border': {
                 // Continuously running border animation: a bright color spot races
@@ -4331,6 +4510,268 @@ document.addEventListener('DOMContentLoaded', () => {
             }
             cursorX += w;
         });
+        ctx.restore();
+    }
+
+    // Particle Dust text animation: text forms from / disintegrates into floating particles
+    function drawTextOverlayParticleDust(ctx, text, progress, phase, fontSize, textColor, strokeColor, strokeWidth, currentTime) {
+        if (!text) return;
+        const isEditingStill = (state.currentStep === 3 && !state.isPlaying);
+        const effectivePhase = isEditingStill ? 'settled' : phase;
+        
+        let dissolveFactor = 0;
+        let baseAlpha = 1;
+        if (effectivePhase === 'in' || effectivePhase === 'out') {
+            const eased = easeOutCubicTO(progress);
+            dissolveFactor = 1 - eased;
+            baseAlpha = Math.max(0.05, eased);
+        } else {
+            dissolveFactor = 0;
+            baseAlpha = 1;
+        }
+
+        ctx.save();
+        if (strokeColor) { ctx.lineWidth = strokeWidth; ctx.strokeStyle = strokeColor; }
+
+        if (dissolveFactor < 0.95) {
+            ctx.save();
+            ctx.globalAlpha *= baseAlpha * (1 - dissolveFactor * 0.7);
+            if (strokeColor) ctx.strokeText(text, 0, 0);
+            ctx.fillStyle = textColor;
+            ctx.fillText(text, 0, 0);
+            ctx.restore();
+        }
+
+        const chars = text.split('');
+        const charWidths = chars.map(c => ctx.measureText(c).width || 10);
+        const totalWidth = charWidths.reduce((a, b) => a + b, 0);
+        let charX = -totalWidth / 2;
+
+        const particlesPerChar = 18;
+        const t = currentTime || 0;
+
+        for (let ci = 0; ci < chars.length; ci++) {
+            const cw = charWidths[ci];
+            const cx = charX + cw / 2;
+            const cy = 0;
+
+            if (chars[ci].trim().length > 0) {
+                for (let pi = 0; pi < particlesPerChar; pi++) {
+                    const seed = (ci * 43 + pi * 19) % 1000;
+                    const angle = ((seed * 13) % 360) * (Math.PI / 180) + (pi * 0.35);
+                    const maxSpread = fontSize * (1.4 + (seed % 10) * 0.12);
+
+                    let px, py, size, pAlpha;
+
+                    if (dissolveFactor > 0.001) {
+                        const dP = Math.pow(dissolveFactor, 0.75);
+                        const dist = maxSpread * dP;
+                        px = cx + Math.cos(angle) * dist + Math.sin(t * 3 + seed) * (fontSize * 0.15 * dP);
+                        py = cy + Math.sin(angle) * dist - (dP * fontSize * 0.5);
+                        size = (1.5 + (seed % 5) * 0.8) * (1 - dP * 0.3);
+                        pAlpha = baseAlpha * (1 - dP * 0.6) * (0.6 + (seed % 7) * 0.06);
+                    } else {
+                        const floatOffX = Math.sin(t * 2.5 + seed) * (cw * 0.6);
+                        const floatOffY = Math.cos(t * 2.0 + seed * 1.5) * (fontSize * 0.35);
+                        px = cx + floatOffX;
+                        py = cy + floatOffY;
+                        size = 1.2 + (seed % 3) * 0.7;
+                        pAlpha = 0.35 + Math.sin(t * 4 + seed) * 0.3;
+                    }
+
+                    if (pAlpha > 0.05) {
+                        ctx.save();
+                        ctx.globalAlpha *= Math.max(0, Math.min(1, pAlpha));
+                        ctx.shadowColor = (pi % 3 === 0) ? '#ffffff' : ((pi % 2 === 0) ? '#fbbf24' : textColor);
+                        ctx.shadowBlur = 6;
+                        ctx.fillStyle = (pi % 4 === 0) ? '#ffffff' : ((pi % 2 === 0) ? '#fef08a' : textColor);
+                        ctx.beginPath();
+                        ctx.arc(px, py, Math.max(0.5, size), 0, Math.PI * 2);
+                        ctx.fill();
+                        ctx.restore();
+                    }
+                }
+            }
+            charX += cw;
+        }
+        ctx.restore();
+    }
+
+    // Cyberpunk Glitch text animation: RGB channel split and flicker
+    function drawTextOverlayGlitch(ctx, text, currentTime, textColor, strokeColor, strokeWidth) {
+        if (!text) return;
+        const t = currentTime * 18;
+        const isGlitchBeat = (Math.sin(t * 1.3) > 0.55) || (Math.cos(t * 2.7) > 0.65);
+        const shiftX = isGlitchBeat ? (Math.sin(t * 7) * 7) : 0;
+        const shiftY = isGlitchBeat ? (Math.cos(t * 4) * 3) : 0;
+
+        ctx.save();
+        if (strokeColor) { ctx.lineWidth = strokeWidth; ctx.strokeStyle = strokeColor; }
+
+        if (isGlitchBeat) {
+            ctx.save();
+            ctx.globalAlpha *= 0.8;
+            ctx.translate(shiftX, shiftY);
+            ctx.fillStyle = '#00f0ff';
+            ctx.fillText(text, 0, 0);
+            ctx.restore();
+
+            ctx.save();
+            ctx.globalAlpha *= 0.8;
+            ctx.translate(-shiftX * 1.2, -shiftY * 0.8);
+            ctx.fillStyle = '#ff0055';
+            ctx.fillText(text, 0, 0);
+            ctx.restore();
+        }
+
+        if (strokeColor) ctx.strokeText(text, 0, 0);
+        ctx.fillStyle = textColor;
+        ctx.fillText(text, 0, 0);
+
+        ctx.restore();
+    }
+
+    // Wave Ripple text animation: characters bounce in a fluid sine wave
+    function drawTextOverlayWave(ctx, text, progress, phase, fontSize, currentTime, strokeColor, strokeWidth) {
+        if (!text) return;
+        const isEditingStill = (state.currentStep === 3 && !state.isPlaying);
+        const effectivePhase = isEditingStill ? 'settled' : phase;
+        const pWave = (effectivePhase === 'in') ? (1 - progress) : ((effectivePhase === 'out') ? (1 - progress) : 0);
+        const waveAmp = fontSize * 0.35 * (0.2 + pWave * 0.8);
+
+        const chars = text.split('');
+        const widths = chars.map(c => ctx.measureText(c).width || 10);
+        const totalWidth = widths.reduce((a, b) => a + b, 0);
+        let cursorX = -totalWidth / 2;
+
+        ctx.save();
+        if (strokeColor) { ctx.lineWidth = strokeWidth; ctx.strokeStyle = strokeColor; }
+
+        chars.forEach((c, i) => {
+            const w = widths[i];
+            const charCenterX = cursorX + w / 2;
+            const waveY = Math.sin(currentTime * 7 + i * 0.45) * waveAmp;
+
+            ctx.save();
+            ctx.translate(charCenterX, waveY);
+            if (strokeColor) ctx.strokeText(c, 0, 0);
+            ctx.fillText(c, 0, 0);
+            ctx.restore();
+
+            cursorX += w;
+        });
+
+        ctx.restore();
+    }
+
+    // Cinematic Blur Focus text animation: text focuses into clarity
+    function drawTextOverlayBlurFade(ctx, text, progress, phase, fontSize, strokeColor, strokeWidth) {
+        if (!text) return;
+        const isEditingStill = (state.currentStep === 3 && !state.isPlaying);
+        const effectivePhase = isEditingStill ? 'settled' : phase;
+
+        let p = 1;
+        if (effectivePhase === 'in' || effectivePhase === 'out') {
+            p = easeOutCubicTO(progress);
+        }
+
+        const blurRadius = (1 - p) * (fontSize * 0.4);
+
+        ctx.save();
+        if (strokeColor) { ctx.lineWidth = strokeWidth; ctx.strokeStyle = strokeColor; }
+
+        if (blurRadius > 0.5) {
+            ctx.save();
+            ctx.shadowColor = ctx.fillStyle || '#ffffff';
+            ctx.shadowBlur = blurRadius * 1.5;
+            ctx.globalAlpha *= Math.max(0.1, p);
+            for (let b = 0; b < 3; b++) {
+                if (strokeColor) ctx.strokeText(text, 0, 0);
+                ctx.fillText(text, 0, 0);
+            }
+            ctx.restore();
+        } else {
+            if (strokeColor) ctx.strokeText(text, 0, 0);
+            ctx.fillText(text, 0, 0);
+        }
+
+        ctx.restore();
+    }
+
+    // Smoke Vapor text animation: text emerges from / disappears into soft fog
+    function drawTextOverlaySmokeVapor(ctx, text, progress, phase, fontSize, strokeColor, strokeWidth) {
+        if (!text) return;
+        const isEditingStill = (state.currentStep === 3 && !state.isPlaying);
+        const effectivePhase = isEditingStill ? 'settled' : phase;
+        const pVapor = (effectivePhase === 'in') ? (1 - progress) : ((effectivePhase === 'out') ? (1 - progress) : 0);
+
+        ctx.save();
+        ctx.shadowColor = 'rgba(255, 255, 255, 0.7)';
+        ctx.shadowBlur = fontSize * 0.5 * (0.3 + pVapor * 0.9);
+        ctx.globalAlpha *= Math.max(0.05, 1 - pVapor * 0.9);
+        ctx.translate(0, -pVapor * fontSize * 0.4);
+
+        if (strokeColor) { ctx.lineWidth = strokeWidth; ctx.strokeStyle = strokeColor; ctx.strokeText(text, 0, 0); }
+        ctx.fillText(text, 0, 0);
+
+        ctx.restore();
+    }
+
+    // Metallic Shine Sweep text animation: bright light ray sweeps across text
+    function drawTextOverlayShineSweep(ctx, text, currentTime, fontSize, textColor, strokeColor, strokeWidth) {
+        if (!text) return;
+        ctx.save();
+        if (strokeColor) { ctx.lineWidth = strokeWidth; ctx.strokeStyle = strokeColor; ctx.strokeText(text, 0, 0); }
+        ctx.fillStyle = textColor;
+        ctx.fillText(text, 0, 0);
+
+        const textMetrics = ctx.measureText(text);
+        const w = textMetrics.width || 100;
+        const t = currentTime || 0;
+        const sweepProgress = (t * 0.8) % 2.0;
+        if (sweepProgress < 1.3) {
+            const sweepX = -w / 2 - 40 + sweepProgress * (w + 80);
+            ctx.save();
+            ctx.globalCompositeOperation = 'source-atop';
+            const grad = ctx.createLinearGradient(sweepX - 30, -fontSize/2, sweepX + 30, fontSize/2);
+            grad.addColorStop(0, 'rgba(255, 255, 255, 0)');
+            grad.addColorStop(0.5, 'rgba(255, 255, 255, 0.9)');
+            grad.addColorStop(1, 'rgba(255, 255, 255, 0)');
+            ctx.fillStyle = grad;
+            ctx.fillRect(-w / 2 - 10, -fontSize, w + 20, fontSize * 2);
+            ctx.restore();
+        }
+
+        ctx.restore();
+    }
+
+    // Rainbow Flow text animation: rainbow hue shifts continuously across letters
+    function drawTextOverlayRainbowFlow(ctx, text, currentTime, strokeColor, strokeWidth) {
+        if (!text) return;
+        const chars = text.split('');
+        const widths = chars.map(c => ctx.measureText(c).width || 10);
+        const totalWidth = widths.reduce((a, b) => a + b, 0);
+        let cursorX = -totalWidth / 2;
+        const t = currentTime || 0;
+
+        ctx.save();
+        if (strokeColor) { ctx.lineWidth = strokeWidth; ctx.strokeStyle = strokeColor; }
+
+        chars.forEach((c, i) => {
+            const w = widths[i];
+            const charCenterX = cursorX + w / 2;
+            const hue = (t * 140 + i * 25) % 360;
+
+            ctx.save();
+            ctx.translate(charCenterX, 0);
+            if (strokeColor) ctx.strokeText(c, 0, 0);
+            ctx.fillStyle = `hsl(${hue}, 90%, 65%)`;
+            ctx.fillText(c, 0, 0);
+            ctx.restore();
+
+            cursorX += w;
+        });
+
         ctx.restore();
     }
 
@@ -6753,6 +7194,20 @@ document.addEventListener('DOMContentLoaded', () => {
                         drawTextOverlayStaggered(ctx2, textToDraw, 'letter', textRevealAnim.p, outlineColor, outlineWidth);
                     } else if (textAnimStyle === 'word-stagger' && textRevealAnim.phase !== 'settled') {
                         drawTextOverlayStaggered(ctx2, textToDraw, 'word', textRevealAnim.p, outlineColor, outlineWidth);
+                    } else if (textAnimStyle === 'particle-dust') {
+                        drawTextOverlayParticleDust(ctx2, textToDraw, textRevealAnim.p, textRevealAnim.phase, item.fontSize, item.color, outlineColor, outlineWidth, currentTime);
+                    } else if (textAnimStyle === 'glitch') {
+                        drawTextOverlayGlitch(ctx2, textToDraw, currentTime, item.color, outlineColor, outlineWidth);
+                    } else if (textAnimStyle === 'wave-reveal') {
+                        drawTextOverlayWave(ctx2, textToDraw, textRevealAnim.p, textRevealAnim.phase, item.fontSize, currentTime, outlineColor, outlineWidth);
+                    } else if (textAnimStyle === 'blur-fade') {
+                        drawTextOverlayBlurFade(ctx2, textToDraw, textRevealAnim.p, textRevealAnim.phase, item.fontSize, outlineColor, outlineWidth);
+                    } else if (textAnimStyle === 'smoke-vapor') {
+                        drawTextOverlaySmokeVapor(ctx2, textToDraw, textRevealAnim.p, textRevealAnim.phase, item.fontSize, outlineColor, outlineWidth);
+                    } else if (textAnimStyle === 'shine-sweep') {
+                        drawTextOverlayShineSweep(ctx2, textToDraw, currentTime, item.fontSize, item.color, outlineColor, outlineWidth);
+                    } else if (textAnimStyle === 'rainbow-flow') {
+                        drawTextOverlayRainbowFlow(ctx2, textToDraw, currentTime, outlineColor, outlineWidth);
                     } else {
                         ctx2.lineWidth = outlineWidth;
                         ctx2.strokeStyle = outlineColor;
