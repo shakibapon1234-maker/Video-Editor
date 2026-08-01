@@ -3827,7 +3827,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // --- Text Overlay v3: independent Text vs Box animation engine ---
     // Styles that loop continuously for as long as the overlay is visible
     // (as opposed to the entry/exit-only styles above them in the dropdown).
-    const TEXT_OVERLAY_CONTINUOUS_ANIM_STYLES = new Set(['pulse', 'wiggle', 'float', 'glow-pulse', 'breathe', 'rainbow-flow', 'neon-flash', 'shine-sweep']);
+    const TEXT_OVERLAY_CONTINUOUS_ANIM_STYLES = new Set(['pulse', 'wiggle', 'float', 'glow-pulse', 'breathe', 'rainbow-flow', 'neon-flash', 'shine-sweep', 'heartbeat', 'drift']);
     // Styles that only make sense for the *text glyphs themselves* (progressive
     // reveal of characters/words/particles) — never offered on the Box Animation dropdown,
     // and handled separately at draw time rather than through the transform below.
@@ -3853,6 +3853,17 @@ document.addEventListener('DOMContentLoaded', () => {
                     result.offY = Math.sin(t * 2.2) * (refSize * 0.10); break;
                 case 'glow-pulse':
                     result.alpha = 0.82 + Math.sin(t * 3.6) * 0.18; break;
+                case 'heartbeat': {
+                    // Two quick, subtle beats followed by a rest — useful for CTA badges.
+                    const beat = Math.pow(Math.max(0, Math.sin(t * 5.4)), 8);
+                    result.scale = 1 + beat * 0.09;
+                    result.alpha = 0.94 + beat * 0.06;
+                    break;
+                }
+                case 'drift':
+                    result.offX = Math.sin(t * 1.35) * (refSize * 0.07);
+                    result.offY = Math.cos(t * 1.8) * (refSize * 0.055);
+                    break;
                 case 'breathe':
                     result.scale = 1 + Math.sin(t * 1.8) * 0.05;
                     result.alpha = 0.90 + Math.sin(t * 1.8) * 0.10;
@@ -3909,6 +3920,18 @@ document.addEventListener('DOMContentLoaded', () => {
                 result.rot = (1 - p) * 0.5 * Math.sin(p * Math.PI * 2.2);
                 result.alpha = eased;
                 break;
+            case 'stamp':
+                result.scale = Math.max(0.05, easeOutBackOvershoot(p));
+                result.rot = (1 - eased) * -0.18;
+                result.alpha = Math.max(0.08, eased);
+                break;
+            case 'spring-up': {
+                const springP = Math.max(0, Math.min(1.12, easeOutBackOvershoot(p)));
+                result.offY = (1 - springP) * refSize * 1.15;
+                result.scale = 0.82 + 0.18 * springP;
+                result.alpha = Math.max(0.08, eased);
+                break;
+            }
             case 'wipe-horizontal':
                 result.scaleX = Math.max(0.01, eased);
                 result.alpha = eased;
