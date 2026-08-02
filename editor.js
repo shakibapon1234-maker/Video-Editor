@@ -4367,6 +4367,23 @@ document.addEventListener('DOMContentLoaded', () => {
         ctx.restore();
     }
 
+    // Splits text into visual "grapheme clusters" rather than raw UTF-16 code units.
+    // Critical for Bengali (and other complex scripts): prevents breaking base consonants
+    // from their matras (e.g. ো, ি, ু), hasanta (্), or conjuncts (যেমন: র্স, ন্য, ক্স).
+    function splitGraphemes(text) {
+        if (!text) return [];
+        try {
+            if (typeof Intl !== 'undefined' && Intl.Segmenter) {
+                const seg = new Intl.Segmenter(undefined, { granularity: 'grapheme' });
+                return Array.from(seg.segment(text), (s) => s.segment);
+            }
+        } catch (e) { /* fall through to fallback */ }
+        
+        // Fallback: regex matching base character followed by any Bengali combining marks/virama/ZWNJ/ZWJ
+        const bengaliClusterRegex = /[\u0980-\u09FF][\u0980-\u09FF\u200C\u200D]*|[\s\S]/g;
+        return text.match(bengaliClusterRegex) || Array.from(text);
+    }
+
     // Draws `text` centered at the current origin, arced along a circle whose
     // curvature is set by `curveAmount` (-100..100; 0 = perfectly flat).
     // Positive values arch upward in the middle (rainbow/badge look), negative
@@ -4380,7 +4397,7 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
         const arcUp = curveAmount > 0;
-        const chars = text.split('');
+        const chars = splitGraphemes(text);
         const widths = chars.map(c => ctx.measureText(c).width || 1);
         const totalWidth = widths.reduce((a, b) => a + b, 0);
         const totalAngle = strength * 2.3; // radians, up to ~132 degrees at max curve
@@ -4463,7 +4480,7 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
 
-        var chars = text.split('');
+        var chars = splitGraphemes(text);
         var widths = chars.map(function (c) { return ctx.measureText(c).width || 1; });
         var cursor = 0;
 
@@ -4507,7 +4524,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // animation progress `progress` (0..1). Used for the letter-cascade and
     // word-stagger Text Overlay animation presets.
     function drawTextOverlayStaggered(ctx, text, mode, progress, strokeColor, strokeWidth) {
-        const units = mode === 'word' ? text.split(/(\s+)/) : text.split('');
+        const units = mode === 'word' ? text.split(/(\s+)/) : splitGraphemes(text);
         const meaningfulCount = units.filter(u => u.trim().length > 0).length || 1;
         const widths = units.map(u => ctx.measureText(u).width);
         const totalWidth = widths.reduce((a, b) => a + b, 0);
@@ -4565,7 +4582,7 @@ document.addEventListener('DOMContentLoaded', () => {
             ctx.restore();
         }
 
-        const chars = text.split('');
+        const chars = splitGraphemes(text);
         const charWidths = chars.map(c => ctx.measureText(c).width || 10);
         const totalWidth = charWidths.reduce((a, b) => a + b, 0);
         let charX = -totalWidth / 2;
@@ -4659,10 +4676,12 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!text) return;
         const isEditingStill = (state.currentStep === 3 && !state.isPlaying);
         const effectivePhase = isEditingStill ? 'settled' : phase;
-        const pWave = (effectivePhase === 'in') ? (1 - progress) : ((effectivePhase === 'out') ? (1 - progress) : 0);
+        // settled phase: 0.45 gives waveAmp ≈ fontSize*0.196 — always visible
+        const pWave = (effectivePhase === 'in') ? (1 - progress) :
+                      (effectivePhase === 'out') ? (1 - progress) : 0.45;
         const waveAmp = fontSize * 0.35 * (0.2 + pWave * 0.8);
 
-        const chars = text.split('');
+        const chars = splitGraphemes(text);
         const widths = chars.map(c => ctx.measureText(c).width || 10);
         const totalWidth = widths.reduce((a, b) => a + b, 0);
         let cursorX = -totalWidth / 2;
@@ -4673,7 +4692,7 @@ document.addEventListener('DOMContentLoaded', () => {
         chars.forEach((c, i) => {
             const w = widths[i];
             const charCenterX = cursorX + w / 2;
-            const waveY = Math.sin(currentTime * 7 + i * 0.45) * waveAmp;
+            const waveY = Math.sin(currentTime * 5.5 + i * 0.55) * waveAmp;
 
             ctx.save();
             ctx.translate(charCenterX, waveY);
@@ -4698,7 +4717,10 @@ document.addEventListener('DOMContentLoaded', () => {
             p = easeOutCubicTO(progress);
         }
 
-        const blurRadius = (1 - p) * (fontSize * 0.4);
+        // In settled phase keep a gentle glow so the animation is always visible
+        const blurRadius = (effectivePhase === 'settled')
+            ? fontSize * 0.08   // subtle persistent glow
+            : (1 - p) * (fontSize * 0.4);
 
         ctx.save();
         if (strokeColor) { ctx.lineWidth = strokeWidth; ctx.strokeStyle = strokeColor; }
@@ -4726,7 +4748,9 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!text) return;
         const isEditingStill = (state.currentStep === 3 && !state.isPlaying);
         const effectivePhase = isEditingStill ? 'settled' : phase;
-        const pVapor = (effectivePhase === 'in') ? (1 - progress) : ((effectivePhase === 'out') ? (1 - progress) : 0);
+        // settled phase: 0.15 gives a persistent soft-fog glow (always visible)
+        const pVapor = (effectivePhase === 'in') ? (1 - progress) :
+                       (effectivePhase === 'out') ? (1 - progress) : 0.15;
 
         ctx.save();
         ctx.shadowColor = 'rgba(255, 255, 255, 0.7)';
@@ -4771,7 +4795,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // Rainbow Flow text animation: rainbow hue shifts continuously across letters
     function drawTextOverlayRainbowFlow(ctx, text, currentTime, strokeColor, strokeWidth) {
         if (!text) return;
-        const chars = text.split('');
+        const chars = splitGraphemes(text);
         const widths = chars.map(c => ctx.measureText(c).width || 10);
         const totalWidth = widths.reduce((a, b) => a + b, 0);
         let cursorX = -totalWidth / 2;
@@ -5576,10 +5600,11 @@ document.addEventListener('DOMContentLoaded', () => {
                     ctx.textAlign = align;
 
                     if (isTypewriter) {
-                        const typeDur = Math.min(secondsPerLine * 0.85, Math.max(0.4, lineObj.text.length * 0.045));
+                        const lineGraphemes = splitGraphemes(lineObj.text);
+                        const typeDur = Math.min(secondsPerLine * 0.85, Math.max(0.4, lineGraphemes.length * 0.045));
                         const p = Math.max(0, Math.min(1, localT / typeDur));
-                        const revealCount = Math.max(0, Math.min(lineObj.text.length, Math.round(lineObj.text.length * p)));
-                        const textToDraw = lineObj.text.slice(0, revealCount);
+                        const revealCount = Math.max(0, Math.min(lineGraphemes.length, Math.round(lineGraphemes.length * p)));
+                        const textToDraw = lineGraphemes.slice(0, revealCount).join('');
                         if (lineObj.bullet) ctx.fillText(lineObj.bullet, textX, lineY);
                         ctx.fillText(textToDraw, lineX, lineY);
                         if (p < 1 && Math.floor(currentTime * 2.5) % 2 === 0) {
@@ -6396,9 +6421,10 @@ document.addEventListener('DOMContentLoaded', () => {
                                 let textToDraw = lineObj.text;
                                 let isTypingLine = false;
                                 if (style === 'typewriter' && brollAnimActive && tIn < animDur) {
-                                    const revealCount = Math.max(0, Math.min(lineObj.text.length, Math.round(lineObj.text.length * lineP)));
-                                    textToDraw = lineObj.text.slice(0, revealCount);
-                                    isTypingLine = revealCount < lineObj.text.length && lineP > 0;
+                                    const lineGraphemes = splitGraphemes(lineObj.text);
+                                    const revealCount = Math.max(0, Math.min(lineGraphemes.length, Math.round(lineGraphemes.length * lineP)));
+                                    textToDraw = lineGraphemes.slice(0, revealCount).join('');
+                                    isTypingLine = revealCount < lineGraphemes.length && lineP > 0;
                                 }
 
                                 if (item.mode === 'fullscreen' && item.transparentBg === false) {
@@ -7203,8 +7229,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 // applied per-draw-mode below.
                 let textToDraw = resolvedItemText;
                 if (textAnimStyle === 'typewriter' && textRevealAnim.phase === 'in') {
-                    const revealCount = Math.max(0, Math.min(resolvedItemText.length, Math.round(resolvedItemText.length * textRevealAnim.p)));
-                    textToDraw = resolvedItemText.slice(0, revealCount);
+                    const textGraphemes = splitGraphemes(resolvedItemText);
+                    const revealCount = Math.max(0, Math.min(textGraphemes.length, Math.round(textGraphemes.length * textRevealAnim.p)));
+                    textToDraw = textGraphemes.slice(0, revealCount).join('');
                 }
 
                 const drawTextContent = (ctx2) => {
@@ -11297,6 +11324,8 @@ document.addEventListener('DOMContentLoaded', () => {
         if (item) {
             item.textAnimStyle = e.target.value;
             item.animStyle = e.target.value; // legacy fallback field, kept in sync
+            state.currentTime = item.startSec;
+            if (typeof updatePlayhead === 'function') updatePlayhead();
             drawFrame();
             if (window.triggerAutoSave) window.triggerAutoSave();
         }
@@ -11305,7 +11334,13 @@ document.addEventListener('DOMContentLoaded', () => {
     if (textOverlayBoxAnimSelect) {
         textOverlayBoxAnimSelect.addEventListener('change', (e) => {
             const item = getSelectedTextOverlay();
-            if (item) { item.boxAnimStyle = e.target.value; drawFrame(); if (window.triggerAutoSave) window.triggerAutoSave(); }
+            if (item) {
+                item.boxAnimStyle = e.target.value;
+                state.currentTime = item.startSec;
+                if (typeof updatePlayhead === 'function') updatePlayhead();
+                drawFrame();
+                if (window.triggerAutoSave) window.triggerAutoSave();
+            }
         });
     }
 

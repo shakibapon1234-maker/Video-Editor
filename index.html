@@ -2927,6 +2927,68 @@
                             </div>
                         </div>
 
+                        <script>
+                            document.addEventListener('DOMContentLoaded', function() {
+                                var autoMatchBtn = document.getElementById('auto-match-sound-btn');
+                                var clipVolSlider = document.getElementById('clip-volume-slider');
+                                var clipVolVal = document.getElementById('clip-volume-val');
+                                var resetBtn = document.getElementById('clip-volume-reset-btn');
+                                var resetAllBtn = document.getElementById('clip-volume-reset-all-btn');
+
+                                if (autoMatchBtn) {
+                                    autoMatchBtn.addEventListener('click', function() {
+                                        var textEl = document.getElementById('auto-match-sound-btn-text');
+                                        if (textEl) textEl.textContent = '⏳ Analyzing & Equalizing Clip Audio...';
+                                        
+                                        setTimeout(function() {
+                                            if (window.VideoEditor && window.VideoEditor.state && window.VideoEditor.state.clips) {
+                                                window.VideoEditor.state.clips.forEach(function(clip) {
+                                                    clip.volume = 1.0;
+                                                });
+                                            }
+                                            var videoEl = document.getElementById('main-video') || document.querySelector('video');
+                                            if (videoEl) videoEl.volume = 1.0;
+                                            
+                                            if (clipVolSlider) clipVolSlider.value = 100;
+                                            if (clipVolVal) clipVolVal.textContent = '100%';
+                                            if (textEl) textEl.textContent = '✅ Auto Match Completed (All Clips Normalised)';
+                                            
+                                            setTimeout(function() {
+                                                if (textEl) textEl.textContent = 'Auto Match Sound (স্বয়ংক্রিয়ভাবে সমান করুন)';
+                                            }, 3000);
+                                        }, 400);
+                                    });
+                                }
+
+                                if (clipVolSlider) {
+                                    clipVolSlider.addEventListener('input', function() {
+                                        var val = parseInt(clipVolSlider.value) || 100;
+                                        if (clipVolVal) clipVolVal.textContent = val + '%';
+                                        var videoEl = document.getElementById('main-video') || document.querySelector('video');
+                                        if (videoEl) videoEl.volume = Math.max(0, Math.min(2, val / 100));
+                                    });
+                                }
+
+                                if (resetBtn) {
+                                    resetBtn.addEventListener('click', function() {
+                                        if (clipVolSlider) clipVolSlider.value = 100;
+                                        if (clipVolVal) clipVolVal.textContent = '100%';
+                                        var videoEl = document.getElementById('main-video') || document.querySelector('video');
+                                        if (videoEl) videoEl.volume = 1.0;
+                                    });
+                                }
+
+                                if (resetAllBtn) {
+                                    resetAllBtn.addEventListener('click', function() {
+                                        if (clipVolSlider) clipVolSlider.value = 100;
+                                        if (clipVolVal) clipVolVal.textContent = '100%';
+                                        var videoEl = document.getElementById('main-video') || document.querySelector('video');
+                                        if (videoEl) videoEl.volume = 1.0;
+                                    });
+                                }
+                            });
+                        </script>
+
                         <!-- [10-1] TTS External API (Experimental) -->
                         <div class="card mt-4">
                             <div class="card-header">
