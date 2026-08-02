@@ -4389,11 +4389,15 @@ document.addEventListener('DOMContentLoaded', () => {
     // Positive values arch upward in the middle (rainbow/badge look), negative
     // values dip down in the middle (smile/cup look). ctx.font/fillStyle/
     // textAlign/textBaseline must already be set by the caller.
-    function drawCurvedTextOverlay(ctx, text, curveAmount, strokeColor, strokeWidth) {
+    function drawCurvedTextOverlay(ctx, text, curveAmount, strokeColor, strokeWidth, charDrawFn) {
         const strength = Math.min(1, Math.abs(curveAmount) / 100);
         if (strength <= 0.001 || !text) {
-            if (strokeColor) { ctx.lineWidth = strokeWidth; ctx.strokeStyle = strokeColor; ctx.strokeText(text, 0, 0); }
-            ctx.fillText(text, 0, 0);
+            if (charDrawFn) {
+                charDrawFn(ctx, text, 0, 1);
+            } else {
+                if (strokeColor) { ctx.lineWidth = strokeWidth; ctx.strokeStyle = strokeColor; ctx.strokeText(text, 0, 0); }
+                ctx.fillText(text, 0, 0);
+            }
             return;
         }
         const arcUp = curveAmount > 0;
@@ -4413,8 +4417,12 @@ document.addEventListener('DOMContentLoaded', () => {
             ctx.save();
             ctx.translate(0, arcUp ? -radius : radius);
             if (!arcUp) ctx.rotate(Math.PI);
-            if (strokeColor) ctx.strokeText(chars[i], 0, 0);
-            ctx.fillText(chars[i], 0, 0);
+            if (charDrawFn) {
+                charDrawFn(ctx, chars[i], i, chars.length);
+            } else {
+                if (strokeColor) ctx.strokeText(chars[i], 0, 0);
+                ctx.fillText(chars[i], 0, 0);
+            }
             ctx.restore();
             ctx.rotate(charAngle / 2);
         }
@@ -4448,10 +4456,14 @@ document.addEventListener('DOMContentLoaded', () => {
     // Draws `text` along a custom user-drawn curve defined by normalized
     // `curvePoints` [{x,y}, ...]. ctx.font/fillStyle/textAlign/textBaseline
     // must already be set by the caller.
-    function drawCustomCurveTextOverlay(ctx, text, curvePoints, strokeColor, strokeWidth) {
+    function drawCustomCurveTextOverlay(ctx, text, curvePoints, strokeColor, strokeWidth, charDrawFn) {
         if (!curvePoints || curvePoints.length < 2 || !text) {
-            if (strokeColor) { ctx.lineWidth = strokeWidth; ctx.strokeStyle = strokeColor; ctx.strokeText(text, 0, 0); }
-            ctx.fillText(text, 0, 0);
+            if (charDrawFn) {
+                charDrawFn(ctx, text, 0, 1);
+            } else {
+                if (strokeColor) { ctx.lineWidth = strokeWidth; ctx.strokeStyle = strokeColor; ctx.strokeText(text, 0, 0); }
+                ctx.fillText(text, 0, 0);
+            }
             return;
         }
 
@@ -4461,8 +4473,12 @@ document.addEventListener('DOMContentLoaded', () => {
         var sampled = sampleCatmullRom(pts, 28);
 
         if (!sampled || sampled.length < 2) {
-            if (strokeColor) { ctx.lineWidth = strokeWidth; ctx.strokeStyle = strokeColor; ctx.strokeText(text, 0, 0); }
-            ctx.fillText(text, 0, 0);
+            if (charDrawFn) {
+                charDrawFn(ctx, text, 0, 1);
+            } else {
+                if (strokeColor) { ctx.lineWidth = strokeWidth; ctx.strokeStyle = strokeColor; ctx.strokeText(text, 0, 0); }
+                ctx.fillText(text, 0, 0);
+            }
             return;
         }
 
@@ -4475,8 +4491,12 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         var totalLength = arcLengths[sampled.length - 1];
         if (totalLength < 0.001) {
-            if (strokeColor) { ctx.lineWidth = strokeWidth; ctx.strokeStyle = strokeColor; ctx.strokeText(text, 0, 0); }
-            ctx.fillText(text, 0, 0);
+            if (charDrawFn) {
+                charDrawFn(ctx, text, 0, 1);
+            } else {
+                if (strokeColor) { ctx.lineWidth = strokeWidth; ctx.strokeStyle = strokeColor; ctx.strokeText(text, 0, 0); }
+                ctx.fillText(text, 0, 0);
+            }
             return;
         }
 
@@ -4511,8 +4531,12 @@ document.addEventListener('DOMContentLoaded', () => {
             ctx.save();
             ctx.translate(px, py);
             ctx.rotate(angle);
-            if (strokeColor) ctx.strokeText(chars[ci], 0, 0);
-            ctx.fillText(chars[ci], 0, 0);
+            if (charDrawFn) {
+                charDrawFn(ctx, chars[ci], ci, chars.length);
+            } else {
+                if (strokeColor) ctx.strokeText(chars[ci], 0, 0);
+                ctx.fillText(chars[ci], 0, 0);
+            }
             ctx.restore();
         }
 
@@ -7235,12 +7259,193 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
 
                 const drawTextContent = (ctx2) => {
-                    if (curveAmount && !(item.curvePoints && item.curvePoints.length >= 2) && !(state.isDrawingTextCurve && state.textCurvePoints && state.textCurvePoints.length >= 2)) {
-                        drawCurvedTextOverlay(ctx2, textToDraw, curveAmount, outlineColor, outlineWidth);
-                    } else if ((item.curvePoints && item.curvePoints.length >= 2) || (state.isDrawingTextCurve && state.textCurvePoints && state.textCurvePoints.length >= 2)) {
-                        var activeCurvePoints = (state.isDrawingTextCurve && state.textCurvePoints && state.textCurvePoints.length >= 2) ? state.textCurvePoints : item.curvePoints;
-                        drawCustomCurveTextOverlay(ctx2, textToDraw, activeCurvePoints, outlineColor, outlineWidth);
-                    } else if (textAnimStyle === 'letter-cascade' && textRevealAnim.phase !== 'settled') {
+                    // Determine which curve mode is active
+                    const _hasCurveSimple = curveAmount &&
+                        !(item.curvePoints && item.curvePoints.length >= 2) &&
+                        !(state.isDrawingTextCurve && state.textCurvePoints && state.textCurvePoints.length >= 2);
+                    const _hasCurveCustom = (item.curvePoints && item.curvePoints.length >= 2) ||
+                        (state.isDrawingTextCurve && state.textCurvePoints && state.textCurvePoints.length >= 2);
+
+                    if (_hasCurveSimple || _hasCurveCustom) {
+                        // ── CURVE MODE ─────────────────────────────────────────────────
+                        // Build custom charDrawFn for specific reveal animation styles
+                        // so they animate character-by-character along the curved path.
+                        const _isEditingStillLocal = (state.currentStep === 3 && !state.isPlaying);
+                        const _effPhase = _isEditingStillLocal ? 'settled' : textRevealAnim.phase;
+
+                        let _charDrawFn = null;
+
+                        if (textAnimStyle === 'rainbow-flow') {
+                            _charDrawFn = (cCtx, char, i) => {
+                                const hue = ((currentTime || 0) * 140 + i * 25) % 360;
+                                if (outlineColor) { cCtx.lineWidth = outlineWidth; cCtx.strokeStyle = outlineColor; cCtx.strokeText(char, 0, 0); }
+                                cCtx.fillStyle = `hsl(${hue}, 90%, 65%)`;
+                                cCtx.fillText(char, 0, 0);
+                            };
+                        } else if (textAnimStyle === 'wave-reveal') {
+                            _charDrawFn = (cCtx, char, i) => {
+                                const pWave = (_effPhase === 'in') ? (1 - textRevealAnim.p) : ((_effPhase === 'out') ? (1 - textRevealAnim.p) : 0.45);
+                                const waveAmp = item.fontSize * 0.35 * (0.2 + pWave * 0.8);
+                                const waveY = Math.sin((currentTime || 0) * 5.5 + i * 0.55) * waveAmp;
+                                cCtx.translate(0, waveY);
+                                if (outlineColor) { cCtx.lineWidth = outlineWidth; cCtx.strokeStyle = outlineColor; cCtx.strokeText(char, 0, 0); }
+                                cCtx.fillText(char, 0, 0);
+                            };
+                        } else if (textAnimStyle === 'glitch') {
+                            _charDrawFn = (cCtx, char, i) => {
+                                const t = (currentTime || 0) * 18;
+                                const isGlitchBeat = (Math.sin(t * 1.3) > 0.55) || (Math.cos(t * 2.7) > 0.65);
+                                const shiftX = isGlitchBeat ? (Math.sin(t * 7 + i) * 6) : 0;
+                                const shiftY = isGlitchBeat ? (Math.cos(t * 4 + i) * 3) : 0;
+                                cCtx.translate(shiftX, shiftY);
+                                if (isGlitchBeat) {
+                                    cCtx.save();
+                                    cCtx.fillStyle = 'rgba(255, 0, 80, 0.75)';
+                                    cCtx.fillText(char, -2, -1);
+                                    cCtx.fillStyle = 'rgba(0, 230, 255, 0.75)';
+                                    cCtx.fillText(char, 2, 1);
+                                    cCtx.restore();
+                                }
+                                if (outlineColor) { cCtx.lineWidth = outlineWidth; cCtx.strokeStyle = outlineColor; cCtx.strokeText(char, 0, 0); }
+                                cCtx.fillText(char, 0, 0);
+                            };
+                        } else if (textAnimStyle === 'letter-cascade' || textAnimStyle === 'word-stagger') {
+                            _charDrawFn = (cCtx, char, i, totalChars) => {
+                                if (_effPhase === 'settled') {
+                                    if (outlineColor) { cCtx.lineWidth = outlineWidth; cCtx.strokeStyle = outlineColor; cCtx.strokeText(char, 0, 0); }
+                                    cCtx.fillText(char, 0, 0);
+                                    return;
+                                }
+                                const perUnitDur = Math.max(0.2, (1 / (totalChars || 1)) * 1.6);
+                                const stagger = totalChars > 1 ? (i / (totalChars - 1)) * Math.max(0, 1 - perUnitDur) : 0;
+                                const localP = Math.max(0, Math.min(1, (textRevealAnim.p - stagger) / perUnitDur));
+                                const eased = easeOutCubicTO(localP);
+                                cCtx.globalAlpha *= Math.max(0.02, eased);
+                                cCtx.translate(0, (1 - eased) * 14);
+                                if (outlineColor) { cCtx.lineWidth = outlineWidth; cCtx.strokeStyle = outlineColor; cCtx.strokeText(char, 0, 0); }
+                                cCtx.fillText(char, 0, 0);
+                            };
+                        } else if (textAnimStyle === 'particle-dust') {
+                            _charDrawFn = (cCtx, char, i) => {
+                                let dissolveFactor = 0;
+                                let baseAlpha = 1;
+                                if (_effPhase === 'in' || _effPhase === 'out') {
+                                    const eased = easeOutCubicTO(textRevealAnim.p);
+                                    dissolveFactor = 1 - eased;
+                                    baseAlpha = Math.max(0.05, eased);
+                                }
+                                if (dissolveFactor < 0.95) {
+                                    cCtx.save();
+                                    cCtx.globalAlpha *= baseAlpha * (1 - dissolveFactor * 0.7);
+                                    if (outlineColor) { cCtx.lineWidth = outlineWidth; cCtx.strokeStyle = outlineColor; cCtx.strokeText(char, 0, 0); }
+                                    cCtx.fillText(char, 0, 0);
+                                    cCtx.restore();
+                                }
+                                const particlesPerChar = 12;
+                                const t = currentTime || 0;
+                                const fontSize = item.fontSize;
+                                const textColor = item.color;
+                                for (let pi = 0; pi < particlesPerChar; pi++) {
+                                    const seed = (i * 43 + pi * 19) % 1000;
+                                    const angle = ((seed * 13) % 360) * (Math.PI / 180) + (pi * 0.35);
+                                    const maxSpread = fontSize * (1.4 + (seed % 10) * 0.12);
+                                    let px, py, size, pAlpha;
+                                    if (dissolveFactor > 0.001) {
+                                        const dP = Math.pow(dissolveFactor, 0.75);
+                                        const dist = maxSpread * dP;
+                                        px = Math.cos(angle) * dist + Math.sin(t * 3 + seed) * (fontSize * 0.15 * dP);
+                                        py = Math.sin(angle) * dist - (dP * fontSize * 0.5);
+                                        size = (1.5 + (seed % 5) * 0.8) * (1 - dP * 0.3);
+                                        pAlpha = baseAlpha * (1 - dP * 0.6) * (0.6 + (seed % 7) * 0.06);
+                                    } else {
+                                        px = Math.sin(t * 2.5 + seed) * (fontSize * 0.3);
+                                        py = Math.cos(t * 2.0 + seed * 1.5) * (fontSize * 0.35);
+                                        size = 1.2 + (seed % 3) * 0.7;
+                                        pAlpha = 0.35 + Math.sin(t * 4 + seed) * 0.3;
+                                    }
+                                    if (pAlpha > 0.05) {
+                                        cCtx.save();
+                                        cCtx.globalAlpha *= Math.max(0, Math.min(1, pAlpha));
+                                        cCtx.shadowColor = (pi % 3 === 0) ? '#ffffff' : textColor;
+                                        cCtx.shadowBlur = 6;
+                                        cCtx.fillStyle = (pi % 4 === 0) ? '#ffffff' : textColor;
+                                        cCtx.beginPath();
+                                        cCtx.arc(px, py, Math.max(0.5, size), 0, Math.PI * 2);
+                                        cCtx.fill();
+                                        cCtx.restore();
+                                    }
+                                }
+                            };
+                        } else if (textAnimStyle === 'blur-fade') {
+                            _charDrawFn = (cCtx, char) => {
+                                let p = 1;
+                                if (_effPhase === 'in' || _effPhase === 'out') {
+                                    p = easeOutCubicTO(textRevealAnim.p);
+                                }
+                                const blurRadius = (_effPhase === 'settled')
+                                    ? item.fontSize * 0.08
+                                    : (1 - p) * (item.fontSize * 0.4);
+                                if (blurRadius > 0.5) {
+                                    cCtx.save();
+                                    cCtx.shadowColor = cCtx.fillStyle || '#ffffff';
+                                    cCtx.shadowBlur = blurRadius * 1.5;
+                                    cCtx.globalAlpha *= Math.max(0.1, p);
+                                    if (outlineColor) { cCtx.lineWidth = outlineWidth; cCtx.strokeStyle = outlineColor; cCtx.strokeText(char, 0, 0); }
+                                    cCtx.fillText(char, 0, 0);
+                                    cCtx.restore();
+                                } else {
+                                    if (outlineColor) { cCtx.lineWidth = outlineWidth; cCtx.strokeStyle = outlineColor; cCtx.strokeText(char, 0, 0); }
+                                    cCtx.fillText(char, 0, 0);
+                                }
+                            };
+                        } else if (textAnimStyle === 'smoke-vapor') {
+                            _charDrawFn = (cCtx, char) => {
+                                const pVapor = (_effPhase === 'in') ? (1 - textRevealAnim.p) : ((_effPhase === 'out') ? (1 - textRevealAnim.p) : 0.15);
+                                cCtx.save();
+                                cCtx.shadowColor = 'rgba(255, 255, 255, 0.7)';
+                                cCtx.shadowBlur = item.fontSize * 0.5 * (0.3 + pVapor * 0.9);
+                                cCtx.globalAlpha *= Math.max(0.05, 1 - pVapor * 0.9);
+                                cCtx.translate(0, -pVapor * item.fontSize * 0.4);
+                                if (outlineColor) { cCtx.lineWidth = outlineWidth; cCtx.strokeStyle = outlineColor; cCtx.strokeText(char, 0, 0); }
+                                cCtx.fillText(char, 0, 0);
+                                cCtx.restore();
+                            };
+                        } else if (textAnimStyle === 'shine-sweep') {
+                            _charDrawFn = (cCtx, char, i, totalChars) => {
+                                if (outlineColor) { cCtx.lineWidth = outlineWidth; cCtx.strokeStyle = outlineColor; cCtx.strokeText(char, 0, 0); }
+                                cCtx.fillText(char, 0, 0);
+                                const t = currentTime || 0;
+                                const sweepProgress = (t * 0.8) % 2.0;
+                                if (sweepProgress < 1.3) {
+                                    const charP = i / Math.max(1, (totalChars || 1) - 1);
+                                    const distToSweep = Math.abs(charP - (sweepProgress / 1.3));
+                                    if (distToSweep < 0.25) {
+                                        const alpha = (1 - distToSweep / 0.25) * 0.85;
+                                        cCtx.save();
+                                        cCtx.fillStyle = `rgba(255, 255, 255, ${alpha})`;
+                                        cCtx.fillText(char, 0, 0);
+                                        cCtx.restore();
+                                    }
+                                }
+                            };
+                        } else if (_effPhase !== 'settled') {
+                            const _p = easeOutCubicTO(textRevealAnim.p);
+                            ctx2.globalAlpha *= Math.max(0.05, _p);
+                        }
+
+                        // Draw the curved text with per-character animation logic
+                        if (_hasCurveSimple) {
+                            drawCurvedTextOverlay(ctx2, textToDraw, curveAmount, outlineColor, outlineWidth, _charDrawFn);
+                        } else {
+                            var _activeCurvePoints = (state.isDrawingTextCurve && state.textCurvePoints && state.textCurvePoints.length >= 2)
+                                ? state.textCurvePoints : item.curvePoints;
+                            drawCustomCurveTextOverlay(ctx2, textToDraw, _activeCurvePoints, outlineColor, outlineWidth, _charDrawFn);
+                        }
+                        return;
+                    }
+
+                    // ── STRAIGHT TEXT MODE (existing animation branches) ───────────────
+                    if (textAnimStyle === 'letter-cascade' && textRevealAnim.phase !== 'settled') {
                         drawTextOverlayStaggered(ctx2, textToDraw, 'letter', textRevealAnim.p, outlineColor, outlineWidth);
                     } else if (textAnimStyle === 'word-stagger' && textRevealAnim.phase !== 'settled') {
                         drawTextOverlayStaggered(ctx2, textToDraw, 'word', textRevealAnim.p, outlineColor, outlineWidth);
