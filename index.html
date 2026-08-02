@@ -2745,6 +2745,48 @@
                             </div>
                         </div>
 
+                        <!-- Audio Pause / Silence Generator UI Card -->
+                        <div class="card mt-4" id="audio-pause-generator-card">
+                            <div class="card-header">
+                                <i class="fa-solid fa-hourglass-half card-icon" style="color: #a855f7;"></i>
+                                <h3>⏱️ Audio Silence / Pause Generator (অডিও পজ জেনারেটর)</h3>
+                            </div>
+                            <div class="card-body">
+                                <p class="help-text">ভয়েসওভার বা অডিওর কথাগুলোর মাঝে নির্দিষ্ট সময়ের নীরবতা বা বিরতি (Pause) দিতে নির্ধিদ্বায় সেকেন্ড বেছে নিয়ে সাইলেন্ট অডিও জেনারেট ও ডাউনলোড করুন।</p>
+                                <div class="two-col-row mt-3">
+                                    <div class="control-group">
+                                        <label>Pause Duration (বিরতির সময় - সেকেন্ড)</label>
+                                        <input type="number" id="pause-seconds-input" class="form-input" min="0.5" max="30" step="0.5" value="2.0">
+                                    </div>
+                                    <div class="control-group" style="display:flex; align-items:flex-end;">
+                                        <button type="button" id="generate-pause-btn" class="btn btn-primary w-full" onclick="generateAndDownloadAudioPause();">
+                                            <i class="fa-solid fa-file-arrow-down"></i> Generate &amp; Download Silence (.wav)
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <script>
+                            function generateAndDownloadAudioPause() {
+                                var secInput = document.getElementById('pause-seconds-input');
+                                var sec = parseFloat(secInput ? secInput.value : 2.0) || 2.0;
+                                if (window.AudioPauseManager && typeof window.AudioPauseManager.generateSilenceWavBlob === 'function') {
+                                    var blob = window.AudioPauseManager.generateSilenceWavBlob(sec);
+                                    var url = URL.createObjectURL(blob);
+                                    var a = document.createElement('a');
+                                    a.href = url;
+                                    a.download = 'silence_' + sec + 's.wav';
+                                    document.body.appendChild(a);
+                                    a.click();
+                                    document.body.removeChild(a);
+                                    setTimeout(function() { URL.revokeObjectURL(url); }, 2000);
+                                } else {
+                                    alert('AudioPauseManager loaded failure or missing.');
+                                }
+                            }
+                        </script>
+
                         <div class="card mt-4" id="external-tts-card">
                             <div class="card-header">
                                 <i class="fa-solid fa-volume-high card-icon"></i>
@@ -3889,6 +3931,7 @@
     <script src="color-scopes.js?v=1"></script>
     <script src="public/capacitor/capacitor.js"></script>
     <script src="audio.js?v=4"></script>
+    <script src="audio-silence-generator.js?v=1"></script>
     <script src="editor.js?v=10"></script>
     <script src="keyframes.js?v=1"></script>
     <script src="render-engine.js?v=2"></script>
