@@ -1816,9 +1816,14 @@
                                     </div>
                                 </div>
 
-                                <button id="add-text-overlay-btn" class="btn btn-primary mt-3">
-                                    <i class="fa-solid fa-plus"></i> Add Text
-                                </button>
+                                <div style="display: flex; gap: 8px; flex-wrap: wrap;" class="mt-3">
+                                    <button id="add-text-overlay-btn" class="btn btn-primary" type="button">
+                                        <i class="fa-solid fa-plus"></i> Add Text
+                                    </button>
+                                    <button id="draw-textbox-btn" class="btn btn-outline" type="button" title="ক্যানভাসে ড্র্যাগ করে পছন্দমতো সাইজের টেক্সট বক্স আঁকুন">
+                                        <i class="fa-solid fa-pen-ruler"></i> Draw Text Box (বক্স ড্র করুন)
+                                    </button>
+                                </div>
 
                                 <div class="text-overlay-list mt-4" id="text-overlay-list">
                                     <!-- Dynamically populated list of added text overlays -->
@@ -1882,6 +1887,8 @@
                                 <div class="control-group mt-3">
                                     <label>Design (ডিজাইন)</label>
                                     <select id="lower-third-preset-select" class="form-select">
+                                        <option value="preset-lt-news-split">📺 News Split Ticker (৩-ভাগ নিউজ ব্যানার — ঠিকানা, ওয়াটসঅ্যাপ, ডেসক্রিপশন)</option>
+                                        <option value="preset-lt-top-badge">🎓 Top-Left Header Badge (উপরে বামে ব্যাজ ব্যানার)</option>
                                         <option value="preset-lt-classic">Classic Broadcast (গাঢ় ব্যাকগ্রাউন্ড বার, স্লাইড-ইন)</option>
                                         <option value="preset-lt-minimal">Minimal Outline (হালকা আউটলাইন, ফেড-ইন)</option>
                                         <option value="preset-lt-bold">Bold Gradient (গ্র্যাডিয়েন্ট ব্যানার, বাউন্স-ইন)</option>
@@ -2362,6 +2369,9 @@
                                 <p class="help-text">নিচে থেকে একটি সিম্বল ক্লিক করলে সেটি প্রিভিউতে যোগ হবে। এরপর প্রিভিউ স্ক্রিনে ড্র্যাগ করে অবস্থান, কোণা ধরে সাইজ, এবং উপরের গোল হ্যান্ডেল ধরে রোটেট করতে পারবেন। প্রতিটি সিম্বলের নিজস্ব কালার ও Start/End Time থাকে — ঠিক B-roll এর মতোই, সবসময় স্ক্রিনে থাকবে না।</p>
 
                                 <div class="symbol-grid" id="symbol-grid">
+                                    <button type="button" class="symbol-btn" data-symbol="whatsapp" title="WhatsApp"><i class="fa-brands fa-whatsapp" style="font-size: 16px; color: #25d366;"></i><span class="symbol-btn-label">হোয়াটসঅ্যাপ</span></button>
+                                    <button type="button" class="symbol-btn" data-symbol="location" title="Location / Address"><i class="fa-solid fa-location-dot" style="font-size: 16px; color: #ff3b30;"></i><span class="symbol-btn-label">ঠিকানা / লোকেশন</span></button>
+                                    <button type="button" class="symbol-btn" data-symbol="house" title="House / Address"><i class="fa-solid fa-house" style="font-size: 16px; color: #34c759;"></i><span class="symbol-btn-label">বাসা / বাড়ি</span></button>
                                     <button type="button" class="symbol-btn" data-symbol="arrow" title="Arrow">→<span class="symbol-btn-label">তীর</span></button>
                                     <button type="button" class="symbol-btn" data-symbol="arrow2" title="Double Arrow">↔<span class="symbol-btn-label">দুইমুখী তীর</span></button>
                                     <button type="button" class="symbol-btn" data-symbol="plus" title="Plus">+<span class="symbol-btn-label">প্লাস</span></button>

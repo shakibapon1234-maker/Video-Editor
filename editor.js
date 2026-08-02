@@ -1154,6 +1154,12 @@ window.VideoEditor = {
     isDrawingTextCurve: false,
     textCurvePoints: [],
 
+    // Draw text box mode
+    isDrawingTextBox: false,
+    isDraggingDrawTextBox: false,
+    drawTextBoxStartCoords: null,
+    drawTextBoxCurrentCoords: null,
+
     // Sticker / Emoji Overlays (Phase 4A)
     stickers: [],
     selectedStickerId: null,
@@ -4393,6 +4399,57 @@ document.addEventListener('DOMContentLoaded', () => {
                 ctx.restore();
                 break;
             }
+            case 'rainbow-pulse': {
+                const t = (currentTime || 0);
+                const hue = Math.round((t * 90) % 360);
+                ctx.save();
+                ctx.fillStyle = `hsl(${hue}, 80%, 20%)`;
+                ctx.shadowColor = `hsl(${hue}, 90%, 55%)`;
+                ctx.shadowBlur = 14;
+                ctx.beginPath();
+                if (ctx.roundRect) ctx.roundRect(x, y, w, h, 10); else ctx.rect(x, y, w, h);
+                ctx.fill();
+                ctx.strokeStyle = `hsl(${hue}, 95%, 65%)`;
+                ctx.lineWidth = Math.max(2.5, h * 0.05);
+                ctx.stroke();
+                ctx.restore();
+                break;
+            }
+            case 'glowing-neon': {
+                const t = (currentTime || 0);
+                const pulse = 10 + Math.sin(t * 4) * 6;
+                ctx.save();
+                ctx.fillStyle = 'rgba(15, 23, 42, 0.75)';
+                ctx.beginPath();
+                if (ctx.roundRect) ctx.roundRect(x, y, w, h, 10); else ctx.rect(x, y, w, h);
+                ctx.fill();
+                ctx.shadowColor = color || '#38bdf8';
+                ctx.shadowBlur = pulse;
+                ctx.strokeStyle = color || '#38bdf8';
+                ctx.lineWidth = Math.max(3, h * 0.06);
+                ctx.stroke();
+                ctx.restore();
+                break;
+            }
+            case 'gradient-flow': {
+                const t = (currentTime || 0);
+                ctx.save();
+                const grad = ctx.createLinearGradient(
+                    x + Math.sin(t * 2) * w,
+                    y,
+                    x + w + Math.cos(t * 2) * w,
+                    y + h
+                );
+                grad.addColorStop(0, color || '#4f46e5');
+                grad.addColorStop(0.5, '#ec4899');
+                grad.addColorStop(1, '#06b6d4');
+                ctx.fillStyle = grad;
+                ctx.beginPath();
+                if (ctx.roundRect) ctx.roundRect(x, y, w, h, 12); else ctx.rect(x, y, w, h);
+                ctx.fill();
+                ctx.restore();
+                break;
+            }
             case 'running-border-red':
             case 'running-border': {
                 // Continuously running border animation: a bright color spot races
@@ -7340,17 +7397,28 @@ document.addEventListener('DOMContentLoaded', () => {
                 // untouched so the editing UI still shows the raw token text.
                 const resolvedItemText = resolveTextOverlayTokens(item.text, item, currentTime);
 
-                // Box sizing estimate (straight-line metrics, widened a bit if curved).
-                const metrics = state.ctx.measureText(resolvedItemText);
+                // Multiline text & box sizing calculation
+                const textLines = resolvedItemText.split('\n');
+                const lineHeight = item.fontSize * 1.25;
+                let maxLineWidth = 0;
+                textLines.forEach(line => {
+                    const lineW = state.ctx.measureText(line).width;
+                    if (lineW > maxLineWidth) maxLineWidth = lineW;
+                });
+
                 const boxPadX = Math.max(16, item.fontSize * 0.45);
                 const boxPadY = Math.max(10, item.fontSize * 0.32);
-                let boxW = metrics.width + boxPadX * 2;
-                let boxH = item.fontSize + boxPadY * 2;
+                let calculatedBoxW = maxLineWidth + boxPadX * 2;
+                let calculatedBoxH = textLines.length * lineHeight + boxPadY * 2;
+
                 if (curveAmount) {
                     const strength = Math.min(1, Math.abs(curveAmount) / 100);
-                    boxH += item.fontSize * strength * 0.9;
-                    boxW *= (1 + strength * 0.08);
+                    calculatedBoxH += item.fontSize * strength * 0.9;
+                    calculatedBoxW *= (1 + strength * 0.08);
                 }
+
+                let boxW = Math.max(item.fixedBoxW || 0, calculatedBoxW);
+                let boxH = Math.max(item.fixedBoxH || 0, calculatedBoxH);
 
                 // --- Pass 1: Box (its own animation, drawn behind the text) ---
                 if (item.boxStyle && item.boxStyle !== 'none') {
@@ -7600,8 +7668,19 @@ document.addEventListener('DOMContentLoaded', () => {
                     } else {
                         ctx2.lineWidth = outlineWidth;
                         ctx2.strokeStyle = outlineColor;
-                        ctx2.strokeText(textToDraw, 0, 0);
-                        ctx2.fillText(textToDraw, 0, 0);
+                        const linesToDraw = textToDraw.split('\n');
+                        if (linesToDraw.length <= 1) {
+                            ctx2.strokeText(textToDraw, 0, 0);
+                            ctx2.fillText(textToDraw, 0, 0);
+                        } else {
+                            const lHeight = item.fontSize * 1.25;
+                            const startY = -((linesToDraw.length - 1) * lHeight) / 2;
+                            linesToDraw.forEach((lText, lIdx) => {
+                                const lY = startY + lIdx * lHeight;
+                                ctx2.strokeText(lText, 0, lY);
+                                ctx2.fillText(lText, 0, lY);
+                            });
+                        }
                     }
                 };
                 applyTextOverlayShadow(state.ctx, item, drawTextContent);
@@ -7861,6 +7940,30 @@ document.addEventListener('DOMContentLoaded', () => {
                     state.ctx.restore();
                 }
             });
+        }
+
+        // Live Rubberband Text Box Drawing Preview
+        if (state.isDraggingDrawTextBox && state.drawTextBoxStartCoords && state.drawTextBoxCurrentCoords) {
+            const p1 = state.drawTextBoxStartCoords;
+            const p2 = state.drawTextBoxCurrentCoords;
+            const rx = Math.min(p1.x, p2.x);
+            const ry = Math.min(p1.y, p2.y);
+            const rw = Math.abs(p2.x - p1.x);
+            const rh = Math.abs(p2.y - p1.y);
+
+            state.ctx.save();
+            state.ctx.fillStyle = 'rgba(79, 70, 229, 0.25)';
+            state.ctx.strokeStyle = '#4f46e5';
+            state.ctx.lineWidth = 2;
+            state.ctx.setLineDash([6, 4]);
+            state.ctx.fillRect(rx, ry, rw, rh);
+            state.ctx.strokeRect(rx, ry, rw, rh);
+            state.ctx.setLineDash([]);
+
+            state.ctx.fillStyle = '#ffffff';
+            state.ctx.font = 'bold 14px "Hind Siliguri", sans-serif';
+            state.ctx.fillText(`Text Box (${Math.round(rw)}px × ${Math.round(rh)}px)`, rx + 8, Math.max(20, ry - 6));
+            state.ctx.restore();
         }
 
         // --- Step E1.5: Background Fill Regions ---
@@ -8365,6 +8468,15 @@ document.addEventListener('DOMContentLoaded', () => {
 
         if (state.currentStep !== 2 && state.currentStep !== 3) return;
 
+        if (state.isDrawingTextBox) {
+            const coords = getCanvasCoords(e);
+            state.isDraggingDrawTextBox = true;
+            state.drawTextBoxStartCoords = coords;
+            state.drawTextBoxCurrentCoords = coords;
+            e.preventDefault();
+            return;
+        }
+
         if (state.isPunchZoomPicking) {
             const coords = getCanvasCoords(e);
             const rect = window.__baseMediaRect;
@@ -8786,12 +8898,20 @@ document.addEventListener('DOMContentLoaded', () => {
                 e.preventDefault();
                 return;
             } else {
-                state.selectedTextOverlayId = null;
-                state.isDrawingTextCurve = false;
-                state.textCurvePoints = [];
-                state.canvas.style.cursor = 'default';
-                if (window.onTextOverlaySelected) window.onTextOverlaySelected(null);
-                if (window.updateCurveButtonVisibility) window.updateCurveButtonVisibility();
+                // Only clear text selection if the click is NOT on a symbol/sticker/shape/broll.
+                // Those are checked below and will set their own selection. Don't eagerly
+                // deselect here or the second+ text overlay becomes permanently unmoveable.
+                const hitSymbol = state.symbolOverlays && state.symbolOverlays.length > 0 && findSymbolAt && findSymbolAt(coords);
+                const hitSticker = state.stickers && state.stickers.length > 0 && findStickerAt && findStickerAt(coords);
+                const hitShape = state.shapeOverlays && state.shapeOverlays.length > 0 && findShapeOverlayAt && findShapeOverlayAt(coords);
+                if (!hitSymbol && !hitSticker && !hitShape) {
+                    state.selectedTextOverlayId = null;
+                    state.isDrawingTextCurve = false;
+                    state.textCurvePoints = [];
+                    state.canvas.style.cursor = 'default';
+                    if (window.onTextOverlaySelected) window.onTextOverlaySelected(null);
+                    if (window.updateCurveButtonVisibility) window.updateCurveButtonVisibility();
+                }
             }
         }
 
@@ -9427,6 +9547,54 @@ document.addEventListener('DOMContentLoaded', () => {
         ctx.lineJoin = 'round';
 
         switch (type) {
+            case 'whatsapp': {
+                // WhatsApp Speech Bubble Icon + inner phone curve
+                ctx.fillStyle = color || '#25D366';
+                ctx.beginPath();
+                ctx.arc(0, -half * 0.05, half * 0.7, 0.4, Math.PI * 1.85);
+                ctx.lineTo(-half * 0.72, half * 0.72);
+                ctx.closePath();
+                ctx.fill();
+                // Inner phone glyph cutout / white icon
+                ctx.strokeStyle = '#ffffff';
+                ctx.lineWidth = Math.max(2, s * 0.09);
+                ctx.beginPath();
+                ctx.arc(-half * 0.08, half * 0.05, half * 0.32, -Math.PI * 0.65, Math.PI * 0.15);
+                ctx.stroke();
+                break;
+            }
+            case 'location': {
+                // Pin shape (inverted teardrop with inner circle cutout)
+                ctx.fillStyle = color || '#ff3b30';
+                ctx.beginPath();
+                ctx.arc(0, -half * 0.28, half * 0.48, Math.PI * 0.18, Math.PI * 0.82, true);
+                ctx.lineTo(0, half * 0.75);
+                ctx.closePath();
+                ctx.fill();
+                // Inner circle hole
+                ctx.fillStyle = '#ffffff';
+                ctx.beginPath();
+                ctx.arc(0, -half * 0.28, half * 0.2, 0, Math.PI * 2);
+                ctx.fill();
+                break;
+            }
+            case 'house': {
+                // House Icon (roof triangle + body rectangle + door)
+                ctx.fillStyle = color || '#34c759';
+                // Roof
+                ctx.beginPath();
+                ctx.moveTo(0, -half * 0.75);
+                ctx.lineTo(half * 0.75, -half * 0.05);
+                ctx.lineTo(-half * 0.75, -half * 0.05);
+                ctx.closePath();
+                ctx.fill();
+                // Walls
+                ctx.fillRect(-half * 0.6, -half * 0.05, half * 1.2, half * 0.75);
+                // Door cutout
+                ctx.fillStyle = '#ffffff';
+                ctx.fillRect(-half * 0.18, half * 0.22, half * 0.36, half * 0.48);
+                break;
+            }
             case 'arrow': {
                 ctx.beginPath();
                 ctx.moveTo(-half * 0.85, 0);
@@ -9920,6 +10088,37 @@ document.addEventListener('DOMContentLoaded', () => {
         ctx.restore();
     }
 
+    function getTextOverlayBox(item) {
+        const canvasW = state.canvas.width;
+        const canvasH = state.canvas.height;
+        state.ctx.font = `bold ${item.fontSize}px "${item.font || 'Hind Siliguri'}", "Plus Jakarta Sans", sans-serif`;
+
+        const text = item.text || '';
+        const lines = text.split('\n');
+        const lineHeight = item.fontSize * 1.25;
+        let maxW = 0;
+        lines.forEach(line => {
+            const wLine = state.ctx.measureText(line).width;
+            if (wLine > maxW) maxW = wLine;
+        });
+
+        const boxPadX = Math.max(16, item.fontSize * 0.45);
+        const boxPadY = Math.max(10, item.fontSize * 0.32);
+        let calculatedW = maxW + boxPadX * 2;
+        let calculatedH = lines.length * lineHeight + boxPadY * 2;
+
+        if (item.curve) {
+            const strength = Math.min(1, Math.abs(item.curve) / 100);
+            calculatedH += item.fontSize * strength * 0.9;
+            calculatedW *= (1 + strength * 0.08);
+        }
+
+        let w = Math.max(item.fixedBoxW || 0, calculatedW);
+        let h = Math.max(item.fixedBoxH || 0, calculatedH);
+
+        return { cx: item.x * canvasW, cy: item.y * canvasH, w, h };
+    }
+
     function getStickerBox(item, canvasW, canvasH) {
         const fontSize = canvasW * (item.size / 100);
         const boxW = fontSize * 1.15;
@@ -9975,22 +10174,8 @@ document.addEventListener('DOMContentLoaded', () => {
         return Math.abs(coords.x - handleX) <= pad && Math.abs(coords.y - handleY) <= pad;
     }
 
-    function getTextOverlayBox(item) {
-        const canvasW = state.canvas.width;
-        const canvasH = state.canvas.height;
-        state.ctx.font = `bold ${item.fontSize}px "${item.font || 'Hind Siliguri'}", "Plus Jakarta Sans", sans-serif`;
-        const metrics = state.ctx.measureText(item.text);
-        const boxPadX = Math.max(16, item.fontSize * 0.45);
-        const boxPadY = Math.max(10, item.fontSize * 0.32);
-        let w = metrics.width + boxPadX * 2;
-        let h = item.fontSize + boxPadY * 2;
-        if (item.curve) {
-            const strength = Math.min(1, Math.abs(item.curve) / 100);
-            h += item.fontSize * strength * 0.9;
-            w *= (1 + strength * 0.08);
-        }
-        return { cx: item.x * canvasW, cy: item.y * canvasH, w, h };
-    }
+
+
 
     function findTextOverlayRotateHandle(coords) {
         const item = state.textOverlays.find(t => t.id === state.selectedTextOverlayId);
@@ -10023,11 +10208,11 @@ document.addEventListener('DOMContentLoaded', () => {
         for (let i = state.textOverlays.length - 1; i >= 0; i--) {
             const item = state.textOverlays[i];
             if (!textOverlayBelongsToActiveClip(item)) continue;
-            // In overlay-edit mode the selected text is intentionally shown even
-            // outside its playback range. Keep the hit-test in sync with that
-            // rendering rule so the image beneath it cannot capture the drag.
-            const isBeingEdited = state.currentStep === 3 && !state.isPlaying && item.id === state.selectedTextOverlayId;
-            if (!isBeingEdited && (now < (item.startSec || 0) || now > (item.endSec || 0))) continue;
+            // In step 3 (overlay-edit mode) ALL overlays are visible and selectable,
+            // not just the one that is currently selected. This is the fix that makes
+            // every drawn text box moveable, not only the first one.
+            const inEditMode = state.currentStep === 3 && !state.isPlaying;
+            if (!inEditMode && (now < (item.startSec || 0) || now > (item.endSec || 0))) continue;
             const box = getTextOverlayBox(item);
             const scale = Math.max(0.05, Number(item.scale) || 1);
             const angle = -(item.rotation || 0) * Math.PI / 180;
@@ -10044,6 +10229,13 @@ document.addEventListener('DOMContentLoaded', () => {
         if (window.__mtCanvasPointerMove && window.__mtCanvasPointerMove(e)) return;
 
         if (state.currentStep !== 2 && state.currentStep !== 3) return;
+
+        if (state.isDraggingDrawTextBox && state.drawTextBoxStartCoords) {
+            state.drawTextBoxCurrentCoords = getCanvasCoords(e);
+            drawFrame();
+            e.preventDefault();
+            return;
+        }
 
         if (state.isPunchZoomPicking && state.isDraggingPunchZoomFocus) {
             const coords = getCanvasCoords(e);
@@ -10863,6 +11055,114 @@ document.addEventListener('DOMContentLoaded', () => {
     
     function handlePointerUp(e) {
         if (window.__mtCanvasPointerUp && window.__mtCanvasPointerUp(e)) return;
+
+        if (state.isDraggingDrawTextBox && state.drawTextBoxStartCoords) {
+            state.isDraggingDrawTextBox = false;
+            const endCoords = getCanvasCoords(e);
+            const startCoords = state.drawTextBoxStartCoords;
+            
+            const x1 = Math.min(startCoords.x, endCoords.x);
+            const y1 = Math.min(startCoords.y, endCoords.y);
+            const x2 = Math.max(startCoords.x, endCoords.x);
+            const y2 = Math.max(startCoords.y, endCoords.y);
+            
+            const w = x2 - x1;
+            const h = y2 - y1;
+            
+            state.drawTextBoxStartCoords = null;
+            state.drawTextBoxCurrentCoords = null;
+
+            if (w > 20 && h > 15) {
+                const canvasW = state.canvas.width;
+                const canvasH = state.canvas.height;
+                const cx = (x1 + w / 2) / canvasW;
+                const cy = (y1 + h / 2) / canvasH;
+
+                const textOverlayBoxSelect = document.getElementById('text-overlay-box-select');
+                const textOverlayBoxColorInput = document.getElementById('text-overlay-boxcolor');
+                const textOverlayColorInput = document.getElementById('text-overlay-color');
+                const textOverlayFontSelect = document.getElementById('text-overlay-font-select');
+                const textOverlayAnimSelect = document.getElementById('text-overlay-anim-select');
+                const textOverlayBoxAnimSelect = document.getElementById('text-overlay-box-anim-select');
+                const textOverlayInput = document.getElementById('text-overlay-input');
+
+                // Ensure box style is not 'none' when drawing a box!
+                let activeBoxStyle = textOverlayBoxSelect ? textOverlayBoxSelect.value : 'solid';
+                if (!activeBoxStyle || activeBoxStyle === 'none') {
+                    activeBoxStyle = 'solid';
+                    if (textOverlayBoxSelect) textOverlayBoxSelect.value = 'solid';
+                }
+
+                const calcFontSize = Math.min(65, Math.max(18, Math.round(h * 0.45)));
+
+                // Check if a text overlay is currently selected in the editor
+                let selectedItem = state.selectedTextOverlayId ? state.textOverlays.find(t => t.id === state.selectedTextOverlayId) : null;
+
+                if (selectedItem) {
+                    // Update existing selected item to the drawn box position, size, and box style.
+                    // Store the pixel dimensions of the drawn box so the background box always
+                    // matches exactly what the user drew, regardless of text length.
+                    selectedItem.x = cx;
+                    selectedItem.y = cy;
+                    selectedItem.fontSize = calcFontSize;
+                    selectedItem.boxStyle = activeBoxStyle;
+                    selectedItem.fixedBoxW = w;  // preserve drawn width
+                    selectedItem.fixedBoxH = h;  // preserve drawn height
+                    if (!selectedItem.boxColor) selectedItem.boxColor = textOverlayBoxColorInput ? textOverlayBoxColorInput.value : '#4f46e5';
+
+                    if (typeof renderTextOverlayList === 'function') renderTextOverlayList();
+                    if (typeof showTextOverlayTimingFor === 'function') showTextOverlayTimingFor(selectedItem.id);
+                } else {
+                    // No item selected: check input field or default to standard text
+                    let initialText = textOverlayInput ? textOverlayInput.value.trim() : '';
+                    if (!initialText) {
+                        initialText = "আপনার টেক্সট লিখুন";
+                    }
+                    const newItem = {
+                        id: typeof textOverlayIdCounter !== 'undefined' ? textOverlayIdCounter++ : Date.now(),
+                        clipId: state.activeClipId,
+                        text: initialText,
+                        x: cx,
+                        y: cy,
+                        fontSize: calcFontSize,
+                        fixedBoxW: w,   // lock box to drawn width
+                        fixedBoxH: h,   // lock box to drawn height
+                        color: textOverlayColorInput ? textOverlayColorInput.value : '#ffffff',
+                        font: textOverlayFontSelect ? textOverlayFontSelect.value : 'Hind Siliguri',
+                        boxStyle: activeBoxStyle,
+                        boxColor: textOverlayBoxColorInput ? textOverlayBoxColorInput.value : '#4f46e5',
+                        textAnimStyle: textOverlayAnimSelect ? textOverlayAnimSelect.value : 'none',
+                        animStyle: textOverlayAnimSelect ? textOverlayAnimSelect.value : 'none',
+                        boxAnimStyle: textOverlayBoxAnimSelect ? textOverlayBoxAnimSelect.value : 'none',
+                        startSec: Math.max(0, state.currentTime || 0),
+                        endSec: Math.min(state.duration || 5, (state.currentTime || 0) + 12.5)
+                    };
+                    if (!state.textOverlays) state.textOverlays = [];
+                    state.textOverlays.push(newItem);
+                    state.selectedTextOverlayId = newItem.id;
+                    if (textOverlayInput) textOverlayInput.value = initialText;
+                    if (typeof renderTextOverlayList === 'function') renderTextOverlayList();
+                    if (typeof showTextOverlayTimingFor === 'function') showTextOverlayTimingFor(newItem.id);
+                }
+
+                // Focus the sidebar edit input box so user can type immediately
+                const textOverlayEditInput = document.getElementById('text-overlay-edit-input');
+                const targetInput = textOverlayEditInput || textOverlayInput;
+                if (targetInput) {
+                    try { targetInput.focus(); targetInput.select(); } catch(err){}
+                }
+            }
+            state.isDrawingTextBox = false;
+            state.canvas.style.cursor = 'default';
+            const drawTextBoxBtn = document.getElementById('draw-textbox-btn');
+            if (drawTextBoxBtn) {
+                drawTextBoxBtn.innerHTML = '<i class="fa-solid fa-pen-ruler"></i> Draw Text Box (বক্স ড্র করুন)';
+                drawTextBoxBtn.classList.remove('active');
+            }
+            drawFrame();
+            e.preventDefault();
+            return;
+        }
 
         if (state.isDraggingPunchZoomFocus) {
             state.isDraggingPunchZoomFocus = false;
@@ -11888,6 +12188,35 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Expose so showTextOverlayTimingFor can keep buttons in sync
     window.updateCurveButtonVisibility = updateCurveButtonVisibility;
+
+    const drawTextBoxBtn = document.getElementById('draw-textbox-btn');
+    if (drawTextBoxBtn) {
+        drawTextBoxBtn.addEventListener('click', () => {
+            state.isDrawingTextBox = !state.isDrawingTextBox;
+            if (state.isDrawingTextBox) {
+                state.canvas.style.cursor = 'crosshair';
+                drawTextBoxBtn.innerHTML = '<i class="fa-solid fa-check"></i> Finish Box Draw';
+                drawTextBoxBtn.classList.add('active');
+
+                const textOverlayBoxSelect = document.getElementById('text-overlay-box-select');
+                if (textOverlayBoxSelect && (!textOverlayBoxSelect.value || textOverlayBoxSelect.value === 'none')) {
+                    textOverlayBoxSelect.value = 'solid';
+                }
+                const selectedItem = state.selectedTextOverlayId ? state.textOverlays.find(t => t.id === state.selectedTextOverlayId) : null;
+                if (selectedItem && (!selectedItem.boxStyle || selectedItem.boxStyle === 'none')) {
+                    selectedItem.boxStyle = textOverlayBoxSelect ? textOverlayBoxSelect.value : 'solid';
+                }
+
+                drawFrame();
+                alert('ক্যানভাসে মাউস বা টাচ দিয়ে ড্র্যাগ করে টেক্সট বক্সের আকার এবং অবস্থান আঁকুন। (Drag on canvas to position and size your text box.)');
+            } else {
+                state.canvas.style.cursor = 'default';
+                drawTextBoxBtn.innerHTML = '<i class="fa-solid fa-pen-ruler"></i> Draw Text Box (বক্স ড্র করুন)';
+                drawTextBoxBtn.classList.remove('active');
+                drawFrame();
+            }
+        });
+    }
 
     addTextOverlayBtn.addEventListener('click', () => {
         const text = textOverlayInput.value.trim();
@@ -14533,6 +14862,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Small glyph shown per symbol type in the palette + the added-items list.
     const SYMBOL_LABELS = {
+        whatsapp: '💬',
+        location: '📍',
+        house: '🏠',
         arrow: '→',
         arrow2: '↔',
         plus: '+',
@@ -14545,6 +14877,9 @@ document.addEventListener('DOMContentLoaded', () => {
         triangle: '△'
     };
     const SYMBOL_NAMES_BN = {
+        whatsapp: 'হোয়াটসঅ্যাপ',
+        location: 'ঠিকানা / লোকেশন',
+        house: 'বাসা / বাড়ি',
         arrow: 'তীর চিহ্ন',
         arrow2: 'দুইমুখী তীর',
         plus: 'প্লাস চিহ্ন',

@@ -27,6 +27,41 @@
     // keys, see editor.js's text-overlay-add-btn handler) so nothing is
     // missing that the render code expects.
     var LOWER_THIRD_PRESETS = {
+        'preset-lt-news-split': {
+            label: 'News Split Ticker',
+            font: 'Hind Siliguri',
+            isMultiBox: true,
+            box1: {
+                defaultText: '📍 রামপুরা বনশ্রী, সি ব্লক,\nমেইন রোড, হাউস নং A7, A8',
+                fontSize: 22, color: '#ffffff', colorMode: 'solid',
+                boxStyle: 'solid', boxColor: '#0f172a',
+                animStyle: 'slide-up', x: 0.22, y: 0.88
+            },
+            box2: {
+                defaultText: '📞 01790-674695\n(WhatsApp)',
+                fontSize: 24, color: '#38bdf8', colorMode: 'solid',
+                boxStyle: 'solid', boxColor: '#1e293b',
+                animStyle: 'slide-up', x: 0.52, y: 0.88
+            },
+            box3: {
+                defaultText: 'এখনই ভর্তি হয়ে আপনার\nক্যারিয়ারের নতুন অধ্যায় শুরু করুন।',
+                fontSize: 24, color: '#ffffff', colorMode: 'gradient',
+                gradientColor1: '#fbbf24', gradientColor2: '#f59e0b', gradientDirection: 'horizontal',
+                boxStyle: 'solid', boxColor: '#1e40af',
+                animStyle: 'slide-up', x: 0.82, y: 0.88
+            }
+        },
+        'preset-lt-top-badge': {
+            label: 'Top-Left Header Badge',
+            font: 'Hind Siliguri',
+            name: {
+                fontSize: 28, color: '#ffffff', colorMode: 'solid',
+                boxStyle: 'gradient', boxColor: '#1d4ed8',
+                gradientColor1: '#1e40af', gradientColor2: '#3b82f6', gradientDirection: 'horizontal',
+                animStyle: 'slide-right', x: 0.22, y: 0.12
+            },
+            title: null
+        },
         'preset-lt-classic': {
             label: 'Classic Broadcast',
             font: 'Hind Siliguri',
@@ -116,14 +151,6 @@
         var statusEl = document.getElementById('lower-third-status');
 
         if (!preset) return;
-        if (!nameText && !titleText) {
-            if (statusEl) {
-                statusEl.style.display = 'block';
-                statusEl.style.color = '#f87171';
-                statusEl.innerText = 'অন্তত নাম বা পদবি একটা লিখুন।';
-            }
-            return;
-        }
 
         var startSec = Math.max(0, state.currentTime || 0);
         var endSec = Math.min(state.endTime || state.duration || 5, startSec + 4);
@@ -132,15 +159,41 @@
         if (!state.textOverlays) state.textOverlays = [];
         var createdIds = [];
 
-        if (nameText) {
-            var nameItem = buildOverlayItem(nameText, preset.name, preset.font, 1, startSec, endSec);
-            state.textOverlays.push(nameItem);
-            createdIds.push(nameItem.id);
-        }
-        if (titleText) {
-            var titleItem = buildOverlayItem(titleText, preset.title, preset.font, 2, startSec, endSec);
-            state.textOverlays.push(titleItem);
-            createdIds.push(titleItem.id);
+        if (preset.isMultiBox) {
+            var b1Text = nameText || preset.box1.defaultText;
+            var b2Text = titleText || preset.box2.defaultText;
+            var b3Text = preset.box3.defaultText;
+
+            var item1 = buildOverlayItem(b1Text, preset.box1, preset.font, 1, startSec, endSec);
+            var item2 = buildOverlayItem(b2Text, preset.box2, preset.font, 2, startSec, endSec);
+            var item3 = buildOverlayItem(b3Text, preset.box3, preset.font, 3, startSec, endSec);
+
+            state.textOverlays.push(item1, item2, item3);
+            createdIds.push(item1.id, item2.id, item3.id);
+        } else {
+            if (!nameText && !titleText) {
+                if (presetKey === 'preset-lt-top-badge') {
+                    nameText = '🎓 আপনার সফল ক্যারিয়ার!';
+                } else {
+                    if (statusEl) {
+                        statusEl.style.display = 'block';
+                        statusEl.style.color = '#f87171';
+                        statusEl.innerText = 'অন্তত নাম বা পদবি একটা লিখুন।';
+                    }
+                    return;
+                }
+            }
+
+            if (nameText && preset.name) {
+                var nameItem = buildOverlayItem(nameText, preset.name, preset.font, 1, startSec, endSec);
+                state.textOverlays.push(nameItem);
+                createdIds.push(nameItem.id);
+            }
+            if (titleText && preset.title) {
+                var titleItem = buildOverlayItem(titleText, preset.title, preset.font, 2, startSec, endSec);
+                state.textOverlays.push(titleItem);
+                createdIds.push(titleItem.id);
+            }
         }
 
         // Select the last-created item so the existing Text Overlay panel's
