@@ -4017,11 +4017,145 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Draws a decorative background box behind a Text Overlay, centered on the
     // current canvas origin (caller is expected to have already translated to
+    // Draws a curved box path matching the text's curve arc (curveAmount)
+    function drawCurvedBoxPath(ctx, w, h, curveAmount) {
+        const strength = Math.min(1, Math.abs(curveAmount) / 100);
+        if (strength <= 0.001) {
+            ctx.beginPath();
+            if (ctx.roundRect) ctx.roundRect(-w / 2, -h / 2, w, h, 10);
+            else ctx.rect(-w / 2, -h / 2, w, h);
+            return;
+        }
+        const arcUp = curveAmount > 0;
+        const totalAngle = strength * 2.3;
+        const radius = w / totalAngle;
+        const halfH = h / 2;
+
+        const centerY = arcUp ? radius : -radius;
+        const rTop = arcUp ? (radius + halfH) : (radius - halfH);
+        const rBottom = arcUp ? (radius - halfH) : (radius + halfH);
+        const startA = arcUp ? (-Math.PI / 2 - totalAngle / 2) : (Math.PI / 2 - totalAngle / 2);
+        const endA = arcUp ? (-Math.PI / 2 + totalAngle / 2) : (Math.PI / 2 + totalAngle / 2);
+
+        ctx.beginPath();
+        ctx.arc(0, centerY, rTop, startA, endA, false);
+        ctx.arc(0, centerY, rBottom, endA, startA, true);
+        ctx.closePath();
+    }
+
+    // Draws a dynamic background box for Text Overlays (centered at (0,0) relative to
     // the overlay's position). (w, h) are the full box dimensions.
-    function drawTextOverlayBox(ctx, style, color, w, h, currentTime) {
+    function drawTextOverlayBox(ctx, style, color, w, h, currentTime, curveAmount) {
         if (!style || style === 'none') return;
         const x = -w / 2, y = -h / 2;
+        const isCurved = curveAmount && Math.abs(curveAmount) > 0.05;
         ctx.save();
+
+        if (isCurved) {
+            switch (style) {
+                case 'solid':
+                    ctx.globalAlpha *= 0.9;
+                    ctx.fillStyle = color;
+                    drawCurvedBoxPath(ctx, w, h, curveAmount);
+                    ctx.fill();
+                    break;
+                case 'outline':
+                    ctx.strokeStyle = color;
+                    ctx.lineWidth = Math.max(2, h * 0.06);
+                    drawCurvedBoxPath(ctx, w, h, curveAmount);
+                    ctx.stroke();
+                    break;
+                case 'gradient': {
+                    const grad = ctx.createLinearGradient(x, y, x + w, y + h);
+                    grad.addColorStop(0, color);
+                    grad.addColorStop(1, shadeColorTO(color, -30));
+                    ctx.fillStyle = grad;
+                    drawCurvedBoxPath(ctx, w, h, curveAmount);
+                    ctx.fill();
+                    break;
+                }
+                case 'pill':
+                case 'marker':
+                case 'ribbon':
+                case 'speech':
+                    ctx.globalAlpha *= 0.9;
+                    ctx.fillStyle = color;
+                    drawCurvedBoxPath(ctx, w, h, curveAmount);
+                    ctx.fill();
+                    break;
+                case 'neon':
+                    ctx.fillStyle = 'rgba(10,10,20,0.55)';
+                    drawCurvedBoxPath(ctx, w, h, curveAmount);
+                    ctx.fill();
+                    ctx.shadowColor = color;
+                    ctx.shadowBlur = Math.max(8, h * 0.35);
+                    ctx.strokeStyle = color;
+                    ctx.lineWidth = Math.max(2, h * 0.05);
+                    drawCurvedBoxPath(ctx, w, h, curveAmount);
+                    ctx.stroke();
+                    ctx.shadowBlur = 0;
+                    break;
+                case 'glassmorphism':
+                    ctx.shadowColor = 'rgba(0, 0, 0, 0.4)';
+                    ctx.shadowBlur = 16;
+                    ctx.shadowOffsetY = 6;
+                    ctx.fillStyle = 'rgba(255, 255, 255, 0.20)';
+                    drawCurvedBoxPath(ctx, w, h, curveAmount);
+                    ctx.fill();
+                    ctx.shadowBlur = 0;
+                    ctx.strokeStyle = 'rgba(255, 255, 255, 0.45)';
+                    ctx.lineWidth = Math.max(1.5, h * 0.04);
+                    drawCurvedBoxPath(ctx, w, h, curveAmount);
+                    ctx.stroke();
+                    break;
+                case 'cyber-cut':
+                    ctx.fillStyle = 'rgba(10, 15, 30, 0.75)';
+                    drawCurvedBoxPath(ctx, w, h, curveAmount);
+                    ctx.fill();
+                    ctx.shadowColor = color || '#00f0ff';
+                    ctx.shadowBlur = 10;
+                    ctx.strokeStyle = color || '#00f0ff';
+                    ctx.lineWidth = Math.max(2, h * 0.05);
+                    drawCurvedBoxPath(ctx, w, h, curveAmount);
+                    ctx.stroke();
+                    break;
+                case 'double-border':
+                    ctx.fillStyle = color;
+                    ctx.globalAlpha *= 0.85;
+                    drawCurvedBoxPath(ctx, w, h, curveAmount);
+                    ctx.fill();
+                    ctx.strokeStyle = '#ffffff';
+                    ctx.lineWidth = Math.max(1.5, h * 0.03);
+                    drawCurvedBoxPath(ctx, w, h, curveAmount);
+                    ctx.stroke();
+                    break;
+                case 'shimmer-border': {
+                    const t = (currentTime || 0);
+                    ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
+                    drawCurvedBoxPath(ctx, w, h, curveAmount);
+                    ctx.fill();
+                    const grad = ctx.createLinearGradient(x + Math.sin(t * 3) * w, y, x + w + Math.cos(t * 3) * w, y + h);
+                    grad.addColorStop(0, color);
+                    grad.addColorStop(0.5, '#ffffff');
+                    grad.addColorStop(1, color);
+                    ctx.shadowColor = color;
+                    ctx.shadowBlur = 12;
+                    ctx.strokeStyle = grad;
+                    ctx.lineWidth = Math.max(3, h * 0.06);
+                    drawCurvedBoxPath(ctx, w, h, curveAmount);
+                    ctx.stroke();
+                    break;
+                }
+                default:
+                    ctx.globalAlpha *= 0.9;
+                    ctx.fillStyle = color;
+                    drawCurvedBoxPath(ctx, w, h, curveAmount);
+                    ctx.fill();
+                    break;
+            }
+            ctx.restore();
+            return;
+        }
         switch (style) {
             case 'solid':
                 ctx.globalAlpha *= 0.9;
@@ -7228,7 +7362,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     const boxScaleX = txScale * boxT.scale * boxT.scaleX;
                     const boxScaleY = txScale * boxT.scale * boxT.scaleY;
                     if (boxScaleX !== 1 || boxScaleY !== 1) state.ctx.scale(boxScaleX, boxScaleY);
-                    drawTextOverlayBox(state.ctx, item.boxStyle, item.boxColor || '#4f46e5', boxW, boxH, currentTime);
+                    drawTextOverlayBox(state.ctx, item.boxStyle, item.boxColor || '#4f46e5', boxW, boxH, currentTime, curveAmount);
                     state.ctx.restore();
                 }
 
