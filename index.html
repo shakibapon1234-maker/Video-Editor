@@ -2749,25 +2749,103 @@
                         <div class="card mt-4" id="audio-pause-generator-card">
                             <div class="card-header">
                                 <i class="fa-solid fa-hourglass-half card-icon" style="color: #a855f7;"></i>
-                                <h3>⏱️ Audio Silence / Pause Generator (অডিও পজ জেনারেটর)</h3>
+                                <h3>⏱️ Audio Silence &amp; Pause Manager (অডিও পজ ও সাইলেন্স ম্যানেজার)</h3>
                             </div>
                             <div class="card-body">
-                                <p class="help-text">ভয়েসওভার বা অডিওর কথাগুলোর মাঝে নির্দিষ্ট সময়ের নীরবতা বা বিরতি (Pause) দিতে নির্ধিদ্বায় সেকেন্ড বেছে নিয়ে সাইলেন্ট অডিও জেনারেট ও ডাউনলোড করুন।</p>
+                                <p class="help-text">ভয়েসওভার অডিও আপলোড করে যেকোনো টাইমস্ট্যাম্পের মাথায় (যেমনঃ ৫.০ সেকেন্ড পর) ইচ্ছামতো সময়ের সাইলেন্ট পজ/বিরতি যুক্ত করে ডাউনলোড করুন।</p>
+                                
+                                <div class="file-selector-box mt-3" id="pause-audio-dropzone" onclick="document.getElementById('pause-audio-file-input').click();" style="cursor:pointer; border: 1px dashed rgba(255,255,255,0.2); padding: 12px; text-align: center; border-radius: 8px;">
+                                    <i class="fa-solid fa-file-audio" style="font-size: 20px; color: #a5b4fc;"></i>
+                                    <span id="pause-audio-filename" style="margin-left: 8px; font-weight: 500;">+ Select / Upload Audio File (অডিও সিলেক্ট করুন)</span>
+                                    <input type="file" id="pause-audio-file-input" accept="audio/*" style="display: none;" onchange="handlePauseAudioFileSelect(this);">
+                                </div>
+
                                 <div class="two-col-row mt-3">
                                     <div class="control-group">
-                                        <label>Pause Duration (বিরতির সময় - সেকেন্ড)</label>
+                                        <label>Insert Timestamp (কত সেকেন্ডের মাথায় পজ দেবেন)</label>
+                                        <input type="number" id="pause-at-second" class="form-input" min="0" step="0.5" value="5.0" placeholder="যেমন: 5.0">
+                                    </div>
+                                    <div class="control-group">
+                                        <label>Pause Duration (কত সেকেন্ডের বিরতি দেবেন)</label>
                                         <input type="number" id="pause-seconds-input" class="form-input" min="0.5" max="30" step="0.5" value="2.0">
                                     </div>
-                                    <div class="control-group" style="display:flex; align-items:flex-end;">
-                                        <button type="button" id="generate-pause-btn" class="btn btn-primary w-full" onclick="generateAndDownloadAudioPause();">
-                                            <i class="fa-solid fa-file-arrow-down"></i> Generate &amp; Download Silence (.wav)
-                                        </button>
-                                    </div>
                                 </div>
+
+                                <div class="two-col-row mt-3">
+                                    <button type="button" id="process-pause-audio-btn" class="btn btn-primary w-full" onclick="insertPauseAndDownloadAudio();">
+                                        <i class="fa-solid fa-wand-magic-sparkles"></i> Insert Pause &amp; Download Audio
+                                    </button>
+                                    <button type="button" id="generate-pause-only-btn" class="btn btn-outline w-full" onclick="generateAndDownloadAudioPause();">
+                                        <i class="fa-solid fa-file-arrow-down"></i> Generate Silence Only (.wav)
+                                    </button>
+                                </div>
+                                <div id="pause-process-status" class="help-text mt-2" style="color: #818cf8;"></div>
                             </div>
                         </div>
 
                         <script>
+                            var loadedAudioBuffer = null;
+
+                            function handlePauseAudioFileSelect(input) {
+                                if (input.files && input.files[0]) {
+                                    var file = input.files[0];
+                                    var nameEl = document.getElementById('pause-audio-filename');
+                                    if (nameEl) nameEl.textContent = '🎵 ' + file.name;
+                                    
+                                    var statusEl = document.getElementById('pause-process-status');
+                                    if (statusEl) statusEl.textContent = '⏳ Loading audio file...';
+
+                                    var reader = new FileReader();
+                                    reader.onload = function(e) {
+                                        var arrayBuffer = e.target.result;
+                                        var ctx = new (window.AudioContext || window.webkitAudioContext)();
+                                        ctx.decodeAudioData(arrayBuffer, function(decoded) {
+                                            loadedAudioBuffer = decoded;
+                                            if (statusEl) statusEl.textContent = '✅ Audio loaded successfully! Total duration: ' + decoded.duration.toFixed(1) + 's';
+                                        }, function(err) {
+                                            if (statusEl) statusEl.textContent = '❌ Failed to decode audio file.';
+                                        });
+                                    };
+                                    reader.readAsArrayBuffer(file);
+                                }
+                            }
+
+                            function insertPauseAndDownloadAudio() {
+                                var statusEl = document.getElementById('pause-process-status');
+                                if (!loadedAudioBuffer) {
+                                    alert('অনুগ্রহ করে প্রথমে একটি অডিও ফাইল আপলোড করুন!');
+                                    return;
+                                }
+                                var atSec = parseFloat(document.getElementById('pause-at-second').value) || 0.0;
+                                var pauseSec = parseFloat(document.getElementById('pause-seconds-input').value) || 2.0;
+
+                                if (window.AudioPauseManager && typeof window.AudioPauseManager.insertPauseIntoBuffer === 'function') {
+                                    if (statusEl) statusEl.textContent = '⏳ Inserting ' + pauseSec + 's pause at ' + atSec + 's mark...';
+                                    
+                                    setTimeout(function() {
+                                        try {
+                                            var newBuffer = window.AudioPauseManager.insertPauseIntoBuffer(loadedAudioBuffer, atSec, pauseSec);
+                                            var wavBlob = window.AudioPauseManager.audioBufferToWavBlob(newBuffer);
+
+                                            var url = URL.createObjectURL(wavBlob);
+                                            var a = document.createElement('a');
+                                            a.href = url;
+                                            a.download = 'audio_with_pause.wav';
+                                            document.body.appendChild(a);
+                                            a.click();
+                                            document.body.removeChild(a);
+                                            setTimeout(function() { URL.revokeObjectURL(url); }, 2000);
+
+                                            if (statusEl) statusEl.textContent = '✅ Pause inserted! Audio downloaded as audio_with_pause.wav (New duration: ' + newBuffer.duration.toFixed(1) + 's)';
+                                        } catch (e) {
+                                            if (statusEl) statusEl.textContent = '❌ Error processing audio: ' + e.message;
+                                        }
+                                    }, 100);
+                                } else {
+                                    alert('AudioPauseManager library missing.');
+                                }
+                            }
+
                             function generateAndDownloadAudioPause() {
                                 var secInput = document.getElementById('pause-seconds-input');
                                 var sec = parseFloat(secInput ? secInput.value : 2.0) || 2.0;
