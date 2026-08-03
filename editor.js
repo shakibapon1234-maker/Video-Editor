@@ -4621,8 +4621,9 @@ document.addEventListener('DOMContentLoaded', () => {
         const fontPx = fontSize || (item && item.fontSize) || 48;
         const is3D = template === 'word-bevel-3d' || template === 'word-depth-3d' || template === 'word-3d-extruded' ||
                      template === 'word-3d-isometric' || template === 'word-3d-neon' || template === 'word-3d-popart' || template === 'word-3d-glass' ||
+                     template === 'word-3d-chrome' || template === 'word-3d-holo' ||
                      template === 'bevel-3d' || template === 'depth-3d' || template === '3d-extruded' || template === '3d-isometric' ||
-                     template === '3d-neon' || template === '3d-popart' || template === '3d-glass';
+                     template === '3d-neon' || template === '3d-popart' || template === '3d-glass' || template === '3d-chrome' || template === '3d-holo';
 
         const charList = splitGraphemes(text);
         const totalChars = charList.length;
@@ -4672,12 +4673,18 @@ document.addEventListener('DOMContentLoaded', () => {
         if (align) ctx.textAlign = align;
 
         if (is3D) {
-            const depthSteps = template.includes('extruded') ? 22 : (template.includes('isometric') ? 24 : (template.includes('depth') ? 18 : 12));
-            const stepOffset = Math.max(1, fontPx * 0.034);
+            // Each style gets its own step-count and offset so the "thickness"
+            // and direction of the extrusion is clearly different at a glance,
+            // not just a slightly different shade of the same grey block.
+            const depthSteps = template.includes('extruded') ? 26 : (template.includes('isometric') ? 30 :
+                                template.includes('holo') ? 16 : (template.includes('chrome') ? 20 :
+                                template.includes('depth') ? 34 : (template.includes('glass') ? 10 : 14)));
+            const stepOffset = Math.max(1, fontPx * (template.includes('depth') ? 0.05 : (template.includes('glass') ? 0.022 : 0.034)));
 
             // 1. Draw 3D Extrusion Slices for the Text Characters
             for (let i = depthSteps; i >= 1; i--) {
-                const dx = i * stepOffset * (template.includes('isometric') ? 1.0 : 0.85);
+                const dirX = template.includes('depth') ? -1 : 1; // depth card extrudes to the opposite side, so it doesn't read as a bevel clone
+                const dx = i * stepOffset * (template.includes('isometric') ? 1.0 : 0.85) * dirX;
                 const dy = i * stepOffset * (template.includes('isometric') ? 1.25 : 1.0);
 
                 ctx.save();
@@ -4704,9 +4711,34 @@ document.addEventListener('DOMContentLoaded', () => {
                     ctx.shadowBlur = Math.max(8, fontPx * 0.2);
                     ctx.fillStyle = `rgba(6, 182, 212, ${0.15 + (1 - i / depthSteps) * 0.2})`;
                     ctx.fillText(text, x, y);
+                } else if (template.includes('depth')) {
+                    // Long, dark, sharply-directional shadow slab — reads as a
+                    // card floating well above the background, not a bevel edge.
+                    const darkVal = Math.round(6 + (i / depthSteps) * 22);
+                    ctx.fillStyle = `rgba(${darkVal}, ${darkVal}, ${Math.round(darkVal * 1.4)}, 0.6)`;
+                    ctx.fillText(text, x, y);
+                } else if (template.includes('glass')) {
+                    // Short, cool, translucent stack that feels like layered
+                    // frosted glass rather than a solid extrusion.
+                    ctx.fillStyle = `rgba(180, 225, 255, ${0.10 + (1 - i / depthSteps) * 0.10})`;
+                    ctx.fillText(text, x, y);
+                } else if (template.includes('chrome')) {
+                    // Alternating light/dark metallic bands to fake a brushed
+                    // chrome reflection running down the extrusion.
+                    const band = i % 3;
+                    const shade = band === 0 ? 235 : (band === 1 ? 120 : 190);
+                    ctx.fillStyle = `rgb(${shade}, ${shade + 3}, ${Math.min(255, shade + 10)})`;
+                    ctx.fillText(text, x, y);
+                } else if (template.includes('holo')) {
+                    // Hue rotates with each depth slice for a shifting,
+                    // iridescent-foil effect.
+                    const hue = (i * 24) % 360;
+                    ctx.fillStyle = `hsla(${hue}, 90%, 65%, ${0.18 + (1 - i / depthSteps) * 0.22})`;
+                    ctx.fillText(text, x, y);
                 } else {
-                    const darkVal = Math.round(20 + (i / depthSteps) * 50);
-                    ctx.fillStyle = `rgba(${darkVal}, ${darkVal}, ${darkVal}, 0.55)`;
+                    // Plain bevel: soft, tight, neutral-grey shadow only.
+                    const darkVal = Math.round(35 + (i / depthSteps) * 55);
+                    ctx.fillStyle = `rgba(${darkVal}, ${darkVal}, ${darkVal}, 0.5)`;
                     ctx.fillText(text, x, y);
                 }
                 ctx.restore();
@@ -4768,6 +4800,54 @@ document.addEventListener('DOMContentLoaded', () => {
                 ctx.lineWidth = Math.max(2, fontPx * 0.06);
                 ctx.strokeText(text, x, y);
                 ctx.fillStyle = getFrontFill(0);
+                ctx.fillText(text, x, y);
+            } else if (template.includes('depth')) {
+                // Crisp, high-contrast face with a heavy dark outline so the
+                // long directional shadow behind it reads as genuine depth.
+                ctx.shadowColor = 'rgba(0,0,0,0.85)';
+                ctx.shadowBlur = Math.max(10, fontPx * 0.18);
+                ctx.lineWidth = Math.max(3, fontPx * 0.08);
+                ctx.strokeStyle = '#0b0d14';
+                ctx.strokeText(text, x, y);
+                ctx.shadowBlur = 0;
+                ctx.fillStyle = getFrontFill(0) === '#ffffff' ? '#e8edff' : getFrontFill(0);
+                ctx.fillText(text, x, y);
+            } else if (template.includes('glass')) {
+                // Frosted, semi-translucent face with a bright rim-light —
+                // visibly cooler and airier than the solid bevel look.
+                ctx.shadowColor = 'rgba(160, 220, 255, 0.7)';
+                ctx.shadowBlur = Math.max(14, fontPx * 0.3);
+                ctx.lineWidth = Math.max(1.5, fontPx * 0.035);
+                ctx.strokeStyle = 'rgba(255,255,255,0.95)';
+                ctx.strokeText(text, x, y);
+                ctx.shadowBlur = 0;
+                const gFill = getFrontFill(0);
+                ctx.fillStyle = gFill === '#ffffff' ? 'rgba(235, 248, 255, 0.88)' : gFill;
+                ctx.fillText(text, x, y);
+            } else if (template.includes('chrome')) {
+                // Bright specular highlight stroke + cool steel-blue fill to
+                // sell a polished metal surface.
+                ctx.lineWidth = Math.max(2, fontPx * 0.05);
+                ctx.strokeStyle = '#f8fafc';
+                ctx.strokeText(text, x, y);
+                const cFill = getFrontFill(0);
+                ctx.fillStyle = cFill === '#ffffff' ? '#cbd5e1' : cFill;
+                ctx.fillText(text, x, y);
+                ctx.save();
+                ctx.globalAlpha = 0.5;
+                ctx.fillStyle = '#ffffff';
+                ctx.translate(0, -fontPx * 0.06);
+                ctx.fillText(text, x, y);
+                ctx.restore();
+            } else if (template.includes('holo')) {
+                // Rainbow-tinted outline over a shifting fill for an
+                // iridescent-foil sticker look.
+                const hueBase = (Date.now() / 12) % 360;
+                ctx.lineWidth = Math.max(2, fontPx * 0.05);
+                ctx.strokeStyle = `hsla(${hueBase}, 95%, 70%, 0.9)`;
+                ctx.strokeText(text, x, y);
+                const hFill = getFrontFill(0);
+                ctx.fillStyle = hFill === '#ffffff' ? `hsla(${(hueBase + 140) % 360}, 85%, 78%, 1)` : hFill;
                 ctx.fillText(text, x, y);
             } else {
                 if (outlineColor) {
@@ -6582,19 +6662,26 @@ document.addEventListener('DOMContentLoaded', () => {
                     item.visualTemplate === 'word-bevel-3d' || item.visualTemplate === 'word-depth-3d' ||
                     item.visualTemplate === 'word-3d-extruded' || item.visualTemplate === 'word-3d-isometric' ||
                     item.visualTemplate === 'word-3d-neon' || item.visualTemplate === 'word-3d-popart' ||
-                    item.visualTemplate === 'word-3d-glass') {
+                    item.visualTemplate === 'word-3d-glass' || item.visualTemplate === 'word-3d-chrome' ||
+                    item.visualTemplate === 'word-3d-holo') {
                     state.ctx.translate(cx, cy);
                     const vt = item.visualTemplate;
                     if (vt === 'word-bevel-3d' || vt === 'word-depth-3d' || vt === 'word-3d-extruded' ||
-                        vt === 'word-3d-isometric' || vt === 'word-3d-neon' || vt === 'word-3d-popart' || vt === 'word-3d-glass') {
-                        let tiltY = -0.22;
-                        let tiltX = 0.08;
-                        if (vt === 'word-depth-3d') { tiltY = -0.30; tiltX = 0.12; }
-                        else if (vt === 'word-3d-extruded') { tiltY = -0.34; tiltX = 0.15; }
-                        else if (vt === 'word-3d-isometric') { tiltY = -0.38; tiltX = 0.18; }
-                        else if (vt === 'word-3d-neon') { tiltY = -0.24; tiltX = 0.10; }
-                        else if (vt === 'word-3d-popart') { tiltY = -0.28; tiltX = 0.12; }
-                        else if (vt === 'word-3d-glass') { tiltY = -0.26; tiltX = 0.11; }
+                        vt === 'word-3d-isometric' || vt === 'word-3d-neon' || vt === 'word-3d-popart' || vt === 'word-3d-glass' ||
+                        vt === 'word-3d-chrome' || vt === 'word-3d-holo') {
+                        // Spread the tilt/skew per style well apart (including flipping
+                        // the sign of tiltX for some) so each 3D design's perspective
+                        // is unmistakably different, not a near-identical few degrees.
+                        let tiltY = -0.14;
+                        let tiltX = 0.05;
+                        if (vt === 'word-depth-3d') { tiltY = -0.46; tiltX = 0.22; }
+                        else if (vt === 'word-3d-extruded') { tiltY = -0.55; tiltX = -0.20; }
+                        else if (vt === 'word-3d-isometric') { tiltY = -0.62; tiltX = 0.34; }
+                        else if (vt === 'word-3d-neon') { tiltY = -0.20; tiltX = -0.12; }
+                        else if (vt === 'word-3d-popart') { tiltY = 0.30; tiltX = 0.16; }
+                        else if (vt === 'word-3d-glass') { tiltY = -0.30; tiltX = 0.04; }
+                        else if (vt === 'word-3d-chrome') { tiltY = 0.18; tiltX = -0.22; }
+                        else if (vt === 'word-3d-holo') { tiltY = -0.10; tiltX = 0.28; }
                         state.ctx.transform(Math.cos(tiltY), Math.sin(tiltX), -Math.sin(tiltY) * 0.52, Math.cos(tiltX) * 0.92, 0, 0);
                     }
                     if (rotateAmt !== 0) state.ctx.rotate(rotateAmt);
@@ -6629,12 +6716,12 @@ document.addEventListener('DOMContentLoaded', () => {
                 const hasPhoneScreenClip = item.visualTemplate === 'phone';
                 const hasImageShapeClip = item.type !== 'text' && (item.visualTemplate === 'word-circle' || item.visualTemplate === 'word-rounded');
                 if (hasPhoneScreenClip) {
-                    const bezel = Math.max(7, Math.min(boxW, boxH) * 0.055);
-                    const radius = Math.max(16, Math.min(boxW, boxH) * 0.12);
+                    const bezel = Math.max(10, Math.min(boxW, boxH) * 0.075);
+                    const radius = Math.max(20, Math.min(boxW, boxH) * 0.16);
                     state.ctx.save();
                     state.ctx.beginPath();
-                    if (state.ctx.roundRect) state.ctx.roundRect(drawBoxX + bezel, drawBoxY + bezel, boxW - bezel * 2, boxH - bezel * 2, radius);
-                    else state.ctx.rect(drawBoxX + bezel, drawBoxY + bezel, boxW - bezel * 2, boxH - bezel * 2);
+                    if (state.ctx.roundRect) state.ctx.roundRect(drawBoxX + bezel / 2, drawBoxY + bezel / 2, boxW - bezel, boxH - bezel, radius);
+                    else state.ctx.rect(drawBoxX + bezel / 2, drawBoxY + bezel / 2, boxW - bezel, boxH - bezel);
                     state.ctx.clip();
                 }
                 if (hasImageShapeClip) {
@@ -16287,24 +16374,80 @@ document.addEventListener('DOMContentLoaded', () => {
         const minSide = Math.max(1, Math.min(width, height));
 
         if (template === 'phone') {
-            const bezel = Math.max(7, minSide * 0.055);
-            const radius = Math.max(18, minSide * 0.14);
-            ctx.strokeStyle = '#101114';
-            ctx.lineWidth = bezel;
-            ctx.shadowColor = 'rgba(0,0,0,0.5)';
-            ctx.shadowBlur = bezel * 1.8;
+            const bezel = Math.max(10, minSide * 0.075);
+            const radius = Math.max(20, minSide * 0.16);
+            const bx = x + bezel / 2, by = y + bezel / 2, bw = width - bezel, bh = height - bezel;
+
+            // Dark device body (drawn as a filled rounded rect, not just a thin
+            // stroke) so it reads as a physical phone case, not a plain frame.
+            ctx.save();
+            ctx.shadowColor = 'rgba(0,0,0,0.55)';
+            ctx.shadowBlur = bezel * 2;
+            ctx.shadowOffsetY = bezel * 0.4;
+            ctx.fillStyle = '#101114';
             ctx.beginPath();
-            if (ctx.roundRect) ctx.roundRect(x + bezel / 2, y + bezel / 2, width - bezel, height - bezel, radius);
-            else ctx.rect(x + bezel / 2, y + bezel / 2, width - bezel, height - bezel);
+            if (ctx.roundRect) ctx.roundRect(x, y, width, height, radius + bezel / 2);
+            else ctx.rect(x, y, width, height);
+            ctx.fill();
+            ctx.restore();
+
+            // Thin metallic edge highlight around the case for a premium look
+            ctx.strokeStyle = 'rgba(255,255,255,0.18)';
+            ctx.lineWidth = Math.max(1, bezel * 0.08);
+            ctx.beginPath();
+            if (ctx.roundRect) ctx.roundRect(x + 1, y + 1, width - 2, height - 2, radius + bezel / 2 - 1);
+            else ctx.rect(x + 1, y + 1, width - 2, height - 2);
             ctx.stroke();
-            ctx.shadowBlur = 0;
-            const islandW = Math.min(width * 0.34, height * 0.7);
-            const islandH = Math.max(9, bezel * 1.1);
+
+            // Side hardware — power button (right) + two volume buttons (left)
+            // are the single strongest visual cue that this is a phone, not
+            // just a rounded box.
+            const btnW = Math.max(3, bezel * 0.35);
             ctx.fillStyle = '#08090a';
             ctx.beginPath();
-            if (ctx.roundRect) ctx.roundRect(x + (width - islandW) / 2, y + bezel * 0.45, islandW, islandH, islandH / 2);
-            else ctx.rect(x + (width - islandW) / 2, y + bezel * 0.45, islandW, islandH);
+            if (ctx.roundRect) ctx.roundRect(x + width - btnW * 0.4, y + height * 0.20, btnW, height * 0.09, btnW / 2);
             ctx.fill();
+            ctx.beginPath();
+            if (ctx.roundRect) ctx.roundRect(x - btnW * 0.6, y + height * 0.16, btnW, height * 0.055, btnW / 2);
+            ctx.fill();
+            ctx.beginPath();
+            if (ctx.roundRect) ctx.roundRect(x - btnW * 0.6, y + height * 0.23, btnW, height * 0.055, btnW / 2);
+            ctx.fill();
+
+            // Dynamic island / camera notch — bigger and darker so it stays
+            // legible even on a wide/short box.
+            const islandW = Math.min(bw * 0.34, Math.max(width, height) * 0.28);
+            const islandH = Math.max(11, bezel * 0.9);
+            ctx.fillStyle = '#000000';
+            ctx.beginPath();
+            if (ctx.roundRect) ctx.roundRect(x + (width - islandW) / 2, by + bezel * 0.28, islandW, islandH, islandH / 2);
+            else ctx.rect(x + (width - islandW) / 2, by + bezel * 0.28, islandW, islandH);
+            ctx.fill();
+
+            // Bottom home-indicator bar — instantly recognisable modern-phone cue
+            const barW = bw * 0.32;
+            const barH = Math.max(3, bezel * 0.14);
+            ctx.fillStyle = 'rgba(255,255,255,0.55)';
+            ctx.beginPath();
+            if (ctx.roundRect) ctx.roundRect(x + (width - barW) / 2, by + bh - barH - bezel * 0.22, barW, barH, barH / 2);
+            else ctx.rect(x + (width - barW) / 2, by + bh - barH - bezel * 0.22, barW, barH);
+            ctx.fill();
+
+            // Diagonal glass glare across the screen area for a subtle
+            // reflective sheen, clipped to the screen so it never spills
+            // onto the case.
+            ctx.save();
+            ctx.beginPath();
+            if (ctx.roundRect) ctx.roundRect(bx, by, bw, bh, radius);
+            else ctx.rect(bx, by, bw, bh);
+            ctx.clip();
+            const glare = ctx.createLinearGradient(bx, by, bx + bw * 0.55, by + bh * 0.4);
+            glare.addColorStop(0, 'rgba(255,255,255,0.16)');
+            glare.addColorStop(0.5, 'rgba(255,255,255,0.03)');
+            glare.addColorStop(1, 'rgba(255,255,255,0)');
+            ctx.fillStyle = glare;
+            ctx.fillRect(bx, by, bw, bh);
+            ctx.restore();
         } else if (template === 'laptop') {
             const bezel = Math.max(6, minSide * 0.042);
             const screenH = height * 0.84;
@@ -16417,16 +16560,21 @@ document.addEventListener('DOMContentLoaded', () => {
             ctx.strokeStyle = 'rgba(255,255,255,0.75)';
             ctx.lineWidth = Math.max(2, minSide * 0.012);
             ctx.strokeRect(x, y, width, height);
-        } else if (template === 'word-bevel-3d' || template === 'word-depth-3d' || template === 'word-3d-extruded' || template === 'word-3d-isometric' || template === 'word-3d-neon' || template === 'word-3d-popart' || template === 'word-3d-glass') {
+        } else if (template === 'word-bevel-3d' || template === 'word-depth-3d' || template === 'word-3d-extruded' || template === 'word-3d-isometric' || template === 'word-3d-neon' || template === 'word-3d-popart' || template === 'word-3d-glass' || template === 'word-3d-chrome' || template === 'word-3d-holo') {
             const frameW = Math.max(10, minSide * 0.08);
-            const depthSteps = template === 'word-3d-extruded' ? 28 : (template === 'word-3d-isometric' ? 32 : (template === 'word-depth-3d' ? 20 : 14));
+            const depthSteps = template === 'word-3d-extruded' ? 28 : (template === 'word-3d-isometric' ? 32 :
+                                template === 'word-depth-3d' ? 36 : (template === 'word-3d-chrome' ? 22 :
+                                template === 'word-3d-holo' ? 18 : (template === 'word-3d-glass' ? 10 : 14)));
 
             // Multi-step 3D Extrusion Slices (Creates genuine 3D block thickness)
             ctx.save();
             ctx.shadowBlur = 0;
             for (let i = depthSteps; i >= 1; i--) {
-                const offX = i * (template === 'word-3d-isometric' ? 1.1 : 0.95);
-                const offY = i * (template === 'word-3d-isometric' ? 1.4 : 1.05);
+                // Depth Card extrudes down-left instead of down-right so it never
+                // reads as a slightly-thicker copy of the plain Bevel style.
+                const dirX = template === 'word-depth-3d' ? -1 : 1;
+                const offX = i * (template === 'word-3d-isometric' ? 1.1 : 0.95) * dirX;
+                const offY = i * (template === 'word-3d-isometric' ? 1.4 : (template === 'word-depth-3d' ? 1.7 : 1.05));
 
                 if (template === 'word-3d-extruded') {
                     const shade = Math.round(15 + (i / depthSteps) * 35);
@@ -16444,9 +16592,27 @@ document.addEventListener('DOMContentLoaded', () => {
                 } else if (template === 'word-3d-neon') {
                     ctx.fillStyle = `rgba(6, 182, 212, ${0.08 + (1 - i / depthSteps) * 0.12})`;
                     ctx.fillRect(x + offX - frameW / 2, y + offY - frameW / 2, width + frameW, height + frameW);
+                } else if (template === 'word-depth-3d') {
+                    // Deep, dark, almost-black navy slab — long and heavy so
+                    // the card visibly floats far above the background.
+                    const darkVal = Math.round(4 + (i / depthSteps) * 18);
+                    ctx.fillStyle = `rgba(${darkVal}, ${darkVal}, ${Math.round(darkVal * 1.6)}, 0.55)`;
+                    ctx.fillRect(x + offX - frameW / 2, y + offY - frameW / 2, width + frameW, height + frameW);
+                } else if (template === 'word-3d-chrome') {
+                    // Alternating light/mid steel bands down the extrusion,
+                    // mimicking a brushed-metal reflection.
+                    const band = i % 3;
+                    const shade = band === 0 ? 225 : (band === 1 ? 110 : 175);
+                    ctx.fillStyle = `rgb(${shade}, ${shade + 4}, ${Math.min(255, shade + 14)})`;
+                    ctx.fillRect(x + offX - frameW / 2, y + offY - frameW / 2, width + frameW, height + frameW);
+                } else if (template === 'word-3d-holo') {
+                    const hue = (i * 22) % 360;
+                    ctx.fillStyle = `hsla(${hue}, 90%, 62%, ${0.12 + (1 - i / depthSteps) * 0.18})`;
+                    ctx.fillRect(x + offX - frameW / 2, y + offY - frameW / 2, width + frameW, height + frameW);
                 } else {
-                    const darkVal = Math.round(30 + (i / depthSteps) * 60);
-                    ctx.fillStyle = `rgba(${darkVal}, ${darkVal}, ${darkVal}, 0.45)`;
+                    // Plain Bevel: short, tight, neutral shadow only.
+                    const darkVal = Math.round(45 + (i / depthSteps) * 55);
+                    ctx.fillStyle = `rgba(${darkVal}, ${darkVal}, ${darkVal}, 0.4)`;
                     ctx.fillRect(x + offX - frameW / 2, y + offY - frameW / 2, width + frameW, height + frameW);
                 }
             }
@@ -16488,12 +16654,59 @@ document.addEventListener('DOMContentLoaded', () => {
                 ctx.strokeStyle = 'rgba(255, 255, 255, 0.85)';
                 ctx.lineWidth = Math.max(2, frameW * 0.4);
                 ctx.strokeRect(x, y, width, height);
+            } else if (template === 'word-3d-chrome') {
+                // Brushed metal frame: cool grey-blue gradient with a bright
+                // specular streak across the top edge.
+                const chromeGrad = ctx.createLinearGradient(x, y, x, y + height);
+                chromeGrad.addColorStop(0, '#f1f5f9');
+                chromeGrad.addColorStop(0.35, '#64748b');
+                chromeGrad.addColorStop(0.5, '#e2e8f0');
+                chromeGrad.addColorStop(0.75, '#334155');
+                chromeGrad.addColorStop(1, '#94a3b8');
+                ctx.strokeStyle = chromeGrad;
+                ctx.lineWidth = frameW;
+                ctx.strokeRect(x, y, width, height);
+                ctx.fillStyle = 'rgba(255, 255, 255, 0.55)';
+                ctx.fillRect(x - frameW / 2, y - frameW / 2, width + frameW, frameW * 0.3);
+            } else if (template === 'word-3d-holo') {
+                // Rainbow-foil border that shifts hue along its length.
+                const holoGrad = ctx.createLinearGradient(x, y, x + width, y + height);
+                holoGrad.addColorStop(0, '#f472b6');
+                holoGrad.addColorStop(0.25, '#a78bfa');
+                holoGrad.addColorStop(0.5, '#38bdf8');
+                holoGrad.addColorStop(0.75, '#34d399');
+                holoGrad.addColorStop(1, '#facc15');
+                ctx.shadowColor = 'rgba(167, 139, 250, 0.6)';
+                ctx.shadowBlur = Math.max(12, frameW * 1.4);
+                ctx.strokeStyle = holoGrad;
+                ctx.lineWidth = frameW;
+                ctx.strokeRect(x, y, width, height);
+                ctx.shadowBlur = 0;
+            } else if (template === 'word-depth-3d') {
+                // Deep Depth Card: heavy, far-thrown black shadow and a
+                // near-black frame — reads as "hovering high" rather than a
+                // subtle bevel.
+                ctx.shadowColor = 'rgba(0, 0, 0, 0.9)';
+                ctx.shadowBlur = Math.max(30, frameW * 3.5);
+                ctx.shadowOffsetX = -frameW * 2.2;
+                ctx.shadowOffsetY = frameW * 2.4;
+
+                ctx.strokeStyle = '#0b0d14';
+                ctx.lineWidth = frameW * 1.1;
+                ctx.strokeRect(x, y, width, height);
+
+                ctx.shadowBlur = 0;
+                ctx.shadowOffsetX = 0;
+                ctx.shadowOffsetY = 0;
+
+                ctx.fillStyle = 'rgba(148, 163, 255, 0.55)';
+                ctx.fillRect(x - frameW / 2, y - frameW / 2, width + frameW, frameW * 0.4);
             } else {
-                // Enhanced 3D Bevel & 3D Depth Card
-                ctx.shadowColor = 'rgba(0, 0, 0, 0.75)';
-                ctx.shadowBlur = Math.max(18, frameW * 2.2);
-                ctx.shadowOffsetX = template === 'word-depth-3d' ? frameW * 1.6 : frameW * 0.8;
-                ctx.shadowOffsetY = Math.max(12, frameW * 1.4);
+                // Plain 3D Bevel: light, soft, classic beveled-edge card.
+                ctx.shadowColor = 'rgba(0, 0, 0, 0.55)';
+                ctx.shadowBlur = Math.max(10, frameW * 1.2);
+                ctx.shadowOffsetX = frameW * 0.5;
+                ctx.shadowOffsetY = Math.max(6, frameW * 0.8);
 
                 ctx.strokeStyle = '#ffffff';
                 ctx.lineWidth = frameW;
