@@ -4672,13 +4672,13 @@ document.addEventListener('DOMContentLoaded', () => {
         if (align) ctx.textAlign = align;
 
         if (is3D) {
-            const depthSteps = template.includes('extruded') ? 16 : (template.includes('isometric') ? 18 : (template.includes('depth') ? 12 : 8));
-            const stepOffset = Math.max(1, fontPx * 0.024);
+            const depthSteps = template.includes('extruded') ? 22 : (template.includes('isometric') ? 24 : (template.includes('depth') ? 18 : 12));
+            const stepOffset = Math.max(1, fontPx * 0.034);
 
             // 1. Draw 3D Extrusion Slices for the Text Characters
             for (let i = depthSteps; i >= 1; i--) {
-                const dx = i * stepOffset * (template.includes('isometric') ? 0.9 : 0.7);
-                const dy = i * stepOffset * (template.includes('isometric') ? 1.1 : 0.85);
+                const dx = i * stepOffset * (template.includes('isometric') ? 1.0 : 0.85);
+                const dy = i * stepOffset * (template.includes('isometric') ? 1.25 : 1.0);
 
                 ctx.save();
                 ctx.translate(dx, dy);
@@ -6248,6 +6248,23 @@ document.addEventListener('DOMContentLoaded', () => {
                     const layout = getBrollTextLayout(state.ctx, item, maxW);
                     boxW = item.pipW !== undefined ? (item.pipW * canvasW) : layout.totalW;
                     boxH = layout.totalH;
+
+                    if (item.visualTemplate === 'phone') {
+                        const desiredH = boxW * 2.06;
+                        if (desiredH < boxH) {
+                            boxW = Math.max(boxW, boxH / 2.06);
+                        } else {
+                            boxH = desiredH;
+                        }
+                    } else if (item.visualTemplate === 'laptop') {
+                        const desiredH = boxW * 0.70;
+                        if (desiredH < boxH) {
+                            boxW = Math.max(boxW, boxH / 0.70);
+                        } else {
+                            boxH = desiredH;
+                        }
+                    }
+
                     if (item.mode === 'fullscreen') {
                         const scale = ((item.size !== undefined ? item.size : 100)) / 100;
                         if ((scale < 0.999 || item._fsPosSet) && item.x !== undefined && item.y !== undefined) {
@@ -16401,15 +16418,15 @@ document.addEventListener('DOMContentLoaded', () => {
             ctx.lineWidth = Math.max(2, minSide * 0.012);
             ctx.strokeRect(x, y, width, height);
         } else if (template === 'word-bevel-3d' || template === 'word-depth-3d' || template === 'word-3d-extruded' || template === 'word-3d-isometric' || template === 'word-3d-neon' || template === 'word-3d-popart' || template === 'word-3d-glass') {
-            const frameW = Math.max(8, minSide * 0.06);
-            const depthSteps = template === 'word-3d-extruded' ? 22 : (template === 'word-3d-isometric' ? 26 : (template === 'word-depth-3d' ? 16 : 10));
+            const frameW = Math.max(10, minSide * 0.08);
+            const depthSteps = template === 'word-3d-extruded' ? 28 : (template === 'word-3d-isometric' ? 32 : (template === 'word-depth-3d' ? 20 : 14));
 
             // Multi-step 3D Extrusion Slices (Creates genuine 3D block thickness)
             ctx.save();
             ctx.shadowBlur = 0;
             for (let i = depthSteps; i >= 1; i--) {
-                const offX = i * (template === 'word-3d-isometric' ? 0.9 : 0.7);
-                const offY = i * (template === 'word-3d-isometric' ? 1.1 : 0.85);
+                const offX = i * (template === 'word-3d-isometric' ? 1.1 : 0.95);
+                const offY = i * (template === 'word-3d-isometric' ? 1.4 : 1.05);
 
                 if (template === 'word-3d-extruded') {
                     const shade = Math.round(15 + (i / depthSteps) * 35);
