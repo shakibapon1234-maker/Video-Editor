@@ -2227,6 +2227,25 @@
                                         </select>
                                         <p class="help-text mt-1">ছবি বা ভিডিওকে ফোন/ল্যাপটপ ফ্রেমে, টেক্সটকে glass caption অথবা রানিং রেড বর্ডার বক্সে দেখাতে পারবেন। নিচের Image Designs দিয়ে ছবিতে Word-এর মতো ফ্রেম, শ্যাডো ও রিফ্লেকশন যোগ করুন।</p>
                                     </div>
+
+                                    <div class="control-group mt-3" id="broll-template-rotation-container">
+                                        <label>Template Rotation (ডিজাইন ঘোরান)</label>
+                                        <div class="slider-val-container">
+                                            <input type="range" id="broll-template-rotation-slider" min="-180" max="180" value="0">
+                                            <span id="broll-template-rotation-val">0°</span>
+                                        </div>
+                                        <p class="help-text mt-1">শুধু Visual Template-এর ফ্রেম/ডিজাইনটাকে (ফোন, ল্যাপটপ, 3D ফ্রেম ইত্যাদি) নিখুঁতভাবে ঘোরাতে চাইলে এখান থেকে অ্যাঙ্গেল সেট করুন।</p>
+                                    </div>
+
+                                    <div class="control-group mt-3" id="broll-template-color-container">
+                                        <label>Template Color (ডিজাইনের রঙ)</label>
+                                        <div class="slider-val-container" style="flex-wrap:wrap;">
+                                            <input type="color" id="broll-template-color-input" value="#ffffff">
+                                            <span id="broll-template-color-val" style="width:auto;">Default</span>
+                                            <button type="button" id="broll-template-color-reset" class="btn-secondary" style="padding:5px 10px; font-size:11px; border-radius:6px; white-space:nowrap;">ডিফল্ট রঙে ফিরুন</button>
+                                        </div>
+                                        <p class="help-text mt-1">ফোনের বেজেল, ফ্রেমের বর্ডার, 3D গোল্ড/নিয়ন/ক্রোম রঙ ইত্যাদি — Visual Template-এর নিজস্ব রঙ এখান থেকে বদলে দিন। "ডিফল্ট রঙে ফিরুন" চাপলে আসল রঙে ফিরে যাবে।</p>
+                                    </div>
                                     
                                     <!-- After Image Uploader for Comparison Slide -->
                                     <div class="control-group mt-3" id="broll-after-image-container" style="display: none;">

@@ -4619,6 +4619,9 @@ document.addEventListener('DOMContentLoaded', () => {
         const template = (item && (item.visualTemplate || item.imageDesign)) || 'standard';
         const colorMode = (item && item.colorMode) || 'solid';
         const fontPx = fontSize || (item && item.fontSize) || 48;
+        // Tints the 3D extrusion/shadow hue (frame color), independent from
+        // the text's own fill color which is still controlled separately.
+        const overrideColor = item && item.visualTemplateColor;
         const is3D = template === 'word-bevel-3d' || template === 'word-depth-3d' || template === 'word-3d-extruded' ||
                      template === 'word-3d-isometric' || template === 'word-3d-neon' || template === 'word-3d-popart' || template === 'word-3d-glass' ||
                      template === 'word-3d-chrome' || template === 'word-3d-holo' ||
@@ -4692,53 +4695,61 @@ document.addEventListener('DOMContentLoaded', () => {
 
                 if (template.includes('extruded')) {
                     const shade = Math.round(15 + (i / depthSteps) * 35);
-                    ctx.fillStyle = `rgb(${shade}, ${shade + 10}, ${shade + 25})`;
+                    ctx.fillStyle = overrideColor ? shadeColorTO(overrideColor, -60 + (i / depthSteps) * 30) : `rgb(${shade}, ${shade + 10}, ${shade + 25})`;
                     ctx.fillText(text, x, y);
                 } else if (template.includes('isometric')) {
                     const r = Math.round(180 - i * 3);
                     const g = Math.round(120 - i * 3);
                     const b = Math.round(20 - i * 0.5);
-                    ctx.fillStyle = `rgb(${Math.max(40, r)}, ${Math.max(25, g)}, ${Math.max(5, b)})`;
+                    ctx.fillStyle = overrideColor ? shadeColorTO(overrideColor, -55 + (i / depthSteps) * 30) : `rgb(${Math.max(40, r)}, ${Math.max(25, g)}, ${Math.max(5, b)})`;
                     ctx.fillText(text, x, y);
                 } else if (template.includes('popart')) {
                     ctx.lineWidth = Math.max(4, fontPx * 0.12);
                     ctx.strokeStyle = '#000000';
                     ctx.strokeText(text, x, y);
-                    ctx.fillStyle = (i % 2 === 0) ? '#000000' : '#ef4444';
+                    ctx.fillStyle = (i % 2 === 0) ? '#000000' : (overrideColor || '#ef4444');
                     ctx.fillText(text, x, y);
                 } else if (template.includes('neon')) {
-                    ctx.shadowColor = '#06b6d4';
+                    ctx.shadowColor = overrideColor ? shadeColorTO(overrideColor, 20) : '#06b6d4';
                     ctx.shadowBlur = Math.max(8, fontPx * 0.2);
-                    ctx.fillStyle = `rgba(6, 182, 212, ${0.15 + (1 - i / depthSteps) * 0.2})`;
+                    ctx.fillStyle = overrideColor ? hexToRgba(overrideColor, 0.15 + (1 - i / depthSteps) * 0.2) : `rgba(6, 182, 212, ${0.15 + (1 - i / depthSteps) * 0.2})`;
                     ctx.fillText(text, x, y);
                 } else if (template.includes('depth')) {
                     // Long, dark, sharply-directional shadow slab — reads as a
                     // card floating well above the background, not a bevel edge.
                     const darkVal = Math.round(6 + (i / depthSteps) * 22);
-                    ctx.fillStyle = `rgba(${darkVal}, ${darkVal}, ${Math.round(darkVal * 1.4)}, 0.6)`;
+                    ctx.fillStyle = overrideColor ? hexToRgba(shadeColorTO(overrideColor, -65), 0.6) : `rgba(${darkVal}, ${darkVal}, ${Math.round(darkVal * 1.4)}, 0.6)`;
                     ctx.fillText(text, x, y);
                 } else if (template.includes('glass')) {
                     // Short, cool, translucent stack that feels like layered
                     // frosted glass rather than a solid extrusion.
-                    ctx.fillStyle = `rgba(180, 225, 255, ${0.10 + (1 - i / depthSteps) * 0.10})`;
+                    ctx.fillStyle = overrideColor ? hexToRgba(shadeColorTO(overrideColor, 30), 0.10 + (1 - i / depthSteps) * 0.10) : `rgba(180, 225, 255, ${0.10 + (1 - i / depthSteps) * 0.10})`;
                     ctx.fillText(text, x, y);
                 } else if (template.includes('chrome')) {
                     // Alternating light/dark metallic bands to fake a brushed
                     // chrome reflection running down the extrusion.
                     const band = i % 3;
-                    const shade = band === 0 ? 235 : (band === 1 ? 120 : 190);
-                    ctx.fillStyle = `rgb(${shade}, ${shade + 3}, ${Math.min(255, shade + 10)})`;
+                    if (overrideColor) {
+                        ctx.fillStyle = band === 0 ? shadeColorTO(overrideColor, 35) : (band === 1 ? shadeColorTO(overrideColor, -35) : overrideColor);
+                    } else {
+                        const shade = band === 0 ? 235 : (band === 1 ? 120 : 190);
+                        ctx.fillStyle = `rgb(${shade}, ${shade + 3}, ${Math.min(255, shade + 10)})`;
+                    }
                     ctx.fillText(text, x, y);
                 } else if (template.includes('holo')) {
                     // Hue rotates with each depth slice for a shifting,
-                    // iridescent-foil effect.
-                    const hue = (i * 24) % 360;
-                    ctx.fillStyle = `hsla(${hue}, 90%, 65%, ${0.18 + (1 - i / depthSteps) * 0.22})`;
+                    // iridescent-foil effect (or tonal shades of the chosen color).
+                    if (overrideColor) {
+                        ctx.fillStyle = shadeColorTO(overrideColor, -40 + (i / depthSteps) * 45);
+                    } else {
+                        const hue = (i * 24) % 360;
+                        ctx.fillStyle = `hsla(${hue}, 90%, 65%, ${0.18 + (1 - i / depthSteps) * 0.22})`;
+                    }
                     ctx.fillText(text, x, y);
                 } else {
                     // Plain bevel: soft, tight, neutral-grey shadow only.
                     const darkVal = Math.round(35 + (i / depthSteps) * 55);
-                    ctx.fillStyle = `rgba(${darkVal}, ${darkVal}, ${darkVal}, 0.5)`;
+                    ctx.fillStyle = overrideColor ? hexToRgba(shadeColorTO(overrideColor, -25), 0.5) : `rgba(${darkVal}, ${darkVal}, ${darkVal}, 0.5)`;
                     ctx.fillText(text, x, y);
                 }
                 ctx.restore();
@@ -6767,7 +6778,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     }
                     if (item.visualTemplate === 'running-border-red' || item.visualTemplate === 'running-border') {
                         // Draw a continuously running border animation around the broll text box
-                        const rbColor = (item.visualTemplate === 'running-border-red') ? '#ef4444' : (item.boxColor || '#4f46e5');
+                        const rbColor = (item.visualTemplate === 'running-border-red') ? '#ef4444' : (item.visualTemplateColor || item.boxColor || '#4f46e5');
                         const rbGlow = (item.visualTemplate === 'running-border-red') ? 'rgba(239,68,68,0.65)' : rbColor;
                         const bw = Math.max(4, boxH * 0.07);
                         const borderRadius = 10;
@@ -10999,6 +11010,12 @@ document.addEventListener('DOMContentLoaded', () => {
                     if (Math.abs(newRotation - snapped) < 4) newRotation = snapped;
                 }
                 item.rotation = ((newRotation % 360) + 360) % 360;
+                if (brollTemplateRotationSlider) {
+                    let rot = item.rotation;
+                    if (rot > 180) rot -= 360;
+                    brollTemplateRotationSlider.value = rot;
+                    if (brollTemplateRotationVal) brollTemplateRotationVal.innerText = Math.round(rot) + '°';
+                }
                 drawFrame();
             }
             e.preventDefault();
@@ -13193,6 +13210,11 @@ document.addEventListener('DOMContentLoaded', () => {
     const deleteBrollBtn = document.getElementById('delete-broll-btn');
     const brollAnimStyleSelect = document.getElementById('broll-anim-style');
     const brollVisualTemplateSelect = document.getElementById('broll-visual-template');
+    const brollTemplateRotationSlider = document.getElementById('broll-template-rotation-slider');
+    const brollTemplateRotationVal = document.getElementById('broll-template-rotation-val');
+    const brollTemplateColorInput = document.getElementById('broll-template-color-input');
+    const brollTemplateColorVal = document.getElementById('broll-template-color-val');
+    const brollTemplateColorReset = document.getElementById('broll-template-color-reset');
     const addCashSpinBtn = document.getElementById('add-cash-spin-btn');
     const addCashStackBtn = document.getElementById('add-cash-stack-btn');
     const addBuiltQuestionBtn = document.getElementById('add-built-question-btn');
@@ -14683,6 +14705,16 @@ document.addEventListener('DOMContentLoaded', () => {
         const defaultStyle = item.mode === 'pip' ? 'slide-pop' : 'zoom';
         if (brollAnimStyleSelect) brollAnimStyleSelect.value = getBrollPresetValue(item) || defaultStyle;
         if (brollVisualTemplateSelect) brollVisualTemplateSelect.value = item.visualTemplate || 'standard';
+        if (brollTemplateRotationSlider) {
+            let rot = item.rotation || 0;
+            if (rot > 180) rot -= 360; // display as -180..180 instead of 0..360
+            brollTemplateRotationSlider.value = rot;
+            if (brollTemplateRotationVal) brollTemplateRotationVal.innerText = Math.round(rot) + '°';
+        }
+        if (brollTemplateColorInput) {
+            brollTemplateColorInput.value = item.visualTemplateColor || '#ffffff';
+            if (brollTemplateColorVal) brollTemplateColorVal.innerText = item.visualTemplateColor ? item.visualTemplateColor.toUpperCase() : 'Default';
+        }
         if (brollEntryDirSelect) brollEntryDirSelect.value = item.entryDirection || 'bottom';
         if (brollExitDirSelect) brollExitDirSelect.value = item.exitDirection || 'same';
         if (brollAnimSpeedSlider) {
@@ -14804,6 +14836,40 @@ document.addEventListener('DOMContentLoaded', () => {
                 item.entryDirection = 'bottom';
                 if (brollAnimStyleSelect) brollAnimStyleSelect.value = 'slide-pop';
             }
+            drawFrame();
+        });
+    }
+
+    if (brollTemplateRotationSlider) {
+        brollTemplateRotationSlider.addEventListener('input', (e) => {
+            const item = state.brollOverlays.find(b => b.id === state.selectedBrollId);
+            if (!item) return;
+            const rot = parseInt(e.target.value, 10) || 0;
+            // Reuses the same item.rotation the drag-to-rotate handle sets, so
+            // this slider and the on-canvas handle always agree with each other.
+            item.rotation = ((rot % 360) + 360) % 360;
+            if (brollTemplateRotationVal) brollTemplateRotationVal.innerText = rot + '°';
+            drawFrame();
+        });
+    }
+
+    if (brollTemplateColorInput) {
+        brollTemplateColorInput.addEventListener('input', (e) => {
+            const item = state.brollOverlays.find(b => b.id === state.selectedBrollId);
+            if (!item) return;
+            item.visualTemplateColor = e.target.value;
+            if (brollTemplateColorVal) brollTemplateColorVal.innerText = e.target.value.toUpperCase();
+            drawFrame();
+        });
+    }
+
+    if (brollTemplateColorReset) {
+        brollTemplateColorReset.addEventListener('click', () => {
+            const item = state.brollOverlays.find(b => b.id === state.selectedBrollId);
+            if (!item) return;
+            item.visualTemplateColor = null;
+            if (brollTemplateColorInput) brollTemplateColorInput.value = '#ffffff';
+            if (brollTemplateColorVal) brollTemplateColorVal.innerText = 'Default';
             drawFrame();
         });
     }
@@ -16372,6 +16438,10 @@ document.addEventListener('DOMContentLoaded', () => {
         ctx.save();
         ctx.globalAlpha = Math.max(0, Math.min(1, alpha));
         const minSide = Math.max(1, Math.min(width, height));
+        // User-chosen tint from the Template Color picker — null means "use
+        // each design's own default palette" (e.g. gold for isometric, cyan
+        // for neon), so nothing changes unless the person explicitly sets one.
+        const overrideColor = item.visualTemplateColor || null;
 
         if (template === 'phone') {
             const bezel = Math.max(10, minSide * 0.075);
@@ -16384,7 +16454,7 @@ document.addEventListener('DOMContentLoaded', () => {
             ctx.shadowColor = 'rgba(0,0,0,0.55)';
             ctx.shadowBlur = bezel * 2;
             ctx.shadowOffsetY = bezel * 0.4;
-            ctx.fillStyle = '#101114';
+            ctx.fillStyle = overrideColor || '#101114';
             ctx.beginPath();
             if (ctx.roundRect) ctx.roundRect(x, y, width, height, radius + bezel / 2);
             else ctx.rect(x, y, width, height);
@@ -16451,13 +16521,13 @@ document.addEventListener('DOMContentLoaded', () => {
         } else if (template === 'laptop') {
             const bezel = Math.max(6, minSide * 0.042);
             const screenH = height * 0.84;
-            ctx.strokeStyle = '#17181c';
+            ctx.strokeStyle = overrideColor || '#17181c';
             ctx.lineWidth = bezel;
             ctx.shadowColor = 'rgba(0,0,0,0.48)';
             ctx.shadowBlur = bezel * 1.6;
             ctx.strokeRect(x + bezel / 2, y + bezel / 2, width - bezel, screenH - bezel / 2);
             ctx.shadowBlur = 0;
-            ctx.fillStyle = '#2c2d32';
+            ctx.fillStyle = overrideColor || '#2c2d32';
             ctx.beginPath();
             ctx.moveTo(x - width * 0.08, y + screenH);
             ctx.lineTo(x + width * 1.08, y + screenH);
@@ -16490,7 +16560,7 @@ document.addEventListener('DOMContentLoaded', () => {
             drawButton(x, '#1877f2', '👍', 'Like');
             drawButton(x + buttonW + gap, '#25d366', '◔', 'WhatsApp');
         } else if (template === 'word-shadow') {
-            ctx.strokeStyle = 'rgba(255,255,255,0.88)';
+            ctx.strokeStyle = overrideColor || 'rgba(255,255,255,0.88)';
             ctx.lineWidth = Math.max(2, minSide * 0.012);
             ctx.shadowColor = 'rgba(0,0,0,0.62)';
             ctx.shadowBlur = Math.max(12, minSide * 0.12);
@@ -16501,7 +16571,7 @@ document.addEventListener('DOMContentLoaded', () => {
             ctx.shadowColor = 'rgba(0,0,0,0.45)';
             ctx.shadowBlur = frame * 0.9;
             ctx.shadowOffsetY = frame * 0.35;
-            ctx.strokeStyle = '#ffffff';
+            ctx.strokeStyle = overrideColor || '#ffffff';
             ctx.lineWidth = frame;
             ctx.strokeRect(x, y, width, height);
         } else if (template === 'word-double-frame') {
@@ -16509,14 +16579,14 @@ document.addEventListener('DOMContentLoaded', () => {
             ctx.strokeStyle = '#151515';
             ctx.lineWidth = Math.max(2, minSide * 0.016);
             ctx.strokeRect(x - gap, y - gap, width + gap * 2, height + gap * 2);
-            ctx.strokeStyle = '#ffffff';
+            ctx.strokeStyle = overrideColor || '#ffffff';
             ctx.lineWidth = Math.max(2, minSide * 0.012);
             ctx.strokeRect(x - gap * 2.2, y - gap * 2.2, width + gap * 4.4, height + gap * 4.4);
         } else if (template === 'word-rounded') {
             const radius = Math.max(14, minSide * 0.09);
             ctx.shadowColor = 'rgba(0,0,0,0.42)';
             ctx.shadowBlur = Math.max(10, minSide * 0.09);
-            ctx.strokeStyle = 'rgba(255,255,255,0.9)';
+            ctx.strokeStyle = overrideColor || 'rgba(255,255,255,0.9)';
             ctx.lineWidth = Math.max(3, minSide * 0.02);
             ctx.beginPath();
             if (ctx.roundRect) ctx.roundRect(x, y, width, height, radius); else ctx.rect(x, y, width, height);
@@ -16525,7 +16595,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const radius = Math.min(width, height) * 0.5;
             ctx.shadowColor = 'rgba(0,0,0,0.45)';
             ctx.shadowBlur = Math.max(10, minSide * 0.1);
-            ctx.strokeStyle = '#ffffff';
+            ctx.strokeStyle = overrideColor || '#ffffff';
             ctx.lineWidth = Math.max(5, minSide * 0.035);
             ctx.beginPath();
             ctx.arc(x + width / 2, y + height / 2, radius, 0, Math.PI * 2);
@@ -16536,9 +16606,9 @@ document.addEventListener('DOMContentLoaded', () => {
             ctx.shadowColor = 'rgba(0,0,0,0.48)';
             ctx.shadowBlur = frame;
             ctx.shadowOffsetY = frame * 0.45;
-            ctx.fillStyle = '#ffffff';
+            ctx.fillStyle = overrideColor || '#ffffff';
             ctx.fillRect(x - frame / 2, y + height - frame / 2, width + frame, caption + frame);
-            ctx.strokeStyle = '#ffffff';
+            ctx.strokeStyle = overrideColor || '#ffffff';
             ctx.lineWidth = frame;
             ctx.strokeRect(x, y, width, height);
         } else if (template === 'word-reflection') {
@@ -16557,7 +16627,7 @@ document.addEventListener('DOMContentLoaded', () => {
             reflection.addColorStop(1, 'rgba(0,0,0,0.82)');
             ctx.save(); ctx.beginPath(); ctx.rect(x, y + height + Math.max(4, minSide * 0.025), width, rh); ctx.clip(); ctx.globalCompositeOperation = 'destination-out'; ctx.fillStyle = reflection;
             ctx.fillRect(x, y + height + Math.max(4, minSide * 0.025), width, rh); ctx.restore();
-            ctx.strokeStyle = 'rgba(255,255,255,0.75)';
+            ctx.strokeStyle = overrideColor || 'rgba(255,255,255,0.75)';
             ctx.lineWidth = Math.max(2, minSide * 0.012);
             ctx.strokeRect(x, y, width, height);
         } else if (template === 'word-bevel-3d' || template === 'word-depth-3d' || template === 'word-3d-extruded' || template === 'word-3d-isometric' || template === 'word-3d-neon' || template === 'word-3d-popart' || template === 'word-3d-glass' || template === 'word-3d-chrome' || template === 'word-3d-holo') {
@@ -16578,41 +16648,49 @@ document.addEventListener('DOMContentLoaded', () => {
 
                 if (template === 'word-3d-extruded') {
                     const shade = Math.round(15 + (i / depthSteps) * 35);
-                    ctx.fillStyle = `rgb(${shade}, ${shade + 10}, ${shade + 25})`;
+                    ctx.fillStyle = overrideColor ? shadeColorTO(overrideColor, -60 + (i / depthSteps) * 30) : `rgb(${shade}, ${shade + 10}, ${shade + 25})`;
                     ctx.fillRect(x + offX - frameW / 2, y + offY - frameW / 2, width + frameW, height + frameW);
                 } else if (template === 'word-3d-isometric') {
                     const r = Math.round(180 - i * 3);
                     const g = Math.round(120 - i * 3);
                     const b = Math.round(20 - i * 0.5);
-                    ctx.fillStyle = `rgb(${Math.max(40, r)}, ${Math.max(25, g)}, ${Math.max(5, b)})`;
+                    ctx.fillStyle = overrideColor ? shadeColorTO(overrideColor, -55 + (i / depthSteps) * 30) : `rgb(${Math.max(40, r)}, ${Math.max(25, g)}, ${Math.max(5, b)})`;
                     ctx.fillRect(x + offX - frameW / 2, y + offY - frameW / 2, width + frameW, height + frameW);
                 } else if (template === 'word-3d-popart') {
-                    ctx.fillStyle = (i % 2 === 0) ? '#000000' : '#ef4444';
+                    ctx.fillStyle = (i % 2 === 0) ? '#000000' : (overrideColor || '#ef4444');
                     ctx.fillRect(x + offX - frameW / 2, y + offY - frameW / 2, width + frameW, height + frameW);
                 } else if (template === 'word-3d-neon') {
-                    ctx.fillStyle = `rgba(6, 182, 212, ${0.08 + (1 - i / depthSteps) * 0.12})`;
+                    ctx.fillStyle = overrideColor ? hexToRgba(overrideColor, 0.08 + (1 - i / depthSteps) * 0.12) : `rgba(6, 182, 212, ${0.08 + (1 - i / depthSteps) * 0.12})`;
                     ctx.fillRect(x + offX - frameW / 2, y + offY - frameW / 2, width + frameW, height + frameW);
                 } else if (template === 'word-depth-3d') {
                     // Deep, dark, almost-black navy slab — long and heavy so
                     // the card visibly floats far above the background.
                     const darkVal = Math.round(4 + (i / depthSteps) * 18);
-                    ctx.fillStyle = `rgba(${darkVal}, ${darkVal}, ${Math.round(darkVal * 1.6)}, 0.55)`;
+                    ctx.fillStyle = overrideColor ? hexToRgba(shadeColorTO(overrideColor, -65), 0.55) : `rgba(${darkVal}, ${darkVal}, ${Math.round(darkVal * 1.6)}, 0.55)`;
                     ctx.fillRect(x + offX - frameW / 2, y + offY - frameW / 2, width + frameW, height + frameW);
                 } else if (template === 'word-3d-chrome') {
                     // Alternating light/mid steel bands down the extrusion,
                     // mimicking a brushed-metal reflection.
                     const band = i % 3;
-                    const shade = band === 0 ? 225 : (band === 1 ? 110 : 175);
-                    ctx.fillStyle = `rgb(${shade}, ${shade + 4}, ${Math.min(255, shade + 14)})`;
+                    if (overrideColor) {
+                        ctx.fillStyle = band === 0 ? shadeColorTO(overrideColor, 35) : (band === 1 ? shadeColorTO(overrideColor, -35) : overrideColor);
+                    } else {
+                        const shade = band === 0 ? 225 : (band === 1 ? 110 : 175);
+                        ctx.fillStyle = `rgb(${shade}, ${shade + 4}, ${Math.min(255, shade + 14)})`;
+                    }
                     ctx.fillRect(x + offX - frameW / 2, y + offY - frameW / 2, width + frameW, height + frameW);
                 } else if (template === 'word-3d-holo') {
-                    const hue = (i * 22) % 360;
-                    ctx.fillStyle = `hsla(${hue}, 90%, 62%, ${0.12 + (1 - i / depthSteps) * 0.18})`;
+                    if (overrideColor) {
+                        ctx.fillStyle = shadeColorTO(overrideColor, -40 + (i / depthSteps) * 45);
+                    } else {
+                        const hue = (i * 22) % 360;
+                        ctx.fillStyle = `hsla(${hue}, 90%, 62%, ${0.12 + (1 - i / depthSteps) * 0.18})`;
+                    }
                     ctx.fillRect(x + offX - frameW / 2, y + offY - frameW / 2, width + frameW, height + frameW);
                 } else {
                     // Plain Bevel: short, tight, neutral shadow only.
                     const darkVal = Math.round(45 + (i / depthSteps) * 55);
-                    ctx.fillStyle = `rgba(${darkVal}, ${darkVal}, ${darkVal}, 0.4)`;
+                    ctx.fillStyle = overrideColor ? hexToRgba(shadeColorTO(overrideColor, -30), 0.4) : `rgba(${darkVal}, ${darkVal}, ${darkVal}, 0.4)`;
                     ctx.fillRect(x + offX - frameW / 2, y + offY - frameW / 2, width + frameW, height + frameW);
                 }
             }
@@ -16620,23 +16698,23 @@ document.addEventListener('DOMContentLoaded', () => {
 
             // Main Front 3D Card / Frame Styling
             if (template === 'word-3d-isometric') {
-                // Shiny Metallic Gold Border & Fill Accent
-                ctx.strokeStyle = '#fbbf24';
+                // Shiny Metallic Gold Border & Fill Accent (or user's chosen color)
+                ctx.strokeStyle = overrideColor || '#fbbf24';
                 ctx.lineWidth = frameW;
                 ctx.strokeRect(x, y, width, height);
 
-                ctx.fillStyle = 'rgba(251, 191, 36, 0.85)';
+                ctx.fillStyle = overrideColor ? hexToRgba(overrideColor, 0.85) : 'rgba(251, 191, 36, 0.85)';
                 ctx.fillRect(x - frameW / 2, y - frameW / 2, width + frameW, frameW * 0.45);
-                ctx.fillStyle = 'rgba(180, 83, 9, 0.65)';
+                ctx.fillStyle = overrideColor ? hexToRgba(shadeColorTO(overrideColor, -35), 0.65) : 'rgba(180, 83, 9, 0.65)';
                 ctx.fillRect(x - frameW / 2, y + height, width + frameW, frameW * 0.45);
             } else if (template === 'word-3d-neon') {
                 // Neon Glowing Edges
-                ctx.shadowColor = '#06b6d4';
+                ctx.shadowColor = overrideColor ? shadeColorTO(overrideColor, 20) : '#06b6d4';
                 ctx.shadowBlur = Math.max(16, frameW * 2);
-                ctx.strokeStyle = '#ec4899';
+                ctx.strokeStyle = overrideColor || '#ec4899';
                 ctx.lineWidth = frameW;
                 ctx.strokeRect(x, y, width, height);
-                ctx.shadowColor = '#ec4899';
+                ctx.shadowColor = overrideColor || '#ec4899';
                 ctx.shadowBlur = Math.max(10, frameW * 1.2);
                 ctx.strokeRect(x, y, width, height);
             } else if (template === 'word-3d-popart') {
@@ -16644,39 +16722,54 @@ document.addEventListener('DOMContentLoaded', () => {
                 ctx.strokeStyle = '#000000';
                 ctx.lineWidth = frameW * 1.4;
                 ctx.strokeRect(x, y, width, height);
-                ctx.strokeStyle = '#f59e0b';
+                ctx.strokeStyle = overrideColor || '#f59e0b';
                 ctx.lineWidth = frameW * 0.7;
                 ctx.strokeRect(x, y, width, height);
             } else if (template === 'word-3d-glass') {
                 // Translucent Refractive Glass Slab
-                ctx.fillStyle = 'rgba(255, 255, 255, 0.22)';
+                ctx.fillStyle = overrideColor ? hexToRgba(overrideColor, 0.22) : 'rgba(255, 255, 255, 0.22)';
                 ctx.fillRect(x, y, width, height);
-                ctx.strokeStyle = 'rgba(255, 255, 255, 0.85)';
+                ctx.strokeStyle = overrideColor ? hexToRgba(shadeColorTO(overrideColor, 40), 0.85) : 'rgba(255, 255, 255, 0.85)';
                 ctx.lineWidth = Math.max(2, frameW * 0.4);
                 ctx.strokeRect(x, y, width, height);
             } else if (template === 'word-3d-chrome') {
                 // Brushed metal frame: cool grey-blue gradient with a bright
-                // specular streak across the top edge.
+                // specular streak across the top edge (or shades of the user's color).
                 const chromeGrad = ctx.createLinearGradient(x, y, x, y + height);
-                chromeGrad.addColorStop(0, '#f1f5f9');
-                chromeGrad.addColorStop(0.35, '#64748b');
-                chromeGrad.addColorStop(0.5, '#e2e8f0');
-                chromeGrad.addColorStop(0.75, '#334155');
-                chromeGrad.addColorStop(1, '#94a3b8');
+                if (overrideColor) {
+                    chromeGrad.addColorStop(0, shadeColorTO(overrideColor, 55));
+                    chromeGrad.addColorStop(0.35, shadeColorTO(overrideColor, -25));
+                    chromeGrad.addColorStop(0.5, shadeColorTO(overrideColor, 45));
+                    chromeGrad.addColorStop(0.75, shadeColorTO(overrideColor, -45));
+                    chromeGrad.addColorStop(1, shadeColorTO(overrideColor, -5));
+                } else {
+                    chromeGrad.addColorStop(0, '#f1f5f9');
+                    chromeGrad.addColorStop(0.35, '#64748b');
+                    chromeGrad.addColorStop(0.5, '#e2e8f0');
+                    chromeGrad.addColorStop(0.75, '#334155');
+                    chromeGrad.addColorStop(1, '#94a3b8');
+                }
                 ctx.strokeStyle = chromeGrad;
                 ctx.lineWidth = frameW;
                 ctx.strokeRect(x, y, width, height);
                 ctx.fillStyle = 'rgba(255, 255, 255, 0.55)';
                 ctx.fillRect(x - frameW / 2, y - frameW / 2, width + frameW, frameW * 0.3);
             } else if (template === 'word-3d-holo') {
-                // Rainbow-foil border that shifts hue along its length.
+                // Rainbow-foil border that shifts hue along its length (or a
+                // tonal gradient built from the user's chosen color).
                 const holoGrad = ctx.createLinearGradient(x, y, x + width, y + height);
-                holoGrad.addColorStop(0, '#f472b6');
-                holoGrad.addColorStop(0.25, '#a78bfa');
-                holoGrad.addColorStop(0.5, '#38bdf8');
-                holoGrad.addColorStop(0.75, '#34d399');
-                holoGrad.addColorStop(1, '#facc15');
-                ctx.shadowColor = 'rgba(167, 139, 250, 0.6)';
+                if (overrideColor) {
+                    holoGrad.addColorStop(0, shadeColorTO(overrideColor, 35));
+                    holoGrad.addColorStop(0.5, overrideColor);
+                    holoGrad.addColorStop(1, shadeColorTO(overrideColor, -35));
+                } else {
+                    holoGrad.addColorStop(0, '#f472b6');
+                    holoGrad.addColorStop(0.25, '#a78bfa');
+                    holoGrad.addColorStop(0.5, '#38bdf8');
+                    holoGrad.addColorStop(0.75, '#34d399');
+                    holoGrad.addColorStop(1, '#facc15');
+                }
+                ctx.shadowColor = overrideColor ? hexToRgba(overrideColor, 0.6) : 'rgba(167, 139, 250, 0.6)';
                 ctx.shadowBlur = Math.max(12, frameW * 1.4);
                 ctx.strokeStyle = holoGrad;
                 ctx.lineWidth = frameW;
@@ -16691,7 +16784,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 ctx.shadowOffsetX = -frameW * 2.2;
                 ctx.shadowOffsetY = frameW * 2.4;
 
-                ctx.strokeStyle = '#0b0d14';
+                ctx.strokeStyle = overrideColor ? shadeColorTO(overrideColor, -55) : '#0b0d14';
                 ctx.lineWidth = frameW * 1.1;
                 ctx.strokeRect(x, y, width, height);
 
@@ -16699,7 +16792,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 ctx.shadowOffsetX = 0;
                 ctx.shadowOffsetY = 0;
 
-                ctx.fillStyle = 'rgba(148, 163, 255, 0.55)';
+                ctx.fillStyle = overrideColor ? hexToRgba(shadeColorTO(overrideColor, 40), 0.55) : 'rgba(148, 163, 255, 0.55)';
                 ctx.fillRect(x - frameW / 2, y - frameW / 2, width + frameW, frameW * 0.4);
             } else {
                 // Plain 3D Bevel: light, soft, classic beveled-edge card.
@@ -16708,7 +16801,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 ctx.shadowOffsetX = frameW * 0.5;
                 ctx.shadowOffsetY = Math.max(6, frameW * 0.8);
 
-                ctx.strokeStyle = '#ffffff';
+                ctx.strokeStyle = overrideColor || '#ffffff';
                 ctx.lineWidth = frameW;
                 ctx.strokeRect(x, y, width, height);
 
@@ -16717,12 +16810,12 @@ document.addEventListener('DOMContentLoaded', () => {
                 ctx.shadowOffsetY = 0;
 
                 // Top & Left Light Highlight
-                ctx.fillStyle = 'rgba(255, 255, 255, 0.85)';
+                ctx.fillStyle = overrideColor ? hexToRgba(shadeColorTO(overrideColor, 40), 0.85) : 'rgba(255, 255, 255, 0.85)';
                 ctx.fillRect(x - frameW / 2, y - frameW / 2, width + frameW, frameW * 0.5);
                 ctx.fillRect(x - frameW / 2, y - frameW / 2, frameW * 0.5, height + frameW);
 
                 // Bottom & Right Bevel Dark Shadow
-                ctx.fillStyle = 'rgba(0, 0, 0, 0.45)';
+                ctx.fillStyle = overrideColor ? hexToRgba(shadeColorTO(overrideColor, -45), 0.45) : 'rgba(0, 0, 0, 0.45)';
                 ctx.fillRect(x - frameW / 2, y + height, width + frameW, frameW * 0.5);
                 ctx.fillRect(x + width, y - frameW / 2, frameW * 0.5, height + frameW);
             }
