@@ -383,7 +383,8 @@
     // Word-style photo treatments, shared by preview and export because this
     // is drawn in the common extra-track compositor.
     function drawImageDesignFrame(ctx, clip, box, media) {
-        var design = clip.imageDesign || 'standard';
+        var design = clip.imageDesign || clip.visualTemplate || 'standard';
+        if (design.startsWith('word-')) design = design.replace('word-', '');
         if (design === 'standard') return;
         var minSide = Math.max(1, Math.min(box.w, box.h));
         ctx.save();
@@ -465,11 +466,19 @@
         if (!mw || !mh || !canvas.width || !canvas.height) return;
         if (clip.transform) {
             var box = transformBoxPx(clip.transform, mw, mh, canvas);
-            var shaped = clip.type === 'image' && (clip.imageDesign === 'circle' || clip.imageDesign === 'rounded');
-            if (shaped) { ctx.save(); ctx.beginPath(); if (clip.imageDesign === 'circle') ctx.arc(box.x + box.w / 2, box.y + box.h / 2, Math.min(box.w, box.h) / 2, 0, Math.PI * 2); else if (ctx.roundRect) ctx.roundRect(box.x, box.y, box.w, box.h, Math.max(14, Math.min(box.w, box.h) * .09)); else ctx.rect(box.x, box.y, box.w, box.h); ctx.clip(); }
+            var isVisualDesignClip = (clip.type === 'image' || clip.type === 'video' || clip.type === 'gif');
+            if (isVisualDesignClip && (clip.imageDesign === 'circle' || clip.visualTemplate === 'word-circle')) {
+                var minS = Math.min(box.w, box.h);
+                box.x += (box.w - minS) / 2;
+                box.y += (box.h - minS) / 2;
+                box.w = minS; box.h = minS;
+            }
+            var activeDesign = clip.imageDesign || clip.visualTemplate || 'standard';
+            var shaped = isVisualDesignClip && (activeDesign === 'circle' || activeDesign === 'word-circle' || activeDesign === 'rounded' || activeDesign === 'word-rounded');
+            if (shaped) { ctx.save(); ctx.beginPath(); if (activeDesign === 'circle' || activeDesign === 'word-circle') ctx.arc(box.x + box.w / 2, box.y + box.h / 2, Math.min(box.w, box.h) / 2, 0, Math.PI * 2); else if (ctx.roundRect) ctx.roundRect(box.x, box.y, box.w, box.h, Math.max(14, Math.min(box.w, box.h) * .09)); else ctx.rect(box.x, box.y, box.w, box.h); ctx.clip(); }
             try { ctx.drawImage(media, box.x, box.y, box.w, box.h); } catch (e) { /* not decodable yet */ }
             if (shaped) ctx.restore();
-            if (clip.type === 'image') drawImageDesignFrame(ctx, clip, box, media);
+            if (isVisualDesignClip) drawImageDesignFrame(ctx, clip, box, media);
             if (!isExporting && selectedClipId === clip.id) drawSelectionHandles(ctx, box);
         } else {
             drawCover(ctx, media, mw, mh, canvas.width, canvas.height);
@@ -1484,16 +1493,17 @@
             card.appendChild(fitGroup);
         }
 
-        if (track.type === 'image') {
+        if (track.type === 'image' || track.type === 'video' || track.type === 'gif') {
             var designWrap = document.createElement('div');
             styleEl(designWrap, { display: 'flex', alignItems: 'center', gap: '5px' });
-            designWrap.innerHTML = '<span style="color:var(--text-secondary);font-weight:500;">Image Design:</span>';
+            designWrap.innerHTML = '<span style="color:var(--text-secondary);font-weight:500;">Design & 3D Frame:</span>';
             var designSelect = document.createElement('select');
-            designSelect.innerHTML = '<option value="standard">Standard</option><option value="shadow">Soft Shadow</option><option value="white-frame">White Matte Frame</option><option value="double-frame">Double Line Frame</option><option value="rounded">Rounded Glass</option><option value="circle">Circle Frame</option><option value="polaroid">Polaroid</option><option value="reflection">Reflection</option><option value="bevel-3d">3D Bevel</option><option value="depth-3d">3D Depth Card</option>';
-            designSelect.value = clip.imageDesign || 'standard';
-            styleEl(designSelect, { padding: '3px 6px', borderRadius: '4px', border: '1px solid var(--border-color)', background: 'rgba(0,0,0,.3)', color: '#fff', fontSize: '11px' });
-            designSelect.addEventListener('change', function () { clip.imageDesign = designSelect.value; afterChange(track.name + ': Image design changed'); render(); requestPreviewRedraw(); });
-            designWrap.appendChild(designSelect); card.appendChild(designWrap);
+            styleEl(designSelect, { background: 'var(--bg-card)', color: 'var(--text-primary)', border: '1px solid var(--border-color)', borderRadius: '4px', padding: '2px 6px', fontSize: '11px', flex: '1' });
+            designSelect.innerHTML = '<option value="standard">Standard</option><option value="shadow">Soft Shadow</option><option value="white-frame">White Matte Frame</option><option value="double-frame">Double Line Frame</option><option value="rounded">Rounded Glass</option><option value="circle">Circle Frame (গোল)</option><option value="polaroid">Polaroid</option><option value="reflection">Reflection</option><option value="bevel-3d">3D Bevel (থ্রিডি)</option><option value="depth-3d">3D Depth Card</option>';
+            designSelect.value = clip.imageDesign || clip.visualTemplate || 'standard';
+            designSelect.addEventListener('change', function () { clip.imageDesign = designSelect.value; afterChange(track.name + ': Frame design changed'); render(); requestPreviewRedraw(); });
+            designWrap.appendChild(designSelect);
+            card.appendChild(designWrap);
         }
 
         // Close Inspector Button

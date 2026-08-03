@@ -6005,7 +6005,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     boxH = layout.totalH;
                     if (item.mode === 'fullscreen') {
                         const scale = ((item.size !== undefined ? item.size : 100)) / 100;
-                        if (scale < 0.999 && item._fsPosSet) {
+                        if ((scale < 0.999 || item._fsPosSet) && item.x !== undefined && item.y !== undefined) {
                             boxX = item.x * canvasW;
                             boxY = item.y * canvasH;
                         } else {
@@ -6065,6 +6065,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         }
                         if (item.visualTemplate === 'phone') boxH = boxW * 2.06;
                         if (item.visualTemplate === 'laptop') boxH = boxW * 0.70;
+                        if (item.visualTemplate === 'word-circle') boxH = boxW; // 1:1 aspect ratio for Circle Frame
                         if (item.builtInType === 'wings-brand') boxH = boxW * 1.34;
                         boxX = item.x * canvasW;
                         boxY = item.y * canvasH;
@@ -6315,10 +6316,15 @@ document.addEventListener('DOMContentLoaded', () => {
                     state.ctx.translate(hangPinX, hangPinY);
                     state.ctx.rotate(hangAngle);
                     state.ctx.translate(-hangPinX, -hangPinY);
-                } else if (rotateAmt !== 0 || scaleAmt !== 1) {
+                } else if (rotateAmt !== 0 || scaleAmt !== 1 || item.visualTemplate === 'word-bevel-3d' || item.visualTemplate === 'word-depth-3d') {
                     state.ctx.translate(cx, cy);
+                    if (item.visualTemplate === 'word-bevel-3d' || item.visualTemplate === 'word-depth-3d') {
+                        const tiltY = item.visualTemplate === 'word-depth-3d' ? -0.18 : -0.11;
+                        const tiltX = item.visualTemplate === 'word-depth-3d' ? 0.07 : 0.04;
+                        state.ctx.transform(Math.cos(tiltY), Math.sin(tiltX), -Math.sin(tiltY) * 0.45, Math.cos(tiltX) * 0.95, 0, 0);
+                    }
                     if (rotateAmt !== 0) state.ctx.rotate(rotateAmt);
-                    state.ctx.scale(scaleAmt, scaleAmt);
+                    if (scaleAmt !== 1) state.ctx.scale(scaleAmt, scaleAmt);
                     state.ctx.translate(-cx, -cy);
                 }
                 if (style === 'hanging-sign-swing') {
@@ -8905,6 +8911,11 @@ document.addEventListener('DOMContentLoaded', () => {
             const hit = findTextOverlayAt(coords);
             if (hit) {
                 state.selectedTextOverlayId = hit.id;
+                // অন্য সব সিলেকশন clear করো — না হলে দুটো আলাদা overlay একসাথে সিলেক্টেড দেখায়
+                state.selectedShapeOverlayId = null;
+                state.selectedSymbolId = null;
+                state.selectedStickerId = null;
+                state.selectedBrollId = null;
                 state.isDraggingTextOverlay = true;
                 state.dragTextOffsetX = coords.x - (hit.x * canvasW);
                 state.dragTextOffsetY = coords.y - (hit.y * canvasH);
@@ -8974,6 +8985,11 @@ document.addEventListener('DOMContentLoaded', () => {
             const shapeHit = findShapeOverlayAt(coords);
             if (shapeHit) {
                 state.selectedShapeOverlayId = shapeHit.id;
+                // অন্য সব সিলেকশন clear করো
+                state.selectedTextOverlayId = null;
+                state.selectedSymbolId = null;
+                state.selectedStickerId = null;
+                state.selectedBrollId = null;
                 state.isDraggingShapeOverlay = true;
                 state.dragShapeOverlayOffsetX = coords.x - (shapeHit.x * canvasW);
                 state.dragShapeOverlayOffsetY = coords.y - (shapeHit.y * canvasH);
@@ -9018,6 +9034,11 @@ document.addEventListener('DOMContentLoaded', () => {
             const symbolHit = findSymbolAt(coords);
             if (symbolHit) {
                 state.selectedSymbolId = symbolHit.id;
+                // অন্য সব সিলেকশন clear করো
+                state.selectedTextOverlayId = null;
+                state.selectedShapeOverlayId = null;
+                state.selectedStickerId = null;
+                state.selectedBrollId = null;
                 state.isDraggingSymbol = true;
                 state.dragSymbolOffsetX = coords.x - (symbolHit.x * canvasW);
                 state.dragSymbolOffsetY = coords.y - (symbolHit.y * canvasH);
@@ -9047,6 +9068,11 @@ document.addEventListener('DOMContentLoaded', () => {
             const stickerHit = findStickerAt(coords);
             if (stickerHit) {
                 state.selectedStickerId = stickerHit.id;
+                // অন্য সব সিলেকশন clear করো
+                state.selectedTextOverlayId = null;
+                state.selectedShapeOverlayId = null;
+                state.selectedSymbolId = null;
+                state.selectedBrollId = null;
                 state.isDraggingSticker = true;
                 state.dragStickerOffsetX = coords.x - (stickerHit.x * canvasW);
                 state.dragStickerOffsetY = coords.y - (stickerHit.y * canvasH);
@@ -9101,6 +9127,11 @@ document.addEventListener('DOMContentLoaded', () => {
             if (brollHit) {
                 if (window.captureUndoCheckpoint) window.captureUndoCheckpoint();
                 state.selectedBrollId = brollHit.id;
+                // অন্য সব সিলেকশন clear করো
+                state.selectedTextOverlayId = null;
+                state.selectedShapeOverlayId = null;
+                state.selectedSymbolId = null;
+                state.selectedStickerId = null;
                 state.isDraggingBroll = true;
 
                 if (brollHit.mode === 'fullscreen' && (brollHit.size === undefined || brollHit.size >= 100)) {
@@ -9111,7 +9142,16 @@ document.addEventListener('DOMContentLoaded', () => {
                     brollHit.y = coords.y / canvasH;
                 }
 
-                if (brollHit.mode === 'fullscreen' && brollHit._fsPosSet) {
+                if (brollHit.type === 'text') {
+                    brollHit._fsPosSet = true;
+                    if (brollHit.x === undefined || brollHit.y === undefined) {
+                        const box = getBrollBoxRect(brollHit, canvasW, canvasH);
+                        brollHit.x = box.x / canvasW;
+                        brollHit.y = box.y / canvasH;
+                    }
+                    state.dragBrollOffsetX = coords.x - (brollHit.x * canvasW);
+                    state.dragBrollOffsetY = coords.y - (brollHit.y * canvasH);
+                } else if (brollHit.mode === 'fullscreen' && brollHit._fsPosSet) {
                     // Dragging a fullscreen item with custom position — keep in fullscreen
                     state.dragBrollOffsetX = coords.x - (brollHit.x * canvasW);
                     state.dragBrollOffsetY = coords.y - (brollHit.y * canvasH);
@@ -9121,12 +9161,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     brollHit.size = 35;
                     let pw = canvasW * 0.35;
                     let ph = pw;
-                    if (brollHit.type === 'text') {
-                        state.ctx.font = `${brollHit.italic ? 'italic ' : ''}${brollHit.bold === false ? '' : 'bold '}${brollHit.fontSize}px "${brollHit.font || 'Hind Siliguri'}", "Plus Jakarta Sans", sans-serif`;
-                        const metrics = state.ctx.measureText(brollHit.text);
-                        pw = metrics.width + 32;
-                        ph = brollHit.fontSize + 24;
-                    } else if (brollHit.imageImg) {
+                    if (brollHit.imageImg) {
                         ph = pw * (brollHit.imageImg.naturalHeight / brollHit.imageImg.naturalWidth);
                     }
                     brollHit.x = (coords.x - pw / 2) / canvasW;
@@ -9227,7 +9262,7 @@ document.addEventListener('DOMContentLoaded', () => {
             pipH = layout.totalH;
             if (item.mode === 'fullscreen') {
                 const scale = (item.size !== undefined ? item.size : 100) / 100;
-                if (scale < 0.999 && item._fsPosSet) {
+                if ((scale < 0.999 || item._fsPosSet) && item.x !== undefined && item.y !== undefined) {
                     px = item.x * canvasW;
                     py = item.y * canvasH;
                 } else {
@@ -9267,6 +9302,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         : (item.imageImg || item.gifParsed ? pipW * (getItemImageDimensions(item).height / getItemImageDimensions(item).width) : pipW);
                     if (item.visualTemplate === 'phone') pipH = pipW * 2.06;
                     if (item.visualTemplate === 'laptop') pipH = pipW * 0.70;
+                    if (item.visualTemplate === 'word-circle') pipH = pipW;
                     if (item.builtInType === 'wings-brand') pipH = pipW * 1.34;
                 }
                 px = item.x * canvasW;
@@ -12247,6 +12283,13 @@ document.addEventListener('DOMContentLoaded', () => {
         const text = textOverlayInput.value.trim();
         if (!text) return;
 
+        // undo checkpoint নতুন item যোগের আগে নাও
+        if (window.captureUndoCheckpoint) window.captureUndoCheckpoint();
+
+        // নতুন text যোগ করার আগে পুরনো selection clear করো —
+        // না হলে Draw Text Box সেই পুরনো item-কে move করে নতুন তৈরি করে না
+        state.selectedTextOverlayId = null;
+
         const newItem = {
             id: textOverlayIdCounter++,
             clipId: state.activeClipId,
@@ -12408,6 +12451,9 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     deleteTextOverlayBtn.addEventListener('click', () => {
+        if (!state.selectedTextOverlayId) return;
+        // undo চেকপয়েন্ট সেভ করো যাতে delete-এর পরে Ctrl+Z কাজ করে
+        if (window.captureUndoCheckpoint) window.captureUndoCheckpoint();
         state.textOverlays = state.textOverlays.filter(t => t.id !== state.selectedTextOverlayId);
         state.selectedTextOverlayId = null;
         state.isDrawingTextCurve = false;
@@ -12417,6 +12463,8 @@ document.addEventListener('DOMContentLoaded', () => {
         textOverlayTimingContainer.style.display = 'none';
         if (window.updateCurveButtonVisibility) window.updateCurveButtonVisibility();
         drawFrame();
+        // undo history তে record করো
+        if (window.recordEditorHistory) window.recordEditorHistory('Text overlay deleted');
     });
 
     // Lets multitrack.js's own canvas drag handler (background clip
@@ -13623,6 +13671,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 .map(line => bulletChar ? `${bulletChar} ${line}` : line)
                 .join('\n');
 
+            const existingTextCount = state.brollOverlays.filter(b => b.type === 'text').length;
+            const defaultY = Math.min(0.8, 0.25 + (existingTextCount % 4) * 0.18);
             const newItem = {
                 id: generateBrollId(),
                 type: 'text',
@@ -13637,8 +13687,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 highlightColor: '#ffe600',
                 mode: brollModeSelect ? brollModeSelect.value : 'fullscreen',
                 size: brollSizeSlider ? parseInt(brollSizeSlider.value) : 35,
-                x: 0.5,
-                y: 0.5,
+                x: 0.1,
+                y: defaultY,
+                _fsPosSet: true,
                 rotation: 0, // manual tilt angle in degrees, set via the rotate handle
                 clipId: state.activeClipId,
                 startSec: Math.min(state.endTime || state.duration || 5, state.currentTime || 0),
@@ -14151,11 +14202,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 brollEditTextSection.style.display = 'block';
                 if (brollEditTextInput) {
                     brollEditTextInput.value = item.text || '';
-                    // Give the browser one tick so the section is visible before focusing
-                    setTimeout(() => {
-                        brollEditTextInput.focus();
-                        brollEditTextInput.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-                    }, 0);
                 }
                 if (brollEditTextFontSelect) brollEditTextFontSelect.value = item.font || 'Hind Siliguri';
                 if (brollEditTextFontsize) {
@@ -16048,36 +16094,12 @@ document.addEventListener('DOMContentLoaded', () => {
             ctx.strokeRect(x, y, width, height);
         } else if (template === 'word-bevel-3d' || template === 'word-depth-3d') {
             const frameW = Math.max(8, minSide * 0.06);
-            const cx = x + width / 2;
-            const cy = y + height / 2;
-            const tiltY = template === 'word-depth-3d' ? -0.22 : -0.14; // Y-axis rotation (perspective tilt like screenshot 3)
-            const tiltX = template === 'word-depth-3d' ? 0.08 : 0.05;   // X-axis tilt
 
-            // 1. Draw realistic ground / cast shadow under tilted frame
-            ctx.save();
-            ctx.translate(cx, y + height + Math.max(12, height * 0.06));
-            ctx.scale(1, 0.22);
-            const shadowGradient = ctx.createRadialGradient(0, 0, 10, 0, 0, width * 0.65);
-            shadowGradient.addColorStop(0, 'rgba(0,0,0,0.55)');
-            shadowGradient.addColorStop(0.6, 'rgba(0,0,0,0.20)');
-            shadowGradient.addColorStop(1, 'rgba(0,0,0,0)');
-            ctx.fillStyle = shadowGradient;
-            ctx.beginPath();
-            ctx.arc(0, 0, width * 0.65, 0, Math.PI * 2);
-            ctx.fill();
-            ctx.restore();
-
-            // 2. Apply 3D Perspective transformation
-            ctx.save();
-            ctx.translate(cx, cy);
-            ctx.transform(Math.cos(tiltY), Math.sin(tiltX), -Math.sin(tiltY) * 0.5, Math.cos(tiltX) * 0.94, 0, 0);
-            ctx.translate(-cx, -cy);
-
-            // Deep drop shadow behind transformed card
+            // Draw crisp 3D Bevel frame over the already tilted canvas
             ctx.shadowColor = 'rgba(0, 0, 0, 0.65)';
-            ctx.shadowBlur = Math.max(16, frameW * 2);
-            ctx.shadowOffsetX = template === 'word-depth-3d' ? frameW * 1.5 : frameW * 0.8;
-            ctx.shadowOffsetY = Math.max(10, frameW * 1.2);
+            ctx.shadowBlur = Math.max(14, frameW * 1.8);
+            ctx.shadowOffsetX = template === 'word-depth-3d' ? frameW * 1.2 : frameW * 0.6;
+            ctx.shadowOffsetY = Math.max(8, frameW * 1.0);
 
             // Base thick 3D white border
             ctx.strokeStyle = '#ffffff';
@@ -16103,8 +16125,6 @@ document.addEventListener('DOMContentLoaded', () => {
             ctx.lineWidth = Math.max(1.5, frameW * 0.15);
             ctx.strokeRect(x - frameW * 0.5, y - frameW * 0.5, width + frameW, height + frameW);
             ctx.strokeRect(x + frameW * 0.5, y + frameW * 0.5, width - frameW, height - frameW);
-
-            ctx.restore();
         }
         ctx.restore();
     }
