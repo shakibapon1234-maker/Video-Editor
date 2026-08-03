@@ -3274,6 +3274,12 @@ document.addEventListener('DOMContentLoaded', () => {
         const clip = state.clips.find(c => c.id === clipId);
         if (!clip) return;
 
+        // Diagnostic trace: log active clip switches to help debug image/video
+        // clip selection issues that can affect playback (temporary).
+        try {
+            console.debug('[switchActiveClip] switching to clip', { id: clip.id, name: clip.name, type: clip.type, autoPlay: !!autoPlay });
+        } catch (e) {}
+
         const isSameClip = clip.id === state.activeClipId;
 
         // Persist the outgoing clip's crop area before switching away from it.
@@ -5930,6 +5936,11 @@ document.addEventListener('DOMContentLoaded', () => {
                     ? (item.entryDirection || 'bottom')
                     : item.exitDirection;
 
+                // Predeclare image drawable variable so it's always in scope for
+                // downstream annotation/template drawing even when an earlier
+                // branch (gif / built-in / cash) doesn't assign it.
+                let imgDrawable = null;
+
                 // Keep an overlay video's own playback in sync with the main timeline
                 // during LIVE preview. During export (customExportTime is set) this is
                 // skipped entirely — the exporter seeks each active video overlay to the
@@ -6336,6 +6347,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
 
                 const hasPhoneScreenClip = item.visualTemplate === 'phone';
+                const hasImageShapeClip = item.type !== 'text' && (item.visualTemplate === 'word-circle' || item.visualTemplate === 'word-rounded');
                 if (hasPhoneScreenClip) {
                     const bezel = Math.max(7, Math.min(boxW, boxH) * 0.055);
                     const radius = Math.max(16, Math.min(boxW, boxH) * 0.12);
@@ -6343,6 +6355,19 @@ document.addEventListener('DOMContentLoaded', () => {
                     state.ctx.beginPath();
                     if (state.ctx.roundRect) state.ctx.roundRect(drawBoxX + bezel, drawBoxY + bezel, boxW - bezel * 2, boxH - bezel * 2, radius);
                     else state.ctx.rect(drawBoxX + bezel, drawBoxY + bezel, boxW - bezel * 2, boxH - bezel * 2);
+                    state.ctx.clip();
+                }
+                if (hasImageShapeClip) {
+                    const minSide = Math.min(boxW, boxH);
+                    state.ctx.save();
+                    state.ctx.beginPath();
+                    if (item.visualTemplate === 'word-circle') {
+                        state.ctx.arc(drawBoxX + boxW / 2, drawBoxY + boxH / 2, minSide / 2, 0, Math.PI * 2);
+                    } else if (state.ctx.roundRect) {
+                        state.ctx.roundRect(drawBoxX, drawBoxY, boxW, boxH, Math.max(14, minSide * 0.09));
+                    } else {
+                        state.ctx.rect(drawBoxX, drawBoxY, boxW, boxH);
+                    }
                     state.ctx.clip();
                 }
 
@@ -6857,6 +6882,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 // Pop the wipe-reveal clip (pushed above with its own save()) before any
                 // annotation drawing — annotations like the flying plane are positioned
                 // above/outside the box rect and must not be clipped away by it.
+                if (hasImageShapeClip) state.ctx.restore();
                 if (hasPhoneScreenClip) state.ctx.restore();
                 if (wipeFrac < 0.999) state.ctx.restore();
 
@@ -7159,9 +7185,8 @@ document.addEventListener('DOMContentLoaded', () => {
                     }
                 }
 
+                drawBrollVisualTemplate(state.ctx, item, drawBoxX, drawBoxY, boxW, boxH, alpha, imgDrawable);
                 state.ctx.restore();
-
-                drawBrollVisualTemplate(state.ctx, item, drawBoxX, drawBoxY, boxW, boxH, alpha);
 
                 // Comparison Slide (Before/After) divider handle — drawn unclipped
                 // (after the box's own restore above) so the handle circle isn't cut
@@ -15882,7 +15907,7 @@ document.addEventListener('DOMContentLoaded', () => {
         ctx.restore();
     }
 
-    function drawBrollVisualTemplate(ctx, item, x, y, width, height, alpha) {
+    function drawBrollVisualTemplate(ctx, item, x, y, width, height, alpha, imageSource) {
         const template = item.visualTemplate || 'standard';
         if (template === 'standard' || template === 'glass-caption') return;
 
@@ -15950,6 +15975,136 @@ document.addEventListener('DOMContentLoaded', () => {
             };
             drawButton(x, '#1877f2', '👍', 'Like');
             drawButton(x + buttonW + gap, '#25d366', '◔', 'WhatsApp');
+        } else if (template === 'word-shadow') {
+            ctx.strokeStyle = 'rgba(255,255,255,0.88)';
+            ctx.lineWidth = Math.max(2, minSide * 0.012);
+            ctx.shadowColor = 'rgba(0,0,0,0.62)';
+            ctx.shadowBlur = Math.max(12, minSide * 0.12);
+            ctx.shadowOffsetY = Math.max(7, minSide * 0.055);
+            ctx.strokeRect(x, y, width, height);
+        } else if (template === 'word-white-frame') {
+            const frame = Math.max(10, minSide * 0.075);
+            ctx.shadowColor = 'rgba(0,0,0,0.45)';
+            ctx.shadowBlur = frame * 0.9;
+            ctx.shadowOffsetY = frame * 0.35;
+            ctx.strokeStyle = '#ffffff';
+            ctx.lineWidth = frame;
+            ctx.strokeRect(x, y, width, height);
+        } else if (template === 'word-double-frame') {
+            const gap = Math.max(5, minSide * 0.035);
+            ctx.strokeStyle = '#151515';
+            ctx.lineWidth = Math.max(2, minSide * 0.016);
+            ctx.strokeRect(x - gap, y - gap, width + gap * 2, height + gap * 2);
+            ctx.strokeStyle = '#ffffff';
+            ctx.lineWidth = Math.max(2, minSide * 0.012);
+            ctx.strokeRect(x - gap * 2.2, y - gap * 2.2, width + gap * 4.4, height + gap * 4.4);
+        } else if (template === 'word-rounded') {
+            const radius = Math.max(14, minSide * 0.09);
+            ctx.shadowColor = 'rgba(0,0,0,0.42)';
+            ctx.shadowBlur = Math.max(10, minSide * 0.09);
+            ctx.strokeStyle = 'rgba(255,255,255,0.9)';
+            ctx.lineWidth = Math.max(3, minSide * 0.02);
+            ctx.beginPath();
+            if (ctx.roundRect) ctx.roundRect(x, y, width, height, radius); else ctx.rect(x, y, width, height);
+            ctx.stroke();
+        } else if (template === 'word-circle') {
+            const radius = Math.min(width, height) * 0.5;
+            ctx.shadowColor = 'rgba(0,0,0,0.45)';
+            ctx.shadowBlur = Math.max(10, minSide * 0.1);
+            ctx.strokeStyle = '#ffffff';
+            ctx.lineWidth = Math.max(5, minSide * 0.035);
+            ctx.beginPath();
+            ctx.arc(x + width / 2, y + height / 2, radius, 0, Math.PI * 2);
+            ctx.stroke();
+        } else if (template === 'word-polaroid') {
+            const frame = Math.max(10, minSide * 0.065);
+            const caption = Math.max(22, height * 0.14);
+            ctx.shadowColor = 'rgba(0,0,0,0.48)';
+            ctx.shadowBlur = frame;
+            ctx.shadowOffsetY = frame * 0.45;
+            ctx.fillStyle = '#ffffff';
+            ctx.fillRect(x - frame / 2, y + height - frame / 2, width + frame, caption + frame);
+            ctx.strokeStyle = '#ffffff';
+            ctx.lineWidth = frame;
+            ctx.strokeRect(x, y, width, height);
+        } else if (template === 'word-reflection') {
+            const rh = Math.max(14, height * 0.23);
+            if (imageSource) {
+                ctx.save();
+                ctx.beginPath(); ctx.rect(x, y + height + Math.max(4, minSide * 0.025), width, rh); ctx.clip();
+                ctx.globalAlpha = 0.34;
+                ctx.translate(0, y * 2 + height * 2 + Math.max(4, minSide * 0.025));
+                ctx.scale(1, -1);
+                ctx.drawImage(imageSource, x, y, width, height);
+                ctx.restore();
+            }
+            const reflection = ctx.createLinearGradient(x, y + height, x, y + height + rh);
+            reflection.addColorStop(0, 'rgba(0,0,0,0.04)');
+            reflection.addColorStop(1, 'rgba(0,0,0,0.82)');
+            ctx.save(); ctx.beginPath(); ctx.rect(x, y + height + Math.max(4, minSide * 0.025), width, rh); ctx.clip(); ctx.globalCompositeOperation = 'destination-out'; ctx.fillStyle = reflection;
+            ctx.fillRect(x, y + height + Math.max(4, minSide * 0.025), width, rh); ctx.restore();
+            ctx.strokeStyle = 'rgba(255,255,255,0.75)';
+            ctx.lineWidth = Math.max(2, minSide * 0.012);
+            ctx.strokeRect(x, y, width, height);
+        } else if (template === 'word-bevel-3d' || template === 'word-depth-3d') {
+            const frameW = Math.max(8, minSide * 0.06);
+            const cx = x + width / 2;
+            const cy = y + height / 2;
+            const tiltY = template === 'word-depth-3d' ? -0.22 : -0.14; // Y-axis rotation (perspective tilt like screenshot 3)
+            const tiltX = template === 'word-depth-3d' ? 0.08 : 0.05;   // X-axis tilt
+
+            // 1. Draw realistic ground / cast shadow under tilted frame
+            ctx.save();
+            ctx.translate(cx, y + height + Math.max(12, height * 0.06));
+            ctx.scale(1, 0.22);
+            const shadowGradient = ctx.createRadialGradient(0, 0, 10, 0, 0, width * 0.65);
+            shadowGradient.addColorStop(0, 'rgba(0,0,0,0.55)');
+            shadowGradient.addColorStop(0.6, 'rgba(0,0,0,0.20)');
+            shadowGradient.addColorStop(1, 'rgba(0,0,0,0)');
+            ctx.fillStyle = shadowGradient;
+            ctx.beginPath();
+            ctx.arc(0, 0, width * 0.65, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.restore();
+
+            // 2. Apply 3D Perspective transformation
+            ctx.save();
+            ctx.translate(cx, cy);
+            ctx.transform(Math.cos(tiltY), Math.sin(tiltX), -Math.sin(tiltY) * 0.5, Math.cos(tiltX) * 0.94, 0, 0);
+            ctx.translate(-cx, -cy);
+
+            // Deep drop shadow behind transformed card
+            ctx.shadowColor = 'rgba(0, 0, 0, 0.65)';
+            ctx.shadowBlur = Math.max(16, frameW * 2);
+            ctx.shadowOffsetX = template === 'word-depth-3d' ? frameW * 1.5 : frameW * 0.8;
+            ctx.shadowOffsetY = Math.max(10, frameW * 1.2);
+
+            // Base thick 3D white border
+            ctx.strokeStyle = '#ffffff';
+            ctx.lineWidth = frameW;
+            ctx.strokeRect(x, y, width, height);
+
+            ctx.shadowBlur = 0;
+            ctx.shadowOffsetX = 0;
+            ctx.shadowOffsetY = 0;
+
+            // Light highlight on Top and Left edges (Simulating top-left light source)
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.75)';
+            ctx.fillRect(x - frameW / 2, y - frameW / 2, width + frameW, frameW * 0.45); // Top light band
+            ctx.fillRect(x - frameW / 2, y - frameW / 2, frameW * 0.45, height + frameW); // Left light band
+
+            // Dark bevel shadow on Bottom and Right edges
+            ctx.fillStyle = 'rgba(0, 0, 0, 0.38)';
+            ctx.fillRect(x - frameW / 2, y + height + frameW * 0.05, width + frameW, frameW * 0.45); // Bottom dark band
+            ctx.fillRect(x + width + frameW * 0.05, y - frameW / 2, frameW * 0.45, height + frameW); // Right dark band
+
+            // Inner crisp dark contour separating image from frame
+            ctx.strokeStyle = 'rgba(0, 0, 0, 0.35)';
+            ctx.lineWidth = Math.max(1.5, frameW * 0.15);
+            ctx.strokeRect(x - frameW * 0.5, y - frameW * 0.5, width + frameW, height + frameW);
+            ctx.strokeRect(x + frameW * 0.5, y + frameW * 0.5, width - frameW, height - frameW);
+
+            ctx.restore();
         }
         ctx.restore();
     }

@@ -150,6 +150,10 @@
         const dockPlaceholder = document.getElementById('preview-panel-dock-placeholder');
         const cfCloseBtn = document.getElementById('cf-close-btn');
 
+        // Remember original parent so we can restore when undocked
+        let originalTransportParent = panel.parentNode;
+        let originalTransportNextSibling = panel.nextSibling;
+
         function setVisible(visible) {
             panel.style.display = visible ? 'flex' : 'none';
             panel.classList.toggle('visible', visible);
@@ -169,6 +173,21 @@
                     canvasContainer.style.height = '';
                     if (typeof window.drawFrame === 'function') window.drawFrame();
                     if (typeof window.drawEditorFrame === 'function') window.drawEditorFrame();
+
+                    // If we previously moved the transport into the canvas, restore it
+                    if (originalTransportParent && panel.parentNode !== originalTransportParent) {
+                        originalTransportParent.insertBefore(panel, originalTransportNextSibling);
+                        delete panel.dataset.dockedIntoCanvas;
+                        panel.style.position = '';
+                        panel.style.left = '';
+                        panel.style.top = '';
+                        panel.style.right = '';
+                        panel.style.bottom = '';
+                        panel.style.width = '';
+                        panel.style.minWidth = '';
+                        panel.style.maxWidth = '';
+                        panel.style.zIndex = '';
+                    }
                 } else {
                     if (!canvasContainer.style.top || canvasContainer.style.top === '') {
                         canvasContainer.style.top = '90px';
@@ -176,6 +195,30 @@
                     }
                     canvasContainer.style.right = 'auto';
                     canvasContainer.style.bottom = 'auto';
+                    // Ensure the floating preview is positioned as fixed so its
+                    // header, canvas and footer stay together and are removed
+                    // from normal document flow while floating.
+                    canvasContainer.style.position = 'fixed';
+
+                    // Move the floating transport into the floating canvas so the
+                    // small transport controls stay visually attached to the preview.
+                    try {
+                        if (panel.parentNode !== canvasContainer) {
+                            originalTransportParent = panel.parentNode || originalTransportParent;
+                            originalTransportNextSibling = panel.nextSibling || originalTransportNextSibling;
+                            canvasContainer.appendChild(panel);
+                            panel.dataset.dockedIntoCanvas = '1';
+                            panel.style.position = 'relative';
+                            panel.style.left = '0';
+                            panel.style.right = '0';
+                            panel.style.top = 'auto';
+                            panel.style.bottom = '0';
+                            panel.style.width = '100%';
+                            panel.style.minWidth = 'auto';
+                            panel.style.maxWidth = 'none';
+                            panel.style.zIndex = '10';
+                        }
+                    } catch (e) {}
                 }
             }
             if (canvasHeader) {
@@ -188,9 +231,10 @@
             if (visible) {
                 const left = parseFloat(panel.style.left);
                 const top  = parseFloat(panel.style.top);
-                const badPos = !isFinite(left) || !isFinite(top)
+                const isDockedToCanvas = panel.dataset.dockedIntoCanvas === '1';
+                const badPos = (!isDockedToCanvas && (!isFinite(left) || !isFinite(top)))
                             || left < 0 || left > window.innerWidth
-                            || top  < 0 || top  > window.innerHeight;
+                            || (!isDockedToCanvas && (top  < 0 || top  > window.innerHeight));
                 if (badPos) {
                     panel.style.left  = Math.max(8, window.innerWidth - 340) + 'px';
                     panel.style.top   = '110px';
@@ -287,6 +331,11 @@
         function startCanvasDrag(clientX, clientY) {
             canvasDragging = true;
             const rect = canvasContainer.getBoundingClientRect();
+            // Make sure the floating preview is fixed so moves are relative to viewport
+            if (canvasContainer && !canvasContainer.classList.contains('is-floating-preview')) {
+                canvasContainer.classList.add('is-floating-preview');
+            }
+            canvasContainer.style.position = 'fixed';
             canvasDragOffsetX = clientX - rect.left;
             canvasDragOffsetY = clientY - rect.top;
         }
