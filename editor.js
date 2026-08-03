@@ -4581,6 +4581,251 @@ document.addEventListener('DOMContentLoaded', () => {
         return text.match(bengaliClusterRegex) || Array.from(text);
     }
 
+    const PER_LETTER_PALETTES = {
+        rainbow: ['#ef4444', '#f97316', '#eab308', '#10b981', '#06b6d4', '#3b82f6', '#8b5cf6', '#ec4899'],
+        neon: ['#ff0055', '#00f0ff', '#ff00ff', '#00ff66', '#ffff00', '#9900ff'],
+        pastel: ['#f472b6', '#fb923c', '#facc15', '#4ade80', '#38bdf8', '#c084fc'],
+        fire: ['#ef4444', '#f97316', '#f59e0b', '#fbbf24', '#fde047', '#fb7185'],
+        ocean: ['#0284c7', '#06b6d4', '#14b8a6', '#10b981', '#3b82f6', '#6366f1']
+    };
+
+    function getTextOverlayFillStyle(ctx, item, charIndex = 0, totalChars = 1, boxW = 300, boxH = 80) {
+        if (!item) return '#ffffff';
+        const mode = item.colorMode || 'solid';
+        if (mode === 'per-letter') {
+            const paletteKey = item.perLetterPalette || 'rainbow';
+            const colors = PER_LETTER_PALETTES[paletteKey] || PER_LETTER_PALETTES.rainbow;
+            return colors[charIndex % colors.length];
+        }
+        if (mode === 'gradient') {
+            const c1 = item.gradientColor1 || '#22d3ee';
+            const c2 = item.gradientColor2 || '#a855f7';
+            const dir = item.gradientDirection || 'horizontal';
+            const w = Math.max(50, boxW || 200);
+            const h = Math.max(30, boxH || 60);
+            let g;
+            if (dir === 'vertical') g = ctx.createLinearGradient(0, -h / 2, 0, h / 2);
+            else if (dir === 'diagonal') g = ctx.createLinearGradient(-w / 2, -h / 2, w / 2, h / 2);
+            else g = ctx.createLinearGradient(-w / 2, 0, w / 2, 0);
+            g.addColorStop(0, c1);
+            g.addColorStop(1, c2);
+            return g;
+        }
+        return item.color || '#ffffff';
+    }
+
+    function renderTextWith3DAndColor(ctx, text, x, y, item, fontSize, align, outlineColor, outlineWidth) {
+        if (!text) return;
+        const template = (item && (item.visualTemplate || item.imageDesign)) || 'standard';
+        const colorMode = (item && item.colorMode) || 'solid';
+        const fontPx = fontSize || (item && item.fontSize) || 48;
+        const is3D = template === 'word-bevel-3d' || template === 'word-depth-3d' || template === 'word-3d-extruded' ||
+                     template === 'word-3d-isometric' || template === 'word-3d-neon' || template === 'word-3d-popart' || template === 'word-3d-glass' ||
+                     template === 'bevel-3d' || template === 'depth-3d' || template === '3d-extruded' || template === '3d-isometric' ||
+                     template === '3d-neon' || template === '3d-popart' || template === '3d-glass';
+
+        const charList = splitGraphemes(text);
+        const totalChars = charList.length;
+
+        const getFrontFill = (charIdx) => {
+            if (colorMode === 'per-letter') {
+                const paletteKey = (item && item.perLetterPalette) || 'rainbow';
+                const colors = PER_LETTER_PALETTES[paletteKey] || PER_LETTER_PALETTES.rainbow;
+                return colors[charIdx % colors.length];
+            }
+            if (colorMode === 'gradient') {
+                const c1 = (item && item.gradientColor1) || '#22d3ee';
+                const c2 = (item && item.gradientColor2) || '#a855f7';
+                const dir = (item && item.gradientDirection) || 'horizontal';
+                // Measure text width at the current ctx font so the gradient
+                // spans the actual rendered text, not an arbitrary fixed size.
+                const textW = Math.max(40, ctx.measureText(text).width);
+                const half = textW / 2;
+                let g;
+                if (dir === 'vertical') {
+                    g = ctx.createLinearGradient(x, y - fontPx * 0.6, x, y + fontPx * 0.6);
+                } else if (dir === 'diagonal') {
+                    g = ctx.createLinearGradient(x - half, y - fontPx * 0.5, x + half, y + fontPx * 0.5);
+                } else {
+                    // horizontal (default)
+                    g = ctx.createLinearGradient(x - half, y, x + half, y);
+                }
+                g.addColorStop(0, c1);
+                g.addColorStop(1, c2);
+                return g;
+            }
+            if (template.includes('popart') && (!item || !item.color || item.color === '#ffffff' || item.color === '#201d1d')) return '#ef4444';
+            if (template.includes('isometric') && (!item || !item.color || item.color === '#ffffff' || item.color === '#201d1d')) return '#fbbf24';
+            return (item && item.color) || '#ffffff';
+        };
+
+        ctx.save();
+        // Guarantee font, baseline, and filter are clean regardless of whatever
+        // the caller's context state might be (e.g. a blur filter from a
+        // blur-pop animation, or a mis-cached textBaseline from another path).
+        if (item) {
+            const fStyle = (item.italic ? 'italic ' : '') + (item.bold === false ? '' : 'bold ');
+            ctx.font = `${fStyle}${fontPx}px "${item.font || 'Hind Siliguri'}", "Plus Jakarta Sans", sans-serif`;
+        }
+        ctx.textBaseline = 'middle';
+        ctx.filter = 'none';
+        if (align) ctx.textAlign = align;
+
+        if (is3D) {
+            const depthSteps = template.includes('extruded') ? 16 : (template.includes('isometric') ? 18 : (template.includes('depth') ? 12 : 8));
+            const stepOffset = Math.max(1, fontPx * 0.024);
+
+            // 1. Draw 3D Extrusion Slices for the Text Characters
+            for (let i = depthSteps; i >= 1; i--) {
+                const dx = i * stepOffset * (template.includes('isometric') ? 0.9 : 0.7);
+                const dy = i * stepOffset * (template.includes('isometric') ? 1.1 : 0.85);
+
+                ctx.save();
+                ctx.translate(dx, dy);
+
+                if (template.includes('extruded')) {
+                    const shade = Math.round(15 + (i / depthSteps) * 35);
+                    ctx.fillStyle = `rgb(${shade}, ${shade + 10}, ${shade + 25})`;
+                    ctx.fillText(text, x, y);
+                } else if (template.includes('isometric')) {
+                    const r = Math.round(180 - i * 3);
+                    const g = Math.round(120 - i * 3);
+                    const b = Math.round(20 - i * 0.5);
+                    ctx.fillStyle = `rgb(${Math.max(40, r)}, ${Math.max(25, g)}, ${Math.max(5, b)})`;
+                    ctx.fillText(text, x, y);
+                } else if (template.includes('popart')) {
+                    ctx.lineWidth = Math.max(4, fontPx * 0.12);
+                    ctx.strokeStyle = '#000000';
+                    ctx.strokeText(text, x, y);
+                    ctx.fillStyle = (i % 2 === 0) ? '#000000' : '#ef4444';
+                    ctx.fillText(text, x, y);
+                } else if (template.includes('neon')) {
+                    ctx.shadowColor = '#06b6d4';
+                    ctx.shadowBlur = Math.max(8, fontPx * 0.2);
+                    ctx.fillStyle = `rgba(6, 182, 212, ${0.15 + (1 - i / depthSteps) * 0.2})`;
+                    ctx.fillText(text, x, y);
+                } else {
+                    const darkVal = Math.round(20 + (i / depthSteps) * 50);
+                    ctx.fillStyle = `rgba(${darkVal}, ${darkVal}, ${darkVal}, 0.55)`;
+                    ctx.fillText(text, x, y);
+                }
+                ctx.restore();
+            }
+
+            // 2. Draw Front Face of 3D Text
+            if (template.includes('popart')) {
+                ctx.lineWidth = Math.max(4, fontPx * 0.12);
+                ctx.strokeStyle = '#000000';
+                ctx.strokeText(text, x, y);
+                if (colorMode === 'per-letter') {
+                    const widths = charList.map(c => ctx.measureText(c).width);
+                    const totalW = widths.reduce((a, b) => a + b, 0);
+                    let curX = (ctx.textAlign === 'center') ? (x - totalW / 2) : (ctx.textAlign === 'right' ? (x - totalW) : x);
+                    charList.forEach((c, idx) => {
+                        const cw = widths[idx];
+                        ctx.save();
+                        ctx.translate(curX + cw / 2, y);
+                        ctx.lineWidth = Math.max(4, fontPx * 0.12);
+                        ctx.strokeStyle = '#000000';
+                        ctx.strokeText(c, 0, 0);
+                        ctx.fillStyle = getFrontFill(idx);
+                        ctx.fillText(c, 0, 0);
+                        ctx.restore();
+                        curX += cw;
+                    });
+                } else {
+                    ctx.fillStyle = getFrontFill(0);
+                    ctx.fillText(text, x, y);
+                }
+            } else if (template.includes('isometric')) {
+                ctx.lineWidth = Math.max(2, fontPx * 0.05);
+                ctx.strokeStyle = '#fef08a';
+                ctx.strokeText(text, x, y);
+                if (colorMode === 'per-letter') {
+                    const widths = charList.map(c => ctx.measureText(c).width);
+                    const totalW = widths.reduce((a, b) => a + b, 0);
+                    let curX = (ctx.textAlign === 'center') ? (x - totalW / 2) : (ctx.textAlign === 'right' ? (x - totalW) : x);
+                    charList.forEach((c, idx) => {
+                        const cw = widths[idx];
+                        ctx.save();
+                        ctx.translate(curX + cw / 2, y);
+                        ctx.lineWidth = Math.max(2, fontPx * 0.05);
+                        ctx.strokeStyle = '#fef08a';
+                        ctx.strokeText(c, 0, 0);
+                        ctx.fillStyle = getFrontFill(idx);
+                        ctx.fillText(c, 0, 0);
+                        ctx.restore();
+                        curX += cw;
+                    });
+                } else {
+                    ctx.fillStyle = getFrontFill(0);
+                    ctx.fillText(text, x, y);
+                }
+            } else if (template.includes('neon')) {
+                ctx.shadowColor = '#ec4899';
+                ctx.shadowBlur = Math.max(12, fontPx * 0.25);
+                ctx.strokeStyle = '#ec4899';
+                ctx.lineWidth = Math.max(2, fontPx * 0.06);
+                ctx.strokeText(text, x, y);
+                ctx.fillStyle = getFrontFill(0);
+                ctx.fillText(text, x, y);
+            } else {
+                if (outlineColor) {
+                    ctx.lineWidth = outlineWidth || Math.max(2, fontPx * 0.06);
+                    ctx.strokeStyle = outlineColor;
+                    ctx.strokeText(text, x, y);
+                } else {
+                    ctx.lineWidth = Math.max(2, fontPx * 0.05);
+                    ctx.strokeStyle = 'rgba(0, 0, 0, 0.6)';
+                    ctx.strokeText(text, x, y);
+                }
+                if (colorMode === 'per-letter') {
+                    const widths = charList.map(c => ctx.measureText(c).width);
+                    const totalW = widths.reduce((a, b) => a + b, 0);
+                    let curX = (ctx.textAlign === 'center') ? (x - totalW / 2) : (ctx.textAlign === 'right' ? (x - totalW) : x);
+                    charList.forEach((c, idx) => {
+                        const cw = widths[idx];
+                        ctx.save();
+                        ctx.translate(curX + cw / 2, y);
+                        if (outlineColor) { ctx.lineWidth = outlineWidth; ctx.strokeStyle = outlineColor; ctx.strokeText(c, 0, 0); }
+                        ctx.fillStyle = getFrontFill(idx);
+                        ctx.fillText(c, 0, 0);
+                        ctx.restore();
+                        curX += cw;
+                    });
+                } else {
+                    ctx.fillStyle = getFrontFill(0);
+                    ctx.fillText(text, x, y);
+                }
+            }
+        } else {
+            if (outlineColor) {
+                ctx.lineWidth = outlineWidth || 2;
+                ctx.strokeStyle = outlineColor;
+                ctx.strokeText(text, x, y);
+            }
+            if (colorMode === 'per-letter') {
+                const widths = charList.map(c => ctx.measureText(c).width);
+                const totalW = widths.reduce((a, b) => a + b, 0);
+                let curX = (ctx.textAlign === 'center') ? (x - totalW / 2) : (ctx.textAlign === 'right' ? (x - totalW) : x);
+                charList.forEach((c, idx) => {
+                    const cw = widths[idx];
+                    ctx.save();
+                    ctx.translate(curX + cw / 2, y);
+                    if (outlineColor) { ctx.lineWidth = outlineWidth; ctx.strokeStyle = outlineColor; ctx.strokeText(c, 0, 0); }
+                    ctx.fillStyle = getFrontFill(idx);
+                    ctx.fillText(c, 0, 0);
+                    ctx.restore();
+                    curX += cw;
+                });
+            } else {
+                ctx.fillStyle = getFrontFill(0);
+                ctx.fillText(text, x, y);
+            }
+        }
+        ctx.restore();
+    }
+
     // Draws `text` centered at the current origin, arced along a circle whose
     // curvature is set by `curveAmount` (-100..100; 0 = perfectly flat).
     // Positive values arch upward in the middle (rainbow/badge look), negative
@@ -5826,8 +6071,8 @@ document.addEventListener('DOMContentLoaded', () => {
                         const p = Math.max(0, Math.min(1, localT / typeDur));
                         const revealCount = Math.max(0, Math.min(lineGraphemes.length, Math.round(lineGraphemes.length * p)));
                         const textToDraw = lineGraphemes.slice(0, revealCount).join('');
-                        if (lineObj.bullet) ctx.fillText(lineObj.bullet, textX, lineY);
-                        ctx.fillText(textToDraw, lineX, lineY);
+                        if (lineObj.bullet) renderTextWith3DAndColor(ctx, lineObj.bullet, textX, lineY, item, item.fontSize, isBulletPage ? 'left' : 'center');
+                        renderTextWith3DAndColor(ctx, textToDraw, lineX, lineY, item, item.fontSize, align);
                         if (p < 1 && Math.floor(currentTime * 2.5) % 2 === 0) {
                             const w = ctx.measureText(textToDraw).width;
                             const curX = (align === 'center') ? (lineX + w / 2 + Math.max(2, item.fontSize * 0.04)) : (lineX + w + Math.max(2, item.fontSize * 0.04));
@@ -5842,7 +6087,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         }
                     } else if (isKinetic) {
                         const transitionDur = Math.min(1.0, Math.max(0.3, secondsPerLine * 0.5));
-                        if (lineObj.bullet) ctx.fillText(lineObj.bullet, textX, lineY);
+                        if (lineObj.bullet) renderTextWith3DAndColor(ctx, lineObj.bullet, textX, lineY, item, item.fontSize, isBulletPage ? 'left' : 'center');
                         const lineTextW = ctx.measureText(lineObj.text).width;
                         const kineticLineX = isBulletPage ? (lineX + lineTextW / 2) : lineX;
                         const clampedT = Math.min(localT, transitionDur);
@@ -5887,8 +6132,8 @@ document.addEventListener('DOMContentLoaded', () => {
                             if (scale !== 1) ctx.scale(scale, scale);
                             ctx.translate(-dx, -dy);
                         }
-                        if (lineObj.bullet) ctx.fillText(lineObj.bullet, textX + offX, dy);
-                        ctx.fillText(lineObj.text, dx, dy);
+                        if (lineObj.bullet) renderTextWith3DAndColor(ctx, lineObj.bullet, textX + offX, dy, item, item.fontSize, isBulletPage ? 'left' : 'center');
+                        renderTextWith3DAndColor(ctx, lineObj.text, dx, dy, item, item.fontSize, align);
                         drawLineRevealUnderline(ctx, item, lineObj.text, dx, dy, align);
                     }
 
@@ -6316,12 +6561,24 @@ document.addEventListener('DOMContentLoaded', () => {
                     state.ctx.translate(hangPinX, hangPinY);
                     state.ctx.rotate(hangAngle);
                     state.ctx.translate(-hangPinX, -hangPinY);
-                } else if (rotateAmt !== 0 || scaleAmt !== 1 || item.visualTemplate === 'word-bevel-3d' || item.visualTemplate === 'word-depth-3d') {
+                } else if (rotateAmt !== 0 || scaleAmt !== 1 ||
+                    item.visualTemplate === 'word-bevel-3d' || item.visualTemplate === 'word-depth-3d' ||
+                    item.visualTemplate === 'word-3d-extruded' || item.visualTemplate === 'word-3d-isometric' ||
+                    item.visualTemplate === 'word-3d-neon' || item.visualTemplate === 'word-3d-popart' ||
+                    item.visualTemplate === 'word-3d-glass') {
                     state.ctx.translate(cx, cy);
-                    if (item.visualTemplate === 'word-bevel-3d' || item.visualTemplate === 'word-depth-3d') {
-                        const tiltY = item.visualTemplate === 'word-depth-3d' ? -0.18 : -0.11;
-                        const tiltX = item.visualTemplate === 'word-depth-3d' ? 0.07 : 0.04;
-                        state.ctx.transform(Math.cos(tiltY), Math.sin(tiltX), -Math.sin(tiltY) * 0.45, Math.cos(tiltX) * 0.95, 0, 0);
+                    const vt = item.visualTemplate;
+                    if (vt === 'word-bevel-3d' || vt === 'word-depth-3d' || vt === 'word-3d-extruded' ||
+                        vt === 'word-3d-isometric' || vt === 'word-3d-neon' || vt === 'word-3d-popart' || vt === 'word-3d-glass') {
+                        let tiltY = -0.22;
+                        let tiltX = 0.08;
+                        if (vt === 'word-depth-3d') { tiltY = -0.30; tiltX = 0.12; }
+                        else if (vt === 'word-3d-extruded') { tiltY = -0.34; tiltX = 0.15; }
+                        else if (vt === 'word-3d-isometric') { tiltY = -0.38; tiltX = 0.18; }
+                        else if (vt === 'word-3d-neon') { tiltY = -0.24; tiltX = 0.10; }
+                        else if (vt === 'word-3d-popart') { tiltY = -0.28; tiltX = 0.12; }
+                        else if (vt === 'word-3d-glass') { tiltY = -0.26; tiltX = 0.11; }
+                        state.ctx.transform(Math.cos(tiltY), Math.sin(tiltX), -Math.sin(tiltY) * 0.52, Math.cos(tiltX) * 0.92, 0, 0);
                     }
                     if (rotateAmt !== 0) state.ctx.rotate(rotateAmt);
                     if (scaleAmt !== 1) state.ctx.scale(scaleAmt, scaleAmt);
@@ -6387,6 +6644,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
 
                 if (item.type === 'text') {
+                    drawBrollVisualTemplate(state.ctx, item, drawBoxX, drawBoxY, boxW, boxH, alpha, imgDrawable);
                     if (item.visualTemplate === 'glass-caption') {
                         const glassRadius = Math.min(boxH * 0.48, 28);
                         state.ctx.save();
@@ -6642,8 +6900,7 @@ document.addEventListener('DOMContentLoaded', () => {
                                 }
                                 if (lineObj.bullet) {
                                     state.ctx.textAlign = 'left';
-                                    if (strokeOnFill) state.ctx.strokeText(lineObj.bullet, drawBulletX, drawLineY);
-                                    state.ctx.fillText(lineObj.bullet, drawBulletX, drawLineY);
+                                    renderTextWith3DAndColor(state.ctx, lineObj.bullet, drawBulletX, drawLineY, item, item.fontSize, 'left');
                                 }
                                 // drawKineticText() renders around cx as the center point.
                                 // For bullet pages the text starts at drawLineX (left-aligned),
@@ -6673,17 +6930,10 @@ document.addEventListener('DOMContentLoaded', () => {
                                     isTypingLine = revealCount < lineGraphemes.length && lineP > 0;
                                 }
 
-                                if (item.mode === 'fullscreen' && item.transparentBg === false) {
-                                    state.ctx.lineWidth = Math.max(2, item.fontSize * 0.08);
-                                    state.ctx.strokeStyle = 'rgba(0,0,0,0.55)';
-                                    if (lineObj.bullet) state.ctx.strokeText(lineObj.bullet, drawBulletX, drawLineY);
-                                    state.ctx.strokeText(textToDraw, drawLineX, drawLineY);
-                                }
-
                                 if (lineObj.bullet) {
-                                    state.ctx.fillText(lineObj.bullet, drawBulletX, drawLineY);
+                                    renderTextWith3DAndColor(state.ctx, lineObj.bullet, drawBulletX, drawLineY, item, item.fontSize, isBulletPage ? 'left' : 'center');
                                 }
-                                state.ctx.fillText(textToDraw, drawLineX, drawLineY);
+                                renderTextWith3DAndColor(state.ctx, textToDraw, drawLineX, drawLineY, item, item.fontSize, isBulletPage ? 'left' : 'center');
 
                                 // Canvas text has no native underline, so draw one manually
                                 // under whatever's currently on screen (handles the typewriter
@@ -7191,7 +7441,9 @@ document.addEventListener('DOMContentLoaded', () => {
                     }
                 }
 
-                drawBrollVisualTemplate(state.ctx, item, drawBoxX, drawBoxY, boxW, boxH, alpha, imgDrawable);
+                if (item.type !== 'text') {
+                    drawBrollVisualTemplate(state.ctx, item, drawBoxX, drawBoxY, boxW, boxH, alpha, imgDrawable);
+                }
                 state.ctx.restore();
 
                 // Comparison Slide (Before/After) divider handle — drawn unclipped
@@ -7697,21 +7949,16 @@ document.addEventListener('DOMContentLoaded', () => {
                     } else if (textAnimStyle === 'rainbow-flow') {
                         drawTextOverlayRainbowFlow(ctx2, textToDraw, currentTime, outlineColor, outlineWidth);
                     } else {
-                        ctx2.lineWidth = outlineWidth;
-                        ctx2.strokeStyle = outlineColor;
                         const linesToDraw = textToDraw.split('\n');
-                        if (linesToDraw.length <= 1) {
-                            ctx2.strokeText(textToDraw, 0, 0);
-                            ctx2.fillText(textToDraw, 0, 0);
-                        } else {
-                            const lHeight = item.fontSize * 1.25;
-                            const startY = -((linesToDraw.length - 1) * lHeight) / 2;
-                            linesToDraw.forEach((lText, lIdx) => {
-                                const lY = startY + lIdx * lHeight;
-                                ctx2.strokeText(lText, 0, lY);
-                                ctx2.fillText(lText, 0, lY);
-                            });
-                        }
+                        const lHeight = item.fontSize * 1.25;
+                        const startY = linesToDraw.length <= 1 ? 0 : -((linesToDraw.length - 1) * lHeight) / 2;
+                        // Delegate to the unified helper which handles solid, per-letter,
+                        // gradient colour modes AND 3D extrusion text for all visual templates.
+                        // ctx2 is already translated so that (0, 0) is the text centre.
+                        linesToDraw.forEach((lText, lIdx) => {
+                            const lY = startY + lIdx * lHeight;
+                            renderTextWith3DAndColor(ctx2, lText, 0, lY, item, item.fontSize, 'center', outlineColor, outlineWidth);
+                        });
                     }
                 };
                 applyTextOverlayShadow(state.ctx, item, drawTextContent);
@@ -12002,6 +12249,60 @@ document.addEventListener('DOMContentLoaded', () => {
         if (item) { item.color = e.target.value; drawFrame(); }
     });
 
+    const textOverlayColorMode = document.getElementById('text-overlay-color-mode');
+    const textOverlayPerLetterGroup = document.getElementById('text-overlay-per-letter-group');
+    const textOverlayPerLetterPalette = document.getElementById('text-overlay-per-letter-palette');
+    const textOverlayGradientGroup = document.getElementById('text-overlay-gradient-group');
+    const textOverlayGradientColor1 = document.getElementById('text-overlay-gradient-color1');
+    const textOverlayGradientColor1Val = document.getElementById('text-overlay-gradient-color1-val');
+    const textOverlayGradientColor2 = document.getElementById('text-overlay-gradient-color2');
+    const textOverlayGradientColor2Val = document.getElementById('text-overlay-gradient-color2-val');
+    const textOverlayGradientDirection = document.getElementById('text-overlay-gradient-direction');
+
+    function refreshColorModeGroupsVisibility() {
+        const mode = textOverlayColorMode ? textOverlayColorMode.value : 'solid';
+        if (textOverlayPerLetterGroup) textOverlayPerLetterGroup.style.display = (mode === 'per-letter') ? 'block' : 'none';
+        if (textOverlayGradientGroup) textOverlayGradientGroup.style.display = (mode === 'gradient') ? 'block' : 'none';
+    }
+
+    if (textOverlayColorMode) {
+        textOverlayColorMode.addEventListener('change', (e) => {
+            refreshColorModeGroupsVisibility();
+            const item = getSelectedTextOverlay();
+            if (item) { item.colorMode = e.target.value; drawFrame(); if (window.triggerAutoSave) window.triggerAutoSave(); }
+        });
+    }
+
+    if (textOverlayPerLetterPalette) {
+        textOverlayPerLetterPalette.addEventListener('change', (e) => {
+            const item = getSelectedTextOverlay();
+            if (item) { item.perLetterPalette = e.target.value; drawFrame(); if (window.triggerAutoSave) window.triggerAutoSave(); }
+        });
+    }
+
+    if (textOverlayGradientColor1) {
+        textOverlayGradientColor1.addEventListener('input', (e) => {
+            if (textOverlayGradientColor1Val) textOverlayGradientColor1Val.innerText = e.target.value;
+            const item = getSelectedTextOverlay();
+            if (item) { item.gradientColor1 = e.target.value; drawFrame(); if (window.triggerAutoSave) window.triggerAutoSave(); }
+        });
+    }
+
+    if (textOverlayGradientColor2) {
+        textOverlayGradientColor2.addEventListener('input', (e) => {
+            if (textOverlayGradientColor2Val) textOverlayGradientColor2Val.innerText = e.target.value;
+            const item = getSelectedTextOverlay();
+            if (item) { item.gradientColor2 = e.target.value; drawFrame(); if (window.triggerAutoSave) window.triggerAutoSave(); }
+        });
+    }
+
+    if (textOverlayGradientDirection) {
+        textOverlayGradientDirection.addEventListener('change', (e) => {
+            const item = getSelectedTextOverlay();
+            if (item) { item.gradientDirection = e.target.value; drawFrame(); if (window.triggerAutoSave) window.triggerAutoSave(); }
+        });
+    }
+
     textOverlayFontSelect.addEventListener('change', (e) => {
         const item = getSelectedTextOverlay();
         if (item) { item.font = e.target.value; drawFrame(); }
@@ -12390,6 +12691,12 @@ document.addEventListener('DOMContentLoaded', () => {
         textOverlayFontsizeVal.innerText = item.fontSize + 'px';
         textOverlayColorInput.value = item.color;
         textOverlayColorVal.innerText = item.color;
+        if (textOverlayColorMode) textOverlayColorMode.value = item.colorMode || 'solid';
+        if (textOverlayPerLetterPalette) textOverlayPerLetterPalette.value = item.perLetterPalette || 'rainbow';
+        if (textOverlayGradientColor1) { textOverlayGradientColor1.value = item.gradientColor1 || '#22d3ee'; if (textOverlayGradientColor1Val) textOverlayGradientColor1Val.innerText = textOverlayGradientColor1.value; }
+        if (textOverlayGradientColor2) { textOverlayGradientColor2.value = item.gradientColor2 || '#a855f7'; if (textOverlayGradientColor2Val) textOverlayGradientColor2Val.innerText = textOverlayGradientColor2.value; }
+        if (textOverlayGradientDirection) textOverlayGradientDirection.value = item.gradientDirection || 'horizontal';
+        refreshColorModeGroupsVisibility();
         textOverlayFontSelect.value = item.font || 'Hind Siliguri';
         textOverlayBoxSelect.value = item.boxStyle || 'none';
         textOverlayBoxColorInput.value = item.boxColor || '#4f46e5';
@@ -13699,6 +14006,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 animationStyle: brollModeSelect && brollModeSelect.value === 'pip' ? 'slide-pop' : 'zoom',
                 animationSpeedSec: 0.4, // continuous drag-slider speed (seconds); 0.4 ~= old 'Normal' preset
                 soundEffect: 'none',
+                visualTemplate: (brollVisualTemplateSelect && brollVisualTemplateSelect.value) || 'standard',
                 // true (default) = plain text, no legibility outline. false =
                 // "Normal" mode keeps the old black stroke outline around
                 // fullscreen text so it reads clearly over busy footage.
@@ -14022,7 +14330,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         state.brollOverlays.forEach((item) => {
-            const isSelected = (item.id === state.selectedBrollId);
+            const isSelected = !!(state.selectedBrollId != null && item.id != null && String(item.id) === String(state.selectedBrollId));
             const row = document.createElement('div');
             row.className = 'broll-list-item' + (isSelected ? ' active' : '');
             row.style.display = 'flex';
@@ -14162,7 +14470,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function showBrollTimingFor(id) {
-        const item = state.brollOverlays.find(b => b.id === id);
+        const item = state.brollOverlays.find(b => b.id != null && String(b.id) === String(id));
         if (!item) {
             if (brollTimingContainer) brollTimingContainer.style.display = 'none';
             return;
@@ -16092,39 +16400,102 @@ document.addEventListener('DOMContentLoaded', () => {
             ctx.strokeStyle = 'rgba(255,255,255,0.75)';
             ctx.lineWidth = Math.max(2, minSide * 0.012);
             ctx.strokeRect(x, y, width, height);
-        } else if (template === 'word-bevel-3d' || template === 'word-depth-3d') {
+        } else if (template === 'word-bevel-3d' || template === 'word-depth-3d' || template === 'word-3d-extruded' || template === 'word-3d-isometric' || template === 'word-3d-neon' || template === 'word-3d-popart' || template === 'word-3d-glass') {
             const frameW = Math.max(8, minSide * 0.06);
+            const depthSteps = template === 'word-3d-extruded' ? 22 : (template === 'word-3d-isometric' ? 26 : (template === 'word-depth-3d' ? 16 : 10));
 
-            // Draw crisp 3D Bevel frame over the already tilted canvas
-            ctx.shadowColor = 'rgba(0, 0, 0, 0.65)';
-            ctx.shadowBlur = Math.max(14, frameW * 1.8);
-            ctx.shadowOffsetX = template === 'word-depth-3d' ? frameW * 1.2 : frameW * 0.6;
-            ctx.shadowOffsetY = Math.max(8, frameW * 1.0);
-
-            // Base thick 3D white border
-            ctx.strokeStyle = '#ffffff';
-            ctx.lineWidth = frameW;
-            ctx.strokeRect(x, y, width, height);
-
+            // Multi-step 3D Extrusion Slices (Creates genuine 3D block thickness)
+            ctx.save();
             ctx.shadowBlur = 0;
-            ctx.shadowOffsetX = 0;
-            ctx.shadowOffsetY = 0;
+            for (let i = depthSteps; i >= 1; i--) {
+                const offX = i * (template === 'word-3d-isometric' ? 0.9 : 0.7);
+                const offY = i * (template === 'word-3d-isometric' ? 1.1 : 0.85);
 
-            // Light highlight on Top and Left edges (Simulating top-left light source)
-            ctx.fillStyle = 'rgba(255, 255, 255, 0.75)';
-            ctx.fillRect(x - frameW / 2, y - frameW / 2, width + frameW, frameW * 0.45); // Top light band
-            ctx.fillRect(x - frameW / 2, y - frameW / 2, frameW * 0.45, height + frameW); // Left light band
+                if (template === 'word-3d-extruded') {
+                    const shade = Math.round(15 + (i / depthSteps) * 35);
+                    ctx.fillStyle = `rgb(${shade}, ${shade + 10}, ${shade + 25})`;
+                    ctx.fillRect(x + offX - frameW / 2, y + offY - frameW / 2, width + frameW, height + frameW);
+                } else if (template === 'word-3d-isometric') {
+                    const r = Math.round(180 - i * 3);
+                    const g = Math.round(120 - i * 3);
+                    const b = Math.round(20 - i * 0.5);
+                    ctx.fillStyle = `rgb(${Math.max(40, r)}, ${Math.max(25, g)}, ${Math.max(5, b)})`;
+                    ctx.fillRect(x + offX - frameW / 2, y + offY - frameW / 2, width + frameW, height + frameW);
+                } else if (template === 'word-3d-popart') {
+                    ctx.fillStyle = (i % 2 === 0) ? '#000000' : '#ef4444';
+                    ctx.fillRect(x + offX - frameW / 2, y + offY - frameW / 2, width + frameW, height + frameW);
+                } else if (template === 'word-3d-neon') {
+                    ctx.fillStyle = `rgba(6, 182, 212, ${0.08 + (1 - i / depthSteps) * 0.12})`;
+                    ctx.fillRect(x + offX - frameW / 2, y + offY - frameW / 2, width + frameW, height + frameW);
+                } else {
+                    const darkVal = Math.round(30 + (i / depthSteps) * 60);
+                    ctx.fillStyle = `rgba(${darkVal}, ${darkVal}, ${darkVal}, 0.45)`;
+                    ctx.fillRect(x + offX - frameW / 2, y + offY - frameW / 2, width + frameW, height + frameW);
+                }
+            }
+            ctx.restore();
 
-            // Dark bevel shadow on Bottom and Right edges
-            ctx.fillStyle = 'rgba(0, 0, 0, 0.38)';
-            ctx.fillRect(x - frameW / 2, y + height + frameW * 0.05, width + frameW, frameW * 0.45); // Bottom dark band
-            ctx.fillRect(x + width + frameW * 0.05, y - frameW / 2, frameW * 0.45, height + frameW); // Right dark band
+            // Main Front 3D Card / Frame Styling
+            if (template === 'word-3d-isometric') {
+                // Shiny Metallic Gold Border & Fill Accent
+                ctx.strokeStyle = '#fbbf24';
+                ctx.lineWidth = frameW;
+                ctx.strokeRect(x, y, width, height);
 
-            // Inner crisp dark contour separating image from frame
-            ctx.strokeStyle = 'rgba(0, 0, 0, 0.35)';
-            ctx.lineWidth = Math.max(1.5, frameW * 0.15);
-            ctx.strokeRect(x - frameW * 0.5, y - frameW * 0.5, width + frameW, height + frameW);
-            ctx.strokeRect(x + frameW * 0.5, y + frameW * 0.5, width - frameW, height - frameW);
+                ctx.fillStyle = 'rgba(251, 191, 36, 0.85)';
+                ctx.fillRect(x - frameW / 2, y - frameW / 2, width + frameW, frameW * 0.45);
+                ctx.fillStyle = 'rgba(180, 83, 9, 0.65)';
+                ctx.fillRect(x - frameW / 2, y + height, width + frameW, frameW * 0.45);
+            } else if (template === 'word-3d-neon') {
+                // Neon Glowing Edges
+                ctx.shadowColor = '#06b6d4';
+                ctx.shadowBlur = Math.max(16, frameW * 2);
+                ctx.strokeStyle = '#ec4899';
+                ctx.lineWidth = frameW;
+                ctx.strokeRect(x, y, width, height);
+                ctx.shadowColor = '#ec4899';
+                ctx.shadowBlur = Math.max(10, frameW * 1.2);
+                ctx.strokeRect(x, y, width, height);
+            } else if (template === 'word-3d-popart') {
+                // Bold Pop-Art Comic Outline
+                ctx.strokeStyle = '#000000';
+                ctx.lineWidth = frameW * 1.4;
+                ctx.strokeRect(x, y, width, height);
+                ctx.strokeStyle = '#f59e0b';
+                ctx.lineWidth = frameW * 0.7;
+                ctx.strokeRect(x, y, width, height);
+            } else if (template === 'word-3d-glass') {
+                // Translucent Refractive Glass Slab
+                ctx.fillStyle = 'rgba(255, 255, 255, 0.22)';
+                ctx.fillRect(x, y, width, height);
+                ctx.strokeStyle = 'rgba(255, 255, 255, 0.85)';
+                ctx.lineWidth = Math.max(2, frameW * 0.4);
+                ctx.strokeRect(x, y, width, height);
+            } else {
+                // Enhanced 3D Bevel & 3D Depth Card
+                ctx.shadowColor = 'rgba(0, 0, 0, 0.75)';
+                ctx.shadowBlur = Math.max(18, frameW * 2.2);
+                ctx.shadowOffsetX = template === 'word-depth-3d' ? frameW * 1.6 : frameW * 0.8;
+                ctx.shadowOffsetY = Math.max(12, frameW * 1.4);
+
+                ctx.strokeStyle = '#ffffff';
+                ctx.lineWidth = frameW;
+                ctx.strokeRect(x, y, width, height);
+
+                ctx.shadowBlur = 0;
+                ctx.shadowOffsetX = 0;
+                ctx.shadowOffsetY = 0;
+
+                // Top & Left Light Highlight
+                ctx.fillStyle = 'rgba(255, 255, 255, 0.85)';
+                ctx.fillRect(x - frameW / 2, y - frameW / 2, width + frameW, frameW * 0.5);
+                ctx.fillRect(x - frameW / 2, y - frameW / 2, frameW * 0.5, height + frameW);
+
+                // Bottom & Right Bevel Dark Shadow
+                ctx.fillStyle = 'rgba(0, 0, 0, 0.45)';
+                ctx.fillRect(x - frameW / 2, y + height, width + frameW, frameW * 0.5);
+                ctx.fillRect(x + width, y - frameW / 2, frameW * 0.5, height + frameW);
+            }
         }
         ctx.restore();
     }
@@ -17206,16 +17577,14 @@ document.addEventListener('DOMContentLoaded', () => {
         // deleted at once when the user tries to remove just one. Detect duplicates
         // and assign a fresh unique id to any offending item so every B-roll is
         // individually addressable.
-        if (state.brollOverlays && state.brollOverlays.length > 1) {
-            let runningMax = maxId;
+        if (state.brollOverlays && state.brollOverlays.length > 0) {
             const seenIds = new Set();
             state.brollOverlays.forEach(item => {
                 if (!item) return;
-                if (typeof item.id !== 'number' || seenIds.has(item.id)) {
-                    runningMax += 1;
-                    item.id = runningMax;
+                if (!item.id || seenIds.has(String(item.id))) {
+                    item.id = generateBrollId();
                 }
-                seenIds.add(item.id);
+                seenIds.add(String(item.id));
             });
         }
     }

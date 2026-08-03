@@ -416,11 +416,16 @@
             if (media) { ctx.save(); ctx.beginPath(); ctx.rect(box.x, box.y + box.h + Math.max(4, minSide * .025), box.w, rh); ctx.clip(); ctx.globalAlpha = .34; ctx.translate(0, box.y * 2 + box.h * 2 + Math.max(4, minSide * .025)); ctx.scale(1, -1); try { ctx.drawImage(media, box.x, box.y, box.w, box.h); } catch (e) {} ctx.restore(); }
             gr.addColorStop(0, 'rgba(0,0,0,.04)'); gr.addColorStop(1, 'rgba(0,0,0,.82)'); ctx.save(); ctx.beginPath(); ctx.rect(box.x, box.y + box.h + Math.max(4, minSide * .025), box.w, rh); ctx.clip(); ctx.globalCompositeOperation = 'destination-out'; ctx.fillStyle = gr;
             ctx.fillRect(box.x, box.y + box.h + Math.max(4, minSide * .025), box.w, rh); ctx.restore();
-        } else if (design === 'bevel-3d' || design === 'depth-3d') {
+        } else if (design === 'bevel-3d' || design === 'depth-3d' || design === '3d-extruded' || design === '3d-isometric' || design === '3d-neon' || design === '3d-popart' || design === '3d-glass') {
             var frameW = Math.max(8, minSide * 0.06);
             var cx = box.x + box.w / 2, cy = box.y + box.h / 2;
-            var tiltY = design === 'depth-3d' ? -0.22 : -0.14;
-            var tiltX = design === 'depth-3d' ? 0.08 : 0.05;
+            var tiltY = -0.22, tiltX = 0.08;
+            if (design === 'depth-3d') { tiltY = -0.30; tiltX = 0.12; }
+            else if (design === '3d-extruded') { tiltY = -0.34; tiltX = 0.15; }
+            else if (design === '3d-isometric') { tiltY = -0.38; tiltX = 0.18; }
+            else if (design === '3d-neon') { tiltY = -0.24; tiltX = 0.10; }
+            else if (design === '3d-popart') { tiltY = -0.28; tiltX = 0.12; }
+            else if (design === '3d-glass') { tiltY = -0.26; tiltX = 0.11; }
 
             // Ground shadow
             ctx.save();
@@ -436,22 +441,47 @@
             // 3D transform
             ctx.save();
             ctx.translate(cx, cy);
-            ctx.transform(Math.cos(tiltY), Math.sin(tiltX), -Math.sin(tiltY) * 0.5, Math.cos(tiltX) * 0.94, 0, 0);
+            ctx.transform(Math.cos(tiltY), Math.sin(tiltX), -Math.sin(tiltY) * 0.52, Math.cos(tiltX) * 0.92, 0, 0);
             ctx.translate(-cx, -cy);
 
-            ctx.shadowColor = 'rgba(0, 0, 0, 0.65)';
-            ctx.shadowBlur = Math.max(16, frameW * 2);
-            ctx.shadowOffsetX = design === 'depth-3d' ? frameW * 1.5 : frameW * 0.8;
-            ctx.shadowOffsetY = Math.max(10, frameW * 1.2);
+            var depthSteps = design === '3d-extruded' ? 22 : (design === '3d-isometric' ? 26 : (design === 'depth-3d' ? 16 : 10));
+            ctx.save();
+            ctx.shadowBlur = 0;
+            for (var i = depthSteps; i >= 1; i--) {
+                var offX = i * (design === '3d-isometric' ? 0.9 : 0.7);
+                var offY = i * (design === '3d-isometric' ? 1.1 : 0.85);
+
+                if (design === '3d-extruded') {
+                    var shade = Math.round(15 + (i / depthSteps) * 35);
+                    ctx.fillStyle = 'rgb(' + shade + ',' + (shade + 10) + ',' + (shade + 25) + ')';
+                    ctx.fillRect(box.x + offX - frameW / 2, box.y + offY - frameW / 2, box.w + frameW, box.h + frameW);
+                } else if (design === '3d-isometric') {
+                    var r = Math.round(180 - i * 3);
+                    var g = Math.round(120 - i * 3);
+                    var b = Math.round(20 - i * 0.5);
+                    ctx.fillStyle = 'rgb(' + Math.max(40, r) + ',' + Math.max(25, g) + ',' + Math.max(5, b) + ')';
+                    ctx.fillRect(box.x + offX - frameW / 2, box.y + offY - frameW / 2, box.w + frameW, box.h + frameW);
+                } else {
+                    var darkVal = Math.round(30 + (i / depthSteps) * 60);
+                    ctx.fillStyle = 'rgba(' + darkVal + ',' + darkVal + ',' + darkVal + ',0.45)';
+                    ctx.fillRect(box.x + offX - frameW / 2, box.y + offY - frameW / 2, box.w + frameW, box.h + frameW);
+                }
+            }
+            ctx.restore();
+
+            ctx.shadowColor = 'rgba(0, 0, 0, 0.75)';
+            ctx.shadowBlur = Math.max(18, frameW * 2.2);
+            ctx.shadowOffsetX = design === 'depth-3d' ? frameW * 1.6 : frameW * 0.8;
+            ctx.shadowOffsetY = Math.max(12, frameW * 1.4);
             ctx.strokeStyle = '#ffffff'; ctx.lineWidth = frameW; ctx.strokeRect(box.x, box.y, box.w, box.h);
 
             ctx.shadowBlur = 0; ctx.shadowOffsetX = 0; ctx.shadowOffsetY = 0;
-            ctx.fillStyle = 'rgba(255, 255, 255, 0.75)';
-            ctx.fillRect(box.x - frameW / 2, box.y - frameW / 2, box.w + frameW, frameW * 0.45);
-            ctx.fillRect(box.x - frameW / 2, box.y - frameW / 2, frameW * 0.45, box.h + frameW);
-            ctx.fillStyle = 'rgba(0, 0, 0, 0.38)';
-            ctx.fillRect(box.x - frameW / 2, box.y + box.h + frameW * 0.05, box.w + frameW, frameW * 0.45);
-            ctx.fillRect(box.x + box.w + frameW * 0.05, box.y - frameW / 2, frameW * 0.45, box.h + frameW);
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.85)';
+            ctx.fillRect(box.x - frameW / 2, box.y - frameW / 2, box.w + frameW, frameW * 0.5);
+            ctx.fillRect(box.x - frameW / 2, box.y - frameW / 2, frameW * 0.5, box.h + frameW);
+            ctx.fillStyle = 'rgba(0, 0, 0, 0.45)';
+            ctx.fillRect(box.x - frameW / 2, box.y + box.h, box.w + frameW, frameW * 0.5);
+            ctx.fillRect(box.x + box.w, box.y - frameW / 2, frameW * 0.5, box.h + frameW);
             ctx.restore();
         }
         ctx.restore();
@@ -1499,7 +1529,7 @@
             designWrap.innerHTML = '<span style="color:var(--text-secondary);font-weight:500;">Design & 3D Frame:</span>';
             var designSelect = document.createElement('select');
             styleEl(designSelect, { background: 'var(--bg-card)', color: 'var(--text-primary)', border: '1px solid var(--border-color)', borderRadius: '4px', padding: '2px 6px', fontSize: '11px', flex: '1' });
-            designSelect.innerHTML = '<option value="standard">Standard</option><option value="shadow">Soft Shadow</option><option value="white-frame">White Matte Frame</option><option value="double-frame">Double Line Frame</option><option value="rounded">Rounded Glass</option><option value="circle">Circle Frame (গোল)</option><option value="polaroid">Polaroid</option><option value="reflection">Reflection</option><option value="bevel-3d">3D Bevel (থ্রিডি)</option><option value="depth-3d">3D Depth Card</option>';
+            designSelect.innerHTML = '<option value="standard">Standard</option><option value="shadow">Soft Shadow</option><option value="white-frame">White Matte Frame</option><option value="double-frame">Double Line Frame</option><option value="rounded">Rounded Glass</option><option value="circle">Circle Frame (গোল)</option><option value="polaroid">Polaroid</option><option value="reflection">Reflection</option><option value="bevel-3d">3D Bevel (থ্রিডি)</option><option value="depth-3d">3D Depth Card</option><option value="3d-extruded">3D Extruded Block</option><option value="3d-isometric">3D Isometric Gold</option><option value="3d-neon">3D Neon Cyber</option><option value="3d-popart">3D Retro Pop-Art</option><option value="3d-glass">3D Crystal Glass</option>';
             designSelect.value = clip.imageDesign || clip.visualTemplate || 'standard';
             designSelect.addEventListener('change', function () { clip.imageDesign = designSelect.value; afterChange(track.name + ': Frame design changed'); render(); requestPreviewRedraw(); });
             designWrap.appendChild(designSelect);
