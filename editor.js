@@ -6773,6 +6773,19 @@ document.addEventListener('DOMContentLoaded', () => {
                     frameBoxY = drawBoxY - (frameBoxH - boxH) / 2;
                 }
 
+                // 3D card templates (Bevel/Depth/Extruded/Isometric/Neon/Pop Art/
+                // Glass/Chrome/Holo) on a PHOTO or VIDEO B-roll: paint just the
+                // depth/extrusion "slices" now, before the image itself is drawn,
+                // so they sit behind it like real card thickness. The matching
+                // front-edge pass is drawn after the image further below — see
+                // the 'frameOnly' call near the end of this item's render block.
+                // (Text B-roll doesn't need this split: the text is drawn in a
+                // separate step after the full single-pass call below, so a
+                // combined pass here never ends up covering it.)
+                if (item.type !== 'text' && isBroll3DCardTemplate(item.visualTemplate)) {
+                    drawBrollVisualTemplate(state.ctx, item, frameBoxX, frameBoxY, frameBoxW, frameBoxH, alpha, null, 'shadowOnly');
+                }
+
                 if (item.type === 'text') {
                     drawBrollVisualTemplate(state.ctx, item, frameBoxX, frameBoxY, frameBoxW, frameBoxH, alpha, imgDrawable);
                     if (item.visualTemplate === 'glass-caption') {
@@ -7589,7 +7602,12 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
 
                 if (item.type !== 'text') {
-                    drawBrollVisualTemplate(state.ctx, item, frameBoxX, frameBoxY, frameBoxW, frameBoxH, alpha, imgDrawable);
+                    // For the 3D card templates, only the front-edge pass is left to
+                    // draw here (the depth/extrusion slices were already painted
+                    // behind the image, above). Every other template ignores the
+                    // phase argument and draws in full, same as before.
+                    const _brollPhase = isBroll3DCardTemplate(item.visualTemplate) ? 'frameOnly' : undefined;
+                    drawBrollVisualTemplate(state.ctx, item, frameBoxX, frameBoxY, frameBoxW, frameBoxH, alpha, imgDrawable, _brollPhase);
                 }
                 state.ctx.restore();
 
@@ -16509,7 +16527,31 @@ document.addEventListener('DOMContentLoaded', () => {
         ctx.restore();
     }
 
-    function drawBrollVisualTemplate(ctx, item, x, y, width, height, alpha, imageSource) {
+    // Shared list of the "3D card" visual templates — these are the only
+    // templates whose drawBrollVisualTemplate output needs to be split into a
+    // background pass (depth/extrusion slices) and a foreground pass (the
+    // front card's border/edge styling). Every other template (Polaroid,
+    // phone, laptop, plain frames, etc.) only ever draws a border/overlay
+    // around the box, so it's safe to keep drawing those in a single pass
+    // after the photo/video content, same as before.
+    function isBroll3DCardTemplate(template) {
+        return template === 'word-bevel-3d' || template === 'word-depth-3d' || template === 'word-3d-extruded' ||
+               template === 'word-3d-isometric' || template === 'word-3d-neon' || template === 'word-3d-popart' ||
+               template === 'word-3d-glass' || template === 'word-3d-chrome' || template === 'word-3d-holo';
+    }
+
+    // `phase` controls, for the 3D card templates only, which half of the
+    // drawing gets painted:
+    //  - 'shadowOnly' → just the stacked depth/extrusion slices (meant to sit
+    //    BEHIND the photo/video, like the thickness of a card).
+    //  - 'frameOnly'  → just the front card's border/edge/glow styling (meant
+    //    to sit ON TOP of the photo/video, like a picture-frame edge).
+    //  - anything else (default) → both, back to back — used for text B-roll,
+    //    where the text itself is drawn separately afterwards so a single
+    //    combined pass here never ends up covering it.
+    // All non-3D templates ignore `phase` entirely and always draw in full,
+    // since they're only ever called once (after the image/text is drawn).
+    function drawBrollVisualTemplate(ctx, item, x, y, width, height, alpha, imageSource, phase) {
         const template = item.visualTemplate || 'standard';
         if (template === 'standard' || template === 'glass-caption') return;
 
@@ -16708,13 +16750,21 @@ document.addEventListener('DOMContentLoaded', () => {
             ctx.strokeStyle = overrideColor || 'rgba(255,255,255,0.75)';
             ctx.lineWidth = Math.max(2, minSide * 0.012);
             ctx.strokeRect(x, y, width, height);
-        } else if (template === 'word-bevel-3d' || template === 'word-depth-3d' || template === 'word-3d-extruded' || template === 'word-3d-isometric' || template === 'word-3d-neon' || template === 'word-3d-popart' || template === 'word-3d-glass' || template === 'word-3d-chrome' || template === 'word-3d-holo') {
+        } else if (isBroll3DCardTemplate(template)) {
             const frameW = Math.max(10, minSide * 0.08);
             const depthSteps = template === 'word-3d-extruded' ? 28 : (template === 'word-3d-isometric' ? 32 :
                                 template === 'word-depth-3d' ? 36 : (template === 'word-3d-chrome' ? 22 :
                                 template === 'word-3d-holo' ? 18 : (template === 'word-3d-glass' ? 10 : 14)));
 
-            // Multi-step 3D Extrusion Slices (Creates genuine 3D block thickness)
+            const skipShadow = phase === 'frameOnly';
+            const skipFrame = phase === 'shadowOnly';
+
+            // Multi-step 3D Extrusion Slices (Creates genuine 3D block thickness).
+            // Skipped entirely on the 'frameOnly' pass (drawn separately, earlier,
+            // BEFORE the photo/video content, so this thick stack of translucent
+            // slices reads as a backdrop instead of stacking on top of and
+            // hiding the image).
+            if (!skipShadow) {
             ctx.save();
             ctx.shadowBlur = 0;
             for (let i = depthSteps; i >= 1; i--) {
@@ -16773,8 +16823,13 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
             }
             ctx.restore();
+            }
 
-            // Main Front 3D Card / Frame Styling
+            // Main Front 3D Card / Frame Styling. Skipped entirely on the
+            // 'shadowOnly' pass (drawn separately, afterward, AFTER the photo/
+            // video content, so the border/glow sits on top of the image like
+            // a picture-frame edge instead of being drawn before it).
+            if (!skipFrame) {
             if (template === 'word-3d-isometric') {
                 // Shiny Metallic Gold Border & Fill Accent (or user's chosen color)
                 ctx.strokeStyle = overrideColor || '#fbbf24';
@@ -16896,6 +16951,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 ctx.fillStyle = overrideColor ? hexToRgba(shadeColorTO(overrideColor, -45), 0.45) : 'rgba(0, 0, 0, 0.45)';
                 ctx.fillRect(x - frameW / 2, y + height, width + frameW, frameW * 0.5);
                 ctx.fillRect(x + width, y - frameW / 2, frameW * 0.5, height + frameW);
+            }
             }
         }
         ctx.restore();
