@@ -6758,8 +6758,23 @@ document.addEventListener('DOMContentLoaded', () => {
                     state.ctx.fillRect(drawBoxX - 6, drawBoxY - 6, boxW + 12, boxH + 12);
                 }
 
+                // Frame Scale (Visual Template panel): grows/shrinks the frame/mockup
+                // drawn by drawBrollVisualTemplate around the box's own center, while
+                // the actual content (text or image, drawn separately using the
+                // unscaled drawBoxX/drawBoxY/boxW/boxH above) stays put — so the phone
+                // bezel, laptop shell, or 3D/border frame can be resized independent
+                // of what's inside it.
+                const _tplFrameScale = (item.templateFrameScale !== undefined) ? item.templateFrameScale : 1;
+                let frameBoxX = drawBoxX, frameBoxY = drawBoxY, frameBoxW = boxW, frameBoxH = boxH;
+                if (_tplFrameScale !== 1 && _tplFrameScale > 0) {
+                    frameBoxW = boxW * _tplFrameScale;
+                    frameBoxH = boxH * _tplFrameScale;
+                    frameBoxX = drawBoxX - (frameBoxW - boxW) / 2;
+                    frameBoxY = drawBoxY - (frameBoxH - boxH) / 2;
+                }
+
                 if (item.type === 'text') {
-                    drawBrollVisualTemplate(state.ctx, item, drawBoxX, drawBoxY, boxW, boxH, alpha, imgDrawable);
+                    drawBrollVisualTemplate(state.ctx, item, frameBoxX, frameBoxY, frameBoxW, frameBoxH, alpha, imgDrawable);
                     if (item.visualTemplate === 'glass-caption') {
                         const glassRadius = Math.min(boxH * 0.48, 28);
                         state.ctx.save();
@@ -7112,6 +7127,23 @@ document.addEventListener('DOMContentLoaded', () => {
                         sh = sw / boxAspect;
                         sx = 0;
                         sy = (imgDims.height - sh) / 2;
+                    }
+                    // Content Size (Visual Template panel): a static zoom into/out of
+                    // the crop window, independent of the Frame Scale below and of any
+                    // entry/exit zoom animation, which is applied on top of this further
+                    // down. >100% crops tighter (zoomed in); <100% crops wider (zoomed
+                    // out), clamped to the source image's own bounds.
+                    if (!fsSmall) {
+                        const contentScale = (item.templateContentScale !== undefined) ? item.templateContentScale : 1;
+                        if (contentScale !== 1 && contentScale > 0) {
+                            const newSw = Math.min(imgDims.width, sw / contentScale);
+                            const newSh = Math.min(imgDims.height, sh / contentScale);
+                            sx += (sw - newSw) / 2;
+                            sy += (sh - newSh) / 2;
+                            sw = newSw; sh = newSh;
+                            sx = Math.max(0, Math.min(sx, imgDims.width - sw));
+                            sy = Math.max(0, Math.min(sy, imgDims.height - sh));
+                        }
                     }
                     if (brollAnimActive && (style === 'zoom' || style === 'zoom-out')) {
                         // 'zoom' grows to 18% zoomed-in by the end; 'zoom-out' starts
@@ -7557,7 +7589,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
 
                 if (item.type !== 'text') {
-                    drawBrollVisualTemplate(state.ctx, item, drawBoxX, drawBoxY, boxW, boxH, alpha, imgDrawable);
+                    drawBrollVisualTemplate(state.ctx, item, frameBoxX, frameBoxY, frameBoxW, frameBoxH, alpha, imgDrawable);
                 }
                 state.ctx.restore();
 
@@ -13215,6 +13247,10 @@ document.addEventListener('DOMContentLoaded', () => {
     const brollTemplateColorInput = document.getElementById('broll-template-color-input');
     const brollTemplateColorVal = document.getElementById('broll-template-color-val');
     const brollTemplateColorReset = document.getElementById('broll-template-color-reset');
+    const brollTemplateFrameScaleSlider = document.getElementById('broll-template-frame-scale-slider');
+    const brollTemplateFrameScaleVal = document.getElementById('broll-template-frame-scale-val');
+    const brollTemplateContentScaleSlider = document.getElementById('broll-template-content-scale-slider');
+    const brollTemplateContentScaleVal = document.getElementById('broll-template-content-scale-val');
     const addCashSpinBtn = document.getElementById('add-cash-spin-btn');
     const addCashStackBtn = document.getElementById('add-cash-stack-btn');
     const addBuiltQuestionBtn = document.getElementById('add-built-question-btn');
@@ -14715,6 +14751,16 @@ document.addEventListener('DOMContentLoaded', () => {
             brollTemplateColorInput.value = item.visualTemplateColor || '#ffffff';
             if (brollTemplateColorVal) brollTemplateColorVal.innerText = item.visualTemplateColor ? item.visualTemplateColor.toUpperCase() : 'Default';
         }
+        if (brollTemplateFrameScaleSlider) {
+            const fs = Math.round((item.templateFrameScale !== undefined ? item.templateFrameScale : 1) * 100);
+            brollTemplateFrameScaleSlider.value = fs;
+            if (brollTemplateFrameScaleVal) brollTemplateFrameScaleVal.innerText = fs + '%';
+        }
+        if (brollTemplateContentScaleSlider) {
+            const cs = Math.round((item.templateContentScale !== undefined ? item.templateContentScale : 1) * 100);
+            brollTemplateContentScaleSlider.value = cs;
+            if (brollTemplateContentScaleVal) brollTemplateContentScaleVal.innerText = cs + '%';
+        }
         if (brollEntryDirSelect) brollEntryDirSelect.value = item.entryDirection || 'bottom';
         if (brollExitDirSelect) brollExitDirSelect.value = item.exitDirection || 'same';
         if (brollAnimSpeedSlider) {
@@ -14871,6 +14917,38 @@ document.addEventListener('DOMContentLoaded', () => {
             if (brollTemplateColorInput) brollTemplateColorInput.value = '#ffffff';
             if (brollTemplateColorVal) brollTemplateColorVal.innerText = 'Default';
             drawFrame();
+        });
+    }
+
+    // Frame Scale: resizes only the Visual Template's frame/design (phone
+    // bezel, laptop shell, 3D depth/border frames) around its own center,
+    // independent of the box the actual photo/video content is drawn into
+    // (see drawBrollVisualTemplate's frameScale parameter). Content stays
+    // put; only the surrounding mockup/frame grows or shrinks.
+    if (brollTemplateFrameScaleSlider) {
+        brollTemplateFrameScaleSlider.addEventListener('input', (e) => {
+            const item = state.brollOverlays.find(b => b.id === state.selectedBrollId);
+            if (!item) return;
+            const pct = parseInt(e.target.value, 10) || 100;
+            item.templateFrameScale = pct / 100;
+            if (brollTemplateFrameScaleVal) brollTemplateFrameScaleVal.innerText = pct + '%';
+            drawFrame();
+            if (window.triggerAutoSave) window.triggerAutoSave();
+        });
+    }
+
+    // Content Size: zooms the photo/video crop window shown inside the
+    // frame, without changing the frame/box size itself — the mirror image
+    // of Frame Scale above.
+    if (brollTemplateContentScaleSlider) {
+        brollTemplateContentScaleSlider.addEventListener('input', (e) => {
+            const item = state.brollOverlays.find(b => b.id === state.selectedBrollId);
+            if (!item) return;
+            const pct = parseInt(e.target.value, 10) || 100;
+            item.templateContentScale = pct / 100;
+            if (brollTemplateContentScaleVal) brollTemplateContentScaleVal.innerText = pct + '%';
+            drawFrame();
+            if (window.triggerAutoSave) window.triggerAutoSave();
         });
     }
 
