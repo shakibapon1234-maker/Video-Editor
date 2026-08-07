@@ -1615,6 +1615,24 @@
                                     </div>
                                 </div>
 
+                                <div class="toggle-control mt-3">
+                                    <div class="toggle-label">
+                                        <h4>🔁 Loop Animation (নির্দিষ্ট সময় পরপর আবার চলবে)</h4>
+                                    </div>
+                                    <label class="switch">
+                                        <input type="checkbox" id="text-overlay-anim-loop-enabled">
+                                        <span class="slider round"></span>
+                                    </label>
+                                </div>
+                                <div class="control-group mt-2" id="text-overlay-anim-loop-group" style="display:none;">
+                                    <label>Loop Every (কত সেকেন্ড পরপর রিপিট হবে)</label>
+                                    <div class="slider-val-container">
+                                        <input type="range" id="text-overlay-anim-loop-sec" min="1" max="30" step="0.5" value="5">
+                                        <span id="text-overlay-anim-loop-sec-val">5s</span>
+                                    </div>
+                                    <p class="help-text mt-1">চালু থাকলে, ওভারলে যতক্ষণ স্ক্রিনে থাকবে ততক্ষণ এই টেক্সট অ্যানিমেশনটি (যেমন স্মোক ভেপার, টাইপরাইটার) একবার চলে থেমে না গিয়ে, প্রতি এই কত সেকেন্ড পরপর আবার চলবে।</p>
+                                </div>
+
                                 <div class="control-group mt-3">
                                     <label>Curve (কার্ভ শেপ)</label>
                                     <div class="slider-val-container">

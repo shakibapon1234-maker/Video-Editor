@@ -3831,6 +3831,19 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!item.animStyle || item.animStyle === 'none') return { p: 1, phase: 'settled' };
         const tIn = currentTime - item.startSec;
         const tOut = item.endSec - currentTime;
+
+        // Looping animation: instead of playing the "in" reveal once and then
+        // sitting settled for the rest of the overlay's on-screen duration,
+        // replay it every `animLoopSec` seconds for as long as the overlay is
+        // visible. The exit ("out") animation near the overlay's end still
+        // plays once, normally, and is left untouched.
+        if (item.animLoop && item.animLoopSec > 0 && tOut >= animDur) {
+            const loopSec = Math.max(animDur, item.animLoopSec);
+            const tInLoop = tIn % loopSec;
+            if (tInLoop < animDur) return { p: Math.max(0, Math.min(1, tInLoop / animDur)), phase: 'in' };
+            return { p: 1, phase: 'settled' };
+        }
+
         if (tIn < animDur) return { p: Math.max(0, Math.min(1, tIn / animDur)), phase: 'in' };
         if (tOut < animDur) return { p: Math.max(0, Math.min(1, tOut / animDur)), phase: 'out' };
         return { p: 1, phase: 'settled' };
@@ -3850,7 +3863,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // style/speed/reference-size so they can move fully independently (or be
     // combined — e.g. box fades in while text pops in).
     // Returns { offX, offY, scale, scaleX, scaleY, rot, alpha }.
-    function computeOverlayAnimTransform(style, currentTime, startSec, endSec, animDur, refSize) {
+    function computeOverlayAnimTransform(style, currentTime, startSec, endSec, animDur, refSize, animLoop, animLoopSec) {
         const result = { offX: 0, offY: 0, scale: 1, scaleX: 1, scaleY: 1, rot: 0, alpha: 1 };
         if (!style || style === 'none' || TEXT_OVERLAY_REVEAL_ANIM_STYLES.has(style)) return result;
 
@@ -3889,7 +3902,7 @@ document.addEventListener('DOMContentLoaded', () => {
             return result;
         }
 
-        const anim = getTextOverlayAnimProgress({ animStyle: style, startSec, endSec }, currentTime, animDur);
+        const anim = getTextOverlayAnimProgress({ animStyle: style, startSec, endSec, animLoop, animLoopSec }, currentTime, animDur);
         if (anim.phase === 'settled') return result;
         const p = anim.p;
         const eased = easeOutCubicTO(p);
@@ -5351,9 +5364,11 @@ document.addEventListener('DOMContentLoaded', () => {
     function drawTextOverlaySmokeVaporLine(ctx, text, progress, phase, fontSize, strokeColor, strokeWidth) {
         const isEditingStill = (state.currentStep === 3 && !state.isPlaying);
         const effectivePhase = isEditingStill ? 'settled' : phase;
-        // settled phase: 0.15 gives a persistent soft-fog glow (always visible)
+        // settled phase: 0 means the smoke has fully cleared and the text is
+        // fully solid/sharp — it should not stay permanently hazy once the
+        // reveal has finished.
         const pVapor = (effectivePhase === 'in') ? (1 - progress) :
-                       (effectivePhase === 'out') ? (1 - progress) : 0.15;
+                       (effectivePhase === 'out') ? (1 - progress) : 0;
 
         ctx.save();
         ctx.shadowColor = 'rgba(255, 255, 255, 0.7)';
@@ -7937,8 +7952,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
 
                 // --- Pass 2: Text (its own animation, drawn on top of the box) ---
-                const textT = computeOverlayAnimTransform(textAnimStyle, currentTime, item.startSec, item.endSec, textAnimDur, item.fontSize);
-                const textRevealAnim = getTextOverlayAnimProgress({ animStyle: textAnimStyle, startSec: item.startSec, endSec: item.endSec }, currentTime, textAnimDur);
+                const textT = computeOverlayAnimTransform(textAnimStyle, currentTime, item.startSec, item.endSec, textAnimDur, item.fontSize, item.textAnimLoop, item.textAnimLoopSec);
+                const textRevealAnim = getTextOverlayAnimProgress({ animStyle: textAnimStyle, startSec: item.startSec, endSec: item.endSec, animLoop: item.textAnimLoop, animLoopSec: item.textAnimLoopSec }, currentTime, textAnimDur);
 
                 state.ctx.save();
                 state.ctx.globalAlpha = txAlpha * textT.alpha;
@@ -8104,7 +8119,7 @@ document.addEventListener('DOMContentLoaded', () => {
                             };
                         } else if (textAnimStyle === 'smoke-vapor') {
                             _charDrawFn = (cCtx, char) => {
-                                const pVapor = (_effPhase === 'in') ? (1 - textRevealAnim.p) : ((_effPhase === 'out') ? (1 - textRevealAnim.p) : 0.15);
+                                const pVapor = (_effPhase === 'in') ? (1 - textRevealAnim.p) : ((_effPhase === 'out') ? (1 - textRevealAnim.p) : 0);
                                 cCtx.save();
                                 cCtx.shadowColor = 'rgba(255, 255, 255, 0.7)';
                                 cCtx.shadowBlur = item.fontSize * 0.5 * (0.3 + pVapor * 0.9);
@@ -11617,6 +11632,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 const textOverlayFontSelect = document.getElementById('text-overlay-font-select');
                 const textOverlayAnimSelect = document.getElementById('text-overlay-anim-select');
                 const textOverlayBoxAnimSelect = document.getElementById('text-overlay-box-anim-select');
+                const textOverlayAnimLoopEnabled = document.getElementById('text-overlay-anim-loop-enabled');
+                const textOverlayAnimLoopSecSlider = document.getElementById('text-overlay-anim-loop-sec');
                 const textOverlayInput = document.getElementById('text-overlay-input');
 
                 // Ensure box style is not 'none' when drawing a box!
@@ -11666,6 +11683,8 @@ document.addEventListener('DOMContentLoaded', () => {
                         boxColor: textOverlayBoxColorInput ? textOverlayBoxColorInput.value : '#4f46e5',
                         textAnimStyle: textOverlayAnimSelect ? textOverlayAnimSelect.value : 'none',
                         animStyle: textOverlayAnimSelect ? textOverlayAnimSelect.value : 'none',
+                        textAnimLoop: textOverlayAnimLoopEnabled ? !!textOverlayAnimLoopEnabled.checked : false,
+                        textAnimLoopSec: textOverlayAnimLoopSecSlider ? parseFloat(textOverlayAnimLoopSecSlider.value) || 5 : 5,
                         boxAnimStyle: textOverlayBoxAnimSelect ? textOverlayBoxAnimSelect.value : 'none',
                         startSec: Math.max(0, state.currentTime || 0),
                         endSec: Math.min(state.duration || 5, (state.currentTime || 0) + 12.5)
@@ -12371,6 +12390,10 @@ document.addEventListener('DOMContentLoaded', () => {
     const textOverlayAnimSelect = document.getElementById('text-overlay-anim-select');
     const textOverlayAnimSpeedSlider = document.getElementById('text-overlay-anim-speed');
     const textOverlayAnimSpeedVal = document.getElementById('text-overlay-anim-speed-val');
+    const textOverlayAnimLoopEnabled = document.getElementById('text-overlay-anim-loop-enabled');
+    const textOverlayAnimLoopGroup = document.getElementById('text-overlay-anim-loop-group');
+    const textOverlayAnimLoopSecSlider = document.getElementById('text-overlay-anim-loop-sec');
+    const textOverlayAnimLoopSecVal = document.getElementById('text-overlay-anim-loop-sec-val');
     const textOverlayBoxAnimSelect = document.getElementById('text-overlay-box-anim-select');
     const textOverlayBoxAnimSpeedSlider = document.getElementById('text-overlay-box-anim-speed');
     const textOverlayBoxAnimSpeedVal = document.getElementById('text-overlay-box-anim-speed-val');
@@ -12430,6 +12453,36 @@ document.addEventListener('DOMContentLoaded', () => {
             if (item) {
                 item.textAnimSpeedSec = parseFloat(e.target.value);
                 item.animSpeedSec = item.textAnimSpeedSec; // legacy fallback field, kept in sync
+                drawFrame();
+                if (window.triggerAutoSave) window.triggerAutoSave();
+            }
+        });
+    }
+
+    function refreshTextOverlayAnimLoopVisibility() {
+        if (textOverlayAnimLoopGroup) {
+            textOverlayAnimLoopGroup.style.display = (textOverlayAnimLoopEnabled && textOverlayAnimLoopEnabled.checked) ? 'block' : 'none';
+        }
+    }
+
+    if (textOverlayAnimLoopEnabled) {
+        textOverlayAnimLoopEnabled.addEventListener('change', (e) => {
+            refreshTextOverlayAnimLoopVisibility();
+            const item = getSelectedTextOverlay();
+            if (item) {
+                item.textAnimLoop = !!e.target.checked;
+                drawFrame();
+                if (window.triggerAutoSave) window.triggerAutoSave();
+            }
+        });
+    }
+
+    if (textOverlayAnimLoopSecSlider) {
+        textOverlayAnimLoopSecSlider.addEventListener('input', (e) => {
+            if (textOverlayAnimLoopSecVal) textOverlayAnimLoopSecVal.innerText = e.target.value + 's';
+            const item = getSelectedTextOverlay();
+            if (item) {
+                item.textAnimLoopSec = parseFloat(e.target.value);
                 drawFrame();
                 if (window.triggerAutoSave) window.triggerAutoSave();
             }
@@ -12831,6 +12884,8 @@ document.addEventListener('DOMContentLoaded', () => {
             animStyle: textOverlayAnimSelect.value || 'none', // legacy fallback field, kept in sync
             textAnimSpeedSec: textOverlayAnimSpeedSlider ? parseFloat(textOverlayAnimSpeedSlider.value) || 0.5 : 0.5,
             animSpeedSec: textOverlayAnimSpeedSlider ? parseFloat(textOverlayAnimSpeedSlider.value) || 0.5 : 0.5,
+            textAnimLoop: textOverlayAnimLoopEnabled ? !!textOverlayAnimLoopEnabled.checked : false,
+            textAnimLoopSec: textOverlayAnimLoopSecSlider ? parseFloat(textOverlayAnimLoopSecSlider.value) || 5 : 5,
             boxAnimStyle: textOverlayBoxAnimSelect ? (textOverlayBoxAnimSelect.value || 'none') : 'none',
             boxAnimSpeedSec: textOverlayBoxAnimSpeedSlider ? parseFloat(textOverlayBoxAnimSpeedSlider.value) || 0.5 : 0.5,
             curve: parseInt(textOverlayCurveSlider.value) || 0,
@@ -12931,6 +12986,15 @@ document.addEventListener('DOMContentLoaded', () => {
             const speed = item.textAnimSpeedSec !== undefined ? item.textAnimSpeedSec : (item.animSpeedSec !== undefined ? item.animSpeedSec : 0.5);
             textOverlayAnimSpeedSlider.value = speed;
             if (textOverlayAnimSpeedVal) textOverlayAnimSpeedVal.innerText = speed + 's';
+        }
+        if (textOverlayAnimLoopEnabled) {
+            textOverlayAnimLoopEnabled.checked = !!item.textAnimLoop;
+            refreshTextOverlayAnimLoopVisibility();
+        }
+        if (textOverlayAnimLoopSecSlider) {
+            const loopSec = item.textAnimLoopSec !== undefined ? item.textAnimLoopSec : 5;
+            textOverlayAnimLoopSecSlider.value = loopSec;
+            if (textOverlayAnimLoopSecVal) textOverlayAnimLoopSecVal.innerText = loopSec + 's';
         }
         if (textOverlayBoxAnimSelect) {
             textOverlayBoxAnimSelect.value = item.boxAnimStyle || 'none';
