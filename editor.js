@@ -5080,7 +5080,33 @@ document.addEventListener('DOMContentLoaded', () => {
     // fading/rising into place on a staggered delay, driven by overall
     // animation progress `progress` (0..1). Used for the letter-cascade and
     // word-stagger Text Overlay animation presets.
-    function drawTextOverlayStaggered(ctx, text, mode, progress, strokeColor, strokeWidth) {
+    // Shared multi-line dispatcher for the per-character/per-word Text Overlay
+    // animations below. Canvas fillText() has no concept of "\n" — it draws the
+    // whole string on a single row — so any of these effects, given multi-line
+    // text, previously rendered every line concatenated onto one long row that
+    // overflowed the background box. This splits on "\n", vertically centers
+    // the stack of lines exactly like the default (non-animated) renderer does,
+    // and re-invokes drawSingleLine(line) once per line so each still gets the
+    // full per-character effect, just positioned on its own row.
+    function drawTextOverlayAnimatedLines(ctx, text, fontSize, drawSingleLine) {
+        if (!text) return;
+        if (text.indexOf('\n') === -1) { drawSingleLine(text); return; }
+        const lines = text.split('\n');
+        const lineHeight = fontSize * 1.25;
+        const startY = -((lines.length - 1) * lineHeight) / 2;
+        lines.forEach((line, li) => {
+            ctx.save();
+            ctx.translate(0, startY + li * lineHeight);
+            drawSingleLine(line);
+            ctx.restore();
+        });
+    }
+
+    function drawTextOverlayStaggered(ctx, text, mode, progress, strokeColor, strokeWidth, fontSize) {
+        drawTextOverlayAnimatedLines(ctx, text, fontSize || 40, (line) => drawTextOverlayStaggeredLine(ctx, line, mode, progress, strokeColor, strokeWidth));
+    }
+
+    function drawTextOverlayStaggeredLine(ctx, text, mode, progress, strokeColor, strokeWidth) {
         const units = mode === 'word' ? text.split(/(\s+)/) : splitGraphemes(text);
         const meaningfulCount = units.filter(u => u.trim().length > 0).length || 1;
         const widths = units.map(u => ctx.measureText(u).width);
@@ -5113,6 +5139,10 @@ document.addEventListener('DOMContentLoaded', () => {
     // Particle Dust text animation: text forms from / disintegrates into floating particles
     function drawTextOverlayParticleDust(ctx, text, progress, phase, fontSize, textColor, strokeColor, strokeWidth, currentTime) {
         if (!text) return;
+        drawTextOverlayAnimatedLines(ctx, text, fontSize, (line) => drawTextOverlayParticleDustLine(ctx, line, progress, phase, fontSize, textColor, strokeColor, strokeWidth, currentTime));
+    }
+
+    function drawTextOverlayParticleDustLine(ctx, text, progress, phase, fontSize, textColor, strokeColor, strokeWidth, currentTime) {
         const isEditingStill = (state.currentStep === 3 && !state.isPlaying);
         const effectivePhase = isEditingStill ? 'settled' : phase;
         
@@ -5195,8 +5225,12 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // Cyberpunk Glitch text animation: RGB channel split and flicker
-    function drawTextOverlayGlitch(ctx, text, currentTime, textColor, strokeColor, strokeWidth) {
+    function drawTextOverlayGlitch(ctx, text, currentTime, textColor, strokeColor, strokeWidth, fontSize) {
         if (!text) return;
+        drawTextOverlayAnimatedLines(ctx, text, fontSize || 40, (line) => drawTextOverlayGlitchLine(ctx, line, currentTime, textColor, strokeColor, strokeWidth));
+    }
+
+    function drawTextOverlayGlitchLine(ctx, text, currentTime, textColor, strokeColor, strokeWidth) {
         const t = currentTime * 18;
         const isGlitchBeat = (Math.sin(t * 1.3) > 0.55) || (Math.cos(t * 2.7) > 0.65);
         const shiftX = isGlitchBeat ? (Math.sin(t * 7) * 7) : 0;
@@ -5231,6 +5265,10 @@ document.addEventListener('DOMContentLoaded', () => {
     // Wave Ripple text animation: characters bounce in a fluid sine wave
     function drawTextOverlayWave(ctx, text, progress, phase, fontSize, currentTime, strokeColor, strokeWidth) {
         if (!text) return;
+        drawTextOverlayAnimatedLines(ctx, text, fontSize, (line) => drawTextOverlayWaveLine(ctx, line, progress, phase, fontSize, currentTime, strokeColor, strokeWidth));
+    }
+
+    function drawTextOverlayWaveLine(ctx, text, progress, phase, fontSize, currentTime, strokeColor, strokeWidth) {
         const isEditingStill = (state.currentStep === 3 && !state.isPlaying);
         const effectivePhase = isEditingStill ? 'settled' : phase;
         // settled phase: 0.45 gives waveAmp ≈ fontSize*0.196 — always visible
@@ -5266,6 +5304,10 @@ document.addEventListener('DOMContentLoaded', () => {
     // Cinematic Blur Focus text animation: text focuses into clarity
     function drawTextOverlayBlurFade(ctx, text, progress, phase, fontSize, strokeColor, strokeWidth) {
         if (!text) return;
+        drawTextOverlayAnimatedLines(ctx, text, fontSize, (line) => drawTextOverlayBlurFadeLine(ctx, line, progress, phase, fontSize, strokeColor, strokeWidth));
+    }
+
+    function drawTextOverlayBlurFadeLine(ctx, text, progress, phase, fontSize, strokeColor, strokeWidth) {
         const isEditingStill = (state.currentStep === 3 && !state.isPlaying);
         const effectivePhase = isEditingStill ? 'settled' : phase;
 
@@ -5303,6 +5345,10 @@ document.addEventListener('DOMContentLoaded', () => {
     // Smoke Vapor text animation: text emerges from / disappears into soft fog
     function drawTextOverlaySmokeVapor(ctx, text, progress, phase, fontSize, strokeColor, strokeWidth) {
         if (!text) return;
+        drawTextOverlayAnimatedLines(ctx, text, fontSize, (line) => drawTextOverlaySmokeVaporLine(ctx, line, progress, phase, fontSize, strokeColor, strokeWidth));
+    }
+
+    function drawTextOverlaySmokeVaporLine(ctx, text, progress, phase, fontSize, strokeColor, strokeWidth) {
         const isEditingStill = (state.currentStep === 3 && !state.isPlaying);
         const effectivePhase = isEditingStill ? 'settled' : phase;
         // settled phase: 0.15 gives a persistent soft-fog glow (always visible)
@@ -5324,6 +5370,10 @@ document.addEventListener('DOMContentLoaded', () => {
     // Metallic Shine Sweep text animation: bright light ray sweeps across text
     function drawTextOverlayShineSweep(ctx, text, currentTime, fontSize, textColor, strokeColor, strokeWidth) {
         if (!text) return;
+        drawTextOverlayAnimatedLines(ctx, text, fontSize, (line) => drawTextOverlayShineSweepLine(ctx, line, currentTime, fontSize, textColor, strokeColor, strokeWidth));
+    }
+
+    function drawTextOverlayShineSweepLine(ctx, text, currentTime, fontSize, textColor, strokeColor, strokeWidth) {
         ctx.save();
         if (strokeColor) { ctx.lineWidth = strokeWidth; ctx.strokeStyle = strokeColor; ctx.strokeText(text, 0, 0); }
         ctx.fillStyle = textColor;
@@ -5350,8 +5400,12 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // Rainbow Flow text animation: rainbow hue shifts continuously across letters
-    function drawTextOverlayRainbowFlow(ctx, text, currentTime, strokeColor, strokeWidth) {
+    function drawTextOverlayRainbowFlow(ctx, text, currentTime, strokeColor, strokeWidth, fontSize) {
         if (!text) return;
+        drawTextOverlayAnimatedLines(ctx, text, fontSize || 40, (line) => drawTextOverlayRainbowFlowLine(ctx, line, currentTime, strokeColor, strokeWidth));
+    }
+
+    function drawTextOverlayRainbowFlowLine(ctx, text, currentTime, strokeColor, strokeWidth) {
         const chars = splitGraphemes(text);
         const widths = chars.map(c => ctx.measureText(c).width || 10);
         const totalWidth = widths.reduce((a, b) => a + b, 0);
@@ -8096,13 +8150,13 @@ document.addEventListener('DOMContentLoaded', () => {
 
                     // ── STRAIGHT TEXT MODE (existing animation branches) ───────────────
                     if (textAnimStyle === 'letter-cascade' && textRevealAnim.phase !== 'settled') {
-                        drawTextOverlayStaggered(ctx2, textToDraw, 'letter', textRevealAnim.p, outlineColor, outlineWidth);
+                        drawTextOverlayStaggered(ctx2, textToDraw, 'letter', textRevealAnim.p, outlineColor, outlineWidth, item.fontSize);
                     } else if (textAnimStyle === 'word-stagger' && textRevealAnim.phase !== 'settled') {
-                        drawTextOverlayStaggered(ctx2, textToDraw, 'word', textRevealAnim.p, outlineColor, outlineWidth);
+                        drawTextOverlayStaggered(ctx2, textToDraw, 'word', textRevealAnim.p, outlineColor, outlineWidth, item.fontSize);
                     } else if (textAnimStyle === 'particle-dust') {
                         drawTextOverlayParticleDust(ctx2, textToDraw, textRevealAnim.p, textRevealAnim.phase, item.fontSize, item.color, outlineColor, outlineWidth, currentTime);
                     } else if (textAnimStyle === 'glitch') {
-                        drawTextOverlayGlitch(ctx2, textToDraw, currentTime, item.color, outlineColor, outlineWidth);
+                        drawTextOverlayGlitch(ctx2, textToDraw, currentTime, item.color, outlineColor, outlineWidth, item.fontSize);
                     } else if (textAnimStyle === 'wave-reveal') {
                         drawTextOverlayWave(ctx2, textToDraw, textRevealAnim.p, textRevealAnim.phase, item.fontSize, currentTime, outlineColor, outlineWidth);
                     } else if (textAnimStyle === 'blur-fade') {
@@ -8112,7 +8166,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     } else if (textAnimStyle === 'shine-sweep') {
                         drawTextOverlayShineSweep(ctx2, textToDraw, currentTime, item.fontSize, item.color, outlineColor, outlineWidth);
                     } else if (textAnimStyle === 'rainbow-flow') {
-                        drawTextOverlayRainbowFlow(ctx2, textToDraw, currentTime, outlineColor, outlineWidth);
+                        drawTextOverlayRainbowFlow(ctx2, textToDraw, currentTime, outlineColor, outlineWidth, item.fontSize);
                     } else {
                         const linesToDraw = textToDraw.split('\n');
                         const lHeight = item.fontSize * 1.25;
