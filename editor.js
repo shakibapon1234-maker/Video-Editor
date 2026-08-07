@@ -5355,29 +5355,84 @@ document.addEventListener('DOMContentLoaded', () => {
         ctx.restore();
     }
 
-    // Smoke Vapor text animation: text emerges from / disappears into soft fog
-    function drawTextOverlaySmokeVapor(ctx, text, progress, phase, fontSize, strokeColor, strokeWidth) {
+    // Smoke Vapor text animation: glowing dust/smoke particles drift in from
+    // scattered positions and converge to form the solid letters (and the
+    // reverse on exit) — matches the reference look of floating embers/dust
+    // gathering into shape, not just a blur/opacity fade of the whole word.
+    function drawTextOverlaySmokeVapor(ctx, text, progress, phase, fontSize, strokeColor, strokeWidth, textColor, currentTime) {
         if (!text) return;
-        drawTextOverlayAnimatedLines(ctx, text, fontSize, (line) => drawTextOverlaySmokeVaporLine(ctx, line, progress, phase, fontSize, strokeColor, strokeWidth));
+        drawTextOverlayAnimatedLines(ctx, text, fontSize, (line) => drawTextOverlaySmokeVaporLine(ctx, line, progress, phase, fontSize, strokeColor, strokeWidth, textColor, currentTime));
     }
 
-    function drawTextOverlaySmokeVaporLine(ctx, text, progress, phase, fontSize, strokeColor, strokeWidth) {
+    function drawTextOverlaySmokeVaporLine(ctx, text, progress, phase, fontSize, strokeColor, strokeWidth, textColor, currentTime) {
+        if (!text) return;
         const isEditingStill = (state.currentStep === 3 && !state.isPlaying);
         const effectivePhase = isEditingStill ? 'settled' : phase;
-        // settled phase: 0 means the smoke has fully cleared and the text is
-        // fully solid/sharp — it should not stay permanently hazy once the
-        // reveal has finished.
+        // pVapor: 1 = fully dust/smoke (letters invisible, particles scattered
+        // wide), 0 = fully settled/solid (particles converged into the glyph,
+        // no leftover haze).
         const pVapor = (effectivePhase === 'in') ? (1 - progress) :
                        (effectivePhase === 'out') ? (1 - progress) : 0;
+        const dP = Math.pow(pVapor, 0.7);
+        const t = currentTime || 0;
+        const fill = textColor || '#ffffff';
 
         ctx.save();
-        ctx.shadowColor = 'rgba(255, 255, 255, 0.7)';
-        ctx.shadowBlur = fontSize * 0.5 * (0.3 + pVapor * 0.9);
-        ctx.globalAlpha *= Math.max(0.05, 1 - pVapor * 0.9);
-        ctx.translate(0, -pVapor * fontSize * 0.4);
 
-        if (strokeColor) { ctx.lineWidth = strokeWidth; ctx.strokeStyle = strokeColor; ctx.strokeText(text, 0, 0); }
-        ctx.fillText(text, 0, 0);
+        // Base glyph fades in underneath the converging particles so the
+        // shape reads correctly even before every particle has landed.
+        if (dP < 0.97) {
+            ctx.save();
+            ctx.shadowColor = 'rgba(255, 255, 255, 0.5)';
+            ctx.shadowBlur = fontSize * 0.15 * dP;
+            ctx.globalAlpha *= Math.max(0, 1 - dP * 0.85);
+            if (strokeColor) { ctx.lineWidth = strokeWidth; ctx.strokeStyle = strokeColor; ctx.strokeText(text, 0, 0); }
+            ctx.fillStyle = fill;
+            ctx.fillText(text, 0, 0);
+            ctx.restore();
+        }
+
+        // Visible dust/smoke particles: one cluster per character, each
+        // starting scattered around the letter and drifting/rising inward
+        // toward it as dP goes from 1 -> 0.
+        if (dP > 0.01) {
+            const chars = splitGraphemes(text);
+            const charWidths = chars.map(c => ctx.measureText(c).width || 10);
+            const totalWidth = charWidths.reduce((a, b) => a + b, 0);
+            let charX = -totalWidth / 2;
+            const particlesPerChar = 14;
+
+            for (let ci = 0; ci < chars.length; ci++) {
+                const cw = charWidths[ci];
+                const cx = charX + cw / 2;
+                if (chars[ci].trim().length > 0) {
+                    for (let pi = 0; pi < particlesPerChar; pi++) {
+                        const seed = (ci * 47 + pi * 23) % 1000;
+                        const angle = ((seed * 13) % 360) * (Math.PI / 180) + (pi * 0.4);
+                        const maxSpread = fontSize * (1.3 + (seed % 10) * 0.15);
+                        const dist = maxSpread * dP;
+                        const px = cx + Math.cos(angle) * dist + Math.sin(t * 1.6 + seed) * (fontSize * 0.12 * dP);
+                        // Smoke drifts upward as it dissipates, unlike sparks that scatter evenly.
+                        const py = -dP * fontSize * (0.7 + (seed % 5) * 0.08) + Math.sin(angle) * dist * 0.35;
+                        const size = (1.6 + (seed % 5) * 1.1) * (0.5 + dP * 0.7);
+                        const pAlpha = Math.max(0, (1 - dP * 0.15)) * (0.35 + (seed % 7) * 0.07);
+
+                        if (pAlpha > 0.04) {
+                            ctx.save();
+                            ctx.globalAlpha *= Math.min(1, pAlpha);
+                            ctx.shadowColor = 'rgba(255, 255, 255, 0.9)';
+                            ctx.shadowBlur = size * 2.5;
+                            ctx.fillStyle = (pi % 3 === 0) ? '#ffffff' : fill;
+                            ctx.beginPath();
+                            ctx.arc(px, py, Math.max(0.5, size), 0, Math.PI * 2);
+                            ctx.fill();
+                            ctx.restore();
+                        }
+                    }
+                }
+                charX += cw;
+            }
+        }
 
         ctx.restore();
     }
@@ -8118,16 +8173,47 @@ document.addEventListener('DOMContentLoaded', () => {
                                 }
                             };
                         } else if (textAnimStyle === 'smoke-vapor') {
-                            _charDrawFn = (cCtx, char) => {
+                            _charDrawFn = (cCtx, char, i) => {
                                 const pVapor = (_effPhase === 'in') ? (1 - textRevealAnim.p) : ((_effPhase === 'out') ? (1 - textRevealAnim.p) : 0);
-                                cCtx.save();
-                                cCtx.shadowColor = 'rgba(255, 255, 255, 0.7)';
-                                cCtx.shadowBlur = item.fontSize * 0.5 * (0.3 + pVapor * 0.9);
-                                cCtx.globalAlpha *= Math.max(0.05, 1 - pVapor * 0.9);
-                                cCtx.translate(0, -pVapor * item.fontSize * 0.4);
-                                if (outlineColor) { cCtx.lineWidth = outlineWidth; cCtx.strokeStyle = outlineColor; cCtx.strokeText(char, 0, 0); }
-                                cCtx.fillText(char, 0, 0);
-                                cCtx.restore();
+                                const dP = Math.pow(pVapor, 0.7);
+                                const t = currentTime || 0;
+                                const fontSize = item.fontSize;
+                                const fill = item.color || '#ffffff';
+
+                                if (dP < 0.97) {
+                                    cCtx.save();
+                                    cCtx.shadowColor = 'rgba(255, 255, 255, 0.5)';
+                                    cCtx.shadowBlur = fontSize * 0.15 * dP;
+                                    cCtx.globalAlpha *= Math.max(0, 1 - dP * 0.85);
+                                    if (outlineColor) { cCtx.lineWidth = outlineWidth; cCtx.strokeStyle = outlineColor; cCtx.strokeText(char, 0, 0); }
+                                    cCtx.fillText(char, 0, 0);
+                                    cCtx.restore();
+                                }
+
+                                if (dP > 0.01) {
+                                    const particlesPerChar = 14;
+                                    for (let pi = 0; pi < particlesPerChar; pi++) {
+                                        const seed = (i * 47 + pi * 23) % 1000;
+                                        const angle = ((seed * 13) % 360) * (Math.PI / 180) + (pi * 0.4);
+                                        const maxSpread = fontSize * (1.3 + (seed % 10) * 0.15);
+                                        const dist = maxSpread * dP;
+                                        const px = Math.cos(angle) * dist + Math.sin(t * 1.6 + seed) * (fontSize * 0.12 * dP);
+                                        const py = -dP * fontSize * (0.7 + (seed % 5) * 0.08) + Math.sin(angle) * dist * 0.35;
+                                        const size = (1.6 + (seed % 5) * 1.1) * (0.5 + dP * 0.7);
+                                        const pAlpha = Math.max(0, (1 - dP * 0.15)) * (0.35 + (seed % 7) * 0.07);
+                                        if (pAlpha > 0.04) {
+                                            cCtx.save();
+                                            cCtx.globalAlpha *= Math.min(1, pAlpha);
+                                            cCtx.shadowColor = 'rgba(255, 255, 255, 0.9)';
+                                            cCtx.shadowBlur = size * 2.5;
+                                            cCtx.fillStyle = (pi % 3 === 0) ? '#ffffff' : fill;
+                                            cCtx.beginPath();
+                                            cCtx.arc(px, py, Math.max(0.5, size), 0, Math.PI * 2);
+                                            cCtx.fill();
+                                            cCtx.restore();
+                                        }
+                                    }
+                                }
                             };
                         } else if (textAnimStyle === 'shine-sweep') {
                             _charDrawFn = (cCtx, char, i, totalChars) => {
@@ -8177,7 +8263,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     } else if (textAnimStyle === 'blur-fade') {
                         drawTextOverlayBlurFade(ctx2, textToDraw, textRevealAnim.p, textRevealAnim.phase, item.fontSize, outlineColor, outlineWidth);
                     } else if (textAnimStyle === 'smoke-vapor') {
-                        drawTextOverlaySmokeVapor(ctx2, textToDraw, textRevealAnim.p, textRevealAnim.phase, item.fontSize, outlineColor, outlineWidth);
+                        drawTextOverlaySmokeVapor(ctx2, textToDraw, textRevealAnim.p, textRevealAnim.phase, item.fontSize, outlineColor, outlineWidth, item.color, currentTime);
                     } else if (textAnimStyle === 'shine-sweep') {
                         drawTextOverlayShineSweep(ctx2, textToDraw, currentTime, item.fontSize, item.color, outlineColor, outlineWidth);
                     } else if (textAnimStyle === 'rainbow-flow') {
