@@ -6912,6 +6912,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
                 if (item.type === 'text') {
                     drawBrollVisualTemplate(state.ctx, item, frameBoxX, frameBoxY, frameBoxW, frameBoxH, alpha, imgDrawable);
+                    if (item.visualTemplate !== 'word-3d-blocks' && item.visualTemplate !== 'word-hands-hold') {
                     if (item.visualTemplate === 'glass-caption') {
                         const glassRadius = Math.min(boxH * 0.48, 28);
                         state.ctx.save();
@@ -7232,6 +7233,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
                             state.ctx.restore();
                         });
+                    }
                     }
                     }
 
@@ -16751,93 +16753,226 @@ document.addEventListener('DOMContentLoaded', () => {
     // rotating rainbow palette, each with a simple stylized hand icon reaching
     // up from below, like a "CAREERS" hands-holding-letters graphic). Hands are
     // drawn as flat single-tone icon silhouettes, not a specific skin tone.
+    // Draws text as individual raised 3D tiles (one tile per character) for 'word-3d-blocks'
+    // (Profit/Loss scrabble cube style) and 'word-hands-hold' (Careers style holding colorful tiles with realistic human hands).
     function drawBrollLetterTiles(ctx, item, x, y, width, height, overrideColor, withHands) {
         const text = String((item.type === 'text' ? item.text : item.brollLabel) || '').trim();
         if (!text) return;
 
-        const font = `${item.italic ? 'italic ' : ''}bold ${item.fontSize || 48}px "${item.font || 'Hind Siliguri'}", "Plus Jakarta Sans", sans-serif`;
-        ctx.font = font;
+        const baseFontSize = Math.max(20, item.fontSize || 48);
+        const fontStyle = `${item.italic ? 'italic ' : ''}bold ${baseFontSize}px "${item.font || 'Hind Siliguri'}", "Plus Jakarta Sans", sans-serif`;
+        ctx.font = fontStyle;
+
         const layout = getBrollTextLayout(ctx, item, Math.max(80, width - 32));
         const sublines = layout.sublines.length ? layout.sublines : [{ text }];
-        const lineHeight = layout.lineHeight || (item.fontSize || 48) * 1.35;
-        const cx0 = x + width / 2, cy0 = y + height / 2;
+        const lineHeight = Math.max(baseFontSize * 1.5, layout.lineHeight || baseFontSize * 1.5);
+        const cx0 = x + width / 2;
+        const cy0 = y + height / 2;
         const numLines = sublines.length;
-        const firstLineY = cy0 - ((numLines - 1) * lineHeight) / 2;
 
-        const palette = ['#14b8a6', '#f59e0b', '#3b82f6', '#22c55e', '#ef4444', '#a855f7'];
-        const handColor = '#4b5563';
-        const tileH = Math.min(lineHeight * 0.86, (item.fontSize || 48) * 1.35);
-        const gap = Math.max(3, tileH * 0.07);
-        const radius = Math.max(4, tileH * 0.12);
+        const firstLineY = cy0 - ((numLines - 1) * lineHeight) / 2 - (withHands ? baseFontSize * 0.3 : 0);
+
+        const palette = ['#ef4444', '#3b82f6', '#22c55e', '#f59e0b', '#a855f7', '#06b6d4', '#ec4899', '#14b8a6'];
+
+        // Diverse skin tones and sleeve configurations for realistic hands
+        const handStyles = [
+            { skin: '#f5d0b0', skinShadow: '#d8a782', sleeve: '#1e293b', cuff: '#ffffff' },
+            { skin: '#e0ac69', skinShadow: '#bf8648', sleeve: '#ec4899', cuff: '#fbcfe8' },
+            { skin: '#c68b59', skinShadow: '#9c6233', sleeve: '#3b82f6', cuff: '#93c5fd' },
+            { skin: '#8d5524', skinShadow: '#613812', sleeve: '#eab308', cuff: '#fef08a' },
+            { skin: '#f1c27d', skinShadow: '#cf9c58', sleeve: '#10b981', cuff: '#a7f3d0' },
+            { skin: '#ffdbac', skinShadow: '#dbb180', sleeve: '#8b5cf6', cuff: '#ddd6fe' }
+        ];
 
         sublines.forEach((lineObj, lineIdx) => {
             const lineText = String(lineObj.text || '');
             const chars = lineText.split('');
             if (!chars.length) return;
 
-            const charWidths = chars.map(c => Math.max(ctx.measureText(c).width, tileH * 0.35));
+            const tileH = Math.max(36, baseFontSize * 1.35);
+            const minTileW = Math.max(tileH * 0.95, baseFontSize * 1.15);
+            const gap = Math.max(4, baseFontSize * 0.14);
+
+            const charWidths = chars.map(ch => {
+                if (/\s/.test(ch)) return baseFontSize * 0.55;
+                const mw = ctx.measureText(ch).width;
+                return Math.max(minTileW, mw + baseFontSize * 0.55);
+            });
+
             const lineTotalW = charWidths.reduce((s, w) => s + w + gap, -gap);
             let curX = cx0 - lineTotalW / 2;
             const lineY = firstLineY + lineIdx * lineHeight;
 
             chars.forEach((ch, i) => {
-                const w = charWidths[i];
-                const tileW = w + tileH * 0.32;
-                const tcx = curX + w / 2;
+                const tileW = charWidths[i];
+                const tcx = curX + tileW / 2;
                 const tcy = lineY;
 
-                if (/\s/.test(ch)) { curX += w + gap; return; }
-
-                const base = withHands ? palette[i % palette.length] : (overrideColor || '#dc2626');
-
-                if (withHands) {
-                    // Simple stylized hand icon: a rounded "arm" rising from below
-                    // the tile with a few short "finger" bumps curling over the
-                    // tile's bottom edge — an icon-style silhouette, not a photo.
-                    const armW = tileW * 0.34, armH = tileH * 0.62;
-                    const armX = tcx - armW / 2, armY = tcy + tileH / 2 - tileH * 0.08;
-                    ctx.fillStyle = handColor;
-                    ctx.beginPath();
-                    if (ctx.roundRect) ctx.roundRect(armX, armY, armW, armH, armW * 0.4);
-                    else ctx.rect(armX, armY, armW, armH);
-                    ctx.fill();
-                    const fingerR = tileW * 0.1;
-                    for (let f = -1; f <= 1; f++) {
-                        ctx.beginPath();
-                        ctx.arc(tcx + f * fingerR * 1.5, tcy + tileH * 0.32, fingerR, 0, Math.PI * 2);
-                        ctx.fill();
-                    }
+                if (/\s/.test(ch)) {
+                    curX += tileW + gap;
+                    return;
                 }
 
-                const depth = Math.max(3, tileH * 0.13);
-                ctx.fillStyle = shadeColorTO(base, -40);
+                const baseColor = withHands ? palette[i % palette.length] : (overrideColor || '#dc2626');
+                const radius = Math.max(6, tileH * 0.14);
+
+                // --- DRAW REALISTIC HUMAN HAND HOLDING TILE ---
+                if (withHands) {
+                    const handConfig = handStyles[i % handStyles.length];
+                    const armW = Math.max(16, tileW * 0.46);
+                    const armH = Math.max(36, tileH * 1.35);
+                    const handY0 = tcy + tileH / 2 - tileH * 0.04;
+                    const handX0 = tcx;
+
+                    ctx.save();
+
+                    // Soft arm shadow
+                    ctx.fillStyle = 'rgba(0,0,0,0.22)';
+                    ctx.beginPath();
+                    if (ctx.roundRect) ctx.roundRect(handX0 - armW / 2 + 3, handY0 + 4, armW, armH, 8);
+                    else ctx.rect(handX0 - armW / 2 + 3, handY0 + 4, armW, armH);
+                    ctx.fill();
+
+                    // Forearm / Wrist skin
+                    const skinGrad = ctx.createLinearGradient(handX0 - armW / 2, handY0, handX0 + armW / 2, handY0);
+                    skinGrad.addColorStop(0, shadeColorTO(handConfig.skin, 10));
+                    skinGrad.addColorStop(0.5, handConfig.skin);
+                    skinGrad.addColorStop(1, shadeColorTO(handConfig.skin, -20));
+                    ctx.fillStyle = skinGrad;
+                    ctx.beginPath();
+                    if (ctx.roundRect) ctx.roundRect(handX0 - armW * 0.42, handY0, armW * 0.84, armH, 8);
+                    else ctx.rect(handX0 - armW * 0.42, handY0, armW * 0.84, armH);
+                    ctx.fill();
+
+                    // Sleeve / Shirt Cuff
+                    const sleeveH = armH * 0.62;
+                    const sleeveY = handY0 + armH - sleeveH;
+                    ctx.fillStyle = handConfig.sleeve;
+                    ctx.beginPath();
+                    if (ctx.roundRect) ctx.roundRect(handX0 - armW / 2 - 3, sleeveY, armW + 6, sleeveH, 6);
+                    else ctx.rect(handX0 - armW / 2 - 3, sleeveY, armW + 6, sleeveH);
+                    ctx.fill();
+
+                    if (handConfig.cuff) {
+                        ctx.fillStyle = handConfig.cuff;
+                        ctx.beginPath();
+                        if (ctx.roundRect) ctx.roundRect(handX0 - armW / 2 - 3, sleeveY, armW + 6, Math.max(3, sleeveH * 0.22), 3);
+                        else ctx.rect(handX0 - armW / 2 - 3, sleeveY, armW + 6, Math.max(3, sleeveH * 0.22));
+                        ctx.fill();
+                    }
+
+                    // 4 Realistic Fingers curling over bottom edge of tile
+                    const fingerCount = 4;
+                    const totalFingerW = armW * 0.94;
+                    const fingerW = totalFingerW / fingerCount;
+                    const fingerH = Math.max(9, tileH * 0.26);
+                    const fingerY = tcy + tileH / 2 - fingerH * 0.55;
+                    const startFx = handX0 - totalFingerW / 2;
+
+                    // Shadow under fingers onto tile
+                    ctx.fillStyle = 'rgba(0,0,0,0.28)';
+                    ctx.beginPath();
+                    if (ctx.roundRect) ctx.roundRect(startFx, fingerY + 2, totalFingerW, fingerH, 4);
+                    else ctx.rect(startFx, fingerY + 2, totalFingerW, fingerH);
+                    ctx.fill();
+
+                    for (let f = 0; f < fingerCount; f++) {
+                        const fx = startFx + f * fingerW;
+                        const fGrad = ctx.createLinearGradient(fx, fingerY, fx + fingerW, fingerY + fingerH);
+                        fGrad.addColorStop(0, shadeColorTO(handConfig.skin, 15));
+                        fGrad.addColorStop(0.7, handConfig.skin);
+                        fGrad.addColorStop(1, shadeColorTO(handConfig.skin, -25));
+                        ctx.fillStyle = fGrad;
+                        ctx.beginPath();
+                        if (ctx.roundRect) ctx.roundRect(fx + 0.5, fingerY, fingerW - 1, fingerH, fingerW * 0.42);
+                        else ctx.rect(fx + 0.5, fingerY, fingerW - 1, fingerH);
+                        ctx.fill();
+
+                        ctx.strokeStyle = handConfig.skinShadow;
+                        ctx.lineWidth = 1;
+                        ctx.stroke();
+
+                        // Fingernail highlight accent
+                        ctx.fillStyle = 'rgba(255,255,255,0.35)';
+                        ctx.beginPath();
+                        ctx.ellipse(fx + fingerW / 2, fingerY + fingerH * 0.35, fingerW * 0.25, fingerH * 0.15, 0, 0, Math.PI * 2);
+                        ctx.fill();
+                    }
+
+                    // Thumb wrapping around edge of tile
+                    const thumbW = fingerW * 1.25;
+                    const thumbH = fingerH * 1.1;
+                    const thumbX = handX0 - armW * 0.55;
+                    const thumbY = fingerY + fingerH * 0.25;
+                    ctx.fillStyle = handConfig.skin;
+                    ctx.beginPath();
+                    if (ctx.roundRect) ctx.roundRect(thumbX, thumbY, thumbW, thumbH, thumbW * 0.45);
+                    else ctx.rect(thumbX, thumbY, thumbW, thumbH);
+                    ctx.fill();
+                    ctx.strokeStyle = handConfig.skinShadow;
+                    ctx.lineWidth = 1;
+                    ctx.stroke();
+
+                    ctx.restore();
+                }
+
+                // --- DRAW 3D TILE / BLOCK BACKGROUND ---
+                ctx.save();
+                const depth = Math.max(4, tileH * 0.14);
+
+                // Ground drop shadow
+                ctx.shadowColor = 'rgba(0,0,0,0.35)';
+                ctx.shadowBlur = Math.max(6, tileH * 0.16);
+                ctx.shadowOffsetY = Math.max(3, tileH * 0.1);
+
+                // 3D Side/Extrusion Wall
+                ctx.fillStyle = shadeColorTO(baseColor, -45);
                 ctx.beginPath();
                 if (ctx.roundRect) ctx.roundRect(tcx - tileW / 2 + depth, tcy - tileH / 2 + depth, tileW, tileH, radius);
                 else ctx.rect(tcx - tileW / 2 + depth, tcy - tileH / 2 + depth, tileW, tileH);
                 ctx.fill();
+                ctx.shadowColor = 'transparent';
 
+                // Front Face Gradient
                 const grad = ctx.createLinearGradient(tcx, tcy - tileH / 2, tcx, tcy + tileH / 2);
-                grad.addColorStop(0, shadeColorTO(base, 28));
-                grad.addColorStop(0.5, base);
-                grad.addColorStop(1, shadeColorTO(base, -18));
+                grad.addColorStop(0, shadeColorTO(baseColor, 30));
+                grad.addColorStop(0.5, baseColor);
+                grad.addColorStop(1, shadeColorTO(baseColor, -20));
                 ctx.fillStyle = grad;
                 ctx.beginPath();
                 if (ctx.roundRect) ctx.roundRect(tcx - tileW / 2, tcy - tileH / 2, tileW, tileH, radius);
                 else ctx.rect(tcx - tileW / 2, tcy - tileH / 2, tileW, tileH);
                 ctx.fill();
-                ctx.strokeStyle = shadeColorTO(base, -55);
-                ctx.lineWidth = Math.max(1, tileH * 0.025);
-                ctx.stroke();
 
-                // Thin bright bevel along the top-left edge for a glossy-cube feel
-                ctx.strokeStyle = 'rgba(255,255,255,0.45)';
+                // Border stroke
+                ctx.strokeStyle = shadeColorTO(baseColor, -55);
                 ctx.lineWidth = Math.max(1, tileH * 0.03);
-                ctx.beginPath();
-                ctx.moveTo(tcx - tileW / 2 + radius, tcy - tileH / 2 + 1);
-                ctx.lineTo(tcx + tileW / 2 - radius, tcy - tileH / 2 + 1);
                 ctx.stroke();
 
-                curX += w + gap;
+                // Top Gloss Edge Highlight
+                ctx.strokeStyle = 'rgba(255,255,255,0.48)';
+                ctx.lineWidth = Math.max(1, tileH * 0.035);
+                ctx.beginPath();
+                ctx.moveTo(tcx - tileW / 2 + radius, tcy - tileH / 2 + 1.5);
+                ctx.lineTo(tcx + tileW / 2 - radius, tcy - tileH / 2 + 1.5);
+                ctx.stroke();
+
+                // --- DRAW INDIVIDUAL CHARACTER CENTERED ON TILE ---
+                ctx.font = fontStyle;
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+
+                // Subtle dark text shadow for crisp contrast
+                ctx.fillStyle = 'rgba(0,0,0,0.35)';
+                ctx.fillText(ch, tcx + 1, tcy + 1.5);
+
+                // Crisp white letter
+                ctx.fillStyle = '#ffffff';
+                ctx.fillText(ch, tcx, tcy);
+
+                ctx.restore();
+
+                curX += tileW + gap;
             });
         });
     }
