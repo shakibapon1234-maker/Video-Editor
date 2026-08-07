@@ -6912,7 +6912,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
                 if (item.type === 'text') {
                     drawBrollVisualTemplate(state.ctx, item, frameBoxX, frameBoxY, frameBoxW, frameBoxH, alpha, imgDrawable);
-                    if (item.visualTemplate !== 'word-3d-blocks' && item.visualTemplate !== 'word-hands-hold') {
+                    if (item.visualTemplate !== 'word-3d-blocks' && item.visualTemplate !== 'word-hands-hold' && item.visualTemplate !== 'word-color-pegs' && item.visualTemplate !== 'word-flip-board') {
                     if (item.visualTemplate === 'glass-caption') {
                         const glassRadius = Math.min(boxH * 0.48, 28);
                         state.ctx.save();
@@ -16754,10 +16754,15 @@ document.addEventListener('DOMContentLoaded', () => {
     // up from below, like a "CAREERS" hands-holding-letters graphic). Hands are
     // drawn as flat single-tone icon silhouettes, not a specific skin tone.
     // Draws text as individual raised 3D tiles (one tile per character) for 'word-3d-blocks'
-    // (Profit/Loss scrabble cube style) and 'word-hands-hold' (Careers style holding colorful tiles with realistic human hands).
-    function drawBrollLetterTiles(ctx, item, x, y, width, height, overrideColor, withHands) {
+    // (Profit/Loss scrabble cube style), 'word-color-pegs' (vibrant modern peg design), and 'word-hands-hold' (Careers style holding colorful tiles with realistic human hands).
+    function drawBrollLetterTiles(ctx, item, x, y, width, height, overrideColor, mode) {
         const text = String((item.type === 'text' ? item.text : item.brollLabel) || '').trim();
         if (!text) return;
+
+        const isPegs = mode === 'word-color-pegs' || mode === 'pegs';
+        const isHands = mode === 'word-hands-hold' || mode === 'hands' || mode === true;
+        const isBlocks = mode === 'word-3d-blocks' || mode === 'blocks';
+        const withBottomHolder = isPegs || isHands;
 
         const baseFontSize = Math.max(20, item.fontSize || 48);
         const fontStyle = `${item.italic ? 'italic ' : ''}bold ${baseFontSize}px "${item.font || 'Hind Siliguri'}", "Plus Jakarta Sans", sans-serif`;
@@ -16770,11 +16775,10 @@ document.addEventListener('DOMContentLoaded', () => {
         const cy0 = y + height / 2;
         const numLines = sublines.length;
 
-        const firstLineY = cy0 - ((numLines - 1) * lineHeight) / 2 - (withHands ? baseFontSize * 0.3 : 0);
+        const firstLineY = cy0 - ((numLines - 1) * lineHeight) / 2 - (withBottomHolder ? baseFontSize * 0.3 : 0);
 
         const palette = ['#ef4444', '#3b82f6', '#22c55e', '#f59e0b', '#a855f7', '#06b6d4', '#ec4899', '#14b8a6'];
 
-        // Diverse skin tones and sleeve configurations for realistic hands
         const handStyles = [
             { skin: '#f5d0b0', skinShadow: '#d8a782', sleeve: '#1e293b', cuff: '#ffffff' },
             { skin: '#e0ac69', skinShadow: '#bf8648', sleeve: '#ec4899', cuff: '#fbcfe8' },
@@ -16813,38 +16817,73 @@ document.addEventListener('DOMContentLoaded', () => {
                     return;
                 }
 
-                const baseColor = withHands ? palette[i % palette.length] : (overrideColor || '#dc2626');
+                const baseColor = withBottomHolder ? palette[i % palette.length] : (overrideColor || '#dc2626');
                 const radius = Math.max(6, tileH * 0.14);
+                const handConfig = handStyles[i % handStyles.length];
 
-                // --- DRAW REALISTIC HUMAN HAND HOLDING TILE ---
-                if (withHands) {
-                    const handConfig = handStyles[i % handStyles.length];
-                    const armW = Math.max(16, tileW * 0.46);
-                    const armH = Math.max(36, tileH * 1.35);
+                // --- DRAW COLORFUL PEG (USER'S PREFERRED MINIMAL PEG STYLE) ---
+                if (isPegs) {
+                    const armW = Math.max(16, tileW * 0.44);
+                    const armH = Math.max(36, tileH * 1.3);
                     const handY0 = tcy + tileH / 2 - tileH * 0.04;
                     const handX0 = tcx;
 
                     ctx.save();
-
-                    // Soft arm shadow
                     ctx.fillStyle = 'rgba(0,0,0,0.22)';
                     ctx.beginPath();
                     if (ctx.roundRect) ctx.roundRect(handX0 - armW / 2 + 3, handY0 + 4, armW, armH, 8);
                     else ctx.rect(handX0 - armW / 2 + 3, handY0 + 4, armW, armH);
                     ctx.fill();
 
-                    // Forearm / Wrist skin
+                    ctx.fillStyle = handConfig.skin;
+                    ctx.beginPath();
+                    if (ctx.roundRect) ctx.roundRect(handX0 - armW * 0.42, handY0, armW * 0.84, armH * 0.38, [6, 6, 0, 0]);
+                    else ctx.rect(handX0 - armW * 0.42, handY0, armW * 0.84, armH * 0.38);
+                    ctx.fill();
+
+                    const sleeveH = armH * 0.65;
+                    const sleeveY = handY0 + armH - sleeveH;
+                    ctx.fillStyle = handConfig.sleeve;
+                    ctx.beginPath();
+                    if (ctx.roundRect) ctx.roundRect(handX0 - armW / 2 - 2, sleeveY, armW + 4, sleeveH, 6);
+                    else ctx.rect(handX0 - armW / 2 - 2, sleeveY, armW + 4, sleeveH);
+                    ctx.fill();
+
+                    if (handConfig.cuff) {
+                        ctx.fillStyle = handConfig.cuff;
+                        ctx.beginPath();
+                        if (ctx.roundRect) ctx.roundRect(handX0 - armW / 2 - 2, sleeveY, armW + 4, Math.max(3, sleeveH * 0.22), 3);
+                        else ctx.rect(handX0 - armW / 2 - 2, sleeveY, armW + 4, Math.max(3, sleeveH * 0.22));
+                        ctx.fill();
+                    }
+                    ctx.restore();
+                }
+
+                // --- DRAW REALISTIC HUMAN HAND HOLDING TILE (ANATOMICAL REALISTIC HAND) ---
+                if (isHands) {
+                    const armW = Math.max(18, tileW * 0.48);
+                    const armH = Math.max(38, tileH * 1.38);
+                    const handY0 = tcy + tileH / 2 - tileH * 0.04;
+                    const handX0 = tcx;
+
+                    ctx.save();
+
+                    ctx.fillStyle = 'rgba(0,0,0,0.25)';
+                    ctx.beginPath();
+                    if (ctx.roundRect) ctx.roundRect(handX0 - armW / 2 + 3, handY0 + 4, armW, armH, 8);
+                    else ctx.rect(handX0 - armW / 2 + 3, handY0 + 4, armW, armH);
+                    ctx.fill();
+
                     const skinGrad = ctx.createLinearGradient(handX0 - armW / 2, handY0, handX0 + armW / 2, handY0);
-                    skinGrad.addColorStop(0, shadeColorTO(handConfig.skin, 10));
+                    skinGrad.addColorStop(0, shadeColorTO(handConfig.skin, 12));
                     skinGrad.addColorStop(0.5, handConfig.skin);
-                    skinGrad.addColorStop(1, shadeColorTO(handConfig.skin, -20));
+                    skinGrad.addColorStop(1, shadeColorTO(handConfig.skin, -22));
                     ctx.fillStyle = skinGrad;
                     ctx.beginPath();
                     if (ctx.roundRect) ctx.roundRect(handX0 - armW * 0.42, handY0, armW * 0.84, armH, 8);
                     else ctx.rect(handX0 - armW * 0.42, handY0, armW * 0.84, armH);
                     ctx.fill();
 
-                    // Sleeve / Shirt Cuff
                     const sleeveH = armH * 0.62;
                     const sleeveY = handY0 + armH - sleeveH;
                     ctx.fillStyle = handConfig.sleeve;
@@ -16861,16 +16900,14 @@ document.addEventListener('DOMContentLoaded', () => {
                         ctx.fill();
                     }
 
-                    // 4 Realistic Fingers curling over bottom edge of tile
                     const fingerCount = 4;
-                    const totalFingerW = armW * 0.94;
+                    const totalFingerW = armW * 0.96;
                     const fingerW = totalFingerW / fingerCount;
-                    const fingerH = Math.max(9, tileH * 0.26);
-                    const fingerY = tcy + tileH / 2 - fingerH * 0.55;
+                    const fingerH = Math.max(10, tileH * 0.28);
+                    const fingerY = tcy + tileH / 2 - fingerH * 0.58;
                     const startFx = handX0 - totalFingerW / 2;
 
-                    // Shadow under fingers onto tile
-                    ctx.fillStyle = 'rgba(0,0,0,0.28)';
+                    ctx.fillStyle = 'rgba(0,0,0,0.3)';
                     ctx.beginPath();
                     if (ctx.roundRect) ctx.roundRect(startFx, fingerY + 2, totalFingerW, fingerH, 4);
                     else ctx.rect(startFx, fingerY + 2, totalFingerW, fingerH);
@@ -16879,12 +16916,12 @@ document.addEventListener('DOMContentLoaded', () => {
                     for (let f = 0; f < fingerCount; f++) {
                         const fx = startFx + f * fingerW;
                         const fGrad = ctx.createLinearGradient(fx, fingerY, fx + fingerW, fingerY + fingerH);
-                        fGrad.addColorStop(0, shadeColorTO(handConfig.skin, 15));
+                        fGrad.addColorStop(0, shadeColorTO(handConfig.skin, 18));
                         fGrad.addColorStop(0.7, handConfig.skin);
                         fGrad.addColorStop(1, shadeColorTO(handConfig.skin, -25));
                         ctx.fillStyle = fGrad;
                         ctx.beginPath();
-                        if (ctx.roundRect) ctx.roundRect(fx + 0.5, fingerY, fingerW - 1, fingerH, fingerW * 0.42);
+                        if (ctx.roundRect) ctx.roundRect(fx + 0.5, fingerY, fingerW - 1, fingerH, fingerW * 0.45);
                         else ctx.rect(fx + 0.5, fingerY, fingerW - 1, fingerH);
                         ctx.fill();
 
@@ -16892,18 +16929,16 @@ document.addEventListener('DOMContentLoaded', () => {
                         ctx.lineWidth = 1;
                         ctx.stroke();
 
-                        // Fingernail highlight accent
-                        ctx.fillStyle = 'rgba(255,255,255,0.35)';
+                        ctx.fillStyle = 'rgba(255,255,255,0.4)';
                         ctx.beginPath();
                         ctx.ellipse(fx + fingerW / 2, fingerY + fingerH * 0.35, fingerW * 0.25, fingerH * 0.15, 0, 0, Math.PI * 2);
                         ctx.fill();
                     }
 
-                    // Thumb wrapping around edge of tile
-                    const thumbW = fingerW * 1.25;
-                    const thumbH = fingerH * 1.1;
-                    const thumbX = handX0 - armW * 0.55;
-                    const thumbY = fingerY + fingerH * 0.25;
+                    const thumbW = fingerW * 1.3;
+                    const thumbH = fingerH * 1.15;
+                    const thumbX = handX0 - armW * 0.58;
+                    const thumbY = fingerY + fingerH * 0.22;
                     ctx.fillStyle = handConfig.skin;
                     ctx.beginPath();
                     if (ctx.roundRect) ctx.roundRect(thumbX, thumbY, thumbW, thumbH, thumbW * 0.45);
@@ -16920,12 +16955,10 @@ document.addEventListener('DOMContentLoaded', () => {
                 ctx.save();
                 const depth = Math.max(4, tileH * 0.14);
 
-                // Ground drop shadow
                 ctx.shadowColor = 'rgba(0,0,0,0.35)';
                 ctx.shadowBlur = Math.max(6, tileH * 0.16);
                 ctx.shadowOffsetY = Math.max(3, tileH * 0.1);
 
-                // 3D Side/Extrusion Wall
                 ctx.fillStyle = shadeColorTO(baseColor, -45);
                 ctx.beginPath();
                 if (ctx.roundRect) ctx.roundRect(tcx - tileW / 2 + depth, tcy - tileH / 2 + depth, tileW, tileH, radius);
@@ -16933,7 +16966,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 ctx.fill();
                 ctx.shadowColor = 'transparent';
 
-                // Front Face Gradient
                 const grad = ctx.createLinearGradient(tcx, tcy - tileH / 2, tcx, tcy + tileH / 2);
                 grad.addColorStop(0, shadeColorTO(baseColor, 30));
                 grad.addColorStop(0.5, baseColor);
@@ -16944,12 +16976,10 @@ document.addEventListener('DOMContentLoaded', () => {
                 else ctx.rect(tcx - tileW / 2, tcy - tileH / 2, tileW, tileH);
                 ctx.fill();
 
-                // Border stroke
                 ctx.strokeStyle = shadeColorTO(baseColor, -55);
                 ctx.lineWidth = Math.max(1, tileH * 0.03);
                 ctx.stroke();
 
-                // Top Gloss Edge Highlight
                 ctx.strokeStyle = 'rgba(255,255,255,0.48)';
                 ctx.lineWidth = Math.max(1, tileH * 0.035);
                 ctx.beginPath();
@@ -16962,17 +16992,187 @@ document.addEventListener('DOMContentLoaded', () => {
                 ctx.textAlign = 'center';
                 ctx.textBaseline = 'middle';
 
-                // Subtle dark text shadow for crisp contrast
                 ctx.fillStyle = 'rgba(0,0,0,0.35)';
                 ctx.fillText(ch, tcx + 1, tcy + 1.5);
 
-                // Crisp white letter
                 ctx.fillStyle = '#ffffff';
                 ctx.fillText(ch, tcx, tcy);
 
                 ctx.restore();
 
                 curX += tileW + gap;
+            });
+        });
+    }
+
+    // Draws text on a mechanical Airport Split-Flap departure board (Solari style - "ONE HOUR LATER")
+    function drawBrollFlipBoard(ctx, item, x, y, width, height, overrideColor) {
+        const text = String((item.type === 'text' ? item.text : item.brollLabel) || '').trim().toUpperCase();
+        if (!text) return;
+
+        const baseFontSize = Math.max(22, item.fontSize || 48);
+        const fontStyle = `${item.italic ? 'italic ' : ''}bold ${baseFontSize}px "Courier New", "Lucida Console", "Plus Jakarta Sans", monospace`;
+        ctx.font = fontStyle;
+
+        const layout = getBrollTextLayout(ctx, item, Math.max(80, width - 32));
+        const sublines = layout.sublines.length ? layout.sublines : [{ text }];
+        const numLines = sublines.length;
+
+        const flopH = Math.max(38, baseFontSize * 1.5);
+        const minFlopW = Math.max(flopH * 0.72, baseFontSize * 1.05);
+        const gap = Math.max(3, baseFontSize * 0.12);
+        const lineGap = Math.max(8, flopH * 0.25);
+        const lineHeight = flopH + lineGap;
+        const padX = Math.max(12, baseFontSize * 0.4);
+        const padY = Math.max(10, baseFontSize * 0.35);
+
+        const cx0 = x + width / 2;
+        const cy0 = y + height / 2;
+        const firstLineY = cy0 - ((numLines - 1) * lineHeight) / 2;
+
+        sublines.forEach((lineObj, lineIdx) => {
+            const lineText = String(lineObj.text || '').toUpperCase();
+            const chars = lineText.split('');
+            if (!chars.length) return;
+
+            const charWidths = chars.map(ch => {
+                if (/\s/.test(ch)) return baseFontSize * 0.55;
+                const mw = ctx.measureText(ch).width;
+                return Math.max(minFlopW, mw + baseFontSize * 0.45);
+            });
+
+            const lineTotalW = charWidths.reduce((s, w) => s + w + gap, -gap);
+            const lineY = firstLineY + lineIdx * lineHeight;
+            let curX = cx0 - lineTotalW / 2;
+
+            // --- DRAW OUTER HOUSING CHASSIS FRAME AROUND THE ROW OF FLAPS ---
+            const frameX = cx0 - lineTotalW / 2 - padX;
+            const frameY = lineY - flopH / 2 - padY;
+            const frameW = lineTotalW + padX * 2;
+            const frameH = flopH + padY * 2;
+            const frameRadius = Math.max(6, padY * 0.5);
+
+            ctx.save();
+            ctx.shadowColor = 'rgba(0,0,0,0.6)';
+            ctx.shadowBlur = 18;
+            ctx.shadowOffsetY = 8;
+
+            const chassisGrad = ctx.createLinearGradient(frameX, frameY, frameX, frameY + frameH);
+            chassisGrad.addColorStop(0, '#1c2026');
+            chassisGrad.addColorStop(0.5, '#111317');
+            chassisGrad.addColorStop(1, '#0b0c0e');
+            ctx.fillStyle = chassisGrad;
+            ctx.beginPath();
+            if (ctx.roundRect) ctx.roundRect(frameX, frameY, frameW, frameH, frameRadius);
+            else ctx.rect(frameX, frameY, frameW, frameH);
+            ctx.fill();
+            ctx.shadowColor = 'transparent';
+
+            ctx.strokeStyle = '#3a404c';
+            ctx.lineWidth = Math.max(2, padY * 0.2);
+            ctx.stroke();
+
+            ctx.strokeStyle = 'rgba(0,0,0,0.7)';
+            ctx.lineWidth = Math.max(1.5, padY * 0.15);
+            ctx.beginPath();
+            if (ctx.roundRect) ctx.roundRect(frameX + 2, frameY + 2, frameW - 4, frameH - 4, frameRadius - 1);
+            else ctx.rect(frameX + 2, frameY + 2, frameW - 4, frameH - 4);
+            ctx.stroke();
+
+            const rivetR = Math.max(2, padY * 0.18);
+            const rivetOff = padY * 0.45;
+            const rivets = [
+                { rx: frameX + rivetOff, ry: frameY + rivetOff },
+                { rx: frameX + frameW - rivetOff, ry: frameY + rivetOff },
+                { rx: frameX + rivetOff, ry: frameY + frameH - rivetOff },
+                { rx: frameX + frameW - rivetOff, ry: frameY + frameH - rivetOff }
+            ];
+            rivets.forEach(r => {
+                ctx.fillStyle = '#4a5160';
+                ctx.beginPath();
+                ctx.arc(r.rx, r.ry, rivetR, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.strokeStyle = '#15171c';
+                ctx.lineWidth = 0.8;
+                ctx.stroke();
+            });
+            ctx.restore();
+
+            // --- DRAW INDIVIDUAL SPLIT-FLAP MODULES & CHARACTERS ---
+            chars.forEach((ch, i) => {
+                const flopW = charWidths[i];
+                const tcx = curX + flopW / 2;
+                const tcy = lineY;
+                const flopX = tcx - flopW / 2;
+                const flopY = tcy - flopH / 2;
+                const flopRadius = Math.max(3, flopH * 0.08);
+
+                ctx.save();
+
+                const bgGrad = ctx.createLinearGradient(flopX, flopY, flopX, flopY + flopH);
+                bgGrad.addColorStop(0, '#23272e');
+                bgGrad.addColorStop(0.48, '#16181d');
+                bgGrad.addColorStop(0.52, '#121418');
+                bgGrad.addColorStop(1, '#1e2229');
+                ctx.fillStyle = bgGrad;
+                ctx.beginPath();
+                if (ctx.roundRect) ctx.roundRect(flopX, flopY, flopW, flopH, flopRadius);
+                else ctx.rect(flopX, flopY, flopW, flopH);
+                ctx.fill();
+
+                ctx.strokeStyle = '#0d0e11';
+                ctx.lineWidth = 1;
+                ctx.stroke();
+
+                ctx.fillStyle = 'rgba(255,255,255,0.06)';
+                ctx.beginPath();
+                if (ctx.roundRect) ctx.roundRect(flopX + 1, flopY + 1, flopW - 2, flopH * 0.48, [flopRadius, flopRadius, 0, 0]);
+                else ctx.rect(flopX + 1, flopY + 1, flopW - 2, flopH * 0.48);
+                ctx.fill();
+
+                ctx.strokeStyle = '#0a0b0d';
+                ctx.lineWidth = Math.max(1.5, flopH * 0.04);
+                ctx.beginPath();
+                ctx.moveTo(flopX, tcy);
+                ctx.lineTo(flopX + flopW, tcy);
+                ctx.stroke();
+
+                ctx.strokeStyle = 'rgba(255,255,255,0.14)';
+                ctx.lineWidth = 1;
+                ctx.beginPath();
+                ctx.moveTo(flopX + 1, tcy - 1);
+                ctx.lineTo(flopX + flopW - 1, tcy - 1);
+                ctx.stroke();
+
+                const clipW = Math.max(2.5, flopW * 0.08);
+                const clipH = Math.max(5, flopH * 0.16);
+                ctx.fillStyle = '#4c5361';
+                ctx.fillRect(flopX, tcy - clipH / 2, clipW, clipH);
+                ctx.fillRect(flopX + flopW - clipW, tcy - clipH / 2, clipW, clipH);
+
+                if (!/\s/.test(ch)) {
+                    ctx.font = fontStyle;
+                    ctx.textAlign = 'center';
+                    ctx.textBaseline = 'middle';
+
+                    const charColor = overrideColor || '#f59e0b';
+
+                    ctx.fillStyle = 'rgba(0,0,0,0.7)';
+                    ctx.fillText(ch, tcx + 1.2, tcy + 1.5);
+
+                    ctx.fillStyle = charColor;
+                    ctx.fillText(ch, tcx, tcy);
+
+                    ctx.strokeStyle = 'rgba(10,11,13,0.85)';
+                    ctx.lineWidth = Math.max(1.2, flopH * 0.035);
+                    ctx.beginPath();
+                    ctx.moveTo(flopX, tcy);
+                    ctx.lineTo(flopX + flopW, tcy);
+                    ctx.stroke();
+                }
+
+                ctx.restore();
+                curX += flopW + gap;
             });
         });
     }
@@ -17242,8 +17442,10 @@ document.addEventListener('DOMContentLoaded', () => {
             drawBadgeEllipse(cx0, cy0 - iry * 0.42, irx * 0.82, iry * 0.5);
             ctx.fill();
             ctx.restore();
-        } else if (template === 'word-3d-blocks' || template === 'word-hands-hold') {
-            drawBrollLetterTiles(ctx, item, x, y, width, height, overrideColor, template === 'word-hands-hold');
+        } else if (template === 'word-3d-blocks' || template === 'word-hands-hold' || template === 'word-color-pegs') {
+            drawBrollLetterTiles(ctx, item, x, y, width, height, overrideColor, template);
+        } else if (template === 'word-flip-board') {
+            drawBrollFlipBoard(ctx, item, x, y, width, height, overrideColor);
         } else if (isBroll3DCardTemplate(template)) {
             const frameW = Math.max(10, minSide * 0.08);
             const depthSteps = template === 'word-3d-extruded' ? 28 : (template === 'word-3d-isometric' ? 32 :
