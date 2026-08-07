@@ -16744,6 +16744,104 @@ document.addEventListener('DOMContentLoaded', () => {
                template === 'word-3d-glass' || template === 'word-3d-chrome' || template === 'word-3d-holo';
     }
 
+    // Draws the text (or, for image B-roll, a short label from item.brollLabel)
+    // as a row of individual raised 3D tiles — one tile per character — used by
+    // both 'word-3d-blocks' (bold red-style cube letters, like a PROFIT/LOSS
+    // crossword tile graphic) and 'word-hands-hold' (the same tiles in a
+    // rotating rainbow palette, each with a simple stylized hand icon reaching
+    // up from below, like a "CAREERS" hands-holding-letters graphic). Hands are
+    // drawn as flat single-tone icon silhouettes, not a specific skin tone.
+    function drawBrollLetterTiles(ctx, item, x, y, width, height, overrideColor, withHands) {
+        const text = String((item.type === 'text' ? item.text : item.brollLabel) || '').trim();
+        if (!text) return;
+
+        const font = `${item.italic ? 'italic ' : ''}bold ${item.fontSize || 48}px "${item.font || 'Hind Siliguri'}", "Plus Jakarta Sans", sans-serif`;
+        ctx.font = font;
+        const layout = getBrollTextLayout(ctx, item, Math.max(80, width - 32));
+        const sublines = layout.sublines.length ? layout.sublines : [{ text }];
+        const lineHeight = layout.lineHeight || (item.fontSize || 48) * 1.35;
+        const cx0 = x + width / 2, cy0 = y + height / 2;
+        const numLines = sublines.length;
+        const firstLineY = cy0 - ((numLines - 1) * lineHeight) / 2;
+
+        const palette = ['#14b8a6', '#f59e0b', '#3b82f6', '#22c55e', '#ef4444', '#a855f7'];
+        const handColor = '#4b5563';
+        const tileH = Math.min(lineHeight * 0.86, (item.fontSize || 48) * 1.35);
+        const gap = Math.max(3, tileH * 0.07);
+        const radius = Math.max(4, tileH * 0.12);
+
+        sublines.forEach((lineObj, lineIdx) => {
+            const lineText = String(lineObj.text || '');
+            const chars = lineText.split('');
+            if (!chars.length) return;
+
+            const charWidths = chars.map(c => Math.max(ctx.measureText(c).width, tileH * 0.35));
+            const lineTotalW = charWidths.reduce((s, w) => s + w + gap, -gap);
+            let curX = cx0 - lineTotalW / 2;
+            const lineY = firstLineY + lineIdx * lineHeight;
+
+            chars.forEach((ch, i) => {
+                const w = charWidths[i];
+                const tileW = w + tileH * 0.32;
+                const tcx = curX + w / 2;
+                const tcy = lineY;
+
+                if (/\s/.test(ch)) { curX += w + gap; return; }
+
+                const base = withHands ? palette[i % palette.length] : (overrideColor || '#dc2626');
+
+                if (withHands) {
+                    // Simple stylized hand icon: a rounded "arm" rising from below
+                    // the tile with a few short "finger" bumps curling over the
+                    // tile's bottom edge — an icon-style silhouette, not a photo.
+                    const armW = tileW * 0.34, armH = tileH * 0.62;
+                    const armX = tcx - armW / 2, armY = tcy + tileH / 2 - tileH * 0.08;
+                    ctx.fillStyle = handColor;
+                    ctx.beginPath();
+                    if (ctx.roundRect) ctx.roundRect(armX, armY, armW, armH, armW * 0.4);
+                    else ctx.rect(armX, armY, armW, armH);
+                    ctx.fill();
+                    const fingerR = tileW * 0.1;
+                    for (let f = -1; f <= 1; f++) {
+                        ctx.beginPath();
+                        ctx.arc(tcx + f * fingerR * 1.5, tcy + tileH * 0.32, fingerR, 0, Math.PI * 2);
+                        ctx.fill();
+                    }
+                }
+
+                const depth = Math.max(3, tileH * 0.13);
+                ctx.fillStyle = shadeColorTO(base, -40);
+                ctx.beginPath();
+                if (ctx.roundRect) ctx.roundRect(tcx - tileW / 2 + depth, tcy - tileH / 2 + depth, tileW, tileH, radius);
+                else ctx.rect(tcx - tileW / 2 + depth, tcy - tileH / 2 + depth, tileW, tileH);
+                ctx.fill();
+
+                const grad = ctx.createLinearGradient(tcx, tcy - tileH / 2, tcx, tcy + tileH / 2);
+                grad.addColorStop(0, shadeColorTO(base, 28));
+                grad.addColorStop(0.5, base);
+                grad.addColorStop(1, shadeColorTO(base, -18));
+                ctx.fillStyle = grad;
+                ctx.beginPath();
+                if (ctx.roundRect) ctx.roundRect(tcx - tileW / 2, tcy - tileH / 2, tileW, tileH, radius);
+                else ctx.rect(tcx - tileW / 2, tcy - tileH / 2, tileW, tileH);
+                ctx.fill();
+                ctx.strokeStyle = shadeColorTO(base, -55);
+                ctx.lineWidth = Math.max(1, tileH * 0.025);
+                ctx.stroke();
+
+                // Thin bright bevel along the top-left edge for a glossy-cube feel
+                ctx.strokeStyle = 'rgba(255,255,255,0.45)';
+                ctx.lineWidth = Math.max(1, tileH * 0.03);
+                ctx.beginPath();
+                ctx.moveTo(tcx - tileW / 2 + radius, tcy - tileH / 2 + 1);
+                ctx.lineTo(tcx + tileW / 2 - radius, tcy - tileH / 2 + 1);
+                ctx.stroke();
+
+                curX += w + gap;
+            });
+        });
+    }
+
     // `phase` controls, for the 3D card templates only, which half of the
     // drawing gets painted:
     //  - 'shadowOnly' → just the stacked depth/extrusion slices (meant to sit
@@ -16954,6 +17052,63 @@ document.addEventListener('DOMContentLoaded', () => {
             ctx.strokeStyle = overrideColor || 'rgba(255,255,255,0.75)';
             ctx.lineWidth = Math.max(2, minSide * 0.012);
             ctx.strokeRect(x, y, width, height);
+        } else if (template === 'word-glossy-badge') {
+            // Glossy round/oval "Best Choice" style badge — a metallic-ringed
+            // button with a bright glass highlight across the top, sized to
+            // hug the text's own bounding box like word-circle/word-rounded.
+            const base = overrideColor || '#0f8a3c';
+            const cx0 = x + width / 2, cy0 = y + height / 2;
+            const rx = width / 2 + Math.max(14, minSide * 0.12);
+            const ry = height / 2 + Math.max(14, minSide * 0.12);
+
+            const drawBadgeEllipse = (px, py, prx, pry) => {
+                ctx.beginPath();
+                ctx.ellipse(px, py, Math.max(1, prx), Math.max(1, pry), 0, 0, Math.PI * 2);
+            };
+
+            // Soft ground shadow
+            ctx.save();
+            ctx.shadowColor = 'rgba(0,0,0,0.5)';
+            ctx.shadowBlur = Math.max(14, minSide * 0.1);
+            ctx.shadowOffsetY = Math.max(6, minSide * 0.05);
+            // Outer metallic silver ring
+            const ringGrad = ctx.createLinearGradient(cx0, cy0 - ry, cx0, cy0 + ry);
+            ringGrad.addColorStop(0, '#ffffff');
+            ringGrad.addColorStop(0.45, '#9ca3af');
+            ringGrad.addColorStop(0.55, '#6b7280');
+            ringGrad.addColorStop(1, '#e5e7eb');
+            ctx.fillStyle = ringGrad;
+            drawBadgeEllipse(cx0, cy0, rx, ry);
+            ctx.fill();
+            ctx.restore();
+
+            // Inner glossy face
+            const ringW = Math.max(6, minSide * 0.045);
+            const irx = rx - ringW, iry = ry - ringW;
+            const faceGrad = ctx.createRadialGradient(cx0, cy0 - iry * 0.35, iry * 0.15, cx0, cy0, Math.max(irx, iry));
+            faceGrad.addColorStop(0, shadeColorTO(base, 35));
+            faceGrad.addColorStop(0.55, base);
+            faceGrad.addColorStop(1, shadeColorTO(base, -35));
+            ctx.fillStyle = faceGrad;
+            drawBadgeEllipse(cx0, cy0, irx, iry);
+            ctx.fill();
+            ctx.strokeStyle = shadeColorTO(base, -50);
+            ctx.lineWidth = Math.max(1.5, minSide * 0.008);
+            ctx.stroke();
+
+            // Bright glass highlight arc across the upper half
+            ctx.save();
+            drawBadgeEllipse(cx0, cy0, irx, iry);
+            ctx.clip();
+            const glossGrad = ctx.createLinearGradient(cx0, cy0 - iry, cx0, cy0);
+            glossGrad.addColorStop(0, 'rgba(255,255,255,0.55)');
+            glossGrad.addColorStop(1, 'rgba(255,255,255,0)');
+            ctx.fillStyle = glossGrad;
+            drawBadgeEllipse(cx0, cy0 - iry * 0.42, irx * 0.82, iry * 0.5);
+            ctx.fill();
+            ctx.restore();
+        } else if (template === 'word-3d-blocks' || template === 'word-hands-hold') {
+            drawBrollLetterTiles(ctx, item, x, y, width, height, overrideColor, template === 'word-hands-hold');
         } else if (isBroll3DCardTemplate(template)) {
             const frameW = Math.max(10, minSide * 0.08);
             const depthSteps = template === 'word-3d-extruded' ? 28 : (template === 'word-3d-isometric' ? 32 :
