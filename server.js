@@ -11,7 +11,10 @@ ffmpeg.setFfmpegPath(ffmpegPath);
 
 const app = express();
 const server = http.createServer(app);
-const wss = new WebSocket.Server({ server });
+const wss = new WebSocket.Server({
+    server,
+    maxPayload: 2048 * 1024 * 1024 // 2 GB limit (default ws limit is 100MB)
+});
 
 const PORT = 4000;
 
@@ -343,11 +346,21 @@ wss.on('connection', (ws) => {
 
                     console.log(`Starting render session ${renderId}. Expecting ${totalFrames} frames.`);
                     ws.send(JSON.stringify({ type: 'init_ok', renderId }));
-                } 
-                else if (data.type === 'audio_start') {
+                }                 else if (data.type === 'audio_start') {
                     mode = 'audio';
-                    console.log('Ready to receive audio file.');
+                    if (tempDir) {
+                        const audioPath = path.join(tempDir, 'audio.wav');
+                        if (fs.existsSync(audioPath)) {
+                            try { fs.unlinkSync(audioPath); } catch (e) {}
+                        }
+                    }
+                    console.log('Ready to receive audio file (chunked streaming enabled).');
                     ws.send(JSON.stringify({ type: 'audio_ready' }));
+                }
+                else if (data.type === 'audio_end') {
+                    console.log('Finished receiving audio file chunks.');
+                    mode = 'frames';
+                    ws.send(JSON.stringify({ type: 'audio_ok' }));
                 }
                 else if (data.type === 'compile') {
                     console.log('Starting compile...');
@@ -367,11 +380,10 @@ wss.on('connection', (ws) => {
                     }
                 } 
                 else if (mode === 'audio') {
-                    const audioPath = path.join(tempDir, 'audio.wav');
-                    fs.writeFileSync(audioPath, message);
-                    console.log('Saved mixed WAV audio file.');
-                    mode = 'frames'; // Switch mode to receive video frames
-                    ws.send(JSON.stringify({ type: 'audio_ok' }));
+                    if (tempDir) {
+                        const audioPath = path.join(tempDir, 'audio.wav');
+                        fs.appendFileSync(audioPath, message);
+                    }
                 }
             }
         } catch (err) {

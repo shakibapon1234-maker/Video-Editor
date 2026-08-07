@@ -429,14 +429,24 @@ document.addEventListener('DOMContentLoaded', () => {
                         const onMsg = async (event) => {
                             const data = JSON.parse(event.data);
                             if (data.type === 'audio_ready') {
-                                await serverLog('Received audio_ready. Sending audioBlob.');
+                                await serverLog('Received audio_ready. Streaming audioBlob chunks.');
                                 this.ws.removeEventListener('message', onMsg);
                                 resolve();
                             }
                         };
                         this.ws.addEventListener('message', onMsg);
                     });
-                    this.ws.send(blob);
+
+                    // Send blob in 5MB chunks to avoid memory spikes and payload size limits
+                    const chunkSize = 5 * 1024 * 1024;
+                    let offset = 0;
+                    while (offset < blob.size) {
+                        const chunk = blob.slice(offset, offset + chunkSize);
+                        this.ws.send(chunk);
+                        offset += chunkSize;
+                    }
+
+                    this.ws.send(JSON.stringify({ type: 'audio_end' }));
                     await new Promise((resolve) => {
                         const onMsg = async (event) => {
                             const data = JSON.parse(event.data);

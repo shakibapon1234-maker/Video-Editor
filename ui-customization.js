@@ -587,4 +587,159 @@
             });
         }
     }
+
+    // ============================================================
+    // Fullscreen Preview  (স্ক্রিন রেকর্ডিংয়ের জন্য ফুলস্ক্রিন)
+    // Uses canvas.captureStream() → <video> → requestFullscreen()
+    // so the editor canvas is mirrored live at full-screen size.
+    // ============================================================
+    (function initFullscreenPreview() {
+        const editorCanvas   = document.getElementById('editor-canvas');
+        const fsWrapper      = document.getElementById('sf-fullscreen-wrapper');
+        const fsVideo        = document.getElementById('sf-fullscreen-video');
+        const fsBtnOverlay   = document.getElementById('canvas-fullscreen-btn');
+        const fsBtnFloat     = document.getElementById('canvas-fullscreen-btn-float');
+        const fsPlayPause    = document.getElementById('sf-fs-playpause');
+        const fsTimeDisplay  = document.getElementById('sf-fs-time');
+        const fsExitBtn      = document.getElementById('sf-fs-exit');
+
+        if (!editorCanvas || !fsWrapper || !fsVideo) return;
+
+        let fsStream = null;
+        let fsTimerInterval = null;
+
+        // Helper — format seconds as MM:SS.s
+        function formatTime(sec) {
+            if (!isFinite(sec) || sec < 0) sec = 0;
+            const m = Math.floor(sec / 60);
+            const s = (sec % 60).toFixed(1).padStart(4, '0');
+            return `${String(m).padStart(2, '0')}:${s}`;
+        }
+
+        // Sync the time display by reading the main seek slider
+        function syncTimeDisplay() {
+            const currentEl = document.getElementById('seek-current-time');
+            const totalEl   = document.getElementById('seek-total-time');
+            if (fsTimeDisplay && currentEl && totalEl) {
+                fsTimeDisplay.textContent = `${currentEl.textContent} / ${totalEl.textContent}`;
+            }
+        }
+
+        function enterFullscreen() {
+            if (!editorCanvas) return;
+
+            // Capture a live 30fps stream from the editor canvas
+            try {
+                fsStream = editorCanvas.captureStream(30);
+                fsVideo.srcObject = fsStream;
+                fsVideo.play().catch(() => {});
+            } catch (err) {
+                console.warn('captureStream not supported:', err);
+                return;
+            }
+
+            // Show wrapper and request fullscreen
+            fsWrapper.style.display = 'flex';
+            const fsReq = fsWrapper.requestFullscreen
+                || fsWrapper.webkitRequestFullscreen
+                || fsWrapper.mozRequestFullScreen
+                || fsWrapper.msRequestFullscreen;
+            if (fsReq) {
+                fsReq.call(fsWrapper).catch((err) => {
+                    console.warn('Fullscreen request failed:', err);
+                    // Fallback: stay as fixed overlay even without true fullscreen API
+                });
+            }
+
+            // Start time-sync interval
+            fsTimerInterval = setInterval(syncTimeDisplay, 200);
+            syncTimeDisplay();
+
+            // Sync play/pause button icon with main editor state
+            updateFsPlayPauseIcon();
+        }
+
+        function exitFullscreen() {
+            if (document.exitFullscreen) document.exitFullscreen().catch(() => {});
+            else if (document.webkitExitFullscreen) document.webkitExitFullscreen();
+            else if (document.mozCancelFullScreen) document.mozCancelFullScreen();
+            else if (document.msExitFullscreen) document.msExitFullscreen();
+
+            cleanupFs();
+        }
+
+        function cleanupFs() {
+            if (fsTimerInterval) { clearInterval(fsTimerInterval); fsTimerInterval = null; }
+            if (fsVideo) { fsVideo.srcObject = null; fsVideo.pause(); }
+            if (fsStream) {
+                fsStream.getTracks().forEach((t) => t.stop());
+                fsStream = null;
+            }
+            if (fsWrapper) fsWrapper.style.display = 'none';
+        }
+
+        function updateFsPlayPauseIcon() {
+            if (!fsPlayPause) return;
+            const mainBtn = document.getElementById('play-pause-btn');
+            const isPlaying = mainBtn && mainBtn.querySelector('.fa-pause');
+            fsPlayPause.innerHTML = isPlaying
+                ? '<i class="fa-solid fa-pause"></i>'
+                : '<i class="fa-solid fa-play"></i>';
+        }
+
+        // Fullscreen button — canvas overlay (docked mode)
+        if (fsBtnOverlay) {
+            fsBtnOverlay.addEventListener('click', enterFullscreen);
+        }
+
+        // Fullscreen button — floating header
+        if (fsBtnFloat) {
+            fsBtnFloat.addEventListener('click', enterFullscreen);
+        }
+
+        // Exit button inside fullscreen overlay
+        if (fsExitBtn) {
+            fsExitBtn.addEventListener('click', exitFullscreen);
+        }
+
+        // Play/Pause inside fullscreen overlay — delegates to main editor button
+        if (fsPlayPause) {
+            fsPlayPause.addEventListener('click', () => {
+                const mainBtn = document.getElementById('play-pause-btn');
+                if (mainBtn) mainBtn.click();
+                setTimeout(updateFsPlayPauseIcon, 80);
+            });
+        }
+
+        // Listen for the main play-pause button state to sync the FS icon
+        document.addEventListener('click', (e) => {
+            if (e.target.closest('#play-pause-btn')) {
+                setTimeout(updateFsPlayPauseIcon, 80);
+            }
+        }, true);
+
+        // Clean up when fullscreen exits (ESC key or API)
+        document.addEventListener('fullscreenchange', () => {
+            if (!document.fullscreenElement) cleanupFs();
+        });
+        document.addEventListener('webkitfullscreenchange', () => {
+            if (!document.webkitFullscreenElement) cleanupFs();
+        });
+
+        // Show the canvas overlay button once a video is loaded
+        // (watch for the timeline-controls becoming visible, which signals a clip is loaded)
+        const timelineControls = document.getElementById('timeline-controls');
+        if (timelineControls && fsBtnOverlay) {
+            const obs = new MutationObserver(() => {
+                const isLoaded = timelineControls.style.display !== 'none';
+                fsBtnOverlay.style.display = isLoaded ? 'flex' : 'none';
+            });
+            obs.observe(timelineControls, { attributes: true, attributeFilter: ['style'] });
+            // Initial check
+            fsBtnOverlay.style.display =
+                timelineControls.style.display !== 'none' ? 'flex' : 'none';
+        }
+    })();
+
 })();
+

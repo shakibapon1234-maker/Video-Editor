@@ -809,6 +809,139 @@ body {
     background: rgba(239, 68, 68, 0.15);
 }
 
+/* -------------------------------------------------------
+   Fullscreen Preview Button (canvas overlay + float header)
+   ------------------------------------------------------- */
+.cf-fs-btn {
+    background: transparent;
+    border: none;
+    color: var(--text-secondary, #94a3b8);
+    cursor: pointer;
+    font-size: 13px;
+    padding: 2px 7px;
+    border-radius: 4px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: color 0.15s, background 0.15s;
+}
+.cf-fs-btn:hover {
+    color: #6366f1;
+    background: rgba(99, 102, 241, 0.15);
+}
+
+/* Canvas-overlay fullscreen button (visible on canvas hover, docked mode) */
+#canvas-fullscreen-btn {
+    position: absolute;
+    bottom: 10px;
+    right: 10px;
+    background: rgba(15, 23, 42, 0.75);
+    border: 1px solid rgba(99, 102, 241, 0.45);
+    color: #c7d2fe;
+    border-radius: 8px;
+    padding: 6px 14px;
+    cursor: pointer;
+    font-size: 12px;
+    font-weight: 600;
+    z-index: 50;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    backdrop-filter: blur(6px);
+    transition: background 0.2s, border-color 0.2s, transform 0.15s;
+    font-family: inherit;
+}
+#canvas-fullscreen-btn:hover {
+    background: rgba(99, 102, 241, 0.75);
+    border-color: #6366f1;
+    color: #fff;
+    transform: scale(1.04);
+}
+
+/* -------------------------------------------------------
+   Fullscreen Preview Overlay  (#sf-fullscreen-wrapper)
+   Used for screen recording — covers the entire screen.
+   ------------------------------------------------------- */
+#sf-fullscreen-wrapper {
+    display: none;                /* hidden until fullscreen is requested */
+    position: fixed;
+    inset: 0;
+    background: #000;
+    z-index: 99999;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+}
+/* When browser grants fullscreen the wrapper is the root element */
+#sf-fullscreen-wrapper:-webkit-full-screen,
+#sf-fullscreen-wrapper:fullscreen {
+    display: flex;
+    background: #000;
+}
+
+#sf-fullscreen-video {
+    width: 100%;
+    height: calc(100% - 56px);
+    object-fit: contain;
+    background: #000;
+    display: block;
+}
+
+/* Controls bar at bottom of fullscreen overlay */
+#sf-fullscreen-controls {
+    width: 100%;
+    height: 56px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 20px;
+    background: rgba(15, 23, 42, 0.92);
+    backdrop-filter: blur(10px);
+    border-top: 1px solid rgba(99, 102, 241, 0.25);
+    padding: 0 24px;
+    flex-shrink: 0;
+}
+#sf-fullscreen-controls button {
+    background: rgba(99, 102, 241, 0.2);
+    border: 1px solid rgba(99, 102, 241, 0.4);
+    color: #c7d2fe;
+    border-radius: 8px;
+    padding: 7px 18px;
+    cursor: pointer;
+    font-size: 13px;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    transition: background 0.2s, border-color 0.2s;
+    font-family: inherit;
+}
+#sf-fullscreen-controls button:hover {
+    background: rgba(99, 102, 241, 0.6);
+    border-color: #6366f1;
+    color: #fff;
+}
+#sf-fs-exit {
+    background: rgba(239, 68, 68, 0.18) !important;
+    border-color: rgba(239, 68, 68, 0.4) !important;
+    color: #fca5a5 !important;
+}
+#sf-fs-exit:hover {
+    background: rgba(239, 68, 68, 0.6) !important;
+    border-color: #ef4444 !important;
+    color: #fff !important;
+}
+#sf-fs-time {
+    color: #94a3b8;
+    font-size: 13px;
+    font-weight: 500;
+    min-width: 120px;
+    text-align: center;
+    font-family: monospace;
+}
+
+
+
 /* Floating Preview Canvas Controls Footer */
 .canvas-floating-footer {
     display: none;

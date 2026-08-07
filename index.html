@@ -167,10 +167,18 @@
                     <div class="canvas-container" id="canvas-container">
                         <div class="canvas-floating-header" id="canvas-floating-header" style="display: none;">
                             <span class="cf-title"><i class="fa-solid fa-up-down-left-right"></i> ভাসমান প্লেহেড (Drag to reposition)</span>
-                            <button type="button" class="cf-close-btn" id="cf-close-btn" title="ডক প্যানেলে ফিরে যান"><i class="fa-solid fa-xmark"></i></button>
+                            <div style="display:flex;align-items:center;gap:6px;">
+                                <button type="button" id="canvas-fullscreen-btn-float" class="cf-fs-btn" title="ফুলস্ক্রিন প্রিভিউ — স্ক্রিন রেকর্ডিংয়ের জন্য (Fullscreen Preview)"><i class="fa-solid fa-expand"></i></button>
+                                <button type="button" class="cf-close-btn" id="cf-close-btn" title="ডক প্যানেলে ফিরে যান"><i class="fa-solid fa-xmark"></i></button>
+                            </div>
                         </div>
                         <!-- Canvas for video rendering + logo overlay -->
                         <canvas id="editor-canvas"></canvas>
+
+                        <!-- Fullscreen button overlay on the canvas (always visible) -->
+                        <button type="button" id="canvas-fullscreen-btn" title="ফুলস্ক্রিন প্রিভিউ — স্ক্রিন রেকর্ডিংয়ের জন্য (Fullscreen Preview)" style="display:none;">
+                            <i class="fa-solid fa-expand"></i> ফুলস্ক্রিন
+                        </button>
                         
                         <!-- Drag-and-drop placeholder when no video -->
                         <div class="upload-placeholder" id="video-dropzone">
@@ -187,8 +195,19 @@
                         </div>
                     </div>
 
+                    <!-- Fullscreen Preview Overlay (for screen recording) -->
+                    <div id="sf-fullscreen-wrapper">
+                        <video id="sf-fullscreen-video" autoplay muted playsinline></video>
+                        <div id="sf-fullscreen-controls">
+                            <button id="sf-fs-playpause" title="Play / Pause"><i class="fa-solid fa-play"></i></button>
+                            <span id="sf-fs-time">00:00 / 00:00</span>
+                            <button id="sf-fs-exit" title="ফুলস্ক্রিন থেকে বের হন (ESC চাপুন)"><i class="fa-solid fa-compress"></i> বের হন</button>
+                        </div>
+                    </div>
+
                     <!-- Generic Keyframe Animation Panel (Phase 11) -->
                     <div id="keyframe-panel-mount"></div>
+
 
                     <!-- Custom Timeline Control -->
                     <div class="timeline-bar" style="display: none;" id="timeline-controls">
