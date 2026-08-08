@@ -6662,21 +6662,29 @@ document.addEventListener('DOMContentLoaded', () => {
                             scaleAmt = 0.75 + 0.25 * eased;
                             alpha = Math.max(0.15, eased);
                         }
-                    } else if (style === 'zoom-pop' || style === 'confetti-pop' || style === 'heart-burst' || style === 'cash-spin' || style === 'cash-stack' || style === 'question-bounce' || style === 'checkmark-pop' || style === 'magnifier-zoom') {
+                    } else if (style === 'zoom-pop' || style === 'confetti-pop' || style === 'heart-burst' || style === 'cash-spin' || style === 'cash-stack' || style === 'question-bounce' || style === 'checkmark-pop' || style === 'magnifier-zoom' || style === 'badge-pop-dot' || style === 'comic-burst-text' || style === 'cta-button-arrow') {
                         // Quick pop-in scale from 70% with a bouncy overshoot — distinct
                         // from the slow continuous Ken Burns 'zoom' below. 'confetti-pop'
                         // and 'heart-burst' reuse this exact box pop and additionally burst
                         // colorful particles / hearts outward (drawn in the annotation section below).
+                        // 'badge-pop-dot' additionally lands on a small fixed tilt (like a
+                        // sticker slapped on at an angle) instead of landing flat.
                         if (tIn < animDur) {
                             const eased = easeOutBackOvershoot(Math.max(0, tIn / animDur));
                             scaleAmt = 0.7 + 0.3 * eased;
                             alpha = Math.max(0.15, eased);
                             if (style === 'cash-spin') rotateAmt = (1 - eased) * Math.PI * 2;
+                            // Was -0.07 rad (~4°) — barely readable as a "tilted sticker".
+                            // -0.14 rad (~8°) is a clearly visible slap-on tilt.
+                            if (style === 'badge-pop-dot') rotateAmt = -0.14 * eased;
                         } else if (tOut < animDur) {
                             const eased = easeOutBackOvershoot(Math.max(0, tOut / animDur));
                             scaleAmt = 0.7 + 0.3 * eased;
                             alpha = Math.max(0.15, eased);
                             if (style === 'cash-spin') rotateAmt = -(1 - eased) * Math.PI * 2;
+                            if (style === 'badge-pop-dot') rotateAmt = -0.14 * eased;
+                        } else if (style === 'badge-pop-dot') {
+                            rotateAmt = -0.14; // stays gently tilted while held on screen
                         }
                     } else if (style === 'blur-pop') {
                         // Starts heavily blurred and small, sharpens and scales up to settle.
@@ -6917,6 +6925,73 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (item.type === 'text') {
                     drawBrollVisualTemplate(state.ctx, item, frameBoxX, frameBoxY, frameBoxW, frameBoxH, alpha, imgDrawable);
                     if (item.visualTemplate !== 'word-3d-blocks' && item.visualTemplate !== 'word-hands-hold' && item.visualTemplate !== 'word-color-pegs' && item.visualTemplate !== 'word-flip-board') {
+                    // Specialized backdrop containers for Reels Text/Badge Styles
+                    if (style === 'badge-pop-dot') {
+                        // Badge Sticker Pill Container: rounded badge backdrop with soft shadow & crisp border
+                        state.ctx.save();
+                        const bRadius = Math.min(boxH * 0.45, 18);
+                        const bx = drawBoxX - 10, by = drawBoxY - 6, bw = boxW + 20, bh = boxH + 12;
+                        state.ctx.shadowColor = 'rgba(0, 0, 0, 0.35)';
+                        state.ctx.shadowBlur = 14;
+                        state.ctx.shadowOffsetY = 4;
+                        state.ctx.fillStyle = (item.boxColor || item.highlightColor || '#ffffff');
+                        state.ctx.beginPath();
+                        if (state.ctx.roundRect) state.ctx.roundRect(bx, by, bw, bh, bRadius);
+                        else state.ctx.rect(bx, by, bw, bh);
+                        state.ctx.fill();
+                        state.ctx.shadowBlur = 0;
+                        state.ctx.shadowOffsetY = 0;
+                        state.ctx.strokeStyle = 'rgba(255, 255, 255, 0.85)';
+                        state.ctx.lineWidth = 2;
+                        state.ctx.stroke();
+                        state.ctx.restore();
+                    } else if (style === 'cta-button-arrow') {
+                        // CTA Button Pill Container: vibrant gradient button with glossy sheen & drop shadow
+                        state.ctx.save();
+                        const ctaRadius = Math.min(boxH * 0.5, 24);
+                        const bx = drawBoxX - 14, by = drawBoxY - 8, bw = boxW + 28, bh = boxH + 16;
+                        state.ctx.shadowColor = 'rgba(239, 68, 68, 0.45)';
+                        state.ctx.shadowBlur = 18;
+                        state.ctx.shadowOffsetY = 6;
+                        const ctaGrad = state.ctx.createLinearGradient(bx, by, bx, by + bh);
+                        ctaGrad.addColorStop(0, '#ef4444');
+                        ctaGrad.addColorStop(1, '#dc2626');
+                        state.ctx.fillStyle = ctaGrad;
+                        state.ctx.beginPath();
+                        if (state.ctx.roundRect) state.ctx.roundRect(bx, by, bw, bh, ctaRadius);
+                        else state.ctx.rect(bx, by, bw, bh);
+                        state.ctx.fill();
+                        state.ctx.shadowBlur = 0;
+                        state.ctx.shadowOffsetY = 0;
+                        // Top half glossy sheen
+                        state.ctx.fillStyle = 'rgba(255, 255, 255, 0.18)';
+                        state.ctx.beginPath();
+                        if (state.ctx.roundRect) state.ctx.roundRect(bx + 2, by + 2, bw - 4, (bh - 4) / 2, [ctaRadius - 2, ctaRadius - 2, 0, 0]);
+                        else state.ctx.rect(bx + 2, by + 2, bw - 4, (bh - 4) / 2);
+                        state.ctx.fill();
+                        state.ctx.strokeStyle = '#ffffff';
+                        state.ctx.lineWidth = 2;
+                        state.ctx.stroke();
+                        state.ctx.restore();
+                    } else if (style === 'comic-burst-text') {
+                        // Comic Starburst / Speech Bubble Backdrop
+                        state.ctx.save();
+                        const bx = drawBoxX - 16, by = drawBoxY - 12, bw = boxW + 32, bh = boxH + 24;
+                        state.ctx.fillStyle = (item.highlightColor || '#facc15');
+                        state.ctx.shadowColor = 'rgba(0, 0, 0, 0.4)';
+                        state.ctx.shadowBlur = 12;
+                        state.ctx.shadowOffsetY = 5;
+                        state.ctx.beginPath();
+                        if (state.ctx.roundRect) state.ctx.roundRect(bx, by, bw, bh, 14);
+                        else state.ctx.rect(bx, by, bw, bh);
+                        state.ctx.fill();
+                        state.ctx.shadowBlur = 0;
+                        state.ctx.shadowOffsetY = 0;
+                        state.ctx.strokeStyle = '#000000';
+                        state.ctx.lineWidth = 4;
+                        state.ctx.stroke();
+                        state.ctx.restore();
+                    }
                     if (item.visualTemplate === 'glass-caption') {
                         const glassRadius = Math.min(boxH * 0.48, 28);
                         state.ctx.save();
@@ -7056,6 +7131,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
                     const kineticTextStyles = ['letter-rotate-settle', 'letter-converge', 'letter-cascade-fade', 'word-pop-stagger'];
                     const isKineticStyle = kineticTextStyles.includes(style) && brollAnimActive;
+                    const isLetterBounceStyle = (style === 'letter-bounce-wiggle') && item.type === 'text';
 
                     if (item.lineRevealMode && numLines > 1) {
                         // Independent line-by-line reveal feature — see drawLineRevealText
@@ -7192,6 +7268,34 @@ document.addEventListener('DOMContentLoaded', () => {
                                     // Real exit phase: all currently-visible lines animate away together.
                                     drawKineticText(state.ctx, item, style, lineObj.text, kineticLineX, drawLineY, perLineDur, Math.max(0, tOut), perLineDur, strokeOnFill);
                                 }
+                            } else if (isLetterBounceStyle) {
+                                // Enhanced Letter Bounce Wiggle: multi-frequency bobbing + rotation tilt + character squish/stretch
+                                const bounceGraphemes = splitGraphemes(lineObj.text);
+                                const bounceWidths = bounceGraphemes.map(g => state.ctx.measureText(g).width);
+                                const bounceTotalW = bounceWidths.reduce((a, b) => a + b, 0);
+                                state.ctx.save();
+                                state.ctx.globalAlpha = state.ctx.globalAlpha;
+                                state.ctx.textAlign = 'left';
+                                state.ctx.lineJoin = 'round';
+                                let bx = isBulletPage ? drawLineX : (drawLineX - bounceTotalW / 2);
+                                for (let gi = 0; gi < bounceGraphemes.length; gi++) {
+                                    const bob = Math.sin((currentTime || 0) * 7.5 + gi * 0.85) * (item.fontSize * 0.16);
+                                    const tilt = Math.sin((currentTime || 0) * 5.2 + gi * 1.1) * 0.09;
+                                    const squish = 1 + Math.cos((currentTime || 0) * 7.5 + gi * 0.85) * 0.08;
+                                    state.ctx.save();
+                                    state.ctx.translate(bx + bounceWidths[gi] / 2, drawLineY + bob);
+                                    state.ctx.rotate(tilt);
+                                    state.ctx.scale(1 / squish, squish);
+                                    state.ctx.translate(-(bx + bounceWidths[gi] / 2), -(drawLineY + bob));
+                                    state.ctx.lineWidth = Math.max(3, item.fontSize * 0.10);
+                                    state.ctx.strokeStyle = 'rgba(0,0,0,0.75)';
+                                    state.ctx.strokeText(bounceGraphemes[gi], bx, drawLineY + bob);
+                                    state.ctx.fillStyle = item.color || '#ffffff';
+                                    state.ctx.fillText(bounceGraphemes[gi], bx, drawLineY + bob);
+                                    state.ctx.restore();
+                                    bx += bounceWidths[gi];
+                                }
+                                state.ctx.restore();
                             } else {
                                 let textToDraw = lineObj.text;
                                 let isTypingLine = false;
@@ -7200,6 +7304,75 @@ document.addEventListener('DOMContentLoaded', () => {
                                     const revealCount = Math.max(0, Math.min(lineGraphemes.length, Math.round(lineGraphemes.length * lineP)));
                                     textToDraw = lineGraphemes.slice(0, revealCount).join('');
                                     isTypingLine = revealCount < lineGraphemes.length && lineP > 0;
+                                }
+
+                                if (style === 'comic-outline-glow') {
+                                    // Dual-pass ultra-crisp comic outline + pulsing neon glow
+                                    state.ctx.save();
+                                    state.ctx.textAlign = isBulletPage ? 'left' : 'center';
+                                    state.ctx.lineJoin = 'round';
+                                    // Pass 1: Heavy black outline
+                                    state.ctx.strokeStyle = '#000000';
+                                    state.ctx.lineWidth = Math.max(5, item.fontSize * 0.22);
+                                    state.ctx.strokeText(textToDraw, drawLineX, drawLineY);
+                                    // Pass 2: Pulsing neon glow stroke
+                                    const glowPulse = item.fontSize * (0.4 + 0.25 * Math.sin((currentTime || 0) * 4.5));
+                                    state.ctx.strokeStyle = item.glowColor || '#ef4444';
+                                    state.ctx.shadowColor = item.glowColor || '#ef4444';
+                                    state.ctx.shadowBlur = glowPulse;
+                                    state.ctx.lineWidth = Math.max(2, item.fontSize * 0.08);
+                                    state.ctx.strokeText(textToDraw, drawLineX, drawLineY);
+                                    state.ctx.shadowBlur = 0;
+                                    state.ctx.restore();
+                                } else if (style === 'particle-glow-text') {
+                                    // Luxurious golden star sparkles (✦/✨) & drifting gold sparkle dust
+                                    const glowW = state.ctx.measureText(textToDraw).width;
+                                    const glowCx = isBulletPage ? (drawLineX + glowW / 2) : drawLineX;
+                                    state.ctx.save();
+                                    // Soft golden radial aura behind text
+                                    const auraGrad = state.ctx.createRadialGradient(glowCx, drawLineY, 0, glowCx, drawLineY, Math.max(glowW, item.fontSize * 2));
+                                    auraGrad.addColorStop(0, 'rgba(254, 240, 138, 0.35)');
+                                    auraGrad.addColorStop(0.5, 'rgba(234, 179, 8, 0.15)');
+                                    auraGrad.addColorStop(1, 'rgba(0, 0, 0, 0)');
+                                    state.ctx.fillStyle = auraGrad;
+                                    state.ctx.beginPath();
+                                    state.ctx.arc(glowCx, drawLineY, Math.max(glowW, item.fontSize * 2), 0, Math.PI * 2);
+                                    state.ctx.fill();
+
+                                    // Floating 4-point gold star sparkles
+                                    const N = 10;
+                                    for (let gi = 0; gi < N; gi++) {
+                                        const seedX = ((gi * 59 + 13) % 100) / 100 - 0.5;
+                                        const driftY = ((gi * 37 + (currentTime || 0) * 20) % 120) / 100 - 0.6;
+                                        const px = glowCx + seedX * (glowW + item.fontSize * 1.2);
+                                        const py = drawLineY + driftY * item.fontSize * 1.5;
+                                        const twinkle = 0.3 + 0.7 * Math.max(0, Math.sin((currentTime || 0) * 3.8 + gi * 1.9));
+                                        const starSize = Math.max(6, item.fontSize * (0.12 + (gi % 3) * 0.05)) * twinkle;
+
+                                        state.ctx.save();
+                                        state.ctx.translate(px, py);
+                                        state.ctx.globalAlpha = twinkle * 0.85;
+                                        state.ctx.fillStyle = '#fef08a';
+                                        state.ctx.shadowColor = '#eab308';
+                                        state.ctx.shadowBlur = 8;
+                                        // Draw 4-point star
+                                        state.ctx.beginPath();
+                                        for (let s = 0; s < 4; s++) {
+                                            const ang = (s * Math.PI) / 2;
+                                            const rx1 = Math.cos(ang) * starSize;
+                                            const ry1 = Math.sin(ang) * starSize;
+                                            const angMid = ang + Math.PI / 4;
+                                            const rx2 = Math.cos(angMid) * (starSize * 0.3);
+                                            const ry2 = Math.sin(angMid) * (starSize * 0.3);
+                                            if (s === 0) state.ctx.moveTo(rx1, ry1);
+                                            else state.ctx.lineTo(rx1, ry1);
+                                            state.ctx.lineTo(rx2, ry2);
+                                        }
+                                        state.ctx.closePath();
+                                        state.ctx.fill();
+                                        state.ctx.restore();
+                                    }
+                                    state.ctx.restore();
                                 }
 
                                 if (lineObj.bullet) {
@@ -7436,7 +7609,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 // content after it's painted, growing in sync with the entry (and
                 // shrinking back out on exit) so they feel "drawn on" rather than
                 // just appearing instantly.
-                if (brollAnimActive && (style === 'circle-highlight' || style === 'underline-draw' || style === 'checkmark-pop' || style === 'thinking-character' || style === 'arrow-point' || style === 'magnifier-zoom' || style === 'question-bounce' || style === 'confetti-pop' || style === 'heart-burst' || style === 'plane-banner-trail')) {
+                if (brollAnimActive && (style === 'circle-highlight' || style === 'underline-draw' || style === 'checkmark-pop' || style === 'thinking-character' || style === 'arrow-point' || style === 'magnifier-zoom' || style === 'question-bounce' || style === 'confetti-pop' || style === 'heart-burst' || style === 'plane-banner-trail' || style === 'badge-pop-dot' || style === 'comic-burst-text' || style === 'cursor-click-point' || style === 'cta-button-arrow')) {
                     let annoP = 1;
                     let annoInEntry = false, annoInExit = false;
                     if (tIn < animDur) { annoP = brollEaseOut(tIn / animDur); annoInEntry = true; }
@@ -7675,6 +7848,169 @@ document.addEventListener('DOMContentLoaded', () => {
                                     state.ctx.restore();
                                 }
                             }
+                        } else if (style === 'badge-pop-dot') {
+                            // Pulsing live alert notification dot at top-right corner of badge sticker
+                            const dotR = Math.max(12, Math.min(boxW, boxH) * 0.18) * easeOutBackOvershoot(annoP);
+                            const dotCx = drawBoxX + boxW - dotR * 0.3;
+                            const dotCy = drawBoxY - dotR * 0.2;
+                            state.ctx.save();
+                            // Pulsing sonar wave ring
+                            const wavePulse = ((currentTime || 0) * 3) % 1;
+                            state.ctx.globalAlpha = annoP * (1 - wavePulse) * 0.7;
+                            state.ctx.strokeStyle = '#ef4444';
+                            state.ctx.lineWidth = 2.5;
+                            state.ctx.beginPath();
+                            state.ctx.arc(dotCx, dotCy, dotR * (1 + wavePulse * 0.7), 0, Math.PI * 2);
+                            state.ctx.stroke();
+                            // Solid red dot badge
+                            state.ctx.globalAlpha = annoP;
+                            state.ctx.shadowColor = 'rgba(239, 68, 68, 0.9)';
+                            state.ctx.shadowBlur = dotR * 1.1;
+                            state.ctx.fillStyle = '#ef4444';
+                            state.ctx.strokeStyle = '#ffffff';
+                            state.ctx.lineWidth = Math.max(2, dotR * 0.25);
+                            state.ctx.beginPath();
+                            state.ctx.arc(dotCx, dotCy, dotR, 0, Math.PI * 2);
+                            state.ctx.fill();
+                            state.ctx.stroke();
+                            // White inner alert dot
+                            state.ctx.fillStyle = '#ffffff';
+                            state.ctx.beginPath();
+                            state.ctx.arc(dotCx - dotR * 0.25, dotCy - dotR * 0.25, dotR * 0.28, 0, Math.PI * 2);
+                            state.ctx.fill();
+                            state.ctx.restore();
+                        } else if (style === 'comic-burst-text') {
+                            // Radiating comic impact rays continuously pulsing & rotating from badge center
+                            const bcx = drawBoxX + boxW / 2;
+                            const bcy = drawBoxY + boxH / 2;
+                            const rayCount = 12;
+                            const rayLen = Math.max(boxW, boxH) * 0.55;
+                            const rotBase = (currentTime || 0) * 0.8;
+                            state.ctx.save();
+                            state.ctx.globalAlpha = annoP * 0.75;
+                            state.ctx.strokeStyle = item.glowColor || '#ef4444';
+                            state.ctx.lineCap = 'round';
+                            for (let i = 0; i < rayCount; i++) {
+                                const ang = rotBase + (i / rayCount) * Math.PI * 2;
+                                const pulseLen = rayLen * (0.8 + 0.2 * Math.sin((currentTime || 0) * 5 + i));
+                                const rX1 = bcx + Math.cos(ang) * (Math.max(boxW, boxH) * 0.45);
+                                const rY1 = bcy + Math.sin(ang) * (Math.max(boxW, boxH) * 0.45);
+                                const rX2 = bcx + Math.cos(ang) * (Math.max(boxW, boxH) * 0.45 + pulseLen);
+                                const rY2 = bcy + Math.sin(ang) * (Math.max(boxW, boxH) * 0.45 + pulseLen);
+                                state.ctx.lineWidth = Math.max(2, boxH * 0.05);
+                                state.ctx.beginPath();
+                                state.ctx.moveTo(rX1, rY1);
+                                state.ctx.lineTo(rX2, rY2);
+                                state.ctx.stroke();
+                            }
+                            state.ctx.restore();
+                        } else if (style === 'cursor-click-point') {
+                            // Dynamic Trajectory Cursor: smooth gliding from entry position straight to target focus point + tap click & ripple rings
+                            const targetX = drawBoxX + boxW / 2;
+                            const targetY = drawBoxY + boxH / 2;
+
+                            // Calculate trajectory start position based on entry direction or default bottom-right offset
+                            const dir = item.entryDirection || 'bottom';
+                            let startX = targetX + boxW * 0.9;
+                            let startY = targetY + boxH * 1.2;
+                            if (dir === 'left') { startX = targetX - boxW * 1.4; startY = targetY + boxH * 0.4; }
+                            else if (dir === 'right') { startX = targetX + boxW * 1.4; startY = targetY + boxH * 0.4; }
+                            else if (dir === 'top') { startX = targetX + boxW * 0.4; startY = targetY - boxH * 1.4; }
+
+                            // Smooth trajectory position interpolation
+                            const travelProgress = brollAnimActive ? brollEaseOut(annoP) : 1;
+                            const curCx = startX + (targetX - startX) * travelProgress;
+                            const curCy = startY + (targetY - startY) * travelProgress;
+
+                            // Click tap pulse action when near target
+                            const clickBeat = Math.sin((currentTime || 0) * 4.2);
+                            const clickPulse = 1 - Math.max(0, clickBeat) * 0.18;
+                            const curSize = Math.max(22, Math.min(boxW, boxH) * 0.36);
+
+                            state.ctx.save();
+                            state.ctx.globalAlpha = Math.max(0.1, annoP);
+
+                            // Concentric Expanding Target Focus Ripple Waves on click beat
+                            if (clickBeat > 0.4) {
+                                const ringP = (clickBeat - 0.4) / 0.6;
+                                state.ctx.save();
+                                state.ctx.globalAlpha = annoP * (1 - ringP) * 0.75;
+                                state.ctx.strokeStyle = '#3b82f6';
+                                state.ctx.lineWidth = Math.max(2, curSize * 0.08);
+                                state.ctx.beginPath();
+                                state.ctx.arc(targetX, targetY, curSize * (0.3 + ringP * 0.9), 0, Math.PI * 2);
+                                state.ctx.stroke();
+                                state.ctx.strokeStyle = '#ffffff';
+                                state.ctx.lineWidth = Math.max(1.5, curSize * 0.05);
+                                state.ctx.beginPath();
+                                state.ctx.arc(targetX, targetY, curSize * (0.15 + ringP * 0.5), 0, Math.PI * 2);
+                                state.ctx.stroke();
+                                state.ctx.restore();
+                            }
+
+                            // Render Pointer Hand with high contrast shadow & outline
+                            state.ctx.translate(curCx, curCy);
+                            state.ctx.scale(travelProgress * clickPulse, travelProgress * clickPulse);
+                            state.ctx.shadowColor = 'rgba(0, 0, 0, 0.45)';
+                            state.ctx.shadowBlur = 10;
+                            state.ctx.shadowOffsetY = 4;
+                            state.ctx.font = `${Math.round(curSize)}px "Segoe UI Emoji", "Apple Color Emoji", sans-serif`;
+                            state.ctx.textAlign = 'center';
+                            state.ctx.textBaseline = 'middle';
+                            state.ctx.fillText('👆', 0, 0);
+                            state.ctx.restore();
+                        } else if (style === 'cta-button-arrow') {
+                            // Hand-drawn curved arrow swooping in from above/side and pointing straight into CTA button
+                            const arrowAlpha = brollEaseOut(annoP);
+                            const roomAbove = (drawBoxY - boxH * 0.9) > 4;
+                            let ax0, ay0, ax1, ay1, ax2, ay2;
+                            if (roomAbove) {
+                                ax0 = drawBoxX + boxW * 0.85; ay0 = drawBoxY - boxH * 1.1;
+                                ax1 = drawBoxX + boxW * 0.95; ay1 = drawBoxY - boxH * 0.45;
+                                ax2 = drawBoxX + boxW * 0.55; ay2 = drawBoxY - boxH * 0.08;
+                            } else {
+                                ax0 = drawBoxX + boxW * 0.85; ay0 = drawBoxY + boxH * 2.1;
+                                ax1 = drawBoxX + boxW * 0.95; ay1 = drawBoxY + boxH * 1.45;
+                                ax2 = drawBoxX + boxW * 0.55; ay2 = drawBoxY + boxH * 1.08;
+                            }
+
+                            // Progressive stroke drawing along curve
+                            const drawFrac = arrowAlpha;
+                            const curAx2 = ax0 + (ax2 - ax0) * drawFrac;
+                            const curAy2 = ay0 + (ay2 - ay0) * drawFrac;
+                            const curAx1 = ax0 + (ax1 - ax0) * drawFrac;
+                            const curAy1 = ay0 + (ay1 - ay0) * drawFrac;
+
+                            state.ctx.save();
+                            state.ctx.globalAlpha = arrowAlpha;
+                            state.ctx.strokeStyle = '#ffffff';
+                            state.ctx.fillStyle = '#ffffff';
+                            state.ctx.lineWidth = Math.max(3, boxH * 0.08);
+                            state.ctx.lineCap = 'round';
+                            state.ctx.lineJoin = 'round';
+
+                            // Outer shadow for maximum readability
+                            state.ctx.shadowColor = 'rgba(0, 0, 0, 0.5)';
+                            state.ctx.shadowBlur = 10;
+
+                            state.ctx.beginPath();
+                            state.ctx.moveTo(ax0, ay0);
+                            state.ctx.quadraticCurveTo(curAx1, curAy1, curAx2, curAy2);
+                            state.ctx.stroke();
+
+                            // Arrowhead pointing right into button
+                            if (drawFrac > 0.3) {
+                                const headAng = Math.atan2(curAy2 - curAy1, curAx2 - curAx1);
+                                const pulseHead = 1 + 0.15 * Math.sin((currentTime || 0) * 5);
+                                const headLen = Math.max(10, boxH * 0.24) * pulseHead;
+                                state.ctx.beginPath();
+                                state.ctx.moveTo(curAx2, curAy2);
+                                state.ctx.lineTo(curAx2 - Math.cos(headAng - 0.45) * headLen, curAy2 - Math.sin(headAng - 0.45) * headLen);
+                                state.ctx.lineTo(curAx2 - Math.cos(headAng + 0.45) * headLen, curAy2 - Math.sin(headAng + 0.45) * headLen);
+                                state.ctx.closePath();
+                                state.ctx.fill();
+                            }
+                            state.ctx.restore();
                         }
                     }
                 }
@@ -13637,6 +13973,13 @@ document.addEventListener('DOMContentLoaded', () => {
         { value: 'question-bounce', label: 'Question Mark Bounce (❓ লাফিয়ে আসবে)' },
         { value: 'confetti-pop', label: 'Confetti Pop (রঙিন কনফেত্তি ছড়িয়ে পড়বে)' },
         { value: 'heart-burst', label: 'Heart Burst (❤️ হার্ট ছড়িয়ে পড়বে)' },
+        { value: 'badge-pop-dot', label: '🔴 Badge Sticker Pop (কাত হয়ে ব্যাজ পপ করে আসবে + লাল ডট)' },
+        { value: 'comic-burst-text', label: '💥 Comic Impact Burst (বড় বাবল টেক্সট + চারপাশে রশ্মি)' },
+        { value: 'cursor-click-point', label: '🖱️ Cursor Click Pointer (হাতের কার্সর ক্লিক করবে)' },
+        { value: 'cta-button-arrow', label: '➡️ CTA Button + Hand Arrow (বাটন থেকে বাঁকা তীর প্রোডাক্টের দিকে)' },
+        { value: 'comic-outline-glow', label: '🎨 Comic Outline Glow Text (মোটা কালো আউটলাইন + রঙিন গ্লো)' },
+        { value: 'letter-bounce-wiggle', label: '🔤 অক্ষর লাফিয়ে লাফিয়ে নড়বে (Letter Bounce Wiggle)', textOnly: true },
+        { value: 'particle-glow-text', label: '✨ সোনালি Glow পার্টিকেল টেক্সট (Golden Particle Glow)', textOnly: true },
         { value: 'hanging-sign-swing', label: 'Hanging Sign Swing (🔴 পিন থেকে ঝুলে দুলতে দুলতে আসবে)' },
         { value: 'plane-banner-trail', label: 'Plane Banner Trail (✈️ প্লেন উড়ে গিয়ে লেখা রেখে যাবে)' },
 
