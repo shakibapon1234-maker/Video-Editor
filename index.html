@@ -168,6 +168,7 @@
                         <div class="canvas-floating-header" id="canvas-floating-header" style="display: none;">
                             <span class="cf-title"><i class="fa-solid fa-up-down-left-right"></i> ভাসমান প্লেহেড (Drag to reposition)</span>
                             <div style="display:flex;align-items:center;gap:6px;">
+                                <button type="button" id="canvas-snapshot-btn-float" class="cf-fs-btn" title="প্লে স্ক্রিনের স্ক্রিনশট নিন (Take Snapshot)"><i class="fa-solid fa-camera"></i></button>
                                 <button type="button" id="canvas-fullscreen-btn-float" class="cf-fs-btn" title="ফুলস্ক্রিন প্রিভিউ — স্ক্রিন রেকর্ডিংয়ের জন্য (Fullscreen Preview)"><i class="fa-solid fa-expand"></i></button>
                                 <button type="button" class="cf-close-btn" id="cf-close-btn" title="ডক প্যানেলে ফিরে যান"><i class="fa-solid fa-xmark"></i></button>
                             </div>
@@ -175,10 +176,15 @@
                         <!-- Canvas for video rendering + logo overlay -->
                         <canvas id="editor-canvas"></canvas>
 
-                        <!-- Fullscreen button overlay on the canvas (always visible) -->
-                        <button type="button" id="canvas-fullscreen-btn" title="ফুলস্ক্রিন প্রিভিউ — স্ক্রিন রেকর্ডিংয়ের জন্য (Fullscreen Preview)" style="display:none;">
-                            <i class="fa-solid fa-expand"></i> ফুলস্ক্রিন
-                        </button>
+                        <!-- Canvas Action Buttons Overlay (bottom-right) -->
+                        <div class="canvas-overlay-actions" id="canvas-overlay-actions" style="display:none;">
+                            <button type="button" id="canvas-snapshot-btn" class="canvas-overlay-btn" title="প্লে স্ক্রিনের স্ক্রিনশট নিন (Take Snapshot)">
+                                <i class="fa-solid fa-camera"></i> <span>স্ক্রিনশট</span>
+                            </button>
+                            <button type="button" id="canvas-fullscreen-btn" class="canvas-overlay-btn" title="ফুলস্ক্রিন প্রিভিউ — স্ক্রিন রেকর্ডিংয়ের জন্য (Fullscreen Preview)">
+                                <i class="fa-solid fa-expand"></i> <span>ফুলস্ক্রিন</span>
+                            </button>
+                        </div>
                         
                         <!-- Drag-and-drop placeholder when no video -->
                         <div class="upload-placeholder" id="video-dropzone">
@@ -189,8 +195,9 @@
                             <input type="file" id="video-input" accept="video/*, image/*" style="display: none;">
                         </div>
 
-                        <!-- Video playhead/timeline overlay (subtle) -->
+                        <!-- Video playhead/timeline overlay (bottom-left) -->
                         <div class="canvas-overlay-controls" style="display: none;">
+                            <i class="fa-regular fa-clock" style="font-size: 11px; opacity: 0.85; margin-right: 2px;"></i>
                             <span id="canvas-time-display">00:00 / 00:00</span>
                         </div>
                     </div>
@@ -4264,7 +4271,32 @@
         </div>
     </div>
 
-    <script src="punch-zoom-ui.js?v=3"></script>
-    <script src="ui-customization.js?v=3"></script>
+    <!-- Snapshot Modal (Canvas Preview Snapshot) -->
+    <div class="modal-overlay" id="snapshot-modal" style="display: none; z-index: 999999;">
+        <div class="modal-card" style="max-width: 560px; width: 92%;">
+            <div class="modal-header">
+                <h3><i class="fa-solid fa-camera" style="color: var(--primary, #6366f1);"></i> প্রিভিউ স্ক্রিনশট (Preview Snapshot)</h3>
+                <button class="modal-close" id="close-snapshot-modal-btn" type="button"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+            <div class="modal-body" style="padding: 18px 24px; text-align: center;">
+                <div style="margin-bottom: 12px; position: relative; border-radius: 8px; overflow: hidden; background: #000; border: 1px solid var(--border-color, #334155); display: flex; align-items: center; justify-content: center; max-height: 280px; box-shadow: 0 4px 16px rgba(0,0,0,0.4);">
+                    <img id="snapshot-preview-img" src="" alt="Snapshot Preview" style="max-width: 100%; max-height: 280px; object-fit: contain;">
+                    <span id="snapshot-time-badge" style="position: absolute; bottom: 8px; right: 8px; background: rgba(15,23,42,0.85); color: #e2e8f0; padding: 4px 10px; border-radius: 6px; font-size: 11px; font-weight: 600; backdrop-filter: blur(6px); border: 1px solid rgba(255,255,255,0.15);">00:00.0</span>
+                </div>
+                <p style="font-size: 13px; color: var(--text-secondary, #94a3b8); margin-bottom: 8px; line-height: 1.5;">
+                    ক্যাপচারকৃত স্ক্রিনশটটি প্রজেক্ট টাইমলাইনে নতুন ইমেজ ক্লিপ হিসেবে যোগ করতে পারেন বা পিসিতে ডাউনলোড করে নিতে পারেন।
+                </p>
+            </div>
+            <div class="modal-footer" style="padding: 14px 24px; display: flex; flex-wrap: wrap; gap: 8px; justify-content: flex-end; border-top: 1px solid var(--border-color, #334155);">
+                <button type="button" class="btn btn-secondary" id="snapshot-close-btn">বন্ধ করুন</button>
+                <button type="button" class="btn btn-outline" id="snapshot-copy-btn" title="ক্লিপবোর্ডে কপি করুন"><i class="fa-regular fa-copy"></i> কপি</button>
+                <button type="button" class="btn btn-success" id="snapshot-download-btn" style="background: #10b981; border-color: #10b981; color: #fff;"><i class="fa-solid fa-download"></i> Save PNG</button>
+                <button type="button" class="btn btn-primary" id="snapshot-add-timeline-btn" style="background: var(--primary, #6366f1); border-color: var(--primary, #6366f1); color: #fff;"><i class="fa-solid fa-plus"></i> টাইমলাইনে যোগ করুন</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="punch-zoom-ui.js?v=4"></script>
+    <script src="ui-customization.js?v=4"></script>
 </body>
 </html>

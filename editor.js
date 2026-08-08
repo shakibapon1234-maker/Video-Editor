@@ -1579,7 +1579,8 @@ document.addEventListener('DOMContentLoaded', () => {
         if (isRestoredProj) {
             videoDropzone.querySelector('h3').innerText = originalText;
             document.getElementById('timeline-controls').style.display = 'flex';
-            document.querySelector('.canvas-overlay-controls').style.display = 'block';
+            document.querySelector('.canvas-overlay-controls').style.display = 'flex';
+            if (document.querySelector('.canvas-overlay-actions')) document.querySelector('.canvas-overlay-actions').style.display = 'flex';
             videoDropzone.style.display = 'none';
             document.getElementById('selected-video-name').innerText = file.name;
             nextBtn.disabled = false;
@@ -1640,7 +1641,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 updateCanvasDimensions();
                 
                 document.getElementById('timeline-controls').style.display = 'flex';
-                document.querySelector('.canvas-overlay-controls').style.display = 'block';
+                document.querySelector('.canvas-overlay-controls').style.display = 'flex';
+                if (document.querySelector('.canvas-overlay-actions')) document.querySelector('.canvas-overlay-actions').style.display = 'flex';
                 videoDropzone.style.display = 'none';
                 
                 document.getElementById('selected-video-name').innerText = file.name;
@@ -1760,7 +1762,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 updateCanvasDimensions();
                 
                 document.getElementById('timeline-controls').style.display = 'flex';
-                document.querySelector('.canvas-overlay-controls').style.display = 'block';
+                document.querySelector('.canvas-overlay-controls').style.display = 'flex';
+                if (document.querySelector('.canvas-overlay-actions')) document.querySelector('.canvas-overlay-actions').style.display = 'flex';
                 videoDropzone.style.display = 'none';
                 
                 document.getElementById('selected-video-name').innerText = file.name;
@@ -3217,6 +3220,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function addClipToTimeline(file) {
+        window.addClipToTimeline = addClipToTimeline;
         const url = URL.createObjectURL(file);
         if (file.type.startsWith('image/')) {
             const img = new Image();
@@ -18008,7 +18012,9 @@ document.addEventListener('DOMContentLoaded', () => {
             const timelineControls = document.getElementById('timeline-controls');
             if (timelineControls) timelineControls.style.display = 'flex';
             const overlayControls = document.querySelector('.canvas-overlay-controls');
-            if (overlayControls) overlayControls.style.display = 'block';
+            if (overlayControls) overlayControls.style.display = 'flex';
+            const overlayActions = document.querySelector('.canvas-overlay-actions');
+            if (overlayActions) overlayActions.style.display = 'flex';
             if (videoDropzone) videoDropzone.style.display = 'none';
             if (document.getElementById('selected-video-name')) {
                 document.getElementById('selected-video-name').innerText = activeClip.name;

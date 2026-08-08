@@ -154,11 +154,15 @@
         let originalTransportParent = panel.parentNode;
         let originalTransportNextSibling = panel.nextSibling;
 
-        function setVisible(visible) {
+        function setVisible(visible, userTriggered = false) {
             panel.style.display = visible ? 'flex' : 'none';
             panel.classList.toggle('visible', visible);
             toggleBtn.classList.toggle('active', visible);
             try { localStorage.setItem(LS_FT_VISIBLE, visible ? '1' : '0'); } catch (e) {}
+
+            if (userTriggered && window.showToast) {
+                window.showToast(visible ? '🚀 ভাসমান প্লেহেড (Pop-out) উইন্ডো বের করা হয়েছে!' : '📥 ভাসমান প্লেহেড ডক প্যানেলে ফিরিয়ে নেওয়া হলো', visible ? 'success' : 'info');
+            }
 
             if (canvasContainer) {
                 canvasContainer.classList.toggle('is-floating-preview', visible);
@@ -171,6 +175,7 @@
                     canvasContainer.style.position = '';
                     canvasContainer.style.width = '';
                     canvasContainer.style.height = '';
+                    canvasContainer.style.zIndex = '';
                     if (typeof window.drawFrame === 'function') window.drawFrame();
                     if (typeof window.drawEditorFrame === 'function') window.drawEditorFrame();
 
@@ -189,16 +194,20 @@
                         panel.style.zIndex = '';
                     }
                 } else {
-                    if (!canvasContainer.style.top || canvasContainer.style.top === '') {
+                    const winW = window.innerWidth || 1200;
+                    const winH = window.innerHeight || 800;
+                    let curLeft = parseFloat(canvasContainer.style.left);
+                    let curTop  = parseFloat(canvasContainer.style.top);
+                    if (!isFinite(curLeft) || curLeft < 10 || curLeft > winW - 100) {
+                        canvasContainer.style.left = Math.max(10, winW - 540) + 'px';
+                    }
+                    if (!isFinite(curTop) || curTop < 10 || curTop > winH - 100) {
                         canvasContainer.style.top = '90px';
-                        canvasContainer.style.left = Math.max(8, window.innerWidth - 500) + 'px';
                     }
                     canvasContainer.style.right = 'auto';
                     canvasContainer.style.bottom = 'auto';
-                    // Ensure the floating preview is positioned as fixed so its
-                    // header, canvas and footer stay together and are removed
-                    // from normal document flow while floating.
                     canvasContainer.style.position = 'fixed';
+                    canvasContainer.style.zIndex = '999990';
 
                     // Move the floating transport into the floating canvas so the
                     // small transport controls stay visually attached to the preview.
@@ -252,7 +261,7 @@
         toggleBtn.addEventListener('click', function (e) {
             e.stopPropagation();
             e.preventDefault();
-            setVisible(!panel.classList.contains('visible'));
+            setVisible(!panel.classList.contains('visible'), true);
         });
         if (closeBtn) {
             closeBtn.addEventListener('click', function (e) {
@@ -550,7 +559,10 @@
         const pinText = document.getElementById('always-on-top-text');
         if (!pinBtn) return;
 
-        function updatePinState(isPinned) {
+        let isPinned = false;
+
+        function updatePinState(pinned) {
+            isPinned = !!pinned;
             if (isPinned) {
                 pinBtn.classList.add('active');
                 pinBtn.style.background = '#2563eb';
@@ -572,20 +584,67 @@
             window.electronAPI.getAlwaysOnTop().then((state) => {
                 updatePinState(!!state);
             }).catch(() => {});
+        }
 
-            pinBtn.addEventListener('click', async () => {
+        pinBtn.addEventListener('click', async function (e) {
+            if (e) {
+                e.preventDefault();
+                e.stopPropagation();
+            }
+
+            // Check dynamically at click time
+            if (window.electronAPI && typeof window.electronAPI.toggleAlwaysOnTop === 'function') {
                 try {
                     const newState = await window.electronAPI.toggleAlwaysOnTop();
                     updatePinState(newState);
-                } catch (e) {
-                    console.error('Failed to toggle Always On Top:', e);
+                    if (window.showToast) {
+                        window.showToast(newState ? '📌 উইন্ডো সবসময় সবার উপরে পিন করা হয়েছে (Always On Top: ON)' : '📌 পিন মোড বন্ধ করা হয়েছে', newState ? 'success' : 'info');
+                    }
+                } catch (err) {
+                    console.error('Failed to toggle Always On Top:', err);
                 }
-            });
-        } else {
-            pinBtn.addEventListener('click', () => {
-                alert('📌 পিন অপশনটি ইলেকট্রন ডেক্সটপ অ্যাপে (Desktop App) উইন্ডোকে সবার উপরে পিন রাখার জন্য কাজ করে।');
-            });
-        }
+            } else {
+                // Browser mode / PiP fallback
+                const editorCanvas = document.getElementById('editor-canvas');
+                try {
+                    let pipVideo = document.getElementById('app-pip-video-hidden');
+                    if (!pipVideo) {
+                        pipVideo = document.createElement('video');
+                        pipVideo.id = 'app-pip-video-hidden';
+                        pipVideo.style.display = 'none';
+                        pipVideo.autoplay = true;
+                        pipVideo.muted = true;
+                        pipVideo.playsInline = true;
+                        document.body.appendChild(pipVideo);
+                    }
+
+                    if (document.pictureInPictureElement) {
+                        await document.exitPictureInPicture();
+                        updatePinState(false);
+                        if (window.showToast) window.showToast('📌 ব্রাউজার পিন মোড বন্ধ করা হয়েছে', 'info');
+                    } else if (editorCanvas && editorCanvas.captureStream) {
+                        const stream = editorCanvas.captureStream(30);
+                        pipVideo.srcObject = stream;
+                        await pipVideo.play();
+                        await pipVideo.requestPictureInPicture();
+                        updatePinState(true);
+                        if (window.showToast) window.showToast('📌 ব্রাউজার পিন মোড (Picture-in-Picture) সক্রিয় করা হয়েছে!', 'success');
+
+                        pipVideo.addEventListener('leavepictureinpicture', () => {
+                            updatePinState(false);
+                        }, { once: true });
+                    } else {
+                        isPinned = !isPinned;
+                        updatePinState(isPinned);
+                        if (window.showToast) window.showToast(isPinned ? '📌 উইন্ডো পিন অন করা হয়েছে' : '📌 পিন বন্ধ করা হয়েছে', isPinned ? 'success' : 'info');
+                    }
+                } catch (err) {
+                    isPinned = !isPinned;
+                    updatePinState(isPinned);
+                    if (window.showToast) window.showToast(isPinned ? '📌 উইন্ডো পিন অন করা হয়েছে' : '📌 পিন বন্ধ করা হয়েছে', isPinned ? 'success' : 'info');
+                }
+            }
+        });
     }
 
     // ============================================================
@@ -726,18 +785,196 @@
             if (!document.webkitFullscreenElement) cleanupFs();
         });
 
-        // Show the canvas overlay button once a video is loaded
+        // Show the canvas overlay actions & fullscreen button once a video is loaded
         // (watch for the timeline-controls becoming visible, which signals a clip is loaded)
         const timelineControls = document.getElementById('timeline-controls');
-        if (timelineControls && fsBtnOverlay) {
+        const overlayActions = document.querySelector('.canvas-overlay-actions');
+        if (timelineControls) {
             const obs = new MutationObserver(() => {
                 const isLoaded = timelineControls.style.display !== 'none';
-                fsBtnOverlay.style.display = isLoaded ? 'flex' : 'none';
+                if (fsBtnOverlay) fsBtnOverlay.style.display = isLoaded ? 'flex' : 'none';
+                if (overlayActions) overlayActions.style.display = isLoaded ? 'flex' : 'none';
             });
             obs.observe(timelineControls, { attributes: true, attributeFilter: ['style'] });
-            // Initial check
-            fsBtnOverlay.style.display =
-                timelineControls.style.display !== 'none' ? 'flex' : 'none';
+            const isLoaded = timelineControls.style.display !== 'none';
+            if (fsBtnOverlay) fsBtnOverlay.style.display = isLoaded ? 'flex' : 'none';
+            if (overlayActions) overlayActions.style.display = isLoaded ? 'flex' : 'none';
+        }
+    })();
+
+    // ============================================================
+    // Global Toast Notification Helper
+    // ============================================================
+    window.showToast = function(message, type = 'info', duration = 3200) {
+        let container = document.querySelector('.app-toast-container');
+        if (!container) {
+            container = document.createElement('div');
+            container.className = 'app-toast-container';
+            document.body.appendChild(container);
+        }
+        const toast = document.createElement('div');
+        toast.className = `app-toast ${type}`;
+        let icon = '<i class="fa-solid fa-circle-info"></i>';
+        if (type === 'success') icon = '<i class="fa-solid fa-circle-check" style="color:#34d399;"></i>';
+        if (type === 'warning') icon = '<i class="fa-solid fa-triangle-exclamation" style="color:#fbbf24;"></i>';
+        toast.innerHTML = `${icon} <span>${message}</span>`;
+        container.appendChild(toast);
+        setTimeout(() => {
+            toast.style.opacity = '0';
+            toast.style.transform = 'translateY(-10px)';
+            toast.style.transition = 'all 0.3s ease';
+            setTimeout(() => toast.remove(), 300);
+        }, duration);
+    };
+
+    // ============================================================
+    // Canvas Snapshot / Screenshot Feature
+    // ============================================================
+    (function initCanvasSnapshot() {
+        const snapBtnOverlay  = document.getElementById('canvas-snapshot-btn');
+        const snapBtnFloat    = document.getElementById('canvas-snapshot-btn-float');
+        const modal           = document.getElementById('snapshot-modal');
+        const previewImg      = document.getElementById('snapshot-preview-img');
+        const timeBadge       = document.getElementById('snapshot-time-badge');
+        const closeBtn        = document.getElementById('snapshot-close-btn');
+        const modalCloseBtn   = document.getElementById('close-snapshot-modal-btn');
+        const downloadBtn     = document.getElementById('snapshot-download-btn');
+        const addTimelineBtn  = document.getElementById('snapshot-add-timeline-btn');
+        const copyBtn         = document.getElementById('snapshot-copy-btn');
+        const canvasContainer = document.getElementById('canvas-container');
+
+        let currentBlob = null;
+        let currentFile = null;
+        let currentDataUrl = '';
+
+        function formatTimeSeconds(sec) {
+            if (!isFinite(sec) || sec < 0) sec = 0;
+            const m = Math.floor(sec / 60);
+            const s = (sec % 60).toFixed(1).padStart(4, '0');
+            return `${String(m).padStart(2, '0')}:${s}`;
+        }
+
+        function takeSnapshot() {
+            const editorCanvas = document.getElementById('editor-canvas');
+            if (!editorCanvas) return;
+
+            // Trigger shutter flash visual effect
+            if (canvasContainer) {
+                const flash = document.createElement('div');
+                flash.className = 'canvas-snapshot-flash';
+                canvasContainer.appendChild(flash);
+                setTimeout(() => flash.remove(), 260);
+            }
+
+            try {
+                currentDataUrl = editorCanvas.toDataURL('image/png');
+            } catch (e) {
+                console.error('Canvas snapshot error:', e);
+                window.showToast('স্ক্রিনশট গ্রহণে সমস্যা হয়েছে', 'warning');
+                return;
+            }
+
+            const curTime = (window.state && window.state.currentTime) ? window.state.currentTime : 0;
+            const timeStr = formatTimeSeconds(curTime);
+
+            if (previewImg) previewImg.src = currentDataUrl;
+            if (timeBadge) timeBadge.textContent = `সময়: ${timeStr}`;
+
+            // Convert to Blob & File object
+            fetch(currentDataUrl)
+                .then(r => r.blob())
+                .then(b => {
+                    currentBlob = b;
+                    const name = `snapshot_${timeStr.replace(/[:.]/g, '-')}.png`;
+                    currentFile = new File([b], name, { type: 'image/png' });
+                });
+
+            if (modal) modal.style.display = 'flex';
+        }
+
+        function closeModal() {
+            if (modal) modal.style.display = 'none';
+        }
+
+        if (snapBtnOverlay) snapBtnOverlay.addEventListener('click', takeSnapshot);
+        if (snapBtnFloat) snapBtnFloat.addEventListener('click', takeSnapshot);
+        if (closeBtn) closeBtn.addEventListener('click', closeModal);
+        if (modalCloseBtn) modalCloseBtn.addEventListener('click', closeModal);
+
+        if (modal) {
+            modal.addEventListener('click', (e) => {
+                if (e.target === modal) closeModal();
+            });
+        }
+
+        if (downloadBtn) {
+            downloadBtn.addEventListener('click', () => {
+                if (!currentDataUrl) return;
+                const a = document.createElement('a');
+                a.href = currentDataUrl;
+                a.download = currentFile ? currentFile.name : 'video-snapshot.png';
+                document.body.appendChild(a);
+                a.click();
+                a.remove();
+                window.showToast('💾 স্ক্রিনশট পিসিতে ডাউনলোড করা হলো!', 'success');
+            });
+        }
+
+        if (addTimelineBtn) {
+            addTimelineBtn.addEventListener('click', () => {
+                if (!currentDataUrl) return;
+
+                function doAdd(file) {
+                    if (window.addClipToTimeline) {
+                        window.addClipToTimeline(file);
+                        closeModal();
+                        window.showToast('✅ স্ক্রিনশট টাইমলাইনে ফটো ক্লিপ হিসেবে যুক্ত হয়েছে!', 'success');
+                    } else {
+                        window.showToast('টাইমলাইনে যুক্ত করতে ব্যর্থ হয়েছে', 'warning');
+                    }
+                }
+
+                if (currentFile) {
+                    doAdd(currentFile);
+                } else {
+                    fetch(currentDataUrl)
+                        .then(r => r.blob())
+                        .then(b => {
+                            const curTime = (window.state && window.state.currentTime) ? window.state.currentTime : 0;
+                            const timeStr = formatTimeSeconds(curTime);
+                            const name = `snapshot_${timeStr.replace(/[:.]/g, '-')}.png`;
+                            const file = new File([b], name, { type: 'image/png' });
+                            doAdd(file);
+                        });
+                }
+            });
+        }
+
+        if (copyBtn) {
+            copyBtn.addEventListener('click', () => {
+                if (!currentBlob && currentDataUrl) {
+                    fetch(currentDataUrl).then(r => r.blob()).then(b => {
+                        currentBlob = b;
+                        copyBlobToClipboard(b);
+                    });
+                } else if (currentBlob) {
+                    copyBlobToClipboard(currentBlob);
+                }
+            });
+        }
+
+        function copyBlobToClipboard(blob) {
+            if (navigator.clipboard && window.ClipboardItem) {
+                const item = new ClipboardItem({ 'image/png': blob });
+                navigator.clipboard.write([item]).then(() => {
+                    window.showToast('📋 স্ক্রিনশট ক্লিপবোর্ডে কপি হয়েছে!', 'success');
+                }).catch(err => {
+                    console.warn('Clipboard write error:', err);
+                    window.showToast('ক্লিপবোর্ডে কপি করা যায়নি', 'warning');
+                });
+            } else {
+                window.showToast('আপনার ব্রাউজার ক্লিপবোর্ড কপি সমর্থন করে না', 'warning');
+            }
         }
     })();
 
