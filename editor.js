@@ -6662,7 +6662,7 @@ document.addEventListener('DOMContentLoaded', () => {
                             scaleAmt = 0.75 + 0.25 * eased;
                             alpha = Math.max(0.15, eased);
                         }
-                    } else if (style === 'zoom-pop' || style === 'confetti-pop' || style === 'heart-burst' || style === 'cash-spin' || style === 'cash-stack' || style === 'question-bounce' || style === 'checkmark-pop' || style === 'magnifier-zoom' || style === 'badge-pop-dot' || style === 'comic-burst-text' || style === 'cta-button-arrow') {
+                    } else if (style === 'zoom-pop' || style === 'confetti-pop' || style === 'heart-burst' || style === 'cash-spin' || style === 'cash-stack' || style === 'question-bounce' || style === 'checkmark-pop' || style === 'magnifier-zoom' || style === 'badge-pop-dot' || style === 'comic-burst-text' || style === 'cta-button-arrow' || style === 'comic-speed-rays' || style === 'cursor-line-draw' || style === 'torn-paper-marker') {
                         // Quick pop-in scale from 70% with a bouncy overshoot — distinct
                         // from the slow continuous Ken Burns 'zoom' below. 'confetti-pop'
                         // and 'heart-burst' reuse this exact box pop and additionally burst
@@ -6991,6 +6991,82 @@ document.addEventListener('DOMContentLoaded', () => {
                         state.ctx.lineWidth = 4;
                         state.ctx.stroke();
                         state.ctx.restore();
+                    } else if (style === 'comic-speed-rays') {
+                        // Pop-Art Comic Bubble Container (white bubble fill with bold 5px black stroke)
+                        state.ctx.save();
+                        const bx = drawBoxX - 18, by = drawBoxY - 14, bw = boxW + 36, bh = boxH + 28;
+                        state.ctx.shadowColor = 'rgba(0, 0, 0, 0.45)';
+                        state.ctx.shadowBlur = 16;
+                        state.ctx.fillStyle = '#ffffff';
+                        state.ctx.beginPath();
+                        if (state.ctx.roundRect) state.ctx.roundRect(bx, by, bw, bh, 20);
+                        else state.ctx.rect(bx, by, bw, bh);
+                        state.ctx.fill();
+                        state.ctx.shadowBlur = 0;
+                        state.ctx.strokeStyle = '#000000';
+                        state.ctx.lineWidth = 5;
+                        state.ctx.stroke();
+                        state.ctx.restore();
+                    } else if (style === 'torn-paper-marker') {
+                        // Paint Brush / Torn Paper Yellow Banner (Organic Acrylic Brush Stroke with Dry Bristle Tail Ends)
+                        state.ctx.save();
+                        const padX = Math.max(22, item.fontSize * 0.45);
+                        const padY = Math.max(10, item.fontSize * 0.22);
+                        const bx = drawBoxX - padX, by = drawBoxY - padY, bw = boxW + padX * 2, bh = boxH + padY * 2;
+                        
+                        state.ctx.shadowColor = 'rgba(0, 0, 0, 0.55)';
+                        state.ctx.shadowBlur = 14;
+                        state.ctx.shadowOffsetY = 6;
+                        state.ctx.fillStyle = (item.highlightColor || '#facc15');
+
+                        // Paint Brush Banner Outline with Organic Bristle Tail Ends
+                        state.ctx.beginPath();
+                        const step = 4;
+                        
+                        // Top edge (smooth horizontal brush line with light micro-waves)
+                        state.ctx.moveTo(bx, by);
+                        for (let x = bx; x <= bx + bw; x += step) {
+                            const topNoise = Math.sin(x * 0.08 + 1.2) * 1.5 + Math.cos(x * 0.25) * 1.0;
+                            state.ctx.lineTo(x, by + topNoise);
+                        }
+
+                        // Right dry brush bristle tail end (shredded paint stroke bristles)
+                        const bristleSteps = 10;
+                        const rx = bx + bw;
+                        for (let i = 0; i <= bristleSteps; i++) {
+                            const py = by + (bh / bristleSteps) * i;
+                            const bristleLen = (i % 2 === 0 ? 8 : (i % 3 === 1 ? 16 : 4)) + Math.sin(i * 1.8) * 5;
+                            state.ctx.lineTo(rx + bristleLen, py);
+                        }
+
+                        // Bottom edge (smooth horizontal brush line with light micro-waves)
+                        for (let x = bx + bw; x >= bx; x -= step) {
+                            const botNoise = Math.sin(x * 0.08 + 3.4) * 1.8 + Math.cos(x * 0.25 + 2.0) * 1.2;
+                            state.ctx.lineTo(x, by + bh + botNoise);
+                        }
+
+                        // Left dry brush bristle tail end (shredded paint stroke bristles)
+                        for (let i = bristleSteps; i >= 0; i--) {
+                            const py = by + (bh / bristleSteps) * i;
+                            const bristleLen = (i % 2 === 0 ? 6 : (i % 3 === 1 ? 14 : 3)) + Math.cos(i * 2.1) * 4;
+                            state.ctx.lineTo(bx - bristleLen, py);
+                        }
+
+                        state.ctx.closePath();
+                        state.ctx.fill();
+                        state.ctx.shadowBlur = 0;
+                        state.ctx.shadowOffsetY = 0;
+
+                        // Subtle dry brush edge streak highlights
+                        state.ctx.strokeStyle = 'rgba(0, 0, 0, 0.25)';
+                        state.ctx.lineWidth = 1.5;
+                        state.ctx.stroke();
+
+                        // Additional dry brush stroke streaks along top for authentic paint feel
+                        state.ctx.fillStyle = 'rgba(255, 255, 255, 0.18)';
+                        state.ctx.fillRect(bx + 10, by + 3, bw - 20, Math.max(3, bh * 0.15));
+
+                        state.ctx.restore();
                     }
                     if (item.visualTemplate === 'glass-caption') {
                         const glassRadius = Math.min(boxH * 0.48, 28);
@@ -7089,7 +7165,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     // scrim/pill behind the text so it reads clearly over busy video.
                     // Default is transparent — text sits directly on the footage with
                     // no backdrop at all.
-                    if (item.transparentBg === false) {
+                    if (item.transparentBg === false && style !== 'comic-speed-rays' && style !== 'badge-pop-dot' && style !== 'cta-button-arrow' && style !== 'torn-paper-marker') {
                         if (item.mode === 'fullscreen') {
                             // Dark scrim behind the text so it reads over any video content
                             state.ctx.fillStyle = 'rgba(0,0,0,0.45)';
@@ -7307,54 +7383,62 @@ document.addEventListener('DOMContentLoaded', () => {
                                 }
 
                                 if (style === 'comic-outline-glow') {
-                                    // Dual-pass ultra-crisp comic outline + pulsing neon glow
+                                    // Dual-pass ultra-crisp comic outline + pulsing neon glow + user text fill color
+                                    const glowSize = item.glowSize !== undefined ? item.glowSize : 12;
                                     state.ctx.save();
                                     state.ctx.textAlign = isBulletPage ? 'left' : 'center';
                                     state.ctx.lineJoin = 'round';
-                                    // Pass 1: Heavy black outline
-                                    state.ctx.strokeStyle = '#000000';
-                                    state.ctx.lineWidth = Math.max(5, item.fontSize * 0.22);
-                                    state.ctx.strokeText(textToDraw, drawLineX, drawLineY);
-                                    // Pass 2: Pulsing neon glow stroke
-                                    const glowPulse = item.fontSize * (0.4 + 0.25 * Math.sin((currentTime || 0) * 4.5));
+
+                                    // Pass 1: Outer Neon / White Aura Glow
+                                    const glowPulse = glowSize * (0.8 + 0.3 * Math.sin((currentTime || 0) * 4.5));
                                     state.ctx.strokeStyle = item.glowColor || '#ef4444';
                                     state.ctx.shadowColor = item.glowColor || '#ef4444';
                                     state.ctx.shadowBlur = glowPulse;
-                                    state.ctx.lineWidth = Math.max(2, item.fontSize * 0.08);
+                                    state.ctx.lineWidth = Math.max(6, glowSize * 1.8);
                                     state.ctx.strokeText(textToDraw, drawLineX, drawLineY);
+
+                                    // Pass 2: Sharp Crisp Black Comic Outline
                                     state.ctx.shadowBlur = 0;
+                                    state.ctx.strokeStyle = '#000000';
+                                    state.ctx.lineWidth = Math.max(4, glowSize * 0.9);
+                                    state.ctx.strokeText(textToDraw, drawLineX, drawLineY);
+
+                                    // Pass 3: Text Fill using User-Selected Color (item.color)
+                                    state.ctx.fillStyle = item.color || '#ffffff';
+                                    state.ctx.fillText(textToDraw, drawLineX, drawLineY);
+
                                     state.ctx.restore();
                                 } else if (style === 'particle-glow-text') {
-                                    // Luxurious golden star sparkles (✦/✨) & drifting gold sparkle dust
+                                    // Luxurious golden star sparkles (✦/✨) & drifting gold sparkle dust driven by item.particleIntensity
                                     const glowW = state.ctx.measureText(textToDraw).width;
                                     const glowCx = isBulletPage ? (drawLineX + glowW / 2) : drawLineX;
+                                    const particleCount = item.particleIntensity !== undefined ? item.particleIntensity : 25;
                                     state.ctx.save();
                                     // Soft golden radial aura behind text
-                                    const auraGrad = state.ctx.createRadialGradient(glowCx, drawLineY, 0, glowCx, drawLineY, Math.max(glowW, item.fontSize * 2));
-                                    auraGrad.addColorStop(0, 'rgba(254, 240, 138, 0.35)');
-                                    auraGrad.addColorStop(0.5, 'rgba(234, 179, 8, 0.15)');
+                                    const auraGrad = state.ctx.createRadialGradient(glowCx, drawLineY, 0, glowCx, drawLineY, Math.max(glowW, item.fontSize * 2.2));
+                                    auraGrad.addColorStop(0, 'rgba(254, 240, 138, 0.45)');
+                                    auraGrad.addColorStop(0.5, 'rgba(234, 179, 8, 0.22)');
                                     auraGrad.addColorStop(1, 'rgba(0, 0, 0, 0)');
                                     state.ctx.fillStyle = auraGrad;
                                     state.ctx.beginPath();
-                                    state.ctx.arc(glowCx, drawLineY, Math.max(glowW, item.fontSize * 2), 0, Math.PI * 2);
+                                    state.ctx.arc(glowCx, drawLineY, Math.max(glowW, item.fontSize * 2.2), 0, Math.PI * 2);
                                     state.ctx.fill();
 
                                     // Floating 4-point gold star sparkles
-                                    const N = 10;
-                                    for (let gi = 0; gi < N; gi++) {
+                                    for (let gi = 0; gi < particleCount; gi++) {
                                         const seedX = ((gi * 59 + 13) % 100) / 100 - 0.5;
-                                        const driftY = ((gi * 37 + (currentTime || 0) * 20) % 120) / 100 - 0.6;
-                                        const px = glowCx + seedX * (glowW + item.fontSize * 1.2);
-                                        const py = drawLineY + driftY * item.fontSize * 1.5;
-                                        const twinkle = 0.3 + 0.7 * Math.max(0, Math.sin((currentTime || 0) * 3.8 + gi * 1.9));
-                                        const starSize = Math.max(6, item.fontSize * (0.12 + (gi % 3) * 0.05)) * twinkle;
+                                        const driftY = ((gi * 37 + (currentTime || 0) * 18) % 140) / 100 - 0.7;
+                                        const px = glowCx + seedX * (glowW + item.fontSize * 1.5);
+                                        const py = drawLineY + driftY * item.fontSize * 1.6;
+                                        const twinkle = 0.25 + 0.75 * Math.max(0, Math.sin((currentTime || 0) * 3.8 + gi * 1.9));
+                                        const starSize = Math.max(5, item.fontSize * (0.10 + (gi % 4) * 0.04)) * twinkle;
 
                                         state.ctx.save();
                                         state.ctx.translate(px, py);
-                                        state.ctx.globalAlpha = twinkle * 0.85;
-                                        state.ctx.fillStyle = '#fef08a';
+                                        state.ctx.globalAlpha = twinkle * 0.9;
+                                        state.ctx.fillStyle = (gi % 2 === 0) ? '#fef08a' : '#ffffff';
                                         state.ctx.shadowColor = '#eab308';
-                                        state.ctx.shadowBlur = 8;
+                                        state.ctx.shadowBlur = 10;
                                         // Draw 4-point star
                                         state.ctx.beginPath();
                                         for (let s = 0; s < 4; s++) {
@@ -7362,8 +7446,8 @@ document.addEventListener('DOMContentLoaded', () => {
                                             const rx1 = Math.cos(ang) * starSize;
                                             const ry1 = Math.sin(ang) * starSize;
                                             const angMid = ang + Math.PI / 4;
-                                            const rx2 = Math.cos(angMid) * (starSize * 0.3);
-                                            const ry2 = Math.sin(angMid) * (starSize * 0.3);
+                                            const rx2 = Math.cos(angMid) * (starSize * 0.28);
+                                            const ry2 = Math.sin(angMid) * (starSize * 0.28);
                                             if (s === 0) state.ctx.moveTo(rx1, ry1);
                                             else state.ctx.lineTo(rx1, ry1);
                                             state.ctx.lineTo(rx2, ry2);
@@ -7373,12 +7457,53 @@ document.addEventListener('DOMContentLoaded', () => {
                                         state.ctx.restore();
                                     }
                                     state.ctx.restore();
+                                } else if (style === 'cursor-line-draw') {
+                                    // Yellow text with red 3D drop shadow offset + thick black stroke (matching Image 4 "FREE DELIVERY")
+                                    state.ctx.save();
+                                    state.ctx.textAlign = isBulletPage ? 'left' : 'center';
+                                    state.ctx.lineJoin = 'round';
+                                    // 3D Red drop shadow offset
+                                    state.ctx.fillStyle = '#dc2626';
+                                    state.ctx.fillText(textToDraw, drawLineX + 4, drawLineY + 4);
+                                    // Thick black outline
+                                    state.ctx.strokeStyle = '#000000';
+                                    state.ctx.lineWidth = Math.max(5, item.fontSize * 0.20);
+                                    state.ctx.strokeText(textToDraw, drawLineX, drawLineY);
+                                    // Bright yellow fill
+                                    state.ctx.fillStyle = item.color || '#facc15';
+                                    state.ctx.fillText(textToDraw, drawLineX, drawLineY);
+                                    state.ctx.restore();
+                                } else if (style === 'comic-speed-rays') {
+                                    // Pop-Art Comic Title Text: Bold text with thick 6px black stroke & 3D shadow offset (matching Reel Image 3)
+                                    state.ctx.save();
+                                    state.ctx.textAlign = isBulletPage ? 'left' : 'center';
+                                    state.ctx.lineJoin = 'round';
+                                    // 3D Shadow
+                                    state.ctx.fillStyle = 'rgba(0, 0, 0, 0.8)';
+                                    state.ctx.fillText(textToDraw, drawLineX + 5, drawLineY + 5);
+                                    // Heavy Black Stroke
+                                    state.ctx.strokeStyle = '#000000';
+                                    state.ctx.lineWidth = Math.max(6, item.fontSize * 0.22);
+                                    state.ctx.strokeText(textToDraw, drawLineX, drawLineY);
+                                    // Vibrant Fill
+                                    state.ctx.fillStyle = item.color || '#000000';
+                                    state.ctx.fillText(textToDraw, drawLineX, drawLineY);
+                                    state.ctx.restore();
+                                } else if (style === 'torn-paper-marker') {
+                                    // Printed Black Text inside Torn Paper Strip
+                                    state.ctx.save();
+                                    state.ctx.textAlign = isBulletPage ? 'left' : 'center';
+                                    state.ctx.fillStyle = item.color || '#000000';
+                                    state.ctx.fillText(textToDraw, drawLineX, drawLineY);
+                                    state.ctx.restore();
                                 }
 
-                                if (lineObj.bullet) {
-                                    renderTextWith3DAndColor(state.ctx, lineObj.bullet, drawBulletX, drawLineY, item, item.fontSize, isBulletPage ? 'left' : 'center');
+                                if (style !== 'torn-paper-marker' && style !== 'comic-outline-glow' && style !== 'cursor-line-draw' && style !== 'comic-speed-rays') {
+                                    if (lineObj.bullet) {
+                                        renderTextWith3DAndColor(state.ctx, lineObj.bullet, drawBulletX, drawLineY, item, item.fontSize, isBulletPage ? 'left' : 'center');
+                                    }
+                                    renderTextWith3DAndColor(state.ctx, textToDraw, drawLineX, drawLineY, item, item.fontSize, isBulletPage ? 'left' : 'center');
                                 }
-                                renderTextWith3DAndColor(state.ctx, textToDraw, drawLineX, drawLineY, item, item.fontSize, isBulletPage ? 'left' : 'center');
 
                                 // Canvas text has no native underline, so draw one manually
                                 // under whatever's currently on screen (handles the typewriter
@@ -7609,7 +7734,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 // content after it's painted, growing in sync with the entry (and
                 // shrinking back out on exit) so they feel "drawn on" rather than
                 // just appearing instantly.
-                if (brollAnimActive && (style === 'circle-highlight' || style === 'underline-draw' || style === 'checkmark-pop' || style === 'thinking-character' || style === 'arrow-point' || style === 'magnifier-zoom' || style === 'question-bounce' || style === 'confetti-pop' || style === 'heart-burst' || style === 'plane-banner-trail' || style === 'badge-pop-dot' || style === 'comic-burst-text' || style === 'cursor-click-point' || style === 'cta-button-arrow')) {
+                if (brollAnimActive && (style === 'circle-highlight' || style === 'underline-draw' || style === 'checkmark-pop' || style === 'thinking-character' || style === 'arrow-point' || style === 'magnifier-zoom' || style === 'question-bounce' || style === 'confetti-pop' || style === 'heart-burst' || style === 'plane-banner-trail' || style === 'badge-pop-dot' || style === 'comic-burst-text' || style === 'cursor-click-point' || style === 'cta-button-arrow' || style === 'comic-speed-rays' || style === 'cursor-line-draw')) {
                     let annoP = 1;
                     let annoInEntry = false, annoInExit = false;
                     if (tIn < animDur) { annoP = brollEaseOut(tIn / animDur); annoInEntry = true; }
@@ -8011,6 +8136,109 @@ document.addEventListener('DOMContentLoaded', () => {
                                 state.ctx.fill();
                             }
                             state.ctx.restore();
+                        } else if (style === 'comic-speed-rays') {
+                            // High-Energy Manga/Comic Speed Rays exploding from frame edges towards text center
+                            const bcx = drawBoxX + boxW / 2;
+                            const bcy = drawBoxY + boxH / 2;
+                            const rayCount = 24;
+                            const rotBase = (currentTime || 0) * 0.4;
+                            const pulse = Math.sin((currentTime || 0) * 6) * 12;
+
+                            state.ctx.save();
+                            state.ctx.globalAlpha = annoP * 0.9;
+                            for (let i = 0; i < rayCount; i++) {
+                                const ang = rotBase + (i / rayCount) * Math.PI * 2;
+                                const maxR = Math.max(canvasW, canvasH) * 0.8;
+                                const innerR = Math.max(boxW, boxH) * 0.65 + Math.sin(i * 3 + (currentTime || 0) * 8) * 14 + pulse;
+                                const widthAng = 0.03 + (i % 3) * 0.015;
+
+                                const x1 = bcx + Math.cos(ang - widthAng) * maxR;
+                                const y1 = bcy + Math.sin(ang - widthAng) * maxR;
+                                const x2 = bcx + Math.cos(ang + widthAng) * maxR;
+                                const y2 = bcy + Math.sin(ang + widthAng) * maxR;
+                                const tipX = bcx + Math.cos(ang) * innerR;
+                                const tipY = bcy + Math.sin(ang) * innerR;
+
+                                state.ctx.beginPath();
+                                state.ctx.moveTo(x1, y1);
+                                state.ctx.lineTo(x2, y2);
+                                state.ctx.lineTo(tipX, tipY);
+                                state.ctx.closePath();
+
+                                // Alternate colors: Yellow, White, and subtle translucent accents
+                                if (i % 3 === 0) state.ctx.fillStyle = '#facc15';
+                                else if (i % 3 === 1) state.ctx.fillStyle = '#ffffff';
+                                else state.ctx.fillStyle = 'rgba(255, 255, 255, 0.4)';
+
+                                state.ctx.fill();
+                            }
+                            state.ctx.restore();
+                        } else if (style === 'cursor-line-draw') {
+                            // Cursor Line Underline: Hand 👆 glides across under text over a smooth, readable 1.5 - 2.5s duration
+                            const lineX1 = drawBoxX - 12;
+                            const lineX2 = drawBoxX + boxW + 12;
+                            const lineY = drawBoxY + boxH + 8;
+
+                            // Calculate smooth, deliberate draw duration scaled by speed setting
+                            const itemTotalDur = Math.max(0.8, (item.endSec - item.startSec) || 3.0);
+                            const speedSec = item.animationSpeedSec !== undefined ? item.animationSpeedSec : 0.4;
+                            const speedMultiplier = Math.max(0.2, speedSec / 0.4);
+                            const drawDur = Math.max(1.2, Math.min(itemTotalDur * 0.8, 2.4 * speedMultiplier));
+
+                            const drawProgress = brollEaseOut(Math.max(0, Math.min(1, tIn / drawDur)));
+                            const currentLineX = lineX1 + (lineX2 - lineX1) * drawProgress;
+
+                            state.ctx.save();
+                            state.ctx.globalAlpha = Math.max(0.1, alpha);
+
+                            // Draw thick hand-marker underline stroke with drop shadow
+                            state.ctx.strokeStyle = item.highlightColor || '#ef4444';
+                            state.ctx.lineWidth = Math.max(5, boxH * 0.14);
+                            state.ctx.lineCap = 'round';
+                            state.ctx.shadowColor = 'rgba(0, 0, 0, 0.45)';
+                            state.ctx.shadowBlur = 8;
+                            state.ctx.shadowOffsetY = 3;
+                            state.ctx.beginPath();
+                            state.ctx.moveTo(lineX1, lineY);
+                            state.ctx.lineTo(currentLineX, lineY);
+                            state.ctx.stroke();
+                            state.ctx.shadowBlur = 0;
+                            state.ctx.shadowOffsetY = 0;
+
+                            // Gliding pointer hand cursor riding at line tip
+                            const curSize = Math.max(28, Math.min(boxW, boxH) * 0.42);
+                            const clickBeat = Math.sin((currentTime || 0) * 4.5);
+                            const clickPulse = 1 - Math.max(0, clickBeat) * 0.15;
+
+                            state.ctx.translate(currentLineX, lineY + curSize * 0.4);
+                            state.ctx.scale(drawProgress * clickPulse, drawProgress * clickPulse);
+                            state.ctx.shadowColor = 'rgba(0, 0, 0, 0.5)';
+                            state.ctx.shadowBlur = 10;
+                            state.ctx.shadowOffsetY = 4;
+                            state.ctx.font = `${Math.round(curSize)}px "Segoe UI Emoji", "Apple Color Emoji", sans-serif`;
+                            state.ctx.textAlign = 'center';
+                            state.ctx.textBaseline = 'middle';
+                            state.ctx.fillText('👆', 0, 0);
+
+                            // Ink sparkle dot at drawing tip while moving
+                            if (drawProgress < 0.98) {
+                                state.ctx.font = `${Math.round(curSize * 0.5)}px sans-serif`;
+                                state.ctx.fillText('✨', -curSize * 0.4, -curSize * 0.4);
+                            }
+                            state.ctx.restore();
+
+                            // Expanding ripple rings when cursor reaches end of line
+                            if (drawProgress >= 0.95 && clickBeat > 0.3) {
+                                const ringP = (clickBeat - 0.3) / 0.7;
+                                state.ctx.save();
+                                state.ctx.globalAlpha = (1 - ringP) * 0.8;
+                                state.ctx.strokeStyle = '#ffffff';
+                                state.ctx.lineWidth = 2.5;
+                                state.ctx.beginPath();
+                                state.ctx.arc(lineX2, lineY, curSize * (0.2 + ringP * 0.8), 0, Math.PI * 2);
+                                state.ctx.stroke();
+                                state.ctx.restore();
+                            }
                         }
                     }
                 }
@@ -13978,6 +14206,9 @@ document.addEventListener('DOMContentLoaded', () => {
         { value: 'cursor-click-point', label: '🖱️ Cursor Click Pointer (হাতের কার্সর ক্লিক করবে)' },
         { value: 'cta-button-arrow', label: '➡️ CTA Button + Hand Arrow (বাটন থেকে বাঁকা তীর প্রোডাক্টের দিকে)' },
         { value: 'comic-outline-glow', label: '🎨 Comic Outline Glow Text (মোটা কালো আউটলাইন + রঙিন গ্লো)' },
+        { value: 'comic-speed-rays', label: '💥 Comic Speed Rays (টেক্সটের চারপাশ থেকে স্পিড রশ্মি)', textOnly: true },
+        { value: 'cursor-line-draw', label: '✍️ Cursor Line Underline (কার্সর লাইন টেনে দেখাবে)', textOnly: true },
+        { value: 'torn-paper-marker', label: '📜 Torn Paper Banner (ছেঁড়া হলুদ কাগজ টেক্সট ব্যানার)' },
         { value: 'letter-bounce-wiggle', label: '🔤 অক্ষর লাফিয়ে লাফিয়ে নড়বে (Letter Bounce Wiggle)', textOnly: true },
         { value: 'particle-glow-text', label: '✨ সোনালি Glow পার্টিকেল টেক্সট (Golden Particle Glow)', textOnly: true },
         { value: 'hanging-sign-swing', label: 'Hanging Sign Swing (🔴 পিন থেকে ঝুলে দুলতে দুলতে আসবে)' },
@@ -14023,12 +14254,23 @@ document.addEventListener('DOMContentLoaded', () => {
     // Shows/hides the entry/exit direction pickers depending on whether the
     // currently selected animation style actually uses a direction.
     function updateBrollDirectionRowsVisibility(style) {
-        // 'pan' only cares about a single pan direction (reuses the entry-direction
-        // picker) and has no separate exit phase, so its exit-direction row stays hidden.
-        const usesEntryDirection = (style === 'slide' || style === 'slide-pop' || style === 'pan' || style === 'arrow-point' || style === 'plane-banner-trail');
+        const usesEntryDirection = (style === 'slide' || style === 'slide-pop' || style === 'pan' || style === 'arrow-point' || style === 'plane-banner-trail' || style === 'cursor-click-point' || style === 'cursor-line-draw');
         const usesExitDirection = (style === 'slide' || style === 'slide-pop' || style === 'plane-banner-trail');
         if (brollDirectionRow) brollDirectionRow.style.display = usesEntryDirection ? 'block' : 'none';
         if (brollExitDirectionRow) brollExitDirectionRow.style.display = usesExitDirection ? 'block' : 'none';
+    }
+
+    function updateBrollAnimParamSlidersVisibility(item) {
+        if (!item) return;
+        const style = item.animationStyle;
+        const brollParticleIntensityContainer = document.getElementById('broll-particle-intensity-container');
+        const brollGlowSizeContainer = document.getElementById('broll-glow-size-container');
+        if (brollParticleIntensityContainer) {
+            brollParticleIntensityContainer.style.display = (style === 'particle-glow-text') ? 'block' : 'none';
+        }
+        if (brollGlowSizeContainer) {
+            brollGlowSizeContainer.style.display = (style === 'comic-outline-glow') ? 'block' : 'none';
+        }
     }
 
     let brollIdCounter = 1;
@@ -15358,6 +15600,23 @@ document.addEventListener('DOMContentLoaded', () => {
                 : 'কোনো ফাইল আপলোড করা হয়নি।';
         }
         updateBrollDirectionRowsVisibility(item.animationStyle || defaultStyle);
+        updateBrollAnimParamSlidersVisibility(item);
+
+        const brollParticleIntensitySlider = document.getElementById('broll-particle-intensity-slider');
+        const brollParticleIntensityVal = document.getElementById('broll-particle-intensity-val');
+        if (brollParticleIntensitySlider) {
+            const intensity = item.particleIntensity !== undefined ? item.particleIntensity : 25;
+            brollParticleIntensitySlider.value = intensity;
+            if (brollParticleIntensityVal) brollParticleIntensityVal.innerText = intensity;
+        }
+
+        const brollGlowSizeSlider = document.getElementById('broll-glow-size-slider');
+        const brollGlowSizeVal = document.getElementById('broll-glow-size-val');
+        if (brollGlowSizeSlider) {
+            const size = item.glowSize !== undefined ? item.glowSize : 12;
+            brollGlowSizeSlider.value = size;
+            if (brollGlowSizeVal) brollGlowSizeVal.innerText = size + 'px';
+        }
 
         // Sync After Image Uploader visibility
         const brollAfterImageContainer = document.getElementById('broll-after-image-container');
@@ -15417,6 +15676,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     item.animationStyle = val;
                 }
                 updateBrollDirectionRowsVisibility(item.animationStyle);
+                updateBrollAnimParamSlidersVisibility(item);
                 
                 const brollAfterImageContainer = document.getElementById('broll-after-image-container');
                 const brollAfterFilename = document.getElementById('broll-after-filename');
@@ -15436,6 +15696,36 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
                 
                 drawFrame();
+            }
+        });
+    }
+
+    const brollParticleIntensitySlider = document.getElementById('broll-particle-intensity-slider');
+    if (brollParticleIntensitySlider) {
+        brollParticleIntensitySlider.addEventListener('input', (e) => {
+            const item = state.brollOverlays.find(b => b.id === state.selectedBrollId);
+            const val = parseInt(e.target.value);
+            const brollParticleIntensityVal = document.getElementById('broll-particle-intensity-val');
+            if (brollParticleIntensityVal) brollParticleIntensityVal.innerText = val;
+            if (item) {
+                item.particleIntensity = val;
+                drawFrame();
+                if (window.triggerAutoSave) window.triggerAutoSave();
+            }
+        });
+    }
+
+    const brollGlowSizeSlider = document.getElementById('broll-glow-size-slider');
+    if (brollGlowSizeSlider) {
+        brollGlowSizeSlider.addEventListener('input', (e) => {
+            const item = state.brollOverlays.find(b => b.id === state.selectedBrollId);
+            const val = parseInt(e.target.value);
+            const brollGlowSizeVal = document.getElementById('broll-glow-size-val');
+            if (brollGlowSizeVal) brollGlowSizeVal.innerText = val + 'px';
+            if (item) {
+                item.glowSize = val;
+                drawFrame();
+                if (window.triggerAutoSave) window.triggerAutoSave();
             }
         });
     }
