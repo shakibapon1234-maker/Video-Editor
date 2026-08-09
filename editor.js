@@ -8494,6 +8494,43 @@ document.addEventListener('DOMContentLoaded', () => {
             state.ctx.restore();
         }
 
+        // --- Step E1.5: Background Fill Regions ---
+        // Rendered on top of B-roll but BELOW text/symbol/sticker overlays, so a
+        // fill box painted behind a caption never covers the text sitting on it.
+        if (state.fillRegions && state.fillRegions.length > 0) {
+            const currentTime = state.currentTime || 0;
+            const canvasW = state.canvas.width;
+            const canvasH = state.canvas.height;
+            state.fillRegions.forEach(item => {
+                if (currentTime < item.startSec || currentTime > item.endSec) return;
+                if (item.w <= 0 || item.h <= 0) return;
+                const rx = item.x * canvasW;
+                const ry = item.y * canvasH;
+                const rw = item.w * canvasW;
+                const rh = item.h * canvasH;
+                state.ctx.save();
+                state.ctx.globalAlpha = Math.max(0, Math.min(1, (item.opacity ?? 80) / 100));
+                state.ctx.fillStyle = item.color || '#000000';
+                state.ctx.fillRect(rx, ry, rw, rh);
+                state.ctx.globalAlpha = 1;
+                // Selection outline in edit mode
+                if (state.currentStep === 3 && state.isAddingFill && item.id === state.selectedFillId) {
+                    state.ctx.strokeStyle = '#ffffff';
+                    state.ctx.lineWidth = 2;
+                    state.ctx.setLineDash([6, 4]);
+                    state.ctx.strokeRect(rx - 2, ry - 2, rw + 4, rh + 4);
+                    state.ctx.setLineDash([]);
+                    // Resize handle (bottom-right corner)
+                    state.ctx.fillStyle = '#ffffff';
+                    state.ctx.strokeStyle = '#4f46e5';
+                    state.ctx.lineWidth = 1.5;
+                    state.ctx.fillRect(rx + rw - 6, ry + rh - 6, 12, 12);
+                    state.ctx.strokeRect(rx + rw - 6, ry + rh - 6, 12, 12);
+                }
+                state.ctx.restore();
+            });
+        }
+
         // --- Step F: Draw Text Overlays (Phase 2C, extended with box styles/fonts/animation/curve) ---
         if (state.textOverlays && state.textOverlays.length > 0) {
             const currentTime = state.currentTime;
@@ -9132,42 +9169,6 @@ document.addEventListener('DOMContentLoaded', () => {
             state.ctx.font = 'bold 14px "Hind Siliguri", sans-serif';
             state.ctx.fillText(`Text Box (${Math.round(rw)}px × ${Math.round(rh)}px)`, rx + 8, Math.max(20, ry - 6));
             state.ctx.restore();
-        }
-
-        // --- Step E1.5: Background Fill Regions ---
-        // Rendered on top of B-roll and text overlays but below the highlight callout guides.
-        if (state.fillRegions && state.fillRegions.length > 0) {
-            const currentTime = state.currentTime || 0;
-            const canvasW = state.canvas.width;
-            const canvasH = state.canvas.height;
-            state.fillRegions.forEach(item => {
-                if (currentTime < item.startSec || currentTime > item.endSec) return;
-                if (item.w <= 0 || item.h <= 0) return;
-                const rx = item.x * canvasW;
-                const ry = item.y * canvasH;
-                const rw = item.w * canvasW;
-                const rh = item.h * canvasH;
-                state.ctx.save();
-                state.ctx.globalAlpha = Math.max(0, Math.min(1, (item.opacity ?? 80) / 100));
-                state.ctx.fillStyle = item.color || '#000000';
-                state.ctx.fillRect(rx, ry, rw, rh);
-                state.ctx.globalAlpha = 1;
-                // Selection outline in edit mode
-                if (state.currentStep === 3 && state.isAddingFill && item.id === state.selectedFillId) {
-                    state.ctx.strokeStyle = '#ffffff';
-                    state.ctx.lineWidth = 2;
-                    state.ctx.setLineDash([6, 4]);
-                    state.ctx.strokeRect(rx - 2, ry - 2, rw + 4, rh + 4);
-                    state.ctx.setLineDash([]);
-                    // Resize handle (bottom-right corner)
-                    state.ctx.fillStyle = '#ffffff';
-                    state.ctx.strokeStyle = '#4f46e5';
-                    state.ctx.lineWidth = 1.5;
-                    state.ctx.fillRect(rx + rw - 6, ry + rh - 6, 12, 12);
-                    state.ctx.strokeRect(rx + rw - 6, ry + rh - 6, 12, 12);
-                }
-                state.ctx.restore();
-            });
         }
 
         // --- Step E2: Video Highlights / Callouts (rendered AFTER B-roll so highlights
@@ -10884,6 +10885,59 @@ document.addEventListener('DOMContentLoaded', () => {
                 ctx.lineTo(half * 0.72, half * 0.58);
                 ctx.lineTo(-half * 0.72, half * 0.58);
                 ctx.closePath();
+                ctx.stroke();
+                break;
+            }
+            case 'callout-rect': {
+                // Rounded rectangle speech bubble with a pointer tail (bottom-left)
+                const rw = half * 1.7, rh = half * 1.15, r = half * 0.18;
+                const rx = -rw / 2, ry = -rh * 0.62;
+                ctx.beginPath();
+                ctx.moveTo(rx + r, ry);
+                ctx.lineTo(rx + rw - r, ry);
+                ctx.quadraticCurveTo(rx + rw, ry, rx + rw, ry + r);
+                ctx.lineTo(rx + rw, ry + rh - r);
+                ctx.quadraticCurveTo(rx + rw, ry + rh, rx + rw - r, ry + rh);
+                ctx.lineTo(rx + rw * 0.32, ry + rh);
+                ctx.lineTo(rx + rw * 0.16, ry + rh + half * 0.38);
+                ctx.lineTo(rx + rw * 0.24, ry + rh);
+                ctx.lineTo(rx + r, ry + rh);
+                ctx.quadraticCurveTo(rx, ry + rh, rx, ry + rh - r);
+                ctx.lineTo(rx, ry + r);
+                ctx.quadraticCurveTo(rx, ry, rx + r, ry);
+                ctx.closePath();
+                ctx.stroke();
+                break;
+            }
+            case 'callout-oval': {
+                // Oval speech bubble with a pointer tail (bottom-left)
+                ctx.beginPath();
+                ctx.ellipse(0, -half * 0.08, half * 0.85, half * 0.55, 0, 0, Math.PI * 2);
+                ctx.stroke();
+                ctx.beginPath();
+                ctx.moveTo(-half * 0.5, half * 0.32);
+                ctx.lineTo(-half * 0.68, half * 0.72);
+                ctx.lineTo(-half * 0.15, half * 0.4);
+                ctx.closePath();
+                ctx.fill();
+                break;
+            }
+            case 'scroll-banner': {
+                // Scroll/ribbon banner with curled right edge
+                const bw = half * 1.65, bh = half * 1.1;
+                const bx = -bw / 2, by = -bh / 2;
+                ctx.beginPath();
+                ctx.moveTo(bx, by);
+                ctx.lineTo(bx + bw * 0.82, by);
+                ctx.quadraticCurveTo(bx + bw, by, bx + bw, by + bh * 0.22);
+                ctx.lineTo(bx + bw, by + bh);
+                ctx.lineTo(bx + bw * 0.18, by + bh);
+                ctx.quadraticCurveTo(bx, by + bh, bx, by + bh * 0.78);
+                ctx.closePath();
+                ctx.stroke();
+                ctx.beginPath();
+                ctx.moveTo(bx + bw * 0.82, by);
+                ctx.quadraticCurveTo(bx + bw * 0.82, by + bh * 0.22, bx + bw, by + bh * 0.22);
                 ctx.stroke();
                 break;
             }
@@ -16362,7 +16416,10 @@ document.addEventListener('DOMContentLoaded', () => {
         exclaim: '!',
         star: '★',
         circle: '○',
-        triangle: '△'
+        triangle: '△',
+        'callout-rect': '💬',
+        'callout-oval': '💬',
+        'scroll-banner': '📜'
     };
     const SYMBOL_NAMES_BN = {
         whatsapp: 'হোয়াটসঅ্যাপ',
@@ -16377,7 +16434,10 @@ document.addEventListener('DOMContentLoaded', () => {
         exclaim: 'এক্সক্লামেশন',
         star: 'তারা',
         circle: 'বৃত্ত',
-        triangle: 'ত্রিভুজ'
+        triangle: 'ত্রিভুজ',
+        'callout-rect': 'স্পিচ বাবল (চারকোণা)',
+        'callout-oval': 'স্পিচ বাবল (ওভাল)',
+        'scroll-banner': 'স্ক্রল ব্যানার'
     };
 
     let symbolIdCounter = 1;
