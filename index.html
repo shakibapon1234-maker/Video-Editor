@@ -116,10 +116,11 @@
                             <i class="fa-solid fa-rotate-right"></i>
                         </button>
                         <div class="history-panel-wrap" style="position: relative;">
-                            <button id="history-panel-toggle" class="btn btn-outline btn-sm" type="button" title="History list">
+                            <button id="history-panel-toggle" class="btn btn-outline btn-sm" type="button" title="এডিটিং হিস্ট্রি দেখুন — কখন কী কাজ হয়েছে (History)">
                                 <i class="fa-solid fa-clock-rotate-left"></i>
+                                <span id="history-count-badge" class="history-count-badge hidden">0</span>
                             </button>
-                            <ul id="history-panel-list" class="history-panel-dropdown" style="display: none; position: absolute; top: calc(100% + 8px); right: 0; min-width: 330px; max-width: calc(100vw - 32px); max-height: 420px; overflow-y: auto; background: var(--card-bg, #1e293b); border: 1px solid var(--border-color, #334155); border-radius: 10px; padding: 10px; z-index: 999999; list-style: none; font-size: 14px; box-shadow: 0 12px 35px rgba(0,0,0,0.5);"></ul>
+                            <ul id="history-panel-list" class="history-panel-dropdown"></ul>
                         </div>
                         <button id="shortcuts-header-btn" class="shortcuts-help-btn" type="button" title="কীবোর্ড শর্টকাট কি তালিকা দেখুন" onclick="openShortcutsModal();">
                             <i class="fa-solid fa-keyboard"></i> Shortcuts

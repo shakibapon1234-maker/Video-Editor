@@ -397,7 +397,84 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     window.captureUndoCheckpoint = captureUndoCheckpoint;
 
-    function recordEditorHistory(label) {
+    // History metadata helper — resolves string labels into rich objects
+    // This allows existing plain-string calls from editor.js to automatically
+    // receive proper categories and Bangla translations.
+    const HISTORY_STRING_MAP = {
+        // Video / Clip
+        'Video added':              { labelBn: 'ভিডিও যোগ হয়েছে',             category: 'video' },
+        'Clip added':               { labelBn: 'ক্লিপ যোগ হয়েছে',             category: 'clip'  },
+        'Clip removed':             { labelBn: 'ক্লিপ মুছে ফেলা হয়েছে',        category: 'clip'  },
+        'Clips reordered':          { labelBn: 'ক্লিপ পুনর্বিন্যস্ত হয়েছে',     category: 'clip'  },
+        'Clip split':               { labelBn: 'ক্লিপ কাটা হয়েছে',            category: 'clip'  },
+        'Freeze frame added':       { labelBn: 'ফ্রিজ ফ্রেম যোগ হয়েছে',       category: 'clip'  },
+        'Trim changed':             { labelBn: 'ট্রিম পরিবর্তন হয়েছে',         category: 'clip'  },
+        'Video crop saved':         { labelBn: 'ভিডিও ক্রপ সংরক্ষিত',         category: 'crop'  },
+        'Crop changed':             { labelBn: 'ক্রপ পরিবর্তন হয়েছে',         category: 'crop'  },
+        'Crop reset':               { labelBn: 'ক্রপ রিসেট হয়েছে',            category: 'crop'  },
+        'Auto-reframe applied':     { labelBn: 'অটো রিফ্রেম প্রয়োগ হয়েছে',    category: 'crop'  },
+        // Logo / Image
+        'Logo added':               { labelBn: 'লোগো যোগ হয়েছে',             category: 'logo'  },
+        'Logo removed':             { labelBn: 'লোগো মুছে ফেলা হয়েছে',        category: 'logo'  },
+        'Background image added':   { labelBn: 'ব্যাকগ্রাউন্ড ছবি যোগ হয়েছে', category: 'logo'  },
+        'B-roll image added':       { labelBn: 'B-roll ছবি যোগ হয়েছে',        category: 'logo'  },
+        'B-roll video added':       { labelBn: 'B-roll ভিডিও যোগ হয়েছে',      category: 'video' },
+        'B-roll text added':        { labelBn: 'B-roll টেক্সট যোগ হয়েছে',     category: 'text'  },
+        'B-roll deleted':           { labelBn: 'B-roll মুছে ফেলা হয়েছে',       category: 'logo'  },
+        'B-roll removed':           { labelBn: 'B-roll সরানো হয়েছে',          category: 'logo'  },
+        // Text / Subtitle
+        'Text overlay deleted':     { labelBn: 'টেক্সট ওভারলে মুছে ফেলা হয়েছে', category: 'text' },
+        'Highlight added':          { labelBn: 'হাইলাইট যোগ হয়েছে',           category: 'effect' },
+        // Filter / Effect
+        'Blur region added':        { labelBn: 'ব্লার এরিয়া যোগ হয়েছে',       category: 'effect' },
+        'Blur region modified':     { labelBn: 'ব্লার এরিয়া পরিবর্তন হয়েছে',  category: 'effect' },
+        'Background fill added':    { labelBn: 'ব্যাকগ্রাউন্ড ফিল যোগ হয়েছে', category: 'effect' },
+        'Background fill modified': { labelBn: 'ব্যাকগ্রাউন্ড ফিল পরিবর্তন',  category: 'effect' },
+        'Punch zoom removed':       { labelBn: 'পাঞ্চ জুম সরানো হয়েছে',       category: 'effect' },
+        'Punch zoom added':         { labelBn: 'পাঞ্চ জুম যোগ হয়েছে',         category: 'effect' },
+        'Punch zoom updated':       { labelBn: 'পাঞ্চ জুম আপডেট হয়েছে',      category: 'effect' },
+        'Lower-third added':        { labelBn: 'লোয়ার থার্ড যোগ হয়েছে',      category: 'text'  },
+        // Layout
+        'Background mode changed to blur':     { labelBn: 'ব্যাকগ্রাউন্ড: ব্লার',   category: 'layout' },
+        'Background mode changed to color':    { labelBn: 'ব্যাকগ্রাউন্ড: রঙ',      category: 'layout' },
+        'Background mode changed to image':    { labelBn: 'ব্যাকগ্রাউন্ড: ছবি',     category: 'layout' },
+        // Initial state
+        'Initial state':            { labelBn: 'প্রাথমিক অবস্থা',              category: 'init'  },
+        'Project loaded':           { labelBn: 'প্রজেক্ট লোড হয়েছে',           category: 'video' },
+    };
+
+    function resolveHistoryMeta(labelOrObj) {
+        if (labelOrObj && typeof labelOrObj === 'object') return labelOrObj;
+        const str = labelOrObj || 'Change';
+        const now = Date.now();
+        // Direct match
+        if (HISTORY_STRING_MAP[str]) {
+            return { label: str, labelBn: HISTORY_STRING_MAP[str].labelBn, category: HISTORY_STRING_MAP[str].category, timestamp: now };
+        }
+        // Prefix match for dynamic strings (e.g. "Clip split at 00:12", "Text overlay added: ...")
+        for (const [key, val] of Object.entries(HISTORY_STRING_MAP)) {
+            if (str.startsWith(key)) {
+                // Append the dynamic suffix to the Bangla label
+                const suffix = str.slice(key.length);
+                return { label: str, labelBn: val.labelBn + suffix, category: val.category, timestamp: now };
+            }
+        }
+        // Auto-categorise by keyword scanning
+        const lower = str.toLowerCase();
+        let category = 'default';
+        if (lower.includes('video') || lower.includes('clip') || lower.includes('trim') || lower.includes('split') || lower.includes('freeze') || lower.includes('reorder')) category = 'clip';
+        else if (lower.includes('audio') || lower.includes('music') || lower.includes('volume') || lower.includes('noise') || lower.includes('voice')) category = 'audio';
+        else if (lower.includes('filter') || lower.includes('brightness') || lower.includes('contrast') || lower.includes('saturation') || lower.includes('color') || lower.includes('chroma')) category = 'filter';
+        else if (lower.includes('crop') || lower.includes('reframe')) category = 'crop';
+        else if (lower.includes('logo') || lower.includes('image') || lower.includes('broll') || lower.includes('b-roll')) category = 'logo';
+        else if (lower.includes('text') || lower.includes('subtitle') || lower.includes('banner') || lower.includes('ticker') || lower.includes('lower')) category = 'text';
+        else if (lower.includes('transition') || lower.includes('intro') || lower.includes('outro')) category = 'transition';
+        else if (lower.includes('blur') || lower.includes('highlight') || lower.includes('fill') || lower.includes('effect') || lower.includes('zoom') || lower.includes('ken')) category = 'effect';
+        else if (lower.includes('layout') || lower.includes('format') || lower.includes('platform') || lower.includes('background') || lower.includes('flip')) category = 'layout';
+        return { label: str, labelBn: str, category, timestamp: now };
+    }
+
+    function recordEditorHistory(labelOrObj) {
         if (historySuspended) return;
         const hasContent = (state.clips && state.clips.length > 0) ||
                           state.video || state.logoImg || state.image ||
@@ -413,7 +490,9 @@ document.addEventListener('DOMContentLoaded', () => {
         const snap = pendingUndoSnapshot || serializeForHistory();
         pendingUndoSnapshot = null;
         state.undoStack.push(snap);
-        state.historyLabels.push(label || 'Change');
+        const meta = resolveHistoryMeta(labelOrObj);
+        meta.timestamp = meta.timestamp || Date.now();
+        state.historyLabels.push(meta);
         if (state.undoStack.length > MAX_HISTORY) {
             state.undoStack.shift();
             state.historyLabels.shift();
@@ -429,18 +508,20 @@ document.addEventListener('DOMContentLoaded', () => {
         if (state.undoStack.length === 0) return;
         state.redoStack.push(serializeForHistory());
         const snap = state.undoStack.pop();
-        const label = state.historyLabels.pop();
-        state.redoLabels.push(label || 'Change');
+        const meta = state.historyLabels.pop();
+        state.redoLabels.push(meta || { label: 'Change', labelBn: 'পরিবর্তন', category: 'default', timestamp: Date.now() });
         applyHistorySnapshot(snap);
         updateHistoryUI();
         if (typeof window.triggerAutoSave === 'function') window.triggerAutoSave();
-        console.log('Undo:', label);
+        const metaResolved = resolveHistoryMeta(meta);
+        console.log('Undo:', metaResolved.label);
     }
 
     function redoEditor() {
         if (state.redoStack.length === 0) return;
         state.undoStack.push(serializeForHistory());
-        state.historyLabels.push(state.redoLabels.pop() || 'Redo');
+        const redoMeta = state.redoLabels.pop();
+        state.historyLabels.push(resolveHistoryMeta(redoMeta));
         const snap = state.redoStack.pop();
         applyHistorySnapshot(snap);
         updateHistoryUI();
@@ -455,57 +536,201 @@ document.addEventListener('DOMContentLoaded', () => {
     if (undoBtn) undoBtn.addEventListener('click', undoEditor);
     if (redoBtn) redoBtn.addEventListener('click', redoEditor);
 
+    // Category → icon mapping
+    const HISTORY_CATEGORY_ICONS = {
+        video:      'fa-film',
+        audio:      'fa-music',
+        text:       'fa-font',
+        filter:     'fa-sliders',
+        crop:       'fa-crop-simple',
+        clip:       'fa-scissors',
+        effect:     'fa-wand-magic-sparkles',
+        layout:     'fa-table-cells-large',
+        logo:       'fa-image',
+        transition: 'fa-shuffle',
+        init:       'fa-flag',
+        default:    'fa-pen-to-square'
+    };
+
+    function formatHistoryTime(ts) {
+        if (!ts) return '';
+        const d = new Date(ts);
+        const h = d.getHours().toString().padStart(2, '0');
+        const m = d.getMinutes().toString().padStart(2, '0');
+        const s = d.getSeconds().toString().padStart(2, '0');
+        return `${h}:${m}:${s}`;
+    }
+
     function updateHistoryUI() {
         if (undoBtn) undoBtn.disabled = state.undoStack.length === 0;
         if (redoBtn) redoBtn.disabled = state.redoStack.length === 0;
+
+        // Update count badge
+        const countBadge = document.getElementById('history-count-badge');
+        const totalCount = state.historyLabels.length;
+        if (countBadge) {
+            countBadge.textContent = totalCount;
+            countBadge.classList.toggle('hidden', totalCount === 0);
+        }
+
         if (!historyPanelList) return;
         const isOpen = historyPanelToggle && historyPanelToggle.classList.contains('open');
         historyPanelList.style.display = isOpen ? 'block' : 'none';
-        if (isOpen && historyPanelToggle) {
-            if (document.body && historyPanelList.parentElement !== document.body) {
-                document.body.appendChild(historyPanelList);
-            }
-            const rect = historyPanelToggle.getBoundingClientRect();
-            historyPanelList.style.position = 'fixed';
-            historyPanelList.style.top = (rect.bottom + 6) + 'px';
-            historyPanelList.style.right = Math.max(12, window.innerWidth - rect.right) + 'px';
-            historyPanelList.style.left = 'auto';
-            historyPanelList.style.zIndex = '99999999';
+        if (!isOpen) return;
+
+        // Position the panel
+        if (document.body && historyPanelList.parentElement !== document.body) {
+            document.body.appendChild(historyPanelList);
         }
+        const rect = historyPanelToggle.getBoundingClientRect();
+        historyPanelList.style.position = 'fixed';
+        historyPanelList.style.top = (rect.bottom + 6) + 'px';
+        historyPanelList.style.right = Math.max(12, window.innerWidth - rect.right) + 'px';
+        historyPanelList.style.left = 'auto';
+        historyPanelList.style.zIndex = '99999999';
+
         historyPanelList.innerHTML = '';
-        const labels = [...state.historyLabels].reverse();
-        const heading = document.createElement('li');
-        heading.textContent = 'History — সর্বশেষ কাজ আগে';
-        heading.style.padding = '5px 10px 10px';
-        heading.style.fontWeight = '700';
-        heading.style.color = 'var(--text-primary, #fff)';
-        heading.style.borderBottom = '1px solid var(--border-color, #334155)';
-        heading.style.marginBottom = '6px';
-        historyPanelList.appendChild(heading);
-        labels.forEach((lbl, i) => {
-            const li = document.createElement('li');
-            li.textContent = lbl;
-            li.style.padding = '9px 10px';
-            li.style.marginBottom = '4px';
-            li.style.borderRadius = '6px';
-            li.style.cursor = 'pointer';
-            li.style.background = 'var(--bg-surface-elevated, #273449)';
-            li.style.position = 'relative';
-            li.title = 'Jump back to this point (undo ' + (i + 1) + ' step(s))';
-            li.addEventListener('click', (e) => {
-                e.stopPropagation();
-                for (let j = 0; j <= i; j++) undoEditor();
-                if (historyPanelToggle) historyPanelToggle.classList.remove('open');
+
+        // ── Header ──────────────────────────────────────────────────
+        const header = document.createElement('div');
+        header.className = 'history-panel-header';
+        const undoCount = state.undoStack.length;
+        const redoCount = state.redoStack.length;
+        header.innerHTML = `
+            <div class="history-panel-title">
+                <i class="fa-solid fa-clock-rotate-left"></i>
+                হিস্ট্রি
+            </div>
+            <div class="history-panel-step-count">${undoCount} ধাপ · ${redoCount} redo</div>
+        `;
+        historyPanelList.appendChild(header);
+
+        // ── Scrollable body ──────────────────────────────────────────
+        const body = document.createElement('div');
+        body.className = 'history-panel-body';
+        historyPanelList.appendChild(body);
+
+        // Build combined list: undo stack (oldest first) + redo stack (next first)
+        // Display order: most recent at top
+        const undoMetas  = state.historyLabels.map(m => resolveHistoryMeta(m));  // oldest→newest
+        const redoMetasR = [...state.redoLabels].reverse().map(m => resolveHistoryMeta(m)); // next redo first
+
+        if (undoMetas.length === 0 && redoMetasR.length === 0) {
+            // Empty state
+            const empty = document.createElement('div');
+            empty.className = 'history-empty-state';
+            empty.innerHTML = `
+                <i class="fa-regular fa-clock"></i>
+                <p>এখনো কোনো কাজ রেকর্ড হয়নি।<br>কিছু এডিট করুন, তাহলে এখানে দেখাবে।</p>
+            `;
+            body.appendChild(empty);
+        } else {
+            // "Current state" row (shown at top — represents the latest committed state)
+            const currentMeta = undoMetas.length > 0
+                ? undoMetas[undoMetas.length - 1]
+                : { label: 'Current State', labelBn: 'বর্তমান অবস্থা', category: 'init', timestamp: Date.now() };
+            {
+                const li = buildHistoryItem(currentMeta, 0, true, false);
+                body.appendChild(li);
+            }
+
+            // Undo stack items (newest to oldest, skipping the last which is current)
+            const undoDisplay = [...undoMetas].reverse().slice(1); // skip index=last (already shown as current)
+            undoDisplay.forEach((meta, i) => {
+                const stepsBack = i + 1;
+                const li = buildHistoryItem(meta, stepsBack, false, false);
+                li.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    for (let j = 0; j < stepsBack; j++) undoEditor();
+                    if (historyPanelToggle) historyPanelToggle.classList.remove('open');
+                    updateHistoryUI();
+                });
+                body.appendChild(li);
             });
-            historyPanelList.appendChild(li);
-        });
-        if (labels.length === 0) {
-            const empty = document.createElement('li');
-            empty.className = 'history-empty';
-            empty.textContent = 'কোনো হিস্ট্রি নেই';
-            historyPanelList.appendChild(empty);
+
+            // Redo divider + items (if any)
+            if (redoMetasR.length > 0) {
+                const divider = document.createElement('div');
+                divider.className = 'history-redo-divider';
+                divider.innerHTML = `
+                    <div class="history-redo-divider-line"></div>
+                    <span class="history-redo-divider-label"><i class="fa-solid fa-rotate-right" style="margin-right:4px;"></i>Redo তালিকা</span>
+                    <div class="history-redo-divider-line"></div>
+                `;
+                body.appendChild(divider);
+
+                redoMetasR.forEach((meta, i) => {
+                    const li = buildHistoryItem(meta, 0, false, true);
+                    body.appendChild(li);
+                });
+            }
         }
+
+        // ── Footer ──────────────────────────────────────────────────
+        const footer = document.createElement('div');
+        footer.className = 'history-panel-footer';
+        const clearBtn = document.createElement('button');
+        clearBtn.className = 'history-clear-btn';
+        clearBtn.innerHTML = '<i class="fa-solid fa-trash-can"></i> হিস্ট্রি মুছুন';
+        clearBtn.title = 'সব হিস্ট্রি মুছে ফেলুন (undo/redo পাওয়া যাবে না)';
+        clearBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            if (confirm('সব হিস্ট্রি মুছে ফেলবেন? Undo/Redo আর কাজ করবে না।')) {
+                state.undoStack = [];
+                state.historyLabels = [];
+                state.redoStack = [];
+                state.redoLabels = [];
+                if (historyPanelToggle) historyPanelToggle.classList.remove('open');
+                updateHistoryUI();
+            }
+        });
+        footer.appendChild(clearBtn);
+        const footerInfo = document.createElement('span');
+        footerInfo.className = 'history-panel-footer-info';
+        footerInfo.textContent = 'ক্লিক করুন ঐ ধাপে ফিরতে';
+        footer.appendChild(footerInfo);
+        historyPanelList.appendChild(footer);
     }
+
+    function buildHistoryItem(meta, stepsBack, isCurrent, isUndone) {
+        const li = document.createElement('div');
+        li.className = 'history-item' +
+            (isCurrent ? ' is-current' : '') +
+            (isUndone  ? ' is-undone'  : '') +
+            (meta.category === 'init' ? ' is-init' : '');
+        li.title = isCurrent
+            ? 'এটি বর্তমান অবস্থা'
+            : `এই ধাপে ফিরে যান (${stepsBack} ধাপ undo)`;
+
+        const catIcon = HISTORY_CATEGORY_ICONS[meta.category] || HISTORY_CATEGORY_ICONS.default;
+        const catClass = 'cat-' + (meta.category || 'default');
+        const timeStr  = formatHistoryTime(meta.timestamp);
+
+        li.innerHTML = `
+            <div class="history-item-icon ${catClass}">
+                <i class="fa-solid ${catIcon}"></i>
+            </div>
+            <div class="history-item-content">
+                <div class="history-item-label-bn">
+                    ${escapeHtml(meta.labelBn || meta.label)}
+                    ${isCurrent ? '<span class="history-current-badge"><i class="fa-solid fa-circle" style="font-size:6px;"></i> বর্তমান</span>' : ''}
+                </div>
+                <div class="history-item-label-en">${escapeHtml(meta.label)}</div>
+            </div>
+            <div class="history-item-time">${timeStr}</div>
+        `;
+        return li;
+    }
+
+    function escapeHtml(str) {
+        return String(str)
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;');
+    }
+    // Expose globally so editor.js and other scripts can use it
+    if (!window.escapeHtml) window.escapeHtml = escapeHtml;
 
     if (historyPanelToggle) {
         historyPanelToggle.addEventListener('click', (e) => {
@@ -1481,69 +1706,94 @@ document.addEventListener('DOMContentLoaded', () => {
         'clip-zoom-slider', 'clip-offset-x-slider', 'clip-offset-y-slider'
     ]);
 
+    // Rich history metadata map: id → { label (EN), labelBn (বাংলা), category }
+    const HISTORY_LABEL_MAP = {
+        // ── Video / Clip ────────────────────────────────────────────
+        'video-input':                { label: 'Video added',                  labelBn: 'ভিডিও যোগ হয়েছে',             category: 'video' },
+        'add-clip-input':             { label: 'Clip added',                   labelBn: 'ক্লিপ যোগ হয়েছে',             category: 'clip'  },
+        'split-clip-btn':             { label: 'Clip split',                   labelBn: 'ক্লিপ কাটা হয়েছে',            category: 'clip'  },
+        'freeze-frame-btn':           { label: 'Freeze frame added',           labelBn: 'ফ্রিজ ফ্রেম যোগ হয়েছে',       category: 'clip'  },
+        'start-time':                 { label: 'Trim changed',                 labelBn: 'ট্রিম পরিবর্তন হয়েছে',         category: 'clip'  },
+        'end-time':                   { label: 'Trim changed',                 labelBn: 'ট্রিম পরিবর্তন হয়েছে',         category: 'clip'  },
+        'clip-speed-slider':          { label: 'Clip speed changed',           labelBn: 'ক্লিপের গতি পরিবর্তন',         category: 'clip'  },
+        'clip-zoom-slider':           { label: 'Clip zoom changed',            labelBn: 'ক্লিপ জুম পরিবর্তন',           category: 'clip'  },
+        'clip-offset-x-slider':       { label: 'Clip horizontal offset',       labelBn: 'ক্লিপ আড়াআড়ি সরানো হয়েছে',   category: 'clip'  },
+        'clip-offset-y-slider':       { label: 'Clip vertical offset',         labelBn: 'ক্লিপ উপর-নিচে সরানো হয়েছে', category: 'clip'  },
+        // ── Audio ───────────────────────────────────────────────────
+        'bgmusic-volume-slider':      { label: 'Music volume changed',         labelBn: 'মিউজিকের ভলিউম পরিবর্তন',     category: 'audio' },
+        'video-volume-slider':        { label: 'Video volume changed',         labelBn: 'ভিডিও ভলিউম পরিবর্তন',        category: 'audio' },
+        'video-volume-slider-step2':  { label: 'Video volume changed',         labelBn: 'ভিডিও ভলিউম পরিবর্তন',        category: 'audio' },
+        'noise-cancel-toggle':        { label: 'Noise cancellation toggled',   labelBn: 'নয়েজ কান্সেলেশন চালু/বন্ধ',   category: 'audio' },
+        'ai-denoise-toggle':          { label: 'AI denoise toggled',           labelBn: 'AI ডিনয়েজ চালু/বন্ধ',         category: 'audio' },
+        'bgmusic-ducking-toggle':     { label: 'Music ducking toggled',        labelBn: 'মিউজিক ডাকিং চালু/বন্ধ',      category: 'audio' },
+        'voice-changer-apply-video-toggle': { label: 'Voice changer toggled',  labelBn: 'ভয়েস চেঞ্জার চালু/বন্ধ',     category: 'audio' },
+        'addaudio-shortest-toggle':   { label: 'Match shortest track toggled', labelBn: 'শর্টেস্ট ট্র্যাক মিলানো চালু/বন্ধ', category: 'audio' },
+        // ── Filter / Color ──────────────────────────────────────────
+        'filter-preset':              { label: 'Filter changed',               labelBn: 'ফিল্টার পরিবর্তন হয়েছে',       category: 'filter' },
+        'color-grade-toggle':         { label: 'Color grading toggled',        labelBn: 'কালার গ্রেডিং চালু/বন্ধ',     category: 'filter' },
+        'brightness-slider':          { label: 'Brightness changed',           labelBn: 'উজ্জ্বলতা পরিবর্তন',           category: 'filter' },
+        'contrast-slider':            { label: 'Contrast changed',             labelBn: 'কনট্রাস্ট পরিবর্তন',           category: 'filter' },
+        'saturation-slider':          { label: 'Saturation changed',           labelBn: 'স্যাচুরেশন পরিবর্তন',          category: 'filter' },
+        'chroma-key-toggle':          { label: 'Chroma key toggled',           labelBn: 'ক্রোমা কী চালু/বন্ধ',         category: 'filter' },
+        'chroma-key-color':           { label: 'Chroma key color changed',     labelBn: 'ক্রোমা কী রং পরিবর্তন',       category: 'filter' },
+        'chroma-key-threshold':       { label: 'Chroma key threshold',         labelBn: 'ক্রোমা কী থ্রেশহোল্ড পরিবর্তন', category: 'filter' },
+        // ── Crop / Layout ───────────────────────────────────────────
+        'crop-tool-toggle':           { label: 'Crop tool toggled',            labelBn: 'ক্রপ টুল চালু/বন্ধ',          category: 'crop' },
+        // ── Logo / Image ────────────────────────────────────────────
+        'logo-input':                 { label: 'Logo changed',                 labelBn: 'লোগো পরিবর্তন হয়েছে',          category: 'logo' },
+        'logo-size-slider':           { label: 'Logo size changed',            labelBn: 'লোগোর আকার পরিবর্তন',          category: 'logo' },
+        'logo-opacity-slider':        { label: 'Logo opacity changed',         labelBn: 'লোগোর স্বচ্ছতা পরিবর্তন',      category: 'logo' },
+        'broll-input':                { label: 'B-roll image added',           labelBn: 'B-roll ছবি যোগ হয়েছে',         category: 'logo' },
+        'broll-anim-style':           { label: 'B-roll animation changed',     labelBn: 'B-roll অ্যানিমেশন পরিবর্তন',   category: 'effect' },
+        'broll-text-bg-enabled':      { label: 'B-roll text background toggled', labelBn: 'B-roll টেক্সট ব্যাকগ্রাউন্ড',  category: 'text' },
+        'broll-text-highlight-enabled': { label: 'B-roll text highlight toggled', labelBn: 'B-roll টেক্সট হাইলাইট',     category: 'text' },
+        'broll-transparent-bg':       { label: 'B-roll transparent bg toggled', labelBn: 'B-roll স্বচ্ছ ব্যাকগ্রাউন্ড', category: 'logo' },
+        'broll-edit-text-bg-enabled': { label: 'B-roll text background toggled', labelBn: 'B-roll টেক্সট ব্যাকগ্রাউন্ড', category: 'text' },
+        'broll-edit-text-highlight-enabled': { label: 'B-roll text highlight toggled', labelBn: 'B-roll টেক্সট হাইলাইট', category: 'text' },
+        // ── Transition ──────────────────────────────────────────────
+        'intro-transition-type':      { label: 'Intro transition changed',     labelBn: 'ইন্ট্রো ট্রানজিশন পরিবর্তন',   category: 'transition' },
+        'clip-transition-type':       { label: 'Clip transition changed',      labelBn: 'ক্লিপ ট্রানজিশন পরিবর্তন',    category: 'transition' },
+        'clip-transition-duration':   { label: 'Transition duration changed',  labelBn: 'ট্রানজিশন সময় পরিবর্তন',      category: 'transition' },
+        'preview-transitions-toggle': { label: 'Preview transitions toggled',  labelBn: 'ট্রানজিশন প্রিভিউ চালু/বন্ধ', category: 'transition' },
+        // ── Text / Subtitle ─────────────────────────────────────────
+        'subtitle-enabled-toggle':    { label: 'Subtitle toggled',             labelBn: 'সাবটাইটেল চালু/বন্ধ',          category: 'text' },
+        'subtitle-highlight-toggle':  { label: 'Subtitle word highlight toggled', labelBn: 'সাবটাইটেল হাইলাইট চালু/বন্ধ', category: 'text' },
+        'subtitle-bgpill-toggle':     { label: 'Subtitle bg pill toggled',     labelBn: 'সাবটাইটেল পিল ব্যাকগ্রাউন্ড', category: 'text' },
+        'banner-style':               { label: 'Banner changed',               labelBn: 'ব্যানার পরিবর্তন হয়েছে',        category: 'text' },
+        'ticker-text':                { label: 'News ticker changed',          labelBn: 'নিউজ টিকার পরিবর্তন হয়েছে',    category: 'text' },
+        'ticker-enable-toggle':       { label: 'News ticker toggled',          labelBn: 'নিউজ টিকার চালু/বন্ধ',        category: 'text' },
+        // ── Effect / Special ────────────────────────────────────────
+        'blur-tool-toggle':           { label: 'Blur tool toggled',            labelBn: 'ব্লার টুল চালু/বন্ধ',         category: 'effect' },
+        'highlight-tool-toggle':      { label: 'Highlight tool toggled',       labelBn: 'হাইলাইট টুল চালু/বন্ধ',      category: 'effect' },
+        'fill-tool-toggle':           { label: 'Background fill toggled',      labelBn: 'ব্যাকগ্রাউন্ড ফিল চালু/বন্ধ', category: 'effect' },
+        'progress-bar-toggle':        { label: 'Progress bar toggled',         labelBn: 'প্রগ্রেস বার চালু/বন্ধ',       category: 'effect' },
+        'ken-burns-toggle':           { label: 'Ken Burns effect toggled',     labelBn: 'কেন বার্নস ইফেক্ট চালু/বন্ধ', category: 'effect' },
+        'ken-burns-start-zoom':       { label: 'Ken Burns start zoom changed', labelBn: 'কেন বার্নস শুরুর জুম পরিবর্তন', category: 'effect' },
+        'ken-burns-end-zoom':         { label: 'Ken Burns end zoom changed',   labelBn: 'কেন বার্নস শেষের জুম পরিবর্তন', category: 'effect' },
+        'ken-burns-pan':              { label: 'Ken Burns pan changed',        labelBn: 'কেন বার্নস প্যান পরিবর্তন',   category: 'effect' },
+        // ── Layout ──────────────────────────────────────────────────
+        'intro-enabled-toggle':       { label: 'Intro toggled',                labelBn: 'ইন্ট্রো চালু/বন্ধ',            category: 'layout' },
+        'outro-enabled-toggle':       { label: 'Outro toggled',                labelBn: 'আউট্রো চালু/বন্ধ',            category: 'layout' },
+        // ── Project ─────────────────────────────────────────────────
+        'project-file-input':         { label: 'Project loaded',               labelBn: 'প্রজেক্ট লোড হয়েছে',           category: 'video' },
+    };
+
     function historyLabelFor(el) {
         const id = el.id || '';
-        const labelMap = {
-            'video-input': 'Video added',
-            'project-file-input': 'Project loaded',
-            'filter-preset': 'Filter changed',
-            'intro-transition-type': 'Intro transition changed',
-            'banner-style': 'Banner changed',
-            'ticker-text': 'News ticker changed',
-            'progress-bar-toggle': 'Progress bar toggled',
-            'logo-input': 'Logo changed',
-            'color-grade-toggle': 'Color grading toggled',
-            'start-time': 'Trim changed',
-            'end-time': 'Trim changed',
-            'add-clip-input': 'Clip added',
-            'split-clip-btn': 'Clip split',
-            'freeze-frame-btn': 'Freeze frame added',
-            'bgmusic-volume-slider': 'Music volume changed',
-            'broll-input': 'B-roll image added',
-            'broll-anim-style': 'B-roll animation changed',
-            'subtitle-enabled-toggle': 'Subtitle toggled',
-            'intro-enabled-toggle': 'Intro toggled',
-            'outro-enabled-toggle': 'Outro toggled',
-
-            // Sliders
-            'video-volume-slider': 'Video volume changed',
-            'video-volume-slider-step2': 'Video volume changed',
-            'logo-size-slider': 'Logo size changed',
-            'logo-opacity-slider': 'Logo opacity changed',
-            'brightness-slider': 'Brightness changed',
-            'contrast-slider': 'Contrast changed',
-            'saturation-slider': 'Saturation changed',
-
-            // Toggle switches (previously fell through to the generic
-            // 'Change' label because their <label> wrapper has no text,
-            // just the visual slider — that's why the history list showed
-            // duplicate unlabeled "Change" rows).
-            'crop-tool-toggle': 'Crop tool toggled',
-            'preview-transitions-toggle': 'Preview transitions toggled',
-            'blur-tool-toggle': 'Blur tool toggled',
-            'ticker-enable-toggle': 'News ticker toggled',
-            'highlight-tool-toggle': 'Highlight tool toggled',
-            'fill-tool-toggle': 'Background fill tool toggled',
-            'broll-text-bg-enabled': 'B-roll text background toggled',
-            'broll-text-highlight-enabled': 'B-roll text highlight toggled',
-            'broll-transparent-bg': 'B-roll transparent background toggled',
-            'broll-edit-text-bg-enabled': 'B-roll text background toggled',
-            'broll-edit-text-highlight-enabled': 'B-roll text highlight toggled',
-            'noise-cancel-toggle': 'Noise cancellation toggled',
-            'ai-denoise-toggle': 'AI denoise toggled',
-            'bgmusic-ducking-toggle': 'Music ducking toggled',
-            'voice-changer-apply-video-toggle': 'Voice changer apply-to-video toggled',
-            'subtitle-highlight-toggle': 'Subtitle word highlight toggled',
-            'subtitle-bgpill-toggle': 'Subtitle background pill toggled',
-            'addaudio-shortest-toggle': 'Match shortest track toggled'
-        };
-        if (labelMap[id]) return labelMap[id];
+        const now = Date.now();
+        if (HISTORY_LABEL_MAP[id]) {
+            return { ...HISTORY_LABEL_MAP[id], timestamp: now };
+        }
+        // Try to derive from wrapping label element
         const lbl = el.closest('label');
-        if (lbl && lbl.textContent && lbl.textContent.trim()) return lbl.textContent.trim().slice(0, 40);
-        // Last-resort fallback: never show a bare, indistinguishable "Change".
-        // Include the element's id (or type) so different unmapped controls
-        // are still told apart in the history list.
-        return id ? ('Setting changed (' + id + ')') : ((el.type || el.tagName || 'Setting') + ' changed');
+        if (lbl && lbl.textContent && lbl.textContent.trim()) {
+            const txt = lbl.textContent.trim().slice(0, 50);
+            return { label: txt, labelBn: txt, category: 'default', timestamp: now };
+        }
+        // Last-resort fallback: include element id so entries are distinguishable
+        const fallback = id ? `সেটিং পরিবর্তন (${id})` : 'সেটিং পরিবর্তন';
+        const fallbackEn = id ? `Setting changed (${id})` : 'Setting changed';
+        return { label: fallbackEn, labelBn: fallback, category: 'default', timestamp: now };
     }
 
     document.addEventListener('change', (e) => {
