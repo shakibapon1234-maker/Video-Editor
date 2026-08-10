@@ -9138,7 +9138,8 @@ document.addEventListener('DOMContentLoaded', () => {
                     state.ctx.translate(box.cx, box.cy);
                     state.ctx.rotate(rotation * Math.PI / 180);
                     if (shpScale !== 1) state.ctx.scale(shpScale, shpScale);
-                    drawShapeOverlayPath(state.ctx, item.shapeType, box.w, box.h, item.fillColor || '#4f46e5', box.facing, item.accentColor);
+                    const shpFillStyle = getShapeOverlayFillStyle(state.ctx, item, box.w, box.h);
+                    drawShapeOverlayPath(state.ctx, item.shapeType, box.w, box.h, shpFillStyle, box.facing, item.accentColor);
                     if (item.text) {
                         drawShapeOverlayText(state.ctx, item, box.w, box.h, box.facing);
                     }
@@ -11140,6 +11141,24 @@ document.addEventListener('DOMContentLoaded', () => {
         return Math.hypot(coords.x - world.x, coords.y - world.y) < hr;
     }
 
+    // Resolves the fillStyle to use for a shape overlay's body: either the
+    // plain solid fillColor, or (when fillGradientEnabled) a CanvasGradient
+    // running from fillColor to fillGradientColor2 at fillGradientAngle
+    // degrees across the shape's own w x h bounding box. Built fresh every
+    // frame since the box size can change (drag-resize), but this is cheap.
+    function getShapeOverlayFillStyle(ctx, item, w, h) {
+        const base = item.fillColor || '#4f46e5';
+        if (!item.fillGradientEnabled) return base;
+        const angle = ((item.fillGradientAngle ?? 90) * Math.PI) / 180;
+        const halfDiag = Math.sqrt(w * w + h * h) / 2;
+        const dx = Math.cos(angle) * halfDiag;
+        const dy = Math.sin(angle) * halfDiag;
+        const grad = ctx.createLinearGradient(-dx, -dy, dx, dy);
+        grad.addColorStop(0, base);
+        grad.addColorStop(1, item.fillGradientColor2 || '#7c3aed');
+        return grad;
+    }
+
     // Draws one Word-style shape (filled path only, no text) centered at the
     // current canvas origin inside a w x h bounding box, in the given color.
     // Caller is expected to have already translated+rotated the context.
@@ -11361,11 +11380,18 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Draws the user's text, word-wrapped and centered, on top of a shape
     // overlay's fill. Caller has already translated+rotated the context.
+    // Supports an optional time-based text animation (item.textAnimation):
+    // 'shimmer' sweeps a bright highlight band across the text, 'pulse'
+    // gently zooms the whole text in/out, and 'spin' wobbles/rotates each
+    // character individually. All animations are driven off state.currentTime
+    // so they play back identically in the live preview and in the exported
+    // video (which re-renders this same function frame-by-frame).
     function drawShapeOverlayText(ctx, item, w, h, facing) {
         const fontSize = item.fontSize || 28;
+        const anim = item.textAnimation || 'none';
+        const t = state.currentTime || 0;
         ctx.save();
         ctx.font = `bold ${fontSize}px "${item.font || 'Hind Siliguri'}", "Plus Jakarta Sans", sans-serif`;
-        ctx.fillStyle = item.textColor || '#ffffff';
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
         let maxWidth = w * 0.7;
@@ -11378,9 +11404,89 @@ document.addEventListener('DOMContentLoaded', () => {
             textX = -dir * w * 0.16;
             maxWidth = w * 0.46;
         }
+        const textY = (item.shapeType === 'oval' ? -h * 0.06 : 0);
         const lineHeight = fontSize * 1.22;
-        drawWrappedText(ctx, item.text, textX, (item.shapeType === 'oval' ? -h * 0.06 : 0), maxWidth, lineHeight);
+        const baseColor = item.textColor || '#ffffff';
+
+        if (anim === 'shimmer') {
+            // A bright band sweeps left-to-right across the text and loops.
+            const period = 1.6;
+            const sweep = (t % period) / period;
+            const bandWidth = Math.max(40, maxWidth * 0.7);
+            const travel = maxWidth + bandWidth;
+            const gx0 = -maxWidth / 2 - bandWidth + sweep * travel;
+            const grad = ctx.createLinearGradient(gx0, 0, gx0 + bandWidth, 0);
+            grad.addColorStop(0, baseColor);
+            grad.addColorStop(0.5, '#ffffff');
+            grad.addColorStop(1, baseColor);
+            ctx.fillStyle = grad;
+            ctx.shadowColor = 'rgba(255,255,255,0.65)';
+            ctx.shadowBlur = fontSize * 0.22;
+            drawWrappedText(ctx, item.text, textX, textY, maxWidth, lineHeight);
+        } else if (anim === 'pulse') {
+            const scale = 1 + Math.sin(t * 4) * 0.06;
+            ctx.fillStyle = baseColor;
+            ctx.translate(textX, textY);
+            ctx.scale(scale, scale);
+            drawWrappedText(ctx, item.text, 0, 0, maxWidth, lineHeight);
+        } else if (anim === 'spin') {
+            ctx.fillStyle = baseColor;
+            drawWrappedTextWobble(ctx, item.text, textX, textY, maxWidth, lineHeight, t);
+        } else {
+            ctx.fillStyle = baseColor;
+            drawWrappedText(ctx, item.text, textX, textY, maxWidth, lineHeight);
+        }
         ctx.restore();
+    }
+
+    // Like drawWrappedText, but draws each character individually with a
+    // small time-driven rotation + vertical bounce (a "dancing letters"
+    // wobble/spin effect), phase-offset per character so they ripple across
+    // the line instead of moving in lockstep.
+    function drawWrappedTextWobble(ctx, text, x, y, maxWidth, lineHeight, t) {
+        const words = text.split(' ');
+        let line = '';
+        const lines = [];
+        for (let n = 0; n < words.length; n++) {
+            const testLine = line + words[n] + ' ';
+            const testWidth = ctx.measureText(testLine).width;
+            if (testWidth > maxWidth && n > 0) {
+                lines.push(line);
+                line = words[n] + ' ';
+            } else {
+                line = testLine;
+            }
+        }
+        lines.push(line.trim());
+
+        const startY = y - ((lines.length - 1) * lineHeight) / 2;
+        let charIndex = 0;
+        const prevAlign = ctx.textAlign;
+        ctx.textAlign = 'center';
+        for (let i = 0; i < lines.length; i++) {
+            const lineText = lines[i];
+            const lineWidth = ctx.measureText(lineText).width;
+            let cx = x - lineWidth / 2;
+            const lineY = startY + i * lineHeight;
+            for (let c = 0; c < lineText.length; c++) {
+                const ch = lineText[c];
+                const chWidth = ctx.measureText(ch).width;
+                const centerX = cx + chWidth / 2;
+                const phase = t * 5 + charIndex * 0.6;
+                const wobbleDeg = Math.sin(phase) * 14;
+                const bounce = Math.sin(phase) * (lineHeight * 0.05);
+                if (ch !== ' ') {
+                    ctx.save();
+                    ctx.translate(centerX, lineY + bounce);
+                    ctx.rotate(wobbleDeg * Math.PI / 180);
+                    ctx.fillText(ch, 0, 0);
+                    ctx.restore();
+                }
+                cx += chWidth;
+                charIndex++;
+            }
+        }
+        ctx.textAlign = prevAlign;
     }
 
     function getTextOverlayBox(item) {
@@ -16651,8 +16757,15 @@ document.addEventListener('DOMContentLoaded', () => {
     const shapeOverlayTextInput = document.getElementById('shape-overlay-text');
     const shapeOverlayFillColorInput = document.getElementById('shape-overlay-fill-color');
     const shapeOverlayFillColorVal = document.getElementById('shape-overlay-fill-color-val');
+    const shapeOverlayGradientToggle = document.getElementById('shape-overlay-gradient-toggle');
+    const shapeOverlayGradientOptions = document.getElementById('shape-overlay-gradient-options');
+    const shapeOverlayGradientColor2Input = document.getElementById('shape-overlay-gradient-color2');
+    const shapeOverlayGradientColor2Val = document.getElementById('shape-overlay-gradient-color2-val');
+    const shapeOverlayGradientAngleSlider = document.getElementById('shape-overlay-gradient-angle');
+    const shapeOverlayGradientAngleVal = document.getElementById('shape-overlay-gradient-angle-val');
     const shapeOverlayTextColorInput = document.getElementById('shape-overlay-text-color');
     const shapeOverlayTextColorVal = document.getElementById('shape-overlay-text-color-val');
+    const shapeOverlayTextAnimationSelect = document.getElementById('shape-overlay-text-animation');
     const shapeOverlayFontSizeSlider = document.getElementById('shape-overlay-fontsize-slider');
     const shapeOverlayFontSizeVal = document.getElementById('shape-overlay-fontsize-val');
     const shapeOverlaySizeSlider = document.getElementById('shape-overlay-size-slider');
@@ -16695,7 +16808,11 @@ document.addEventListener('DOMContentLoaded', () => {
             size: isPlane ? 46 : 32, // percent of canvas width
             rotation: 0,
             fillColor: isPlane ? '#ffffff' : '#4f46e5',
+            fillGradientEnabled: false,
+            fillGradientColor2: '#7c3aed',
+            fillGradientAngle: 90,
             textColor: isPlane ? '#c62828' : '#ffffff',
+            textAnimation: 'none',
             fontSize: isPlane ? 22 : 28,
             font: 'Hind Siliguri',
             flightPath: isPlane ? 'ltr' : 'static',
@@ -16769,8 +16886,15 @@ document.addEventListener('DOMContentLoaded', () => {
         if (shapeOverlayTextInput) shapeOverlayTextInput.value = item.text;
         if (shapeOverlayFillColorInput) shapeOverlayFillColorInput.value = item.fillColor;
         if (shapeOverlayFillColorVal) shapeOverlayFillColorVal.innerText = item.fillColor;
+        if (shapeOverlayGradientToggle) shapeOverlayGradientToggle.checked = !!item.fillGradientEnabled;
+        if (shapeOverlayGradientOptions) shapeOverlayGradientOptions.style.display = item.fillGradientEnabled ? 'block' : 'none';
+        if (shapeOverlayGradientColor2Input) shapeOverlayGradientColor2Input.value = item.fillGradientColor2 || '#7c3aed';
+        if (shapeOverlayGradientColor2Val) shapeOverlayGradientColor2Val.innerText = item.fillGradientColor2 || '#7c3aed';
+        if (shapeOverlayGradientAngleSlider) shapeOverlayGradientAngleSlider.value = item.fillGradientAngle ?? 90;
+        if (shapeOverlayGradientAngleVal) shapeOverlayGradientAngleVal.innerText = (item.fillGradientAngle ?? 90) + '°';
         if (shapeOverlayTextColorInput) shapeOverlayTextColorInput.value = item.textColor;
         if (shapeOverlayTextColorVal) shapeOverlayTextColorVal.innerText = item.textColor;
+        if (shapeOverlayTextAnimationSelect) shapeOverlayTextAnimationSelect.value = item.textAnimation || 'none';
         if (shapeOverlayFontSizeSlider) shapeOverlayFontSizeSlider.value = item.fontSize;
         if (shapeOverlayFontSizeVal) shapeOverlayFontSizeVal.innerText = item.fontSize + 'px';
         if (shapeOverlaySizeSlider) shapeOverlaySizeSlider.value = Math.round(item.size);
@@ -16821,6 +16945,49 @@ document.addEventListener('DOMContentLoaded', () => {
             if (item) {
                 item.textColor = e.target.value;
                 if (shapeOverlayTextColorVal) shapeOverlayTextColorVal.innerText = item.textColor;
+                drawFrame();
+            }
+        });
+    }
+
+    if (shapeOverlayGradientToggle) {
+        shapeOverlayGradientToggle.addEventListener('change', (e) => {
+            const item = state.shapeOverlays.find(s => s.id === state.selectedShapeOverlayId);
+            if (item) {
+                item.fillGradientEnabled = e.target.checked;
+                if (shapeOverlayGradientOptions) shapeOverlayGradientOptions.style.display = item.fillGradientEnabled ? 'block' : 'none';
+                drawFrame();
+            }
+        });
+    }
+
+    if (shapeOverlayGradientColor2Input) {
+        shapeOverlayGradientColor2Input.addEventListener('input', (e) => {
+            const item = state.shapeOverlays.find(s => s.id === state.selectedShapeOverlayId);
+            if (item) {
+                item.fillGradientColor2 = e.target.value;
+                if (shapeOverlayGradientColor2Val) shapeOverlayGradientColor2Val.innerText = item.fillGradientColor2;
+                drawFrame();
+            }
+        });
+    }
+
+    if (shapeOverlayGradientAngleSlider) {
+        shapeOverlayGradientAngleSlider.addEventListener('input', (e) => {
+            const item = state.shapeOverlays.find(s => s.id === state.selectedShapeOverlayId);
+            if (item) {
+                item.fillGradientAngle = parseInt(e.target.value, 10);
+                if (shapeOverlayGradientAngleVal) shapeOverlayGradientAngleVal.innerText = item.fillGradientAngle + '°';
+                drawFrame();
+            }
+        });
+    }
+
+    if (shapeOverlayTextAnimationSelect) {
+        shapeOverlayTextAnimationSelect.addEventListener('change', (e) => {
+            const item = state.shapeOverlays.find(s => s.id === state.selectedShapeOverlayId);
+            if (item) {
+                item.textAnimation = e.target.value;
                 drawFrame();
             }
         });

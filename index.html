@@ -2593,12 +2593,39 @@
                                             <span class="color-value-text" id="shape-overlay-fill-color-val">#4f46e5</span>
                                         </div>
                                     </div>
+                                    <div class="control-group mt-2">
+                                        <label class="checkbox-label" style="display:flex; align-items:center; gap:8px;">
+                                            <input type="checkbox" id="shape-overlay-gradient-toggle">
+                                            গ্র্যাডিয়েন্ট কালার ব্যবহার করুন (Gradient Fill)
+                                        </label>
+                                    </div>
+                                    <div class="control-group mt-2" id="shape-overlay-gradient-options" style="display:none;">
+                                        <label>Gradient দ্বিতীয় রং (2nd Color)</label>
+                                        <div class="color-picker-wrapper">
+                                            <input type="color" id="shape-overlay-gradient-color2" value="#7c3aed">
+                                            <span class="color-value-text" id="shape-overlay-gradient-color2-val">#7c3aed</span>
+                                        </div>
+                                        <label class="mt-2">Gradient কোণ (Angle)</label>
+                                        <div class="slider-val-container">
+                                            <input type="range" id="shape-overlay-gradient-angle" min="0" max="360" value="90">
+                                            <span id="shape-overlay-gradient-angle-val">90°</span>
+                                        </div>
+                                    </div>
                                     <div class="control-group mt-3">
                                         <label>Text Color (টেক্সট রং)</label>
                                         <div class="color-picker-wrapper">
                                             <input type="color" id="shape-overlay-text-color" value="#ffffff">
                                             <span class="color-value-text" id="shape-overlay-text-color-val">#ffffff</span>
                                         </div>
+                                    </div>
+                                    <div class="control-group mt-3">
+                                        <label>Text Animation (টেক্সট অ্যানিমেশন)</label>
+                                        <select id="shape-overlay-text-animation" class="form-select">
+                                            <option value="none">কোনো অ্যানিমেশন নেই</option>
+                                            <option value="shimmer">ঝলমল করবে (Shimmer)</option>
+                                            <option value="spin">লেখা ঘুরবে/দুলবে (Spin/Wobble)</option>
+                                            <option value="pulse">স্পন্দিত হবে (Pulse/Zoom)</option>
+                                        </select>
                                     </div>
                                     <div class="control-group mt-3">
                                         <label>Font Size</label>
