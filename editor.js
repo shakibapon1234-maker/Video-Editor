@@ -3856,18 +3856,34 @@ document.addEventListener('DOMContentLoaded', () => {
     // --- Text Overlay v3: independent Text vs Box animation engine ---
     // Styles that loop continuously for as long as the overlay is visible
     // (as opposed to the entry/exit-only styles above them in the dropdown).
-    const TEXT_OVERLAY_CONTINUOUS_ANIM_STYLES = new Set(['pulse', 'wiggle', 'float', 'glow-pulse', 'breathe', 'rainbow-flow', 'neon-flash', 'shine-sweep', 'heartbeat', 'drift']);
+    const TEXT_OVERLAY_CONTINUOUS_ANIM_STYLES = new Set(['pulse', 'wiggle', 'float', 'glow-pulse', 'breathe', 'rainbow-flow', 'neon-flash', 'shine-sweep', 'heartbeat', 'drift', 'dvd-bounce']);
     // Styles that only make sense for the *text glyphs themselves* (progressive
     // reveal of characters/words/particles) — never offered on the Box Animation dropdown,
     // and handled separately at draw time rather than through the transform below.
     const TEXT_OVERLAY_REVEAL_ANIM_STYLES = new Set(['typewriter', 'letter-cascade', 'word-stagger', 'particle-dust', 'glitch', 'wave-reveal', 'blur-fade', 'smoke-vapor']);
 
+    // Triangle-wave reflection: bounces a value back and forth between 0 and
+    // `range` at the given speed (px/sec), the way a classic "DVD logo"
+    // bounces off the edges of the screen. Deterministic function of time,
+    // so playhead scrubbing/export always reproduce the exact same path.
+    function bounceTriangleWave(t, speed, range) {
+        if (range <= 0) return 0;
+        const period = range * 2;
+        let phase = (t * speed) % period;
+        if (phase < 0) phase += period;
+        return phase <= range ? phase : (period - phase);
+    }
+
     // Shared entry/exit + continuous animation engine used for BOTH the text
     // glyphs and the background box, called separately for each with its own
     // style/speed/reference-size so they can move fully independently (or be
     // combined — e.g. box fades in while text pops in).
+    // The trailing bounds* params are only used by 'dvd-bounce' so it knows
+    // how far it's allowed to travel: the canvas size, the overlay's own
+    // "home" position (its anchor before this transform is applied), and its
+    // own on-screen width/height (so it reflects before clipping off-screen).
     // Returns { offX, offY, scale, scaleX, scaleY, rot, alpha }.
-    function computeOverlayAnimTransform(style, currentTime, startSec, endSec, animDur, refSize, animLoop, animLoopSec) {
+    function computeOverlayAnimTransform(style, currentTime, startSec, endSec, animDur, refSize, animLoop, animLoopSec, boundsCanvasW, boundsCanvasH, boundsHomeX, boundsHomeY, boundsObjW, boundsObjH) {
         const result = { offX: 0, offY: 0, scale: 1, scaleX: 1, scaleY: 1, rot: 0, alpha: 1 };
         if (!style || style === 'none' || TEXT_OVERLAY_REVEAL_ANIM_STYLES.has(style)) return result;
 
@@ -3900,6 +3916,31 @@ document.addEventListener('DOMContentLoaded', () => {
                 case 'neon-flash': {
                     const flicker = (Math.sin(t * 15) > -0.2 ? 1 : 0.6) * (Math.sin(t * 27) > -0.5 ? 1 : 0.85);
                     result.alpha = flicker;
+                    break;
+                }
+                case 'dvd-bounce': {
+                    // Classic "DVD screensaver" bounce: travels in a straight
+                    // line and reflects off each screen edge, wandering to a
+                    // new spot every time it hits a wall — continues for as
+                    // long as the overlay is on screen.
+                    if (boundsCanvasW && boundsCanvasH) {
+                        const halfW = Math.max(1, (boundsObjW || refSize * 3) / 2);
+                        const halfH = Math.max(1, (boundsObjH || refSize) / 2);
+                        const rangeX = Math.max(1, boundsCanvasW - halfW * 2);
+                        const rangeY = Math.max(1, boundsCanvasH - halfH * 2);
+                        // Base speed scales with canvas size so the trip across
+                        // the screen takes a similar amount of time regardless
+                        // of export resolution; X/Y use different speeds (and
+                        // a phase offset) so the path isn't a repeating
+                        // straight diagonal.
+                        const speed = Math.max(90, Math.min(boundsCanvasW, boundsCanvasH) * 0.30);
+                        const posX = bounceTriangleWave(t, speed, rangeX);
+                        const posY = bounceTriangleWave(t + rangeY / (speed * 0.77), speed * 0.77, rangeY);
+                        const absX = halfW + posX;
+                        const absY = halfH + posY;
+                        result.offX = absX - (boundsHomeX ?? absX);
+                        result.offY = absY - (boundsHomeY ?? absY);
+                    }
                     break;
                 }
             }
@@ -8601,7 +8642,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
                 // --- Pass 1: Box (its own animation, drawn behind the text) ---
                 if (item.boxStyle && item.boxStyle !== 'none') {
-                    const boxT = computeOverlayAnimTransform(boxAnimStyle, currentTime, item.startSec, item.endSec, boxAnimDur, boxH);
+                    const boxT = computeOverlayAnimTransform(boxAnimStyle, currentTime, item.startSec, item.endSec, boxAnimDur, boxH, undefined, undefined, canvasW, canvasH, tx, ty, boxW, boxH);
                     state.ctx.save();
                     state.ctx.globalAlpha = txAlpha * boxT.alpha;
                     state.ctx.translate(tx + boxT.offX, ty + boxT.offY);
@@ -8614,7 +8655,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
 
                 // --- Pass 2: Text (its own animation, drawn on top of the box) ---
-                const textT = computeOverlayAnimTransform(textAnimStyle, currentTime, item.startSec, item.endSec, textAnimDur, item.fontSize, item.textAnimLoop, item.textAnimLoopSec);
+                const textT = computeOverlayAnimTransform(textAnimStyle, currentTime, item.startSec, item.endSec, textAnimDur, item.fontSize, item.textAnimLoop, item.textAnimLoopSec, canvasW, canvasH, tx, ty, maxLineWidth, textLines.length * lineHeight);
                 const textRevealAnim = getTextOverlayAnimProgress({ animStyle: textAnimStyle, startSec: item.startSec, endSec: item.endSec, animLoop: item.textAnimLoop, animLoopSec: item.textAnimLoopSec }, currentTime, textAnimDur);
 
                 state.ctx.save();
@@ -10654,9 +10695,10 @@ document.addEventListener('DOMContentLoaded', () => {
         const canvasW = state.canvas.width;
         const canvasH = state.canvas.height;
         const now = Math.max(0, state.currentTime || 0);
+        const inEditMode = state.currentStep === 3 && !state.isPlaying;
         for (let i = state.symbolOverlays.length - 1; i >= 0; i--) {
             const item = state.symbolOverlays[i];
-            if (now < (item.startSec || 0) || now > (item.endSec || 0)) continue;
+            if (!inEditMode && (now < (item.startSec || 0) || now > (item.endSec || 0))) continue;
             const box = getSymbolBox(item, canvasW, canvasH);
             let testX = coords.x, testY = coords.y;
             if (item.rotation) {
@@ -11032,10 +11074,11 @@ document.addEventListener('DOMContentLoaded', () => {
         const canvasW = state.canvas.width;
         const canvasH = state.canvas.height;
         const now = Math.max(0, state.currentTime || 0);
+        const inEditMode = state.currentStep === 3 && !state.isPlaying;
         for (let i = state.shapeOverlays.length - 1; i >= 0; i--) {
             const item = state.shapeOverlays[i];
             if (!shapeOverlayBelongsToActiveClip(item)) continue;
-            if (now < (item.startSec || 0) || now > (item.endSec || 0)) continue;
+            if (!inEditMode && (now < (item.startSec || 0) || now > (item.endSec || 0))) continue;
             const box = getShapeOverlayBox(item, canvasW, canvasH);
             let testX = coords.x, testY = coords.y;
             if (item.rotation) {
@@ -11388,11 +11431,12 @@ document.addEventListener('DOMContentLoaded', () => {
         const canvasW = state.canvas.width;
         const canvasH = state.canvas.height;
         const now = Math.max(0, state.currentTime || 0);
+        const inEditMode = state.currentStep === 3 && !state.isPlaying;
         // Search topmost (last drawn / last added) first
         for (let i = state.stickers.length - 1; i >= 0; i--) {
             const item = state.stickers[i];
             if (!stickerBelongsToActiveClip(item)) continue;
-            if (now < (item.startSec || 0) || now > (item.endSec || 0)) continue;
+            if (!inEditMode && (now < (item.startSec || 0) || now > (item.endSec || 0))) continue;
             const box = getStickerBox(item, canvasW, canvasH);
             if (coords.x >= box.cx - box.boxW / 2 && coords.x <= box.cx + box.boxW / 2 &&
                 coords.y >= box.cy - box.boxH / 2 && coords.y <= box.cy + box.boxH / 2) {
@@ -12564,6 +12608,7 @@ document.addEventListener('DOMContentLoaded', () => {
         state.isResizingSticker = false;
         state.isDraggingSymbol = false;
         state.isResizingSymbol = false;
+        state.isRotatingSymbol = false;
         state.isRotatingShapeOverlay = false;
         state.isDraggingShapeOverlay = false;
         state.isResizingShapeOverlay = false;

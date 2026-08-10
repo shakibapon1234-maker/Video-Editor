@@ -4019,6 +4019,19 @@ input:checked + .slider:before {
     overflow: hidden;
     text-overflow: ellipsis;
 }
+.history-item-detail {
+    font-size: 11px;
+    color: #93c5fd;
+    margin-top: 3px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    background: rgba(99,102,241,0.10);
+    border-radius: 4px;
+    padding: 1px 6px;
+    display: inline-block;
+    max-width: 100%;
+}
 
 /* Timestamp */
 .history-item-time {

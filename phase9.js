@@ -715,6 +715,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     ${escapeHtml(meta.labelBn || meta.label)}
                     ${isCurrent ? '<span class="history-current-badge"><i class="fa-solid fa-circle" style="font-size:6px;"></i> বর্তমান</span>' : ''}
                 </div>
+                ${meta.detail ? `<div class="history-item-detail">${escapeHtml(meta.detail)}</div>` : ''}
                 <div class="history-item-label-en">${escapeHtml(meta.label)}</div>
             </div>
             <div class="history-item-time">${timeStr}</div>
@@ -1745,6 +1746,10 @@ document.addEventListener('DOMContentLoaded', () => {
         'logo-opacity-slider':        { label: 'Logo opacity changed',         labelBn: 'লোগোর স্বচ্ছতা পরিবর্তন',      category: 'logo' },
         'broll-input':                { label: 'B-roll image added',           labelBn: 'B-roll ছবি যোগ হয়েছে',         category: 'logo' },
         'broll-anim-style':           { label: 'B-roll animation changed',     labelBn: 'B-roll অ্যানিমেশন পরিবর্তন',   category: 'effect' },
+        'broll-visual-template':      { label: 'B-roll visual template changed', labelBn: 'B-roll ভিজ্যুয়াল টেমপ্লেট পরিবর্তন', category: 'logo' },
+        'broll-auto-repeat':          { label: 'B-roll auto-repeat changed',   labelBn: 'B-roll অটো-রিপিট পরিবর্তন',    category: 'logo' },
+        'broll-start':                { label: 'B-roll start time changed',    labelBn: 'B-roll শুরুর সময় পরিবর্তন',    category: 'logo' },
+        'broll-end':                  { label: 'B-roll end time changed',      labelBn: 'B-roll শেষের সময় পরিবর্তন',    category: 'logo' },
         'broll-text-bg-enabled':      { label: 'B-roll text background toggled', labelBn: 'B-roll টেক্সট ব্যাকগ্রাউন্ড',  category: 'text' },
         'broll-text-highlight-enabled': { label: 'B-roll text highlight toggled', labelBn: 'B-roll টেক্সট হাইলাইট',     category: 'text' },
         'broll-transparent-bg':       { label: 'B-roll transparent bg toggled', labelBn: 'B-roll স্বচ্ছ ব্যাকগ্রাউন্ড', category: 'logo' },
@@ -1778,22 +1783,58 @@ document.addEventListener('DOMContentLoaded', () => {
         'project-file-input':         { label: 'Project loaded',               labelBn: 'প্রজেক্ট লোড হয়েছে',           category: 'video' },
     };
 
+    // Reads the actual value a control was changed to, so the history panel
+    // can show not just *that* something changed but *what* it changed to
+    // (e.g. which B-roll template was picked, not just "Setting changed").
+    function captureElementValueDetail(el) {
+        try {
+            if (el.tagName === 'SELECT') {
+                const opt = el.options[el.selectedIndex];
+                const txt = opt ? opt.textContent.trim() : String(el.value || '');
+                return txt.length > 60 ? txt.slice(0, 60) + '…' : txt;
+            }
+            if (el.type === 'checkbox') {
+                return el.checked ? 'চালু (ON)' : 'বন্ধ (OFF)';
+            }
+            if (el.type === 'color') {
+                return el.value;
+            }
+            if (el.type === 'range' || el.type === 'number') {
+                // Many sliders already show a formatted value next to them
+                // (e.g. "1.4s", "80%") in a sibling span id="<id>-val" —
+                // prefer that exact display text when it's there.
+                const valEl = document.getElementById(el.id + '-val');
+                if (valEl && valEl.textContent && valEl.textContent.trim()) {
+                    return valEl.textContent.trim();
+                }
+                return String(el.value);
+            }
+            if (el.tagName === 'TEXTAREA' || el.type === 'text' || el.type === 'search' || el.type === undefined) {
+                const v = (el.value || '').trim();
+                if (!v) return '';
+                return v.length > 60 ? v.slice(0, 60) + '…' : v;
+            }
+        } catch (e) { /* ignore, detail is best-effort */ }
+        return '';
+    }
+
     function historyLabelFor(el) {
         const id = el.id || '';
         const now = Date.now();
+        const detail = captureElementValueDetail(el);
         if (HISTORY_LABEL_MAP[id]) {
-            return { ...HISTORY_LABEL_MAP[id], timestamp: now };
+            return { ...HISTORY_LABEL_MAP[id], detail, detailBn: detail, timestamp: now };
         }
         // Try to derive from wrapping label element
         const lbl = el.closest('label');
         if (lbl && lbl.textContent && lbl.textContent.trim()) {
             const txt = lbl.textContent.trim().slice(0, 50);
-            return { label: txt, labelBn: txt, category: 'default', timestamp: now };
+            return { label: txt, labelBn: txt, category: 'default', detail, detailBn: detail, timestamp: now };
         }
         // Last-resort fallback: include element id so entries are distinguishable
         const fallback = id ? `সেটিং পরিবর্তন (${id})` : 'সেটিং পরিবর্তন';
         const fallbackEn = id ? `Setting changed (${id})` : 'Setting changed';
-        return { label: fallbackEn, labelBn: fallback, category: 'default', timestamp: now };
+        return { label: fallbackEn, labelBn: fallback, category: 'default', detail, detailBn: detail, timestamp: now };
     }
 
     document.addEventListener('change', (e) => {
