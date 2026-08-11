@@ -3400,6 +3400,18 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!clipTimelineListEl) return;
         clipTimelineListEl.innerHTML = '';
 
+        // Calculate total duration using the exact formula from the exporter (with speed scaling and ramps)
+        const totalDuration = state.clips.reduce((sum, c) => {
+            const dur = window.getClipOutputDuration ? window.getClipOutputDuration(c) : (Math.max(0, c.end - c.start) / Math.max(0.5, Math.min(2, Number(c.speed) || 1)));
+            return sum + dur;
+        }, 0);
+
+        // Update total duration display
+        const totalDurationEl = document.getElementById('clip-timeline-total-duration');
+        if (totalDurationEl) {
+            totalDurationEl.textContent = `মোট সময় (Total): ${formatTime(totalDuration)} (${totalDuration.toFixed(1)}s)`;
+        }
+
         state.clips.forEach((clip, idx) => {
             const block = document.createElement('div');
             block.className = 'clip-timeline-block' + (clip.id === state.activeClipId ? ' active' : '');
