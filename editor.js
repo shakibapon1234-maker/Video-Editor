@@ -1135,6 +1135,11 @@ window.VideoEditor = {
     backgroundImg: null,
     backgroundImgFile: null,
 
+    // Meta Reels & Ads Safe Zone Guide
+    safeZonePreset: 'fb-reels-boost', // 'none' | 'fb-reels-boost' | 'ig-reels-boost' | 'fb-feed-boost' | 'yt-shorts'
+    showSafeZoneMockup: true,
+    safeZoneAutoSnap: true,
+
     // Text Overlays (Phase 2C)
     textOverlays: [],
     selectedTextOverlayId: null,
@@ -2022,6 +2027,19 @@ document.addEventListener('DOMContentLoaded', () => {
             b.classList.toggle('active', b.dataset.preset === presetKey);
         });
 
+        // 7. Auto-sync Safe Zone Preset for platform
+        if (presetKey === 'fb-reels') {
+            setSafeZonePreset('fb-reels-boost');
+        } else if (presetKey === 'ig-reels' || presetKey === 'ig-story') {
+            setSafeZonePreset('ig-reels-boost');
+        } else if (presetKey === 'fb-feed') {
+            setSafeZonePreset('fb-feed-boost');
+        } else if (presetKey === 'yt-shorts') {
+            setSafeZonePreset('yt-shorts');
+        } else if (presetKey === 'yt-long') {
+            setSafeZonePreset('none');
+        }
+
         triggerAutoSave();
         if (window.captureUndoCheckpoint) window.captureUndoCheckpoint();
         if (window.recordEditorHistory) {
@@ -2032,6 +2050,44 @@ document.addEventListener('DOMContentLoaded', () => {
     platformPresetBtns.forEach(btn => {
         btn.addEventListener('click', () => applyPlatformPreset(btn.dataset.preset));
     });
+
+    // --- Meta Ads & Reels Boost Safe Zone Bindings ---
+    const canvasSafezoneBtn = document.getElementById('canvas-safezone-btn');
+    if (canvasSafezoneBtn) {
+        canvasSafezoneBtn.addEventListener('click', () => {
+            const nextPreset = (state.safeZonePreset && state.safeZonePreset !== 'none') ? 'none' : 'fb-reels-boost';
+            setSafeZonePreset(nextPreset);
+        });
+    }
+
+    const safeZoneBtns = document.querySelectorAll('#safezone-preset-grid .safezone-mode-btn');
+    safeZoneBtns.forEach(btn => {
+        btn.addEventListener('click', () => {
+            setSafeZonePreset(btn.dataset.safezone);
+        });
+    });
+
+    const safezoneToggleMockup = document.getElementById('safezone-toggle-mockup');
+    if (safezoneToggleMockup) {
+        safezoneToggleMockup.addEventListener('change', (e) => {
+            state.showSafeZoneMockup = e.target.checked;
+            drawFrame();
+        });
+    }
+
+    const safezoneToggleAutofit = document.getElementById('safezone-toggle-autofit');
+    if (safezoneToggleAutofit) {
+        safezoneToggleAutofit.addEventListener('change', (e) => {
+            state.safeZoneAutoSnap = e.target.checked;
+        });
+    }
+
+    const safezoneAutofitBtn = document.getElementById('safezone-autofit-btn');
+    if (safezoneAutofitBtn) {
+        safezoneAutofitBtn.addEventListener('click', () => {
+            autoFitElementsToSafeZone();
+        });
+    }
 
     // --- Facebook Banners & Headlines Bindings ---
     const bannerStyleSelect = document.getElementById('banner-style-select');
@@ -9575,7 +9631,407 @@ document.addEventListener('DOMContentLoaded', () => {
                 ctx.restore();
             }
         }
+
+        // Draw Meta Ads & Reels Boost Safe Zone Overlay (preview-only, not exported)
+        if (state.safeZonePreset && state.safeZonePreset !== 'none' && !state.isExportingVideo && !state.customExportTime) {
+            drawSafeZoneOverlay();
+        }
     }
+
+    // --- Meta Ads & Reels Boost Safe Zone Engine ---
+    function drawSafeZoneOverlay() {
+        const preset = state.safeZonePreset || 'fb-reels-boost';
+        if (preset === 'none') return;
+
+        const ctx = state.ctx;
+        const canvasW = state.canvas.width;
+        const canvasH = state.canvas.height;
+
+        let topDangerPct = 0.12;   // 12% top header danger zone for FB Reels
+        let bottomDangerPct = 0.22;// 22% bottom CTA button & caption danger zone
+        let rightDangerPct = 0.16; // 16% right action buttons danger zone
+        let leftDangerPct = 0.05;  // 5% left margin
+
+        if (preset === 'ig-reels-boost') {
+            topDangerPct = 0.14;
+            bottomDangerPct = 0.20;
+            rightDangerPct = 0.15;
+        } else if (preset === 'fb-feed-boost') {
+            topDangerPct = 0.06;
+            bottomDangerPct = 0.14;
+            rightDangerPct = 0.05;
+        } else if (preset === 'yt-shorts') {
+            topDangerPct = 0.10;
+            bottomDangerPct = 0.18;
+            rightDangerPct = 0.14;
+        }
+
+        const xMin = canvasW * leftDangerPct;
+        const xMax = canvasW * (1 - rightDangerPct);
+        const yMin = canvasH * topDangerPct;
+        const yMax = canvasH * (1 - bottomDangerPct);
+
+        ctx.save();
+
+        // 1. Draw Translucent Danger Zone Masks (Red tint)
+        ctx.fillStyle = 'rgba(239, 68, 68, 0.16)';
+
+        // Top Danger Area
+        ctx.fillRect(0, 0, canvasW, yMin);
+        // Bottom Danger Area
+        ctx.fillRect(0, yMax, canvasW, canvasH - yMax);
+        // Right Danger Area
+        ctx.fillRect(xMax, yMin, canvasW - xMax, yMax - yMin);
+        // Left Danger Margin
+        ctx.fillRect(0, yMin, xMin, yMax - yMin);
+
+        // 2. Danger Zone Boundary Dashed Lines
+        ctx.lineWidth = 1.5;
+        ctx.strokeStyle = 'rgba(239, 68, 68, 0.75)';
+        ctx.setLineDash([5, 4]);
+
+        ctx.beginPath(); ctx.moveTo(0, yMin); ctx.lineTo(canvasW, yMin); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(0, yMax); ctx.lineTo(canvasW, yMax); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(xMax, yMin); ctx.lineTo(xMax, yMax); ctx.stroke();
+
+        ctx.setLineDash([]);
+
+        // 3. Green Safe Zone Rectangle
+        const safeW = xMax - xMin;
+        const safeH = yMax - yMin;
+
+        ctx.lineWidth = 2;
+        ctx.strokeStyle = '#10b981'; // Neon Green
+        ctx.setLineDash([8, 4]);
+        ctx.strokeRect(xMin, yMin, safeW, safeH);
+        ctx.setLineDash([]);
+
+        // Corner Brackets for Safe Zone
+        const bLen = Math.min(22, safeW * 0.08);
+        ctx.strokeStyle = '#34d399';
+        ctx.lineWidth = 3;
+
+        ctx.beginPath(); ctx.moveTo(xMin, yMin + bLen); ctx.lineTo(xMin, yMin); ctx.lineTo(xMin + bLen, yMin); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(xMax - bLen, yMin); ctx.lineTo(xMax, yMin); ctx.lineTo(xMax, yMin + bLen); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(xMin, yMax - bLen); ctx.lineTo(xMin, yMax); ctx.lineTo(xMin + bLen, yMax); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(xMax - bLen, yMax); ctx.lineTo(xMax, yMax); ctx.lineTo(xMax, yMax - bLen); ctx.stroke();
+
+        // 4. Safe Zone Pill Header Label
+        const labelText = "🛡️ রিলস বুস্ট সেফ জোন ( Safe Zone: লেখা ও লোগো এখানে রাখুন )";
+        const fontSize = Math.max(11, Math.round(canvasH * 0.016));
+        ctx.font = `600 ${fontSize}px "Hind Siliguri", sans-serif`;
+        const tw = ctx.measureText(labelText).width;
+        const px = canvasW / 2;
+        const py = yMin + 16;
+        const pillW = tw + 20;
+        const pillH = 24;
+
+        ctx.fillStyle = 'rgba(6, 78, 59, 0.9)';
+        ctx.strokeStyle = '#10b981';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.roundRect(px - pillW / 2, py - pillH / 2, pillW, pillH, 12);
+        ctx.fill();
+        ctx.stroke();
+
+        ctx.fillStyle = '#ffffff';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(labelText, px, py);
+
+        // 5. Draw FB Reels UI Overlay Mockup if enabled
+        if (state.showSafeZoneMockup !== false) {
+            drawFBReelsUIMockup(ctx, canvasW, canvasH, yMin, yMax, xMax, preset);
+        }
+
+        ctx.restore();
+
+        // 6. Real-Time Collision Check
+        checkSafeZoneCollisions(xMin, xMax, yMin, yMax);
+    }
+
+    function drawFBReelsUIMockup(ctx, canvasW, canvasH, yMin, yMax, xMax, preset) {
+        ctx.save();
+
+        // --- Top Header UI ---
+        const headerH = yMin;
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.35)';
+        ctx.fillRect(0, 0, canvasW, Math.min(54, headerH));
+
+        const avatarRadius = Math.max(9, Math.min(16, canvasH * 0.02));
+        const avatarX = 16 + avatarRadius;
+        const avatarY = headerH * 0.5;
+
+        ctx.beginPath();
+        ctx.arc(avatarX, avatarY, avatarRadius, 0, Math.PI * 2);
+        ctx.fillStyle = '#1877f2';
+        ctx.fill();
+
+        ctx.fillStyle = '#ffffff';
+        ctx.font = `700 ${Math.round(avatarRadius * 1.1)}px sans-serif`;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText('P', avatarX, avatarY);
+
+        const textX = avatarX + avatarRadius + 8;
+        ctx.textAlign = 'left';
+        ctx.font = `700 ${Math.max(10, Math.round(canvasH * 0.014))}px "Plus Jakarta Sans", sans-serif`;
+        ctx.fillText('Warisha Fashion', textX, avatarY - 5);
+
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.8)';
+        ctx.font = `500 ${Math.max(8, Math.round(canvasH * 0.012))}px sans-serif`;
+        ctx.fillText('Sponsored · স্পন্সরড 🌐', textX, avatarY + 7);
+
+        // --- Bottom CTA & Caption UI ---
+        const bottomH = canvasH - yMax;
+        const ctaW = Math.min(canvasW * 0.84, 300);
+        const ctaH = Math.max(32, Math.round(canvasH * 0.046));
+        const ctaX = (canvasW - ctaW) / 2;
+        const ctaY = yMax + (bottomH * 0.12);
+
+        ctx.shadowColor = 'rgba(24, 119, 242, 0.5)';
+        ctx.shadowBlur = 8;
+        ctx.fillStyle = '#1877f2'; // FB Blue CTA Button
+        ctx.beginPath();
+        ctx.roundRect(ctaX, ctaY, ctaW, ctaH, 8);
+        ctx.fill();
+
+        ctx.shadowBlur = 0;
+        ctx.fillStyle = '#ffffff';
+        ctx.font = `700 ${Math.max(11, Math.round(ctaH * 0.4))}px "Hind Siliguri", sans-serif`;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText('🛍️ Shop Now / বিস্তারিত দেখুন  ›', ctaX + ctaW / 2, ctaY + ctaH / 2);
+
+        // Dummy caption line below CTA
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.85)';
+        ctx.textAlign = 'left';
+        ctx.font = `400 ${Math.max(9, Math.round(canvasH * 0.013))}px "Hind Siliguri", sans-serif`;
+        ctx.fillText('অফারে থ্রি-পিস অর্ডার করতে Shop Now বাটনে ক্লিক করুন...', 14, ctaY + ctaH + 15);
+
+        // --- Right Action Buttons Stack (Like, Comment, Share) ---
+        const iconCenterX = canvasW - (canvasW * 0.08);
+        const startIconY = yMin + (yMax - yMin) * 0.42;
+        const gapY = Math.max(36, canvasH * 0.075);
+
+        const actionIcons = [
+            { icon: '❤️', label: '2.4K' },
+            { icon: '💬', label: '180' },
+            { icon: '↗️', label: 'Share' },
+            { icon: '⋮', label: '' }
+        ];
+
+        actionIcons.forEach((item, index) => {
+            const iy = startIconY + index * gapY;
+            if (iy < yMax - 10) {
+                ctx.fillStyle = 'rgba(255, 255, 255, 0.95)';
+                ctx.font = `${Math.max(15, Math.round(canvasH * 0.024))}px sans-serif`;
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                ctx.fillText(item.icon, iconCenterX, iy);
+
+                if (item.label) {
+                    ctx.font = `600 ${Math.max(9, Math.round(canvasH * 0.011))}px sans-serif`;
+                    ctx.fillText(item.label, iconCenterX, iy + 14);
+                }
+            }
+        });
+
+        ctx.restore();
+    }
+
+    function checkSafeZoneCollisions(xMin, xMax, yMin, yMax) {
+        const canvasW = state.canvas.width;
+        const canvasH = state.canvas.height;
+        let collidingItems = [];
+
+        if (state.textOverlays && state.textOverlays.length > 0) {
+            state.textOverlays.forEach((item) => {
+                const itemX = item.x * canvasW;
+                const itemY = item.y * canvasH;
+                const ctx = state.ctx;
+                ctx.save();
+                const fontSize = item.fontSize || 32;
+                ctx.font = `${fontSize}px sans-serif`;
+                const textWidth = ctx.measureText(item.text || '').width || 100;
+                const itemW = item.w ? item.w * canvasW : textWidth;
+                const itemH = item.h ? item.h * canvasH : fontSize * 1.4;
+                ctx.restore();
+
+                const isColliding = (
+                    itemY < yMin - 5 || 
+                    (itemY + itemH) > yMax + 5 || 
+                    (itemX + itemW) > xMax + 5 ||
+                    itemX < xMin - 10
+                );
+
+                if (isColliding) {
+                    collidingItems.push({ type: 'text', id: item.id, item, itemX, itemY, itemW, itemH });
+
+                    // Draw red outline warning around colliding text overlay
+                    ctx.save();
+                    ctx.strokeStyle = '#ef4444';
+                    ctx.lineWidth = 2;
+                    ctx.setLineDash([4, 3]);
+                    ctx.shadowColor = 'rgba(239, 68, 68, 0.8)';
+                    ctx.shadowBlur = 6;
+                    ctx.strokeRect(itemX - 4, itemY - 4, itemW + 8, itemH + 8);
+                    
+                    const tagText = "⚠️ বুস্ট বাটন/সাইড আইকনে ঢাকা পড়বে!";
+                    ctx.font = `700 10px "Hind Siliguri", sans-serif`;
+                    ctx.fillStyle = '#dc2626';
+                    ctx.shadowBlur = 0;
+                    const tw = ctx.measureText(tagText).width;
+                    ctx.fillRect(itemX - 4, Math.max(4, itemY - 22), tw + 8, 16);
+                    ctx.fillStyle = '#ffffff';
+                    ctx.textAlign = 'left';
+                    ctx.textBaseline = 'middle';
+                    ctx.fillText(tagText, itemX, Math.max(12, itemY - 14));
+                    ctx.restore();
+                }
+            });
+        }
+
+        if (state.logoImg) {
+            const logoW = canvasW * (state.logoSize / 100);
+            const logoH = logoW * (state.logoImg.naturalHeight / state.logoImg.naturalWidth);
+            const lx = state.logoX * canvasW;
+            const ly = state.logoY * canvasH;
+
+            if (ly < yMin || (ly + logoH) > yMax || (lx + logoW) > xMax) {
+                collidingItems.push({ type: 'logo', lx, ly, logoW, logoH });
+            }
+        }
+
+        const statusBanner = document.getElementById('safezone-status-banner');
+        const statusText = document.getElementById('safezone-status-text');
+        const statusIcon = document.getElementById('safezone-status-icon');
+        const autofitBtn = document.getElementById('safezone-autofit-btn');
+
+        if (statusBanner && statusText && statusIcon) {
+            if (collidingItems.length > 0) {
+                statusBanner.style.background = 'rgba(239, 68, 68, 0.12)';
+                statusBanner.style.borderColor = 'rgba(239, 68, 68, 0.4)';
+                statusText.style.color = '#ef4444';
+                statusText.innerHTML = `⚠️ <b>সতর্কতা:</b> ${collidingItems.length}টি লেখা/লোগো রিলস বাটন বা সাইড আইকন জোনে পড়ছে! বুস্ট দিলে কেটে যাবে।`;
+                statusIcon.className = 'fa-solid fa-triangle-exclamation';
+                statusIcon.style.color = '#ef4444';
+                if (autofitBtn) autofitBtn.style.display = 'inline-flex';
+            } else {
+                statusBanner.style.background = 'rgba(16, 185, 129, 0.1)';
+                statusBanner.style.borderColor = 'rgba(16, 185, 129, 0.3)';
+                statusText.style.color = '#10b981';
+                statusText.innerHTML = `সব লেখা ও লোগো বুস্ট সেফ জোনে সম্পূর্ণ নিরাপদ আছে`;
+                statusIcon.className = 'fa-solid fa-shield-check';
+                statusIcon.style.color = '#10b981';
+                if (autofitBtn) autofitBtn.style.display = 'none';
+            }
+        }
+
+        return collidingItems;
+    }
+    window.checkSafeZoneCollisions = checkSafeZoneCollisions;
+
+    function autoFitElementsToSafeZone() {
+        const canvasW = state.canvas.width;
+        const canvasH = state.canvas.height;
+        const preset = state.safeZonePreset || 'fb-reels-boost';
+
+        let topDangerPct = 0.12;
+        let bottomDangerPct = 0.22;
+        let rightDangerPct = 0.16;
+        let leftDangerPct = 0.05;
+
+        if (preset === 'ig-reels-boost') {
+            topDangerPct = 0.14; bottomDangerPct = 0.20; rightDangerPct = 0.15;
+        } else if (preset === 'fb-feed-boost') {
+            topDangerPct = 0.06; bottomDangerPct = 0.14; rightDangerPct = 0.05;
+        }
+
+        const yMinNorm = topDangerPct + 0.02;
+        const yMaxNorm = (1 - bottomDangerPct) - 0.02;
+        const xMinNorm = leftDangerPct + 0.01;
+        const xMaxNorm = (1 - rightDangerPct) - 0.02;
+
+        let adjustedCount = 0;
+
+        if (state.textOverlays && state.textOverlays.length > 0) {
+            state.textOverlays.forEach(item => {
+                const ctx = state.ctx;
+                ctx.save();
+                ctx.font = `${item.fontSize || 32}px sans-serif`;
+                const textWidth = ctx.measureText(item.text || '').width || 100;
+                const itemWNorm = item.w ? item.w : (textWidth / canvasW);
+                const itemHNorm = item.h ? item.h : ((item.fontSize || 32) * 1.4 / canvasH);
+                ctx.restore();
+
+                let changed = false;
+
+                if (item.y < yMinNorm) {
+                    item.y = yMinNorm;
+                    changed = true;
+                }
+
+                if (item.y + itemHNorm > yMaxNorm) {
+                    item.y = Math.max(yMinNorm, yMaxNorm - itemHNorm);
+                    changed = true;
+                }
+
+                if (item.x + itemWNorm > xMaxNorm) {
+                    item.x = Math.max(xMinNorm, xMaxNorm - itemWNorm);
+                    changed = true;
+                }
+
+                if (item.x < xMinNorm) {
+                    item.x = xMinNorm;
+                    changed = true;
+                }
+
+                if (changed) adjustedCount++;
+            });
+        }
+
+        if (state.logoImg) {
+            const logoWNorm = (state.logoSize / 100);
+            const logoHNorm = logoWNorm * (state.logoImg.naturalHeight / state.logoImg.naturalWidth) * (canvasW / canvasH);
+
+            if (state.logoY + logoHNorm > yMaxNorm) {
+                state.logoY = Math.max(yMinNorm, yMaxNorm - logoHNorm);
+                adjustedCount++;
+            }
+            if (state.logoX + logoWNorm > xMaxNorm) {
+                state.logoX = Math.max(xMinNorm, xMaxNorm - logoWNorm);
+                adjustedCount++;
+            }
+        }
+
+        drawFrame();
+        if (window.triggerAutoSave) window.triggerAutoSave();
+
+        const msg = adjustedCount > 0 ? `✨ ${adjustedCount}টি লেখা/লোগো সেফ জোনে স্বয়ংক্রিয়ভাবে ফিট করা হয়েছে!` : 'সব লেখা ইতিমধ্যে সেফ জোনে আছে!';
+        if (window.showToast) { window.showToast(msg); } else { alert(msg); }
+    }
+    window.autoFitElementsToSafeZone = autoFitElementsToSafeZone;
+
+    function setSafeZonePreset(presetKey) {
+        state.safeZonePreset = presetKey;
+
+        const safeZoneBtns = document.querySelectorAll('#safezone-preset-grid .safezone-mode-btn');
+        safeZoneBtns.forEach(btn => {
+            btn.classList.toggle('active', btn.dataset.safezone === presetKey);
+        });
+
+        const overlayBtn = document.getElementById('canvas-safezone-btn');
+        if (overlayBtn) {
+            const isActive = (presetKey !== 'none');
+            overlayBtn.classList.toggle('active', isActive);
+            overlayBtn.classList.toggle('safezone-active', isActive);
+        }
+
+        drawFrame();
+        if (window.triggerAutoSave) window.triggerAutoSave();
+    }
+    window.setSafeZonePreset = setSafeZonePreset;
     
     // --- Mouse Drag and Resize Interactive System on Canvas ---
     function getCanvasCoords(e) {

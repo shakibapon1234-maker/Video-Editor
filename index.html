@@ -179,6 +179,9 @@
 
                         <!-- Canvas Action Buttons Overlay (bottom-right) -->
                         <div class="canvas-overlay-actions" id="canvas-overlay-actions" style="display:none;">
+                            <button type="button" id="canvas-safezone-btn" class="canvas-overlay-btn active safezone-active" title="Meta / FB Reels Boost Safe Zone গাইড অন/অফ (Toggle Safe Zone Overlay)">
+                                <i class="fa-solid fa-shield-halved"></i> <span>সেফ জোন</span>
+                            </button>
                             <button type="button" id="canvas-snapshot-btn" class="canvas-overlay-btn" title="প্লে স্ক্রিনের স্ক্রিনশট নিন (Take Snapshot)">
                                 <i class="fa-solid fa-camera"></i> <span>স্ক্রিনশট</span>
                             </button>
@@ -505,6 +508,65 @@
                                     <button class="aspect-btn" data-ratio="16-9" data-tooltip="ইউটিউব ও ডেক্সটপ ভিউয়ের জন্য ল্যান্ডস্কেপ ফরম্যাট (16:9 Landscape for Desktop)">
                                         <i class="fa-solid fa-desktop"></i>
                                         <span>16:9 Landscape (YouTube)</span>
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Meta Ads & Reels Boost Safe Zone Guide Card -->
+                        <div class="card mt-4" id="boost-safezone-card">
+                            <div class="card-header" style="display:flex; align-items:center; justify-content:space-between;">
+                                <div style="display:flex; align-items:center; gap:8px;">
+                                    <i class="fa-solid fa-shield-halved card-icon" style="color: #10b981;"></i>
+                                    <h3>Reels & Boost Safe Zone (বুস্ট সেফ জোন গাইড)</h3>
+                                </div>
+                                <span class="badge" style="background: rgba(16, 185, 129, 0.15); color: #10b981; font-weight:600; padding:3px 8px; border-radius:12px; font-size:11px;">
+                                    <i class="fa-solid fa-shield-check"></i> টেক্সট সুরক্ষা
+                                </span>
+                            </div>
+                            <div class="card-body">
+                                <p class="help-text" style="margin-bottom:12px;">
+                                    ফেসবুক বা ইনস্টাগ্রাম রিলস বুস্ট করলে তাদের নিজস্ব UI (CTA বাটন, ক্যাপশন, স্পন্সরড হেডার, লাইক/কমেন্ট আইকন) লেখার ওপর চলে আসে। 
+                                    নিচের সেফ জোন চালু করে লেখাগুলো নিরাপদ সবুজ এলাকার ভেতরে রাখুন।
+                                </p>
+
+                                <div class="safezone-preset-grid" style="display:grid; grid-template-columns: repeat(2, 1fr); gap:8px;" id="safezone-preset-grid">
+                                    <button type="button" class="safezone-mode-btn active" data-safezone="fb-reels-boost" id="sz-btn-fb-reels">
+                                        <i class="fa-brands fa-facebook-f" style="color:#1877f2;"></i>
+                                        <span>FB Reels Boost Safe Zone</span>
+                                    </button>
+                                    <button type="button" class="safezone-mode-btn" data-safezone="ig-reels-boost" id="sz-btn-ig-reels">
+                                        <i class="fa-brands fa-instagram" style="color:#e1306c;"></i>
+                                        <span>IG Reels Ad Zone</span>
+                                    </button>
+                                    <button type="button" class="safezone-mode-btn" data-safezone="fb-feed-boost" id="sz-btn-fb-feed">
+                                        <i class="fa-solid fa-rectangle-ad" style="color:#f59e0b;"></i>
+                                        <span>FB Feed Ad (4:5 / 1:1) Zone</span>
+                                    </button>
+                                    <button type="button" class="safezone-mode-btn" data-safezone="none" id="sz-btn-none">
+                                        <i class="fa-solid fa-eye-slash" style="color:#9ca3af;"></i>
+                                        <span>বন্ধ (Hide Overlay)</span>
+                                    </button>
+                                </div>
+
+                                <div style="margin-top:14px; display:flex; flex-direction:column; gap:8px;">
+                                    <label style="display:flex; align-items:center; gap:8px; cursor:pointer; font-size:12px; font-weight:500; color: var(--text-secondary);">
+                                        <input type="checkbox" id="safezone-toggle-mockup" checked style="accent-color: var(--primary);">
+                                        <span>ফেসবুক নেটিভ UI (CTA বাটন, ক্যাপশন ও লাইক আইকন মকআপ) ক্যানভাসে দেখান</span>
+                                    </label>
+                                    <label style="display:flex; align-items:center; gap:8px; cursor:pointer; font-size:12px; font-weight:500; color: var(--text-secondary);">
+                                        <input type="checkbox" id="safezone-toggle-autofit" checked style="accent-color: var(--primary);">
+                                        <span>ড্র্যাগ করার সময় লেখাগুলো অটো সেফ জোনের ভেতরে লক রাখুন</span>
+                                    </label>
+                                </div>
+
+                                <div id="safezone-status-banner" style="margin-top:12px; padding:10px; border-radius:8px; background: rgba(16, 185, 129, 0.1); border: 1px solid rgba(16, 185, 129, 0.3); display:flex; align-items:center; justify-content:space-between;">
+                                    <div style="display:flex; align-items:center; gap:8px; font-size:12px; color: #10b981; font-weight:600;" id="safezone-status-wrapper">
+                                        <i class="fa-solid fa-shield-check" id="safezone-status-icon"></i>
+                                        <span id="safezone-status-text">সব লেখা ও লোগো বুস্ট সেফ জোনে সুরক্ষিত আছে</span>
+                                    </div>
+                                    <button type="button" id="safezone-autofit-btn" class="btn btn-sm btn-primary" style="font-size:11px; padding:4px 10px; display:none; background: #10b981; border-color: #059669;">
+                                        <i class="fa-solid fa-wand-magic-sparkles"></i> অটো ফিট করুন
                                     </button>
                                 </div>
                             </div>

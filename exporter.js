@@ -178,6 +178,28 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
 
+        // Safe Zone Export Safety Validation for Meta / FB Reels Boost
+        if (window.checkSafeZoneCollisions && state.canvas && state.canvas.width) {
+            const preset = state.safeZonePreset || 'fb-reels-boost';
+            let topPct = 0.12, bottomPct = 0.22, rightPct = 0.16, leftPct = 0.05;
+            if (preset === 'ig-reels-boost') { topPct = 0.14; bottomPct = 0.20; rightPct = 0.15; }
+            else if (preset === 'fb-feed-boost') { topPct = 0.06; bottomPct = 0.14; rightPct = 0.05; }
+            
+            const collisions = window.checkSafeZoneCollisions(
+                state.canvas.width * leftPct,
+                state.canvas.width * (1 - rightPct),
+                state.canvas.height * topPct,
+                state.canvas.height * (1 - bottomPct)
+            );
+
+            if (collisions && collisions.length > 0) {
+                const autoFix = confirm(`⚠️ আপনার ভিডিওর ${collisions.length}টি লেখা/লোগো ফেসবুক রিলস বুস্ট বাটন বা সাইড আইকন এলাকায় অবস্থিত, যা বুস্ট করলে ঢেকে যাবে।\n\nআপনি কি এক্সপোর্টের আগে এগুলো স্বয়ংক্রিয়ভাবে সেফ জোনে সরিয়ে নিয়ে এক্সপোর্ট করতে চান?`);
+                if (autoFix) {
+                    if (window.autoFitElementsToSafeZone) window.autoFitElementsToSafeZone();
+                }
+            }
+        }
+
         // Stop the live preview loop before export begins. Export drives its
         // own frame-by-frame mutation of state.activeClipId/state.clips/video.src,
         // and at each await boundary the browser can still run a queued
