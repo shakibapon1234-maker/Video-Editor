@@ -613,6 +613,154 @@
                             </div>
                         </div>
 
+                        <!-- 3D Rotation & Motion Animations Card (Phase 13) -->
+                        <div class="card mt-4" id="3d-rotation-card">
+                            <div class="card-header" style="display:flex; align-items:center; justify-content:space-between;">
+                                <div style="display:flex; align-items:center; gap:8px;">
+                                    <i class="fa-solid fa-cube card-icon" style="color: #6366f1;"></i>
+                                    <h3>3D Rotation & Motion (৩ডি ঘূর্ণন অ্যানিমেশন)</h3>
+                                </div>
+                                <label class="switch" title="৩ডি রোটেশন ও অ্যানিমেশন অন/অফ করুন">
+                                    <input type="checkbox" id="rot3d-toggle">
+                                    <span class="slider round"></span>
+                                </label>
+                            </div>
+                            <div class="card-body">
+                                <p class="help-text">ছবি বা ভিডিও ক্লিপকে ডানে-বামে (Y-Axis), উপরে-নিচে (X-Axis) ও কেন্দ্রে (Z-Axis) সচল ৩ডি অ্যানিমেশন বা স্থির এঙ্গেল দিন।</p>
+
+                                <div id="rot3d-controls-container" style="display:none; margin-top:10px;">
+                                    <div style="display:grid; grid-template-columns: 1fr 1fr; gap:10px; margin-bottom:12px;">
+                                        <div class="control-group">
+                                            <label for="rot3d-mode-select">Motion Mode (মোড)</label>
+                                            <select id="rot3d-mode-select" class="form-select">
+                                                <option value="continuous" selected>Continuous Anim (প্লে করলে সচল ঘুরবে)</option>
+                                                <option value="static">Static Pose (স্থির এঙ্গেল)</option>
+                                            </select>
+                                        </div>
+                                        <div class="control-group">
+                                            <label style="display:flex; justify-content:space-between;">
+                                                <span>Speed (গতি)</span>
+                                                <span id="rot3d-speed-val">1.0x</span>
+                                            </label>
+                                            <input type="range" id="rot3d-speed-slider" min="0.2" max="3.0" value="1.0" step="0.1">
+                                        </div>
+                                    </div>
+
+                                    <div style="font-weight:600; font-size:12px; margin-bottom:6px;">1-Click 3D Motion Presets (এক-ক্লিক ৩ডি প্রিসেট):</div>
+                                    <div style="display:grid; grid-template-columns: repeat(3, 1fr); gap:6px; margin-bottom:12px;">
+                                        <button type="button" class="btn btn-sm btn-outline active" id="rot3d-preset-spinY" title="ডানে-বামে ৩ডি স্পিন"><i class="fa-solid fa-arrows-left-right"></i> Flip Right/Left</button>
+                                        <button type="button" class="btn btn-sm btn-outline" id="rot3d-preset-flipX" title="উপরে-নিচে ৩ডি ফ্লিপ"><i class="fa-solid fa-arrows-up-down"></i> Flip Up/Down</button>
+                                        <button type="button" class="btn btn-sm btn-outline" id="rot3d-preset-spin360" title="৩৬০° স্পিন"><i class="fa-solid fa-rotate-right"></i> Spin 360°</button>
+                                        <button type="button" class="btn btn-sm btn-outline" id="rot3d-preset-sway" title="৩ডি দোল খাওয়া"><i class="fa-solid fa-compass-drafting"></i> Sway Orbit</button>
+                                        <button type="button" class="btn btn-sm btn-outline" id="rot3d-preset-tilt3d" title="৩ডি পার্সপেক্টিভ"><i class="fa-solid fa-cubes"></i> 3D Perspective</button>
+                                        <button type="button" class="btn btn-sm btn-outline btn-danger" id="rot3d-preset-reset" title="৩ডি সম্পূর্ণ বন্ধ করুন"><i class="fa-solid fa-power-off"></i> Turn Off 3D</button>
+                                    </div>
+
+                                    <div class="control-group">
+                                        <label style="display:flex; justify-content:space-between;">
+                                            <span>Rotate Y — ডানে-বামে (Left-Right 3D Tilt)</span>
+                                            <span id="rotY-val">0°</span>
+                                        </label>
+                                        <input type="range" id="rotY-slider" min="-180" max="180" value="0" step="1">
+                                    </div>
+
+                                    <div class="control-group mt-2">
+                                        <label style="display:flex; justify-content:space-between;">
+                                            <span>Rotate X — উপরে-নিচে (Up-Down 3D Tilt)</span>
+                                            <span id="rotX-val">0°</span>
+                                        </label>
+                                        <input type="range" id="rotX-slider" min="-180" max="180" value="0" step="1">
+                                    </div>
+
+                                    <div class="control-group mt-2">
+                                        <label style="display:flex; justify-content:space-between;">
+                                            <span>Rotate Z — কেন্দ্রে ঘোড়ানো (Center Spin)</span>
+                                            <span id="rotZ-val">0°</span>
+                                        </label>
+                                        <input type="range" id="rotZ-slider" min="-360" max="360" value="0" step="1">
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Smoke & Fog Overlay Card (Phase 13) -->
+                        <div class="card mt-4" id="smoke-effect-card">
+                            <div class="card-header" style="display:flex; align-items:center; justify-content:space-between;">
+                                <div style="display:flex; align-items:center; gap:8px;">
+                                    <i class="fa-solid fa-smog card-icon" style="color: #38bdf8;"></i>
+                                    <h3>Smoke & Fog Effect (ধোঁয়া ও কুয়াশা ইফেক্ট)</h3>
+                                </div>
+                                <label class="switch" title="ধোঁয়া/কুয়াশা ইফেক্ট অন/অফ করুন">
+                                    <input type="checkbox" id="smoke-toggle">
+                                    <span class="slider round"></span>
+                                </label>
+                            </div>
+                            <div class="card-body">
+                                <p class="help-text">ক্যানভাস ও এক্সপোর্ট ভিডিওতে রিয়েল-টাইম ধোঁয়া, কুয়াশা ও রহস্যময় মিস্ট পার্টিকেল যোগ করুন।</p>
+
+                                <div id="smoke-controls-container" style="display:none; margin-top:10px;">
+                                    <div style="font-weight:600; font-size:12px; margin-bottom:6px;">Smoke Presets (ধোঁয়ার ধরন):</div>
+                                    <div style="display:grid; grid-template-columns: repeat(3, 1fr); gap:6px; margin-bottom:12px;">
+                                        <button type="button" class="btn btn-sm btn-outline active" id="smoke-preset-smoke">Dense Smoke</button>
+                                        <button type="button" class="btn btn-sm btn-outline" id="smoke-preset-fog">Mystic Fog</button>
+                                        <button type="button" class="btn btn-sm btn-outline" id="smoke-preset-mystic">Purple Magic</button>
+                                        <button type="button" class="btn btn-sm btn-outline" id="smoke-preset-dark_smoke">Dark Fire</button>
+                                        <button type="button" class="btn btn-sm btn-outline" id="smoke-preset-golden_mist">Golden Mist</button>
+                                    </div>
+
+                                    <div style="display:grid; grid-template-columns: 1fr 1fr; gap:10px; margin-bottom:10px;">
+                                        <div class="control-group">
+                                            <label for="smoke-color-input">Color (ধোঁয়ার রঙ)</label>
+                                            <div class="color-picker-wrapper">
+                                                <input type="color" id="smoke-color-input" value="#e2e8f0">
+                                                <span class="color-value-text" id="smoke-color-val">#e2e8f0</span>
+                                            </div>
+                                        </div>
+                                        <div class="control-group">
+                                            <label for="smoke-blend-mode">Blend Mode (ব্লেন্ড মোড)</label>
+                                            <select id="smoke-blend-mode" class="form-select">
+                                                <option value="screen" selected>Screen (উজ্জ্বল)</option>
+                                                <option value="lighter">Additive Glow (চকচকে)</option>
+                                                <option value="source-over">Normal Overlay</option>
+                                            </select>
+                                        </div>
+                                    </div>
+
+                                    <div class="control-group">
+                                        <label style="display:flex; justify-content:space-between;">
+                                            <span>Density (ঘনত্ব)</span>
+                                            <span id="smoke-density-val">45</span>
+                                        </label>
+                                        <input type="range" id="smoke-density-slider" min="10" max="100" value="45" step="1">
+                                    </div>
+
+                                    <div class="control-group mt-2">
+                                        <label style="display:flex; justify-content:space-between;">
+                                            <span>Speed (গতি)</span>
+                                            <span id="smoke-speed-val">1.0x</span>
+                                        </label>
+                                        <input type="range" id="smoke-speed-slider" min="0.2" max="3.0" value="1.0" step="0.1">
+                                    </div>
+
+                                    <div class="control-group mt-2">
+                                        <label style="display:flex; justify-content:space-between;">
+                                            <span>Direction (বায়ুর দিক)</span>
+                                            <span id="smoke-direction-val">-90°</span>
+                                        </label>
+                                        <input type="range" id="smoke-direction-slider" min="-180" max="180" value="-90" step="5">
+                                    </div>
+
+                                    <div class="control-group mt-2">
+                                        <label style="display:flex; justify-content:space-between;">
+                                            <span>Opacity (আবছা ভাব)</span>
+                                            <span id="smoke-opacity-val">65%</span>
+                                        </label>
+                                        <input type="range" id="smoke-opacity-slider" min="10" max="100" value="65" step="1">
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
                         <!-- Letterbox Background Card -->
                         <div class="card mt-4">
                             <div class="card-header">
@@ -4308,6 +4456,7 @@
     <script src="public/capacitor/capacitor.js"></script>
     <script src="audio.js?v=4"></script>
     <script src="audio-silence-generator.js?v=1"></script>
+    <script src="smoke-effect.js?v=1"></script>
     <script src="editor.js?v=10"></script>
     <script src="keyframes.js?v=1"></script>
     <script src="render-engine.js?v=2"></script>

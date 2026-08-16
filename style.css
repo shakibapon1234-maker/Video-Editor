@@ -4212,3 +4212,23 @@ input:checked + .slider:before {
     text-align: center;
     line-height: 1.5;
 }
+
+/* --- Phase 13: 3D Rotation & Smoke/Fog Effect UI Styles --- */
+#3d-rotation-card .btn-outline.active,
+#smoke-effect-card .btn-outline.active {
+    background-color: var(--primary, #6366f1);
+    color: #ffffff;
+    border-color: var(--primary, #6366f1);
+    box-shadow: 0 2px 8px rgba(99, 102, 241, 0.3);
+}
+
+#3d-rotation-card .btn-outline:hover,
+#smoke-effect-card .btn-outline:hover {
+    border-color: var(--primary, #6366f1);
+    color: #ffffff;
+}
+
+.preset-label-sub {
+    color: var(--text-secondary, #94a3b8);
+}
+

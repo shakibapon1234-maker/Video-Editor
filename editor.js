@@ -5733,6 +5733,27 @@ document.addEventListener('DOMContentLoaded', () => {
         ctx.restore();
     }
 
+    function apply3DCanvasTransform(ctx, rotX, rotY, rotZ, cx, cy) {
+        ctx.translate(cx, cy);
+        var radX = ((rotX || 0) * Math.PI) / 180;
+        var radY = ((rotY || 0) * Math.PI) / 180;
+        var radZ = ((rotZ || 0) * Math.PI) / 180;
+
+        var cosX = Math.cos(radX);
+        var cosY = Math.cos(radY);
+        var cosZ = Math.cos(radZ), sinZ = Math.sin(radZ);
+        var sinX = Math.sin(radX), sinY = Math.sin(radY);
+
+        var m11 = cosY * cosZ - sinX * sinY * sinZ;
+        var m12 = cosY * sinZ + sinX * sinY * cosZ;
+        var m21 = -cosX * sinZ;
+        var m22 = cosX * cosZ;
+
+        ctx.transform(m11, m12, m21, m22, 0, 0);
+        ctx.translate(-cx, -cy);
+    }
+    window.apply3DCanvasTransform = apply3DCanvasTransform;
+
     function drawFrame() {
         if (!state.duration) return;
         
@@ -5884,6 +5905,43 @@ document.addEventListener('DOMContentLoaded', () => {
             state.ctx.scale(flipSX, flipSY);
             state.ctx.translate(-canvasW / 2, -canvasH / 2);
         }
+        
+        // Apply 3D Rotation & Live Motion (rotX, rotY, rotZ) for active clip / frame (both video & image)
+        const rot3dOpts = (activeClip && activeClip.rot3dOptions)
+            ? activeClip.rot3dOptions
+            : (state.rot3dOptions || { enabled: false, mode: 'continuous', preset: 'spinY', speed: 1.0 });
+
+        if (rot3dOpts && rot3dOpts.enabled) {
+            let clipRotX = (activeClip && activeClip.rotX != null) ? activeClip.rotX : (state.rotX || 0);
+            let clipRotY = (activeClip && activeClip.rotY != null) ? activeClip.rotY : (state.rotY || 0);
+            let clipRotZ = (activeClip && activeClip.rotZ != null) ? activeClip.rotZ : (activeClip && activeClip.rotation != null ? activeClip.rotation : (state.rotZ || 0));
+
+            if (rot3dOpts.mode === 'continuous') {
+                const speed = rot3dOpts.speed || 1.0;
+                const pName = rot3dOpts.preset || 'spinY';
+                const t = effectiveTime || 0;
+
+                if (pName === 'spinY' || pName === 'flipY') {
+                    clipRotY += Math.sin(t * 2.2 * speed) * 45;
+                } else if (pName === 'flipX') {
+                    clipRotX += Math.sin(t * 2.2 * speed) * 45;
+                } else if (pName === 'spin360') {
+                    clipRotZ += (t * 90 * speed) % 360;
+                } else if (pName === 'sway') {
+                    clipRotX += Math.sin(t * 1.8 * speed) * 18;
+                    clipRotY += Math.cos(t * 1.5 * speed) * 22;
+                    clipRotZ += Math.sin(t * 1.2 * speed) * 10;
+                } else if (pName === 'tilt3d') {
+                    clipRotX += 30 + Math.sin(t * 1.4 * speed) * 10;
+                    clipRotY += -25 + Math.cos(t * 1.4 * speed) * 12;
+                }
+            }
+
+            if (clipRotX !== 0 || clipRotY !== 0 || clipRotZ !== 0) {
+                apply3DCanvasTransform(state.ctx, clipRotX, clipRotY, clipRotZ, canvasW / 2, canvasH / 2);
+            }
+        }
+
         if (transAlpha !== 1) {
             state.ctx.globalAlpha = transAlpha;
         }
@@ -6016,6 +6074,16 @@ document.addEventListener('DOMContentLoaded', () => {
         // its header comment for the perf reasoning).
         if (state.filmGrainIntensity > 0 && typeof window.drawFilmGrainOverlay === 'function') {
             window.drawFilmGrainOverlay(state.ctx, canvasW, canvasH, state.filmGrainIntensity);
+        }
+
+        // Render Dynamic Smoke & Fog Particle Overlay layer (Phase 13)
+        if (window.SmokeEffectEngine) {
+            const smokeOpts = (activeClip && activeClip.smokeOptions && activeClip.smokeOptions.enabled)
+                ? activeClip.smokeOptions
+                : (state.smokeOptions || { enabled: false });
+            if (smokeOpts && smokeOpts.enabled) {
+                window.SmokeEffectEngine.renderFrame(state.ctx, canvasW, canvasH, effectiveTime, smokeOpts);
+            }
         }
 
         // Image clip resize handles — shown on Steps 1-3 (Media Import, Trim & Layout,
@@ -21969,6 +22037,312 @@ document.addEventListener('DOMContentLoaded', () => {
                 break;
         }
     });
+
+    // --- Phase 13: 3D Rotation & Smoke/Fog Effect UI Initialization ---
+    function init3DRotationAndSmokeControls() {
+        const rot3dToggle = document.getElementById('rot3d-toggle');
+        const rot3dContainer = document.getElementById('rot3d-controls-container');
+        const rot3dModeSelect = document.getElementById('rot3d-mode-select');
+        const rot3dSpeedSlider = document.getElementById('rot3d-speed-slider');
+        const rot3dSpeedVal = document.getElementById('rot3d-speed-val');
+
+        const rotXSlider = document.getElementById('rotX-slider');
+        const rotYSlider = document.getElementById('rotY-slider');
+        const rotZSlider = document.getElementById('rotZ-slider');
+
+        const rotXVal = document.getElementById('rotX-val');
+        const rotYVal = document.getElementById('rotY-val');
+        const rotZVal = document.getElementById('rotZ-val');
+
+        function getTargetObj() {
+            const activeClip = state.clips ? state.clips.find(c => c.id === state.activeClipId) : null;
+            if (activeClip) return activeClip;
+            return state;
+        }
+
+        function getRot3dOpts() {
+            const target = getTargetObj();
+            if (!target.rot3dOptions) {
+                target.rot3dOptions = { enabled: false, mode: 'continuous', preset: 'spinY', speed: 1.0 };
+            }
+            return target.rot3dOptions;
+        }
+
+        function updateRotUI() {
+            const obj = getTargetObj();
+            const opts = getRot3dOpts();
+
+            if (rot3dToggle) rot3dToggle.checked = !!opts.enabled;
+            if (rot3dContainer) rot3dContainer.style.display = opts.enabled ? 'block' : 'none';
+            if (rot3dModeSelect) rot3dModeSelect.value = opts.mode || 'continuous';
+            if (rot3dSpeedSlider) rot3dSpeedSlider.value = opts.speed || 1.0;
+            if (rot3dSpeedVal) rot3dSpeedVal.textContent = (opts.speed || 1.0) + 'x';
+
+            const rx = obj.rotX || 0;
+            const ry = obj.rotY || 0;
+            const rz = obj.rotZ || (obj.rotation || 0);
+
+            if (rotXSlider) rotXSlider.value = rx;
+            if (rotYSlider) rotYSlider.value = ry;
+            if (rotZSlider) rotZSlider.value = rz;
+
+            if (rotXVal) rotXVal.textContent = rx + '°';
+            if (rotYVal) rotYVal.textContent = ry + '°';
+            if (rotZVal) rotZVal.textContent = rz + '°';
+        }
+
+        if (rot3dToggle) {
+            rot3dToggle.addEventListener('change', (e) => {
+                const opts = getRot3dOpts();
+                opts.enabled = e.target.checked;
+                if (!opts.enabled) {
+                    const obj = getTargetObj();
+                    obj.rotX = 0;
+                    obj.rotY = 0;
+                    obj.rotZ = 0;
+                    obj.rotation = 0;
+                }
+                updateRotUI();
+                drawFrame();
+                if (typeof triggerAutoSave === 'function') triggerAutoSave();
+            });
+        }
+
+        if (rot3dModeSelect) {
+            rot3dModeSelect.addEventListener('change', (e) => {
+                const opts = getRot3dOpts();
+                opts.mode = e.target.value;
+                drawFrame();
+            });
+        }
+
+        if (rot3dSpeedSlider) {
+            rot3dSpeedSlider.addEventListener('input', (e) => {
+                const opts = getRot3dOpts();
+                opts.speed = parseFloat(e.target.value) || 1.0;
+                if (rot3dSpeedVal) rot3dSpeedVal.textContent = opts.speed + 'x';
+                drawFrame();
+            });
+        }
+
+        if (rotXSlider) {
+            rotXSlider.addEventListener('input', (e) => {
+                const val = parseInt(e.target.value) || 0;
+                const obj = getTargetObj();
+                obj.rotX = val;
+                if (rotXVal) rotXVal.textContent = val + '°';
+                drawFrame();
+                if (typeof triggerAutoSave === 'function') triggerAutoSave();
+            });
+        }
+        if (rotYSlider) {
+            rotYSlider.addEventListener('input', (e) => {
+                const val = parseInt(e.target.value) || 0;
+                const obj = getTargetObj();
+                obj.rotY = val;
+                if (rotYVal) rotYVal.textContent = val + '°';
+                drawFrame();
+                if (typeof triggerAutoSave === 'function') triggerAutoSave();
+            });
+        }
+        if (rotZSlider) {
+            rotZSlider.addEventListener('input', (e) => {
+                const val = parseInt(e.target.value) || 0;
+                const obj = getTargetObj();
+                obj.rotZ = val;
+                obj.rotation = val;
+                if (rotZVal) rotZVal.textContent = val + '°';
+                drawFrame();
+                if (typeof triggerAutoSave === 'function') triggerAutoSave();
+            });
+        }
+
+        // 3D Motion Presets
+        const presetMap = {
+            'rot3d-preset-spinY': 'spinY',
+            'rot3d-preset-flipX': 'flipX',
+            'rot3d-preset-spin360': 'spin360',
+            'rot3d-preset-sway': 'sway',
+            'rot3d-preset-tilt3d': 'tilt3d'
+        };
+
+        Object.keys(presetMap).forEach(btnId => {
+            const btn = document.getElementById(btnId);
+            if (btn) {
+                btn.addEventListener('click', () => {
+                    const opts = getRot3dOpts();
+                    opts.enabled = true;
+                    opts.preset = presetMap[btnId];
+
+                    document.querySelectorAll('[id^="rot3d-preset-"]').forEach(b => b.classList.remove('active'));
+                    btn.classList.add('active');
+
+                    updateRotUI();
+                    drawFrame();
+                });
+            }
+        });
+
+        const presetReset = document.getElementById('rot3d-preset-reset');
+        if (presetReset) {
+            presetReset.addEventListener('click', () => {
+                const opts = getRot3dOpts();
+                opts.enabled = false;
+
+                const obj = getTargetObj();
+                obj.rotX = 0;
+                obj.rotY = 0;
+                obj.rotZ = 0;
+                obj.rotation = 0;
+
+                document.querySelectorAll('[id^="rot3d-preset-"]').forEach(b => b.classList.remove('active'));
+                updateRotUI();
+                drawFrame();
+            });
+        }
+
+        // --- Smoke & Fog Effect Controls ---
+        const smokeToggle = document.getElementById('smoke-toggle');
+        const smokeContainer = document.getElementById('smoke-controls-container');
+        const smokeColorInput = document.getElementById('smoke-color-input');
+        const smokeColorVal = document.getElementById('smoke-color-val');
+        const smokeBlendMode = document.getElementById('smoke-blend-mode');
+        const smokeDensitySlider = document.getElementById('smoke-density-slider');
+        const smokeDensityVal = document.getElementById('smoke-density-val');
+        const smokeSpeedSlider = document.getElementById('smoke-speed-slider');
+        const smokeSpeedVal = document.getElementById('smoke-speed-val');
+        const smokeDirectionSlider = document.getElementById('smoke-direction-slider');
+        const smokeDirectionVal = document.getElementById('smoke-direction-val');
+        const smokeOpacitySlider = document.getElementById('smoke-opacity-slider');
+        const smokeOpacityVal = document.getElementById('smoke-opacity-val');
+
+        function getSmokeOpts() {
+            const activeClip = state.clips ? state.clips.find(c => c.id === state.activeClipId) : null;
+            if (activeClip) {
+                if (!activeClip.smokeOptions) {
+                    activeClip.smokeOptions = { enabled: false, preset: 'smoke', color: '#e2e8f0', density: 45, speed: 1.0, direction: -90, opacity: 65, blendMode: 'screen' };
+                }
+                return activeClip.smokeOptions;
+            }
+            if (!state.smokeOptions) {
+                state.smokeOptions = { enabled: false, preset: 'smoke', color: '#e2e8f0', density: 45, speed: 1.0, direction: -90, opacity: 65, blendMode: 'screen' };
+            }
+            return state.smokeOptions;
+        }
+
+        function syncSmokeUI() {
+            const s = getSmokeOpts();
+            if (smokeToggle) smokeToggle.checked = !!s.enabled;
+            if (smokeContainer) smokeContainer.style.display = s.enabled ? 'block' : 'none';
+
+            if (smokeColorInput) smokeColorInput.value = s.color || '#e2e8f0';
+            if (smokeColorVal) smokeColorVal.textContent = s.color || '#e2e8f0';
+            if (smokeBlendMode) smokeBlendMode.value = s.blendMode || 'screen';
+
+            if (smokeDensitySlider) smokeDensitySlider.value = s.density || 45;
+            if (smokeDensityVal) smokeDensityVal.textContent = s.density || 45;
+
+            if (smokeSpeedSlider) smokeSpeedSlider.value = s.speed || 1.0;
+            if (smokeSpeedVal) smokeSpeedVal.textContent = (s.speed || 1.0) + 'x';
+
+            if (smokeDirectionSlider) smokeDirectionSlider.value = s.direction || -90;
+            if (smokeDirectionVal) smokeDirectionVal.textContent = (s.direction || -90) + '°';
+
+            if (smokeOpacitySlider) smokeOpacitySlider.value = s.opacity || 65;
+            if (smokeOpacityVal) smokeOpacityVal.textContent = (s.opacity || 65) + '%';
+        }
+
+        if (smokeToggle) {
+            smokeToggle.addEventListener('change', (e) => {
+                const s = getSmokeOpts();
+                s.enabled = e.target.checked;
+                syncSmokeUI();
+                drawFrame();
+                if (typeof triggerAutoSave === 'function') triggerAutoSave();
+            });
+        }
+        if (smokeColorInput) {
+            smokeColorInput.addEventListener('input', (e) => {
+                const s = getSmokeOpts();
+                s.color = e.target.value;
+                if (smokeColorVal) smokeColorVal.textContent = e.target.value;
+                drawFrame();
+            });
+        }
+        if (smokeBlendMode) {
+            smokeBlendMode.addEventListener('change', (e) => {
+                const s = getSmokeOpts();
+                s.blendMode = e.target.value;
+                drawFrame();
+            });
+        }
+        if (smokeDensitySlider) {
+            smokeDensitySlider.addEventListener('input', (e) => {
+                const s = getSmokeOpts();
+                s.density = parseInt(e.target.value) || 45;
+                if (smokeDensityVal) smokeDensityVal.textContent = s.density;
+                drawFrame();
+            });
+        }
+        if (smokeSpeedSlider) {
+            smokeSpeedSlider.addEventListener('input', (e) => {
+                const s = getSmokeOpts();
+                s.speed = parseFloat(e.target.value) || 1.0;
+                if (smokeSpeedVal) smokeSpeedVal.textContent = s.speed + 'x';
+                drawFrame();
+            });
+        }
+        if (smokeDirectionSlider) {
+            smokeDirectionSlider.addEventListener('input', (e) => {
+                const s = getSmokeOpts();
+                s.direction = parseInt(e.target.value) || -90;
+                if (smokeDirectionVal) smokeDirectionVal.textContent = s.direction + '°';
+                drawFrame();
+            });
+        }
+        if (smokeOpacitySlider) {
+            smokeOpacitySlider.addEventListener('input', (e) => {
+                const s = getSmokeOpts();
+                s.opacity = parseInt(e.target.value) || 65;
+                if (smokeOpacityVal) smokeOpacityVal.textContent = s.opacity + '%';
+                drawFrame();
+            });
+        }
+
+        // Smoke Presets
+        ['smoke', 'fog', 'mystic', 'dark_smoke', 'golden_mist'].forEach(pName => {
+            const pBtn = document.getElementById('smoke-preset-' + pName);
+            if (pBtn) {
+                pBtn.addEventListener('click', () => {
+                    const s = getSmokeOpts();
+                    if (window.SmokeEffectEngine && window.SmokeEffectEngine.presets[pName]) {
+                        var p = window.SmokeEffectEngine.presets[pName];
+                        s.preset = pName;
+                        s.color = p.color;
+                        s.density = p.density;
+                        s.speed = p.speed;
+                        s.direction = p.direction;
+                        s.opacity = p.opacity;
+                        s.blendMode = p.blendMode;
+                        
+                        document.querySelectorAll('[id^="smoke-preset-"]').forEach(b => b.classList.remove('active'));
+                        pBtn.classList.add('active');
+
+                        syncSmokeUI();
+                        drawFrame();
+                    }
+                });
+            }
+        });
+
+        // Sync UI on clip change
+        window.syncPhase133DAndSmokeUI = function () {
+            updateRotUI();
+            syncSmokeUI();
+        };
+    }
+
+    init3DRotationAndSmokeControls();
 
     // Bind global trigger to allow re-render on demands
     window.triggerCanvasRedraw = drawFrame;

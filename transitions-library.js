@@ -69,6 +69,20 @@
             items: [
                 { type: 'glitch', label: 'Digital Glitch' }
             ]
+        },
+        {
+            label: '3D Motion', icon: 'fa-cube',
+            items: [
+                { type: 'flip_3d_y', label: '3D Flip Left/Right' },
+                { type: 'flip_3d_x', label: '3D Flip Up/Down' },
+                { type: 'spin_3d', label: '3D Spin Rotate' }
+            ]
+        },
+        {
+            label: 'Smoke & Fog', icon: 'fa-smog',
+            items: [
+                { type: 'smoke_dissolve', label: 'Smoke Dissolve' }
+            ]
         }
     ];
 
@@ -78,7 +92,7 @@
         wipe_right: 'fa-droplet', wipe_left: 'fa-droplet',
         zoom_in: 'fa-magnifying-glass', zoom_out: 'fa-magnifying-glass',
         spin_in: 'fa-magnifying-glass', spin_out: 'fa-magnifying-glass', zoom_rotate: 'fa-magnifying-glass',
-        glitch: 'fa-bolt'
+        glitch: 'fa-bolt', flip_3d_y: 'fa-cube', flip_3d_x: 'fa-cube', spin_3d: 'fa-cube', smoke_dissolve: 'fa-smog'
     };
 
     function afterAssign(label) {

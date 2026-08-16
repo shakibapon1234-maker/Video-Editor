@@ -62,6 +62,11 @@
             item.scale = kfProp(kf, 'scale', 1);
             item.rotation = kfProp(kf, 'rotation', 0);
             item.opacity = kfProp(kf, 'opacity', 100);
+            item.rotX = kfProp(kf, 'rotX', 0);
+            item.rotY = kfProp(kf, 'rotY', 0);
+            item.rotZ = kfProp(kf, 'rotZ', kfProp(kf, 'rotation', 0));
+            if (kf.smokeOpacity != null) item.smokeOpacity = kf.smokeOpacity;
+            if (kf.smokeDensity != null) item.smokeDensity = kf.smokeDensity;
         }
 
         if (currentTime <= kfs[0].t) { write(kfs[0]); return; }
@@ -78,9 +83,23 @@
                 var aScale = kfProp(a, 'scale', 1), bScale = kfProp(b, 'scale', 1);
                 var aRot = kfProp(a, 'rotation', 0), bRot = kfProp(b, 'rotation', 0);
                 var aOp = kfProp(a, 'opacity', 100), bOp = kfProp(b, 'opacity', 100);
+                var aRotX = kfProp(a, 'rotX', 0), bRotX = kfProp(b, 'rotX', 0);
+                var aRotY = kfProp(a, 'rotY', 0), bRotY = kfProp(b, 'rotY', 0);
+                var aRotZ = kfProp(a, 'rotZ', aRot), bRotZ = kfProp(b, 'rotZ', bRot);
+                
                 item.scale = aScale + (bScale - aScale) * eased;
                 item.rotation = aRot + (bRot - aRot) * eased;
                 item.opacity = aOp + (bOp - aOp) * eased;
+                item.rotX = aRotX + (bRotX - aRotX) * eased;
+                item.rotY = aRotY + (bRotY - aRotY) * eased;
+                item.rotZ = aRotZ + (bRotZ - aRotZ) * eased;
+
+                if (a.smokeOpacity != null && b.smokeOpacity != null) {
+                    item.smokeOpacity = a.smokeOpacity + (b.smokeOpacity - a.smokeOpacity) * eased;
+                }
+                if (a.smokeDensity != null && b.smokeDensity != null) {
+                    item.smokeDensity = a.smokeDensity + (b.smokeDensity - a.smokeDensity) * eased;
+                }
                 return;
             }
         }
