@@ -712,8 +712,8 @@
                                         <div class="control-group">
                                             <label for="smoke-color-input">Color (ধোঁয়ার রঙ)</label>
                                             <div class="color-picker-wrapper">
-                                                <input type="color" id="smoke-color-input" value="#e2e8f0">
-                                                <span class="color-value-text" id="smoke-color-val">#e2e8f0</span>
+                                                <input type="color" id="smoke-color-input" value="#b8c4d0">
+                                                <span class="color-value-text" id="smoke-color-val">#b8c4d0</span>
                                             </div>
                                         </div>
                                         <div class="control-group">
@@ -729,17 +729,17 @@
                                     <div class="control-group">
                                         <label style="display:flex; justify-content:space-between;">
                                             <span>Density (ঘনত্ব)</span>
-                                            <span id="smoke-density-val">45</span>
+                                            <span id="smoke-density-val">22</span>
                                         </label>
-                                        <input type="range" id="smoke-density-slider" min="10" max="100" value="45" step="1">
+                                        <input type="range" id="smoke-density-slider" min="10" max="100" value="22" step="1">
                                     </div>
 
                                     <div class="control-group mt-2">
                                         <label style="display:flex; justify-content:space-between;">
                                             <span>Speed (গতি)</span>
-                                            <span id="smoke-speed-val">1.0x</span>
+                                            <span id="smoke-speed-val">0.7x</span>
                                         </label>
-                                        <input type="range" id="smoke-speed-slider" min="0.2" max="3.0" value="1.0" step="0.1">
+                                        <input type="range" id="smoke-speed-slider" min="0.2" max="3.0" value="0.7" step="0.1">
                                     </div>
 
                                     <div class="control-group mt-2">
@@ -753,9 +753,94 @@
                                     <div class="control-group mt-2">
                                         <label style="display:flex; justify-content:space-between;">
                                             <span>Opacity (আবছা ভাব)</span>
-                                            <span id="smoke-opacity-val">65%</span>
+                                            <span id="smoke-opacity-val">38%</span>
                                         </label>
-                                        <input type="range" id="smoke-opacity-slider" min="10" max="100" value="65" step="1">
+                                        <input type="range" id="smoke-opacity-slider" min="10" max="100" value="38" step="1">
+                                    </div>
+
+                                    <div class="mt-3">
+                                        <p class="help-text">ধোঁয়াটি ভিডিওর কোন সময় থেকে কোন সময় পর্যন্ত দেখা যাবে তা ঠিক করুন। খালি রাখলে পুরো ভিডিও জুড়ে দেখা যাবে।</p>
+                                        <div style="display:grid; grid-template-columns: 1fr 1fr; gap:10px;">
+                                            <div class="control-group">
+                                                <label for="smoke-start-input">Show From (সেকেন্ড)</label>
+                                                <input type="number" id="smoke-start-input" class="form-input" min="0" step="0.1" placeholder="পুরো ভিডিও">
+                                            </div>
+                                            <div class="control-group">
+                                                <label for="smoke-end-input">Show Until (সেকেন্ড)</label>
+                                                <input type="number" id="smoke-end-input" class="form-input" min="0" step="0.1" placeholder="পুরো ভিডিও">
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <hr style="border-color: rgba(255,255,255,0.08); margin: 16px 0;">
+
+                                <!-- Golden Glitter Rain sub-section (independent toggle) -->
+                                <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:8px;">
+                                    <div style="display:flex; align-items:center; gap:8px;">
+                                        <i class="fa-solid fa-star" style="color: #fbbf24;"></i>
+                                        <span style="font-weight:600; font-size:13px;">Golden Glitter Rain (সোনালি ঝিরিঝিরি)</span>
+                                    </div>
+                                    <label class="switch" title="সোনালি গ্লিটার/কনফেটি ইফেক্ট অন/অফ">
+                                        <input type="checkbox" id="glitter-toggle">
+                                        <span class="slider round"></span>
+                                    </label>
+                                </div>
+                                <p class="help-text" style="margin-bottom:8px;">উপর থেকে সোনালি ঝিরিঝিরি, স্পার্কল ও কনফেটি পড়বে — বার্থডে পার্টির মতো।</p>
+
+                                <div id="glitter-controls-container" style="display:none;">
+                                    <div style="font-weight:600; font-size:12px; margin-bottom:6px;">Glitter Presets (ঝিরিঝিরির ধরন):</div>
+                                    <div style="display:grid; grid-template-columns: repeat(2, 1fr); gap:6px; margin-bottom:12px;">
+                                        <button type="button" class="btn btn-sm btn-outline active" id="glitter-preset-golden_rain">Golden Rain</button>
+                                        <button type="button" class="btn btn-sm btn-outline" id="glitter-preset-sparkle_stars">Sparkle Stars</button>
+                                        <button type="button" class="btn btn-sm btn-outline" id="glitter-preset-confetti">Confetti</button>
+                                        <button type="button" class="btn btn-sm btn-outline" id="glitter-preset-soft_dust">Soft Dust</button>
+                                    </div>
+
+                                    <div class="control-group">
+                                        <label style="display:flex; justify-content:space-between;">
+                                            <span>Density (ঘনত্ব)</span>
+                                            <span id="glitter-density-val">55</span>
+                                        </label>
+                                        <input type="range" id="glitter-density-slider" min="10" max="120" value="55" step="1">
+                                    </div>
+
+                                    <div class="control-group mt-2">
+                                        <label style="display:flex; justify-content:space-between;">
+                                            <span>Speed (গতি)</span>
+                                            <span id="glitter-speed-val">1.0x</span>
+                                        </label>
+                                        <input type="range" id="glitter-speed-slider" min="0.2" max="3.0" value="1.0" step="0.1">
+                                    </div>
+
+                                    <div class="control-group mt-2">
+                                        <label style="display:flex; justify-content:space-between;">
+                                            <span>Size (আকার)</span>
+                                            <span id="glitter-size-val">1.0x</span>
+                                        </label>
+                                        <input type="range" id="glitter-size-slider" min="0.3" max="2.5" value="1.0" step="0.1">
+                                    </div>
+
+                                    <div class="control-group mt-2">
+                                        <label style="display:flex; justify-content:space-between;">
+                                            <span>Opacity (আবছা ভাব)</span>
+                                            <span id="glitter-opacity-val">75%</span>
+                                        </label>
+                                        <input type="range" id="glitter-opacity-slider" min="10" max="100" value="75" step="1">
+                                    </div>
+
+                                    <div class="mt-3">
+                                        <p class="help-text">গ্লিটারটি ভিডিওর কোন সময় থেকে কোন সময় পর্যন্ত দেখা যাবে তা ঠিক করুন। খালি রাখলে পুরো ভিডিও জুড়ে দেখা যাবে।</p>
+                                        <div style="display:grid; grid-template-columns: 1fr 1fr; gap:10px;">
+                                            <div class="control-group">
+                                                <label for="glitter-start-input">Show From (সেকেন্ড)</label>
+                                                <input type="number" id="glitter-start-input" class="form-input" min="0" step="0.1" placeholder="পুরো ভিডিও">
+                                            </div>
+                                            <div class="control-group">
+                                                <label for="glitter-end-input">Show Until (সেকেন্ড)</label>
+                                                <input type="number" id="glitter-end-input" class="form-input" min="0" step="0.1" placeholder="পুরো ভিডিও">
+                                            </div>
+                                        </div>
                                     </div>
                                 </div>
                             </div>
@@ -4456,7 +4541,8 @@
     <script src="public/capacitor/capacitor.js"></script>
     <script src="audio.js?v=4"></script>
     <script src="audio-silence-generator.js?v=1"></script>
-    <script src="smoke-effect.js?v=1"></script>
+    <script src="smoke-effect.js?v=2"></script>
+    <script src="glitter-effect.js?v=1"></script>
     <script src="editor.js?v=10"></script>
     <script src="keyframes.js?v=1"></script>
     <script src="render-engine.js?v=2"></script>

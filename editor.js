@@ -6077,14 +6077,8 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         // Render Dynamic Smoke & Fog Particle Overlay layer (Phase 13)
-        if (window.SmokeEffectEngine) {
-            const smokeOpts = (activeClip && activeClip.smokeOptions && activeClip.smokeOptions.enabled)
-                ? activeClip.smokeOptions
-                : (state.smokeOptions || { enabled: false });
-            if (smokeOpts && smokeOpts.enabled) {
-                window.SmokeEffectEngine.renderFrame(state.ctx, canvasW, canvasH, effectiveTime, smokeOpts);
-            }
-        }
+        // NOTE: Smoke/Glitter are rendered at the END of drawFrame (before safe zone)
+        // so they appear on top of video and are not covered by later overlay passes.
 
         // Image clip resize handles — shown on Steps 1-3 (Media Import, Trim & Layout,
         // Overlays) so the user can drag/resize the image right where they added it,
@@ -9700,11 +9694,75 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         }
 
+        // Phase 13: Smoke/Fog & Golden Glitter Rain particle overlays.
+        // (Must be called here — this is the only place effectiveTime/activeClip
+        // are in scope for both live preview and export frames.)
+        renderParticleOverlays(activeClip, effectiveTime);
+
         // Draw Meta Ads & Reels Boost Safe Zone Overlay (preview-only, not exported)
         if (state.safeZonePreset && state.safeZonePreset !== 'none' && !state.isExportingVideo && !state.customExportTime) {
             drawSafeZoneOverlay();
         }
     }
+
+    // --- Phase 13: Resolve smoke/glitter options from clip or global state ---
+    function resolveEffectOpts(activeClip, clipKey, stateKey) {
+        const clipOpts = activeClip && activeClip[clipKey];
+        const globalOpts = state[stateKey];
+        if (clipOpts && clipOpts.enabled) return clipOpts;
+        if (globalOpts && globalOpts.enabled) return globalOpts;
+        if (clipOpts) return clipOpts;
+        return globalOpts || { enabled: false };
+    }
+
+    function isEffectInTimeRange(opts, currentTime) {
+        if (!opts || !opts.enabled) return false;
+        const start = (opts.startSec != null && !isNaN(opts.startSec)) ? opts.startSec : (state.startTime || 0);
+        const end = (opts.endSec != null && !isNaN(opts.endSec)) ? opts.endSec : (state.endTime || state.duration || Infinity);
+        return currentTime >= start - 0.05 && currentTime <= end + 0.05;
+    }
+
+    function renderParticleOverlays(activeClip, effectiveTime) {
+        const canvasW = state.canvas.width;
+        const canvasH = state.canvas.height;
+        if (!canvasW || !canvasH) return;
+
+        const smokeOpts = resolveEffectOpts(activeClip, 'smokeOptions', 'smokeOptions');
+        if (window.SmokeEffectEngine && isEffectInTimeRange(smokeOpts, effectiveTime)) {
+            window.SmokeEffectEngine.renderFrame(state.ctx, canvasW, canvasH, effectiveTime, smokeOpts);
+        }
+
+        const glitterOpts = resolveEffectOpts(activeClip, 'glitterOptions', 'glitterOptions');
+        if (window.GlitterEffectEngine && isEffectInTimeRange(glitterOpts, effectiveTime)) {
+            window.GlitterEffectEngine.renderFrame(state.ctx, canvasW, canvasH, effectiveTime, glitterOpts);
+        }
+    }
+
+    let _particleOverlayLoopId = null;
+    function _hasParticleOverlayActive() {
+        const activeClip = state.clips ? state.clips.find(c => c.id === state.activeClipId) : null;
+        const smoke = resolveEffectOpts(activeClip, 'smokeOptions', 'smokeOptions');
+        const glitter = resolveEffectOpts(activeClip, 'glitterOptions', 'glitterOptions');
+        const t = state.currentTime || 0;
+        return isEffectInTimeRange(smoke, t) || isEffectInTimeRange(glitter, t);
+    }
+    function startParticleOverlayLoop() {
+        if (_particleOverlayLoopId) return;
+        function _loop() {
+            if (state.customExportTime !== undefined) {
+                _particleOverlayLoopId = null;
+                return;
+            }
+            if (state.isPlaying || !_hasParticleOverlayActive()) {
+                _particleOverlayLoopId = null;
+                return;
+            }
+            drawFrame();
+            _particleOverlayLoopId = requestAnimationFrame(_loop);
+        }
+        _particleOverlayLoopId = requestAnimationFrame(_loop);
+    }
+    window.startParticleOverlayLoop = startParticleOverlayLoop;
 
     // --- Meta Ads & Reels Boost Safe Zone Engine ---
     function drawSafeZoneOverlay() {
@@ -22215,17 +22273,19 @@ document.addEventListener('DOMContentLoaded', () => {
         const smokeDirectionVal = document.getElementById('smoke-direction-val');
         const smokeOpacitySlider = document.getElementById('smoke-opacity-slider');
         const smokeOpacityVal = document.getElementById('smoke-opacity-val');
+        const smokeStartInput = document.getElementById('smoke-start-input');
+        const smokeEndInput = document.getElementById('smoke-end-input');
 
         function getSmokeOpts() {
             const activeClip = state.clips ? state.clips.find(c => c.id === state.activeClipId) : null;
             if (activeClip) {
                 if (!activeClip.smokeOptions) {
-                    activeClip.smokeOptions = { enabled: false, preset: 'smoke', color: '#e2e8f0', density: 45, speed: 1.0, direction: -90, opacity: 65, blendMode: 'screen' };
+                    activeClip.smokeOptions = { enabled: false, preset: 'smoke', color: '#b8c4d0', density: 22, speed: 0.7, direction: -90, opacity: 38, blendMode: 'screen', startSec: null, endSec: null };
                 }
                 return activeClip.smokeOptions;
             }
             if (!state.smokeOptions) {
-                state.smokeOptions = { enabled: false, preset: 'smoke', color: '#e2e8f0', density: 45, speed: 1.0, direction: -90, opacity: 65, blendMode: 'screen' };
+                state.smokeOptions = { enabled: false, preset: 'smoke', color: '#b8c4d0', density: 22, speed: 0.7, direction: -90, opacity: 38, blendMode: 'screen', startSec: null, endSec: null };
             }
             return state.smokeOptions;
         }
@@ -22235,21 +22295,24 @@ document.addEventListener('DOMContentLoaded', () => {
             if (smokeToggle) smokeToggle.checked = !!s.enabled;
             if (smokeContainer) smokeContainer.style.display = s.enabled ? 'block' : 'none';
 
-            if (smokeColorInput) smokeColorInput.value = s.color || '#e2e8f0';
-            if (smokeColorVal) smokeColorVal.textContent = s.color || '#e2e8f0';
+            if (smokeColorInput) smokeColorInput.value = s.color || '#b8c4d0';
+            if (smokeColorVal) smokeColorVal.textContent = s.color || '#b8c4d0';
             if (smokeBlendMode) smokeBlendMode.value = s.blendMode || 'screen';
 
-            if (smokeDensitySlider) smokeDensitySlider.value = s.density || 45;
-            if (smokeDensityVal) smokeDensityVal.textContent = s.density || 45;
+            if (smokeDensitySlider) smokeDensitySlider.value = s.density || 22;
+            if (smokeDensityVal) smokeDensityVal.textContent = s.density || 22;
 
-            if (smokeSpeedSlider) smokeSpeedSlider.value = s.speed || 1.0;
-            if (smokeSpeedVal) smokeSpeedVal.textContent = (s.speed || 1.0) + 'x';
+            if (smokeSpeedSlider) smokeSpeedSlider.value = s.speed || 0.7;
+            if (smokeSpeedVal) smokeSpeedVal.textContent = (s.speed || 0.7) + 'x';
 
             if (smokeDirectionSlider) smokeDirectionSlider.value = s.direction || -90;
             if (smokeDirectionVal) smokeDirectionVal.textContent = (s.direction || -90) + '°';
 
-            if (smokeOpacitySlider) smokeOpacitySlider.value = s.opacity || 65;
-            if (smokeOpacityVal) smokeOpacityVal.textContent = (s.opacity || 65) + '%';
+            if (smokeOpacitySlider) smokeOpacitySlider.value = s.opacity || 38;
+            if (smokeOpacityVal) smokeOpacityVal.textContent = (s.opacity || 38) + '%';
+
+            if (smokeStartInput) smokeStartInput.value = (s.startSec != null && !isNaN(s.startSec)) ? s.startSec : '';
+            if (smokeEndInput) smokeEndInput.value = (s.endSec != null && !isNaN(s.endSec)) ? s.endSec : '';
         }
 
         if (smokeToggle) {
@@ -22257,6 +22320,23 @@ document.addEventListener('DOMContentLoaded', () => {
                 const s = getSmokeOpts();
                 s.enabled = e.target.checked;
                 syncSmokeUI();
+                drawFrame();
+                if (s.enabled && typeof window.startParticleOverlayLoop === 'function') window.startParticleOverlayLoop();
+                if (typeof triggerAutoSave === 'function') triggerAutoSave();
+            });
+        }
+        if (smokeStartInput) {
+            smokeStartInput.addEventListener('input', (e) => {
+                const s = getSmokeOpts();
+                s.startSec = (e.target.value === '') ? null : Math.max(0, parseFloat(e.target.value) || 0);
+                drawFrame();
+                if (typeof triggerAutoSave === 'function') triggerAutoSave();
+            });
+        }
+        if (smokeEndInput) {
+            smokeEndInput.addEventListener('input', (e) => {
+                const s = getSmokeOpts();
+                s.endSec = (e.target.value === '') ? null : Math.max(0, parseFloat(e.target.value) || 0);
                 drawFrame();
                 if (typeof triggerAutoSave === 'function') triggerAutoSave();
             });
@@ -22279,7 +22359,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (smokeDensitySlider) {
             smokeDensitySlider.addEventListener('input', (e) => {
                 const s = getSmokeOpts();
-                s.density = parseInt(e.target.value) || 45;
+                s.density = parseInt(e.target.value) || 22;
                 if (smokeDensityVal) smokeDensityVal.textContent = s.density;
                 drawFrame();
             });
@@ -22287,7 +22367,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (smokeSpeedSlider) {
             smokeSpeedSlider.addEventListener('input', (e) => {
                 const s = getSmokeOpts();
-                s.speed = parseFloat(e.target.value) || 1.0;
+                s.speed = parseFloat(e.target.value) || 0.7;
                 if (smokeSpeedVal) smokeSpeedVal.textContent = s.speed + 'x';
                 drawFrame();
             });
@@ -22303,7 +22383,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (smokeOpacitySlider) {
             smokeOpacitySlider.addEventListener('input', (e) => {
                 const s = getSmokeOpts();
-                s.opacity = parseInt(e.target.value) || 65;
+                s.opacity = parseInt(e.target.value) || 38;
                 if (smokeOpacityVal) smokeOpacityVal.textContent = s.opacity + '%';
                 drawFrame();
             });
@@ -22335,14 +22415,149 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         });
 
+        // --- Golden Glitter Rain Controls ---
+        const glitterToggle = document.getElementById('glitter-toggle');
+        const glitterContainer = document.getElementById('glitter-controls-container');
+        const glitterDensitySlider = document.getElementById('glitter-density-slider');
+        const glitterDensityVal = document.getElementById('glitter-density-val');
+        const glitterSpeedSlider = document.getElementById('glitter-speed-slider');
+        const glitterSpeedVal = document.getElementById('glitter-speed-val');
+        const glitterSizeSlider = document.getElementById('glitter-size-slider');
+        const glitterSizeVal = document.getElementById('glitter-size-val');
+        const glitterOpacitySlider = document.getElementById('glitter-opacity-slider');
+        const glitterOpacityVal = document.getElementById('glitter-opacity-val');
+        const glitterStartInput = document.getElementById('glitter-start-input');
+        const glitterEndInput = document.getElementById('glitter-end-input');
+
+        function getGlitterOpts() {
+            const activeClip = state.clips ? state.clips.find(c => c.id === state.activeClipId) : null;
+            if (activeClip) {
+                if (!activeClip.glitterOptions) {
+                    activeClip.glitterOptions = { enabled: false, preset: 'golden_rain', density: 55, speed: 1.0, size: 1.0, opacity: 75, style: 'mixed', startSec: null, endSec: null };
+                }
+                return activeClip.glitterOptions;
+            }
+            if (!state.glitterOptions) {
+                state.glitterOptions = { enabled: false, preset: 'golden_rain', density: 55, speed: 1.0, size: 1.0, opacity: 75, style: 'mixed', startSec: null, endSec: null };
+            }
+            return state.glitterOptions;
+        }
+
+        function syncGlitterUI() {
+            const g = getGlitterOpts();
+            if (glitterToggle) glitterToggle.checked = !!g.enabled;
+            if (glitterContainer) glitterContainer.style.display = g.enabled ? 'block' : 'none';
+
+            if (glitterDensitySlider) glitterDensitySlider.value = g.density || 55;
+            if (glitterDensityVal) glitterDensityVal.textContent = g.density || 55;
+
+            if (glitterSpeedSlider) glitterSpeedSlider.value = g.speed || 1.0;
+            if (glitterSpeedVal) glitterSpeedVal.textContent = (g.speed || 1.0) + 'x';
+
+            if (glitterSizeSlider) glitterSizeSlider.value = g.size || 1.0;
+            if (glitterSizeVal) glitterSizeVal.textContent = (g.size || 1.0) + 'x';
+
+            if (glitterOpacitySlider) glitterOpacitySlider.value = g.opacity || 75;
+            if (glitterOpacityVal) glitterOpacityVal.textContent = (g.opacity || 75) + '%';
+
+            if (glitterStartInput) glitterStartInput.value = (g.startSec != null && !isNaN(g.startSec)) ? g.startSec : '';
+            if (glitterEndInput) glitterEndInput.value = (g.endSec != null && !isNaN(g.endSec)) ? g.endSec : '';
+        }
+
+        if (glitterToggle) {
+            glitterToggle.addEventListener('change', (e) => {
+                const g = getGlitterOpts();
+                g.enabled = e.target.checked;
+                syncGlitterUI();
+                drawFrame();
+                if (g.enabled && typeof window.startParticleOverlayLoop === 'function') window.startParticleOverlayLoop();
+                if (typeof triggerAutoSave === 'function') triggerAutoSave();
+            });
+        }
+        if (glitterStartInput) {
+            glitterStartInput.addEventListener('input', (e) => {
+                const g = getGlitterOpts();
+                g.startSec = (e.target.value === '') ? null : Math.max(0, parseFloat(e.target.value) || 0);
+                drawFrame();
+                if (typeof triggerAutoSave === 'function') triggerAutoSave();
+            });
+        }
+        if (glitterEndInput) {
+            glitterEndInput.addEventListener('input', (e) => {
+                const g = getGlitterOpts();
+                g.endSec = (e.target.value === '') ? null : Math.max(0, parseFloat(e.target.value) || 0);
+                drawFrame();
+                if (typeof triggerAutoSave === 'function') triggerAutoSave();
+            });
+        }
+        if (glitterDensitySlider) {
+            glitterDensitySlider.addEventListener('input', (e) => {
+                const g = getGlitterOpts();
+                g.density = parseInt(e.target.value) || 55;
+                if (glitterDensityVal) glitterDensityVal.textContent = g.density;
+                drawFrame();
+            });
+        }
+        if (glitterSpeedSlider) {
+            glitterSpeedSlider.addEventListener('input', (e) => {
+                const g = getGlitterOpts();
+                g.speed = parseFloat(e.target.value) || 1.0;
+                if (glitterSpeedVal) glitterSpeedVal.textContent = g.speed + 'x';
+                drawFrame();
+            });
+        }
+        if (glitterSizeSlider) {
+            glitterSizeSlider.addEventListener('input', (e) => {
+                const g = getGlitterOpts();
+                g.size = parseFloat(e.target.value) || 1.0;
+                if (glitterSizeVal) glitterSizeVal.textContent = g.size + 'x';
+                drawFrame();
+            });
+        }
+        if (glitterOpacitySlider) {
+            glitterOpacitySlider.addEventListener('input', (e) => {
+                const g = getGlitterOpts();
+                g.opacity = parseInt(e.target.value) || 75;
+                if (glitterOpacityVal) glitterOpacityVal.textContent = g.opacity + '%';
+                drawFrame();
+            });
+        }
+
+        // Glitter Presets
+        ['golden_rain', 'sparkle_stars', 'confetti', 'soft_dust'].forEach(pName => {
+            const pBtn = document.getElementById('glitter-preset-' + pName);
+            if (pBtn) {
+                pBtn.addEventListener('click', () => {
+                    const g = getGlitterOpts();
+                    if (window.GlitterEffectEngine && window.GlitterEffectEngine.presets[pName]) {
+                        var p = window.GlitterEffectEngine.presets[pName];
+                        g.preset = pName;
+                        g.density = p.density;
+                        g.speed = p.speed;
+                        g.size = p.size;
+                        g.opacity = p.opacity;
+                        g.style = p.style;
+
+                        document.querySelectorAll('[id^="glitter-preset-"]').forEach(b => b.classList.remove('active'));
+                        pBtn.classList.add('active');
+
+                        syncGlitterUI();
+                        drawFrame();
+                    }
+                });
+            }
+        });
+
         // Sync UI on clip change
         window.syncPhase133DAndSmokeUI = function () {
             updateRotUI();
             syncSmokeUI();
+            syncGlitterUI();
         };
     }
 
     init3DRotationAndSmokeControls();
+    if (typeof window.syncPhase133DAndSmokeUI === 'function') window.syncPhase133DAndSmokeUI();
 
     // Bind global trigger to allow re-render on demands
     window.triggerCanvasRedraw = drawFrame;

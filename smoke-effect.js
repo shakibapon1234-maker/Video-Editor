@@ -10,47 +10,6 @@
 
     var puffTextureCache = {};
 
-    // Generates a multi-lobed organic wispy smoke puff texture
-    function getSmokePuffTexture(colorHex) {
-        var key = colorHex || '#e2e8f0';
-        if (puffTextureCache[key]) return puffTextureCache[key];
-
-        var size = 256;
-        var cv = document.createElement('canvas');
-        cv.width = size;
-        cv.height = size;
-        var ctx = cv.getContext('2d');
-
-        var rgb = hexToRgb(colorHex) || { r: 226, g: 232, b: 240 };
-        var cx = size / 2;
-        var cy = size / 2;
-
-        // Draw multiple overlapping soft cloud blobs to form an organic puff
-        var blobs = [
-            { x: cx, cy: cy, r: size * 0.35, a: 0.35 },
-            { x: cx - size * 0.12, cy: cy - size * 0.08, r: size * 0.28, a: 0.25 },
-            { x: cx + size * 0.14, cy: cy - size * 0.10, r: size * 0.26, a: 0.22 },
-            { x: cx - size * 0.10, cy: cy + size * 0.12, r: size * 0.24, a: 0.20 },
-            { x: cx + size * 0.10, cy: cy + size * 0.14, r: size * 0.25, a: 0.22 }
-        ];
-
-        blobs.forEach(function (b) {
-            var grad = ctx.createRadialGradient(b.x, b.cy, 0, b.x, b.cy, b.r);
-            grad.addColorStop(0, 'rgba(' + rgb.r + ',' + rgb.g + ',' + rgb.b + ',' + b.a + ')');
-            grad.addColorStop(0.4, 'rgba(' + rgb.r + ',' + rgb.g + ',' + rgb.b + ',' + (b.a * 0.5) + ')');
-            grad.addColorStop(0.8, 'rgba(' + rgb.r + ',' + rgb.g + ',' + rgb.b + ',' + (b.a * 0.12) + ')');
-            grad.addColorStop(1, 'rgba(' + rgb.r + ',' + rgb.g + ',' + rgb.b + ', 0)');
-
-            ctx.fillStyle = grad;
-            ctx.beginPath();
-            ctx.arc(b.x, b.cy, b.r, 0, Math.PI * 2);
-            ctx.fill();
-        });
-
-        puffTextureCache[key] = cv;
-        return cv;
-    }
-
     function hexToRgb(hex) {
         if (!hex) return null;
         hex = hex.replace('#', '');
@@ -67,51 +26,111 @@
         return x - Math.floor(x);
     }
 
+    // Generates a wispy, multi-layered organic smoke puff with soft noise edges
+    function getSmokePuffTexture(colorHex, variant) {
+        var key = (colorHex || '#e2e8f0') + '_v' + (variant || 0);
+        if (puffTextureCache[key]) return puffTextureCache[key];
+
+        var size = 256;
+        var cv = document.createElement('canvas');
+        cv.width = size;
+        cv.height = size;
+        var ctx = cv.getContext('2d');
+
+        var rgb = hexToRgb(colorHex) || { r: 180, g: 190, b: 210 };
+        var cx = size / 2;
+        var cy = size / 2;
+        var v = variant || 0;
+
+        // Wispy tendril blobs — lower alpha for realistic translucency
+        var blobs = [
+            { x: cx, cy: cy, r: size * 0.32, a: 0.14 },
+            { x: cx - size * 0.14, cy: cy - size * 0.10, r: size * 0.22, a: 0.10 },
+            { x: cx + size * 0.16, cy: cy - size * 0.08, r: size * 0.20, a: 0.09 },
+            { x: cx - size * 0.12, cy: cy + size * 0.14, r: size * 0.18, a: 0.08 },
+            { x: cx + size * 0.10, cy: cy + size * 0.16, r: size * 0.19, a: 0.09 },
+            { x: cx + size * (0.05 + v * 0.04), cy: cy - size * 0.20, r: size * 0.15, a: 0.07 },
+            { x: cx - size * 0.18, cy: cy + size * 0.04, r: size * 0.16, a: 0.07 }
+        ];
+
+        blobs.forEach(function (b) {
+            var grad = ctx.createRadialGradient(b.x, b.cy, 0, b.x, b.cy, b.r);
+            grad.addColorStop(0, 'rgba(' + rgb.r + ',' + rgb.g + ',' + rgb.b + ',' + b.a + ')');
+            grad.addColorStop(0.25, 'rgba(' + rgb.r + ',' + rgb.g + ',' + rgb.b + ',' + (b.a * 0.65) + ')');
+            grad.addColorStop(0.55, 'rgba(' + rgb.r + ',' + rgb.g + ',' + rgb.b + ',' + (b.a * 0.25) + ')');
+            grad.addColorStop(0.85, 'rgba(' + rgb.r + ',' + rgb.g + ',' + rgb.b + ',' + (b.a * 0.06) + ')');
+            grad.addColorStop(1, 'rgba(' + rgb.r + ',' + rgb.g + ',' + rgb.b + ', 0)');
+
+            ctx.fillStyle = grad;
+            ctx.beginPath();
+            ctx.arc(b.x, b.cy, b.r, 0, Math.PI * 2);
+            ctx.fill();
+        });
+
+        // Add fine wispy noise dots for texture
+        for (var n = 0; n < 40; n++) {
+            var nx = cx + (pseudoRandom(n * 3.7 + v * 11) - 0.5) * size * 0.55;
+            var ny = cy + (pseudoRandom(n * 5.1 + v * 7) - 0.5) * size * 0.55;
+            var nr = size * (0.02 + pseudoRandom(n * 2.3) * 0.06);
+            var na = 0.03 + pseudoRandom(n * 4.1) * 0.06;
+            var grad2 = ctx.createRadialGradient(nx, ny, 0, nx, ny, nr);
+            grad2.addColorStop(0, 'rgba(' + rgb.r + ',' + rgb.g + ',' + rgb.b + ',' + na + ')');
+            grad2.addColorStop(1, 'rgba(' + rgb.r + ',' + rgb.g + ',' + rgb.b + ', 0)');
+            ctx.fillStyle = grad2;
+            ctx.beginPath();
+            ctx.arc(nx, ny, nr, 0, Math.PI * 2);
+            ctx.fill();
+        }
+
+        puffTextureCache[key] = cv;
+        return cv;
+    }
+
     var PRESETS = {
         smoke: {
-            color: '#e2e8f0',
-            density: 28,
-            speed: 0.8,
-            direction: -90, // Upward flow
-            opacity: 50,
+            color: '#b8c4d0',
+            density: 22,
+            speed: 0.7,
+            direction: -90,
+            opacity: 38,
             blendMode: 'screen',
-            puffScale: 1.1
+            puffScale: 1.0
         },
         fog: {
-            color: '#cbd5e1',
-            density: 35,
-            speed: 0.3,
-            direction: 0, // Horizontal flow
-            opacity: 45,
+            color: '#a8b4c4',
+            density: 28,
+            speed: 0.25,
+            direction: 0,
+            opacity: 32,
             blendMode: 'screen',
-            puffScale: 1.8
+            puffScale: 1.5
         },
         mystic: {
-            color: '#c084fc',
-            density: 30,
-            speed: 1.0,
+            color: '#a855f7',
+            density: 20,
+            speed: 0.8,
             direction: -45,
-            opacity: 55,
+            opacity: 40,
             blendMode: 'lighter',
-            puffScale: 1.3
+            puffScale: 1.1
         },
         dark_smoke: {
-            color: '#334155',
-            density: 32,
-            speed: 0.9,
+            color: '#475569',
+            density: 24,
+            speed: 0.7,
             direction: -90,
-            opacity: 60,
+            opacity: 45,
             blendMode: 'source-over',
-            puffScale: 1.2
+            puffScale: 1.0
         },
         golden_mist: {
-            color: '#fde047',
-            density: 25,
-            speed: 0.6,
+            color: '#eab308',
+            density: 18,
+            speed: 0.5,
             direction: -60,
-            opacity: 45,
+            opacity: 35,
             blendMode: 'lighter',
-            puffScale: 1.5
+            puffScale: 1.2
         }
     };
 
@@ -119,86 +138,93 @@
         presets: PRESETS,
 
         getOptions: function (custom) {
-            var opts = Object.assign({
+            return Object.assign({
                 enabled: false,
                 preset: 'smoke',
-                color: '#e2e8f0',
-                density: 28,
-                speed: 0.8,
+                color: '#b8c4d0',
+                density: 22,
+                speed: 0.7,
                 direction: -90,
-                opacity: 50,
+                opacity: 38,
                 blendMode: 'screen'
             }, custom || {});
-
-            return opts;
         },
 
         renderFrame: function (ctx, width, height, time, options) {
             if (!ctx || !options || !options.enabled) return;
 
             var opts = this.getOptions(options);
-            var density = Math.max(8, Math.min(80, Number(opts.density) || 28));
-            var speedMult = Math.max(0.1, Math.min(4.0, Number(opts.speed) || 0.8));
-            var globalOpacity = Math.max(0, Math.min(100, Number(opts.opacity) || 50)) / 100;
+            var density = Math.max(6, Math.min(60, Number(opts.density) || 22));
+            var speedMult = Math.max(0.1, Math.min(4.0, Number(opts.speed) || 0.7));
+            var globalOpacity = Math.max(0, Math.min(100, Number(opts.opacity) || 38)) / 100;
             var dirRad = ((Number(opts.direction) || -90) * Math.PI) / 180;
-            var color = opts.color || '#e2e8f0';
+            var color = opts.color || '#b8c4d0';
             var blendMode = opts.blendMode || 'screen';
 
             var dirX = Math.cos(dirRad);
             var dirY = Math.sin(dirRad);
+            var baseSize = Math.max(width, height) * 0.22 * (opts.puffScale || 1.0);
 
             ctx.save();
             ctx.globalCompositeOperation = blendMode;
 
-            var puffTex = getSmokePuffTexture(color);
-            var baseSize = Math.max(width, height) * 0.28 * (opts.puffScale || 1.2);
-
             for (var i = 0; i < density; i++) {
                 var randSeed = i * 23.17 + 7.41;
-                var lifeSpan = 5.0 + pseudoRandom(randSeed + 1) * 4.0; // 5 to 9 sec lifetime
+                var lifeSpan = 6.0 + pseudoRandom(randSeed + 1) * 5.0;
                 var phaseOffset = pseudoRandom(randSeed + 2) * lifeSpan;
                 var totalTime = (time || 0) * speedMult + phaseOffset;
 
-                var lifeProgress = (totalTime % lifeSpan) / lifeSpan; // 0 to 1
+                var lifeProgress = (totalTime % lifeSpan) / lifeSpan;
                 var cycleCount = Math.floor(totalTime / lifeSpan);
 
-                // Disperse origin across bottom/sides
-                var origX = (pseudoRandom(randSeed + cycleCount * 7 + 3) * 1.2 - 0.1) * width;
-                var origY = height * 0.75 + (pseudoRandom(randSeed + cycleCount * 7 + 5) * height * 0.35);
+                // Spawn from bottom/sides with slight randomness
+                var origX = (pseudoRandom(randSeed + cycleCount * 7 + 3) * 1.3 - 0.15) * width;
+                var origY = height * 0.78 + (pseudoRandom(randSeed + cycleCount * 7 + 5) * height * 0.28);
 
-                var travelDist = (120 + pseudoRandom(randSeed + 4) * 220) * lifeProgress * speedMult;
-                var turbulenceX = Math.sin(totalTime * 1.2 + randSeed) * 50 * lifeProgress;
-                var turbulenceY = Math.cos(totalTime * 0.9 + randSeed * 1.5) * 30 * lifeProgress;
+                var travelDist = (80 + pseudoRandom(randSeed + 4) * 180) * lifeProgress * speedMult;
 
-                var px = origX + dirX * travelDist + turbulenceX;
-                var py = origY + dirY * travelDist + turbulenceY;
+                // Multi-frequency turbulence for organic swirl
+                var turbX = Math.sin(totalTime * 0.8 + randSeed) * 40 * lifeProgress
+                    + Math.sin(totalTime * 2.1 + randSeed * 0.7) * 18 * lifeProgress;
+                var turbY = Math.cos(totalTime * 0.6 + randSeed * 1.5) * 25 * lifeProgress
+                    + Math.cos(totalTime * 1.7 + randSeed * 1.2) * 12 * lifeProgress;
 
-                // Slow rotation of smoke puff for realistic swirl
-                var rotAngle = (pseudoRandom(randSeed + 8) * 360 + totalTime * 15) * (Math.PI / 180);
-                var pSize = baseSize * (0.5 + lifeProgress * 1.4 + pseudoRandom(randSeed + 6) * 0.4);
+                var px = origX + dirX * travelDist + turbX;
+                var py = origY + dirY * travelDist + turbY;
 
-                // Smooth fade in and out curve
+                var rotAngle = (pseudoRandom(randSeed + 8) * 360 + totalTime * 12) * (Math.PI / 180);
+
+                // Particles grow as they rise, then dissipate
+                var sizeGrowth = 0.35 + lifeProgress * 1.6 + pseudoRandom(randSeed + 6) * 0.3;
+                var pSize = baseSize * sizeGrowth;
+
+                // Smooth fade in/out — longer fade-out for wispy dissipation
                 var alpha = 1.0;
-                if (lifeProgress < 0.2) {
-                    alpha = lifeProgress / 0.2;
-                } else if (lifeProgress > 0.65) {
-                    alpha = (1.0 - lifeProgress) / 0.35;
+                if (lifeProgress < 0.15) {
+                    alpha = lifeProgress / 0.15;
+                } else if (lifeProgress > 0.55) {
+                    alpha = Math.pow((1.0 - lifeProgress) / 0.45, 1.4);
                 }
-                alpha *= globalOpacity * (0.35 + pseudoRandom(randSeed + 9) * 0.45);
+                alpha *= globalOpacity * (0.25 + pseudoRandom(randSeed + 9) * 0.35);
 
-                if (alpha <= 0.005) continue;
+                if (alpha <= 0.003) continue;
+
+                // Slight per-particle color tint variation
+                var tintShift = (pseudoRandom(randSeed + 10) - 0.5) * 20;
+                var rgb = hexToRgb(color) || { r: 184, g: 196, b: 208 };
+                var tintColor = 'rgb(' +
+                    Math.max(0, Math.min(255, rgb.r + tintShift)) + ',' +
+                    Math.max(0, Math.min(255, rgb.g + tintShift)) + ',' +
+                    Math.max(0, Math.min(255, rgb.b + tintShift)) + ')';
+
+                var texVariant = Math.floor(pseudoRandom(randSeed + 11) * 3);
+                var puffTex = getSmokePuffTexture(tintColor, texVariant);
 
                 ctx.save();
                 ctx.globalAlpha = alpha;
                 ctx.translate(px, py);
                 ctx.rotate(rotAngle);
-                ctx.drawImage(
-                    puffTex,
-                    -pSize / 2,
-                    -pSize / 2,
-                    pSize,
-                    pSize
-                );
+                ctx.drawImage(puffTex, -pSize / 2, -pSize / 2, pSize, pSize);
                 ctx.restore();
             }
 
