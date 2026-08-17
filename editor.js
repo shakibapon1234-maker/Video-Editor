@@ -1403,6 +1403,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const imageDurationContainer = document.getElementById('image-duration-container');
     const imageDurationInput = document.getElementById('image-duration-input');
     const imageDurationApplyBtn = document.getElementById('image-duration-apply-btn');
+    const imageDurationApplyAllBtn = document.getElementById('image-duration-apply-all-btn');
 
     // Shows/hides the "ছবির সময়কাল (Image Duration)" control based on whether
     // the currently active clip is a still image, and fills it with that
@@ -1465,6 +1466,54 @@ document.addEventListener('DOMContentLoaded', () => {
             } else if (window.triggerAutoSave) {
                 window.triggerAutoSave();
             }
+        });
+    }
+
+    // Apply one duration to every still image at once. This avoids having to
+    // visit each image clip individually when, for example, a 15-photo
+    // slideshow should change from 5 seconds to 30 seconds per photo.
+    if (imageDurationApplyAllBtn) {
+        imageDurationApplyAllBtn.addEventListener('click', () => {
+            let newDuration = parseFloat(imageDurationInput.value);
+            if (!newDuration || isNaN(newDuration) || newDuration <= 0) {
+                alert('সঠিক একটি সময় (সেকেন্ডে) দিন।');
+                return;
+            }
+            newDuration = Math.min(600, Math.max(0.5, newDuration));
+
+            const imageClips = (state.clips || []).filter(clip => clip.type === 'image');
+            if (!imageClips.length) {
+                alert('একসাথে প্রয়োগ করার জন্য কোনো ছবি নেই।');
+                return;
+            }
+
+            imageClips.forEach(clip => {
+                const wasFullLength = Math.abs((clip.end || 0) - (clip.duration || 0)) < 0.05;
+                clip.duration = newDuration;
+                if (wasFullLength || clip.end > newDuration) clip.end = newDuration;
+                if (clip.start > clip.end) clip.start = 0;
+            });
+
+            const activeClip = state.clips.find(clip => clip.id === state.activeClipId);
+            if (activeClip && activeClip.type === 'image') {
+                state.duration = activeClip.duration;
+                state.startTime = activeClip.start;
+                state.endTime = activeClip.end;
+                if (trimStart) { trimStart.max = state.duration; trimStart.value = state.startTime; }
+                if (trimEnd) { trimEnd.max = state.duration; trimEnd.value = state.endTime; }
+                if (startVal) startVal.value = formatTime(state.startTime);
+                if (endVal) endVal.value = formatTime(state.endTime);
+                drawFrame();
+            }
+
+            imageDurationInput.value = newDuration;
+            if (typeof renderClipTimeline === 'function') renderClipTimeline();
+            if (window.recordEditorHistory) {
+                window.recordEditorHistory(`Image duration set to ${newDuration}s for ${imageClips.length} images`);
+            } else if (window.triggerAutoSave) {
+                window.triggerAutoSave();
+            }
+            if (window.showToast) window.showToast(`${imageClips.length}টি ছবির সময়কাল ${newDuration}s করা হয়েছে`, 'success');
         });
     }
     

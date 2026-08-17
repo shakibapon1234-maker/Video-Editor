@@ -737,7 +737,7 @@ body {
 }
 
 .canvas-container.is-floating-preview #editor-canvas {
-    max-height: calc(100% - 110px) !important;
+    max-height: calc(100% - 38px) !important;
     max-width: 100% !important;
     flex: 1 1 auto;
     object-fit: contain;
@@ -973,27 +973,6 @@ body {
 
 .canvas-container.is-floating-preview .canvas-floating-footer {
     display: flex !important;
-}
-
-.canvas-container.is-floating-preview .floating-transport {
-    position: relative !important;
-    top: auto !important;
-    left: 0 !important;
-    right: 0 !important;
-    bottom: 0 !important;
-    width: 100% !important;
-    min-width: auto !important;
-    max-width: none !important;
-    margin: 0 !important;
-    box-shadow: none !important;
-    background: #0d1527 !important;
-    border-top: 1px solid var(--border-color, #334155) !important;
-    border-radius: 0 0 12px 12px !important;
-    flex-shrink: 0 !important;
-}
-
-.canvas-container.is-floating-preview .floating-transport-body {
-    padding: 4px 8px !important;
 }
 
 .cf-controls-group {

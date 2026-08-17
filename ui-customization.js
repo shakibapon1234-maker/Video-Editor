@@ -209,24 +209,19 @@
                     canvasContainer.style.position = 'fixed';
                     canvasContainer.style.zIndex = '999990';
 
-                    // Move the floating transport into the floating canvas so the
-                    // small transport controls stay visually attached to the preview.
+                    // Keep the transport outside the preview.  When it is inside,
+                    // safe-zone/fullscreen overlays can cover the seek bar and make
+                    // the detached playhead difficult to find while playing.
                     try {
-                        if (panel.parentNode !== canvasContainer) {
-                            originalTransportParent = panel.parentNode || originalTransportParent;
-                            originalTransportNextSibling = panel.nextSibling || originalTransportNextSibling;
-                            canvasContainer.appendChild(panel);
-                            panel.dataset.dockedIntoCanvas = '1';
-                            panel.style.position = 'relative';
-                            panel.style.left = '0';
-                            panel.style.right = '0';
-                            panel.style.top = 'auto';
-                            panel.style.bottom = '0';
-                            panel.style.width = '100%';
-                            panel.style.minWidth = 'auto';
-                            panel.style.maxWidth = 'none';
-                            panel.style.zIndex = '10';
+                        if (originalTransportParent && panel.parentNode !== originalTransportParent) {
+                            originalTransportParent.insertBefore(panel, originalTransportNextSibling);
                         }
+                        delete panel.dataset.dockedIntoCanvas;
+                        panel.style.position = 'fixed';
+                        panel.style.width = '';
+                        panel.style.minWidth = '';
+                        panel.style.maxWidth = '';
+                        panel.style.zIndex = '999991';
                     } catch (e) {}
                 }
             }
@@ -240,13 +235,15 @@
             if (visible) {
                 const left = parseFloat(panel.style.left);
                 const top  = parseFloat(panel.style.top);
-                const isDockedToCanvas = panel.dataset.dockedIntoCanvas === '1';
-                const badPos = (!isDockedToCanvas && (!isFinite(left) || !isFinite(top)))
+                const badPos = !isFinite(left) || !isFinite(top)
                             || left < 0 || left > window.innerWidth
-                            || (!isDockedToCanvas && (top  < 0 || top  > window.innerHeight));
+                            || top < 0 || top > window.innerHeight;
                 if (badPos) {
-                    panel.style.left  = Math.max(8, window.innerWidth - 340) + 'px';
-                    panel.style.top   = '110px';
+                    const previewRect = canvasContainer ? canvasContainer.getBoundingClientRect() : null;
+                    const preferredLeft = previewRect ? previewRect.left + Math.max(0, (previewRect.width - 380) / 2) : window.innerWidth - 340;
+                    const preferredTop = previewRect ? previewRect.bottom + 12 : 110;
+                    panel.style.left  = Math.max(8, preferredLeft) + 'px';
+                    panel.style.top   = Math.max(8, preferredTop) + 'px';
                     panel.style.right = 'auto';
                     try { localStorage.removeItem(LS_FT_POS); } catch (e) {}
                 }
