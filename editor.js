@@ -3038,8 +3038,9 @@ document.addEventListener('DOMContentLoaded', () => {
             window.onPlaybackStop();
         }
         ensureAnimatedGifPreview();
-        // Keep animated blank-page backgrounds running after pause
+        // Keep animated blank-page backgrounds and particle overlays running after pause
         if (window.startBgAnimLoop) window.startBgAnimLoop();
+        if (window.startParticleOverlayLoop) window.startParticleOverlayLoop();
     }
     
     function updateLoop() {
@@ -9695,9 +9696,12 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         // Phase 13: Smoke/Fog & Golden Glitter Rain particle overlays.
-        // (Must be called here — this is the only place effectiveTime/activeClip
-        // are in scope for both live preview and export frames.)
-        renderParticleOverlays(activeClip, effectiveTime);
+        // During export: use customExportTime. During playback: use video currentTime.
+        // When paused in preview: use performance.now() so live preview particles animate smoothly in real-time.
+        const particleTime = (state.customExportTime !== undefined)
+            ? state.customExportTime
+            : (state.isPlaying ? effectiveTime : (performance.now() / 1000));
+        renderParticleOverlays(activeClip, effectiveTime, particleTime);
 
         // Draw Meta Ads & Reels Boost Safe Zone Overlay (preview-only, not exported)
         if (state.safeZonePreset && state.safeZonePreset !== 'none' && !state.isExportingVideo && !state.customExportTime) {
@@ -9705,14 +9709,35 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    // --- Phase 13: Resolve smoke/glitter options from clip or global state ---
-    function resolveEffectOpts(activeClip, clipKey, stateKey) {
-        const clipOpts = activeClip && activeClip[clipKey];
-        const globalOpts = state[stateKey];
-        if (clipOpts && clipOpts.enabled) return clipOpts;
-        if (globalOpts && globalOpts.enabled) return globalOpts;
-        if (clipOpts) return clipOpts;
-        return globalOpts || { enabled: false };
+    // --- Phase 13: Multi-Segment Particle Overlay Resolution & Rendering ---
+    function getSmokeLayersList(activeClip) {
+        if (activeClip && Array.isArray(activeClip.smokeLayers) && activeClip.smokeLayers.length > 0) {
+            return activeClip.smokeLayers;
+        }
+        if (Array.isArray(state.smokeLayers) && state.smokeLayers.length > 0) {
+            return state.smokeLayers;
+        }
+        // Legacy fallback
+        const legacy = (activeClip && activeClip.smokeOptions) || state.smokeOptions;
+        if (legacy && legacy.enabled) {
+            return [legacy];
+        }
+        return [];
+    }
+
+    function getGlitterLayersList(activeClip) {
+        if (activeClip && Array.isArray(activeClip.glitterLayers) && activeClip.glitterLayers.length > 0) {
+            return activeClip.glitterLayers;
+        }
+        if (Array.isArray(state.glitterLayers) && state.glitterLayers.length > 0) {
+            return state.glitterLayers;
+        }
+        // Legacy fallback
+        const legacy = (activeClip && activeClip.glitterOptions) || state.glitterOptions;
+        if (legacy && legacy.enabled) {
+            return [legacy];
+        }
+        return [];
     }
 
     function isEffectInTimeRange(opts, currentTime) {
@@ -9722,29 +9747,47 @@ document.addEventListener('DOMContentLoaded', () => {
         return currentTime >= start - 0.05 && currentTime <= end + 0.05;
     }
 
-    function renderParticleOverlays(activeClip, effectiveTime) {
+    function renderParticleOverlays(activeClip, effectiveTime, particleTime) {
         const canvasW = state.canvas.width;
         const canvasH = state.canvas.height;
         if (!canvasW || !canvasH) return;
 
-        const smokeOpts = resolveEffectOpts(activeClip, 'smokeOptions', 'smokeOptions');
-        if (window.SmokeEffectEngine && isEffectInTimeRange(smokeOpts, effectiveTime)) {
-            window.SmokeEffectEngine.renderFrame(state.ctx, canvasW, canvasH, effectiveTime, smokeOpts);
+        const pTime = (particleTime !== undefined) ? particleTime : effectiveTime;
+
+        if (window.SmokeEffectEngine) {
+            const smokeLayers = getSmokeLayersList(activeClip);
+            for (let i = 0; i < smokeLayers.length; i++) {
+                const layer = smokeLayers[i];
+                if (layer && layer.enabled && isEffectInTimeRange(layer, effectiveTime)) {
+                    window.SmokeEffectEngine.renderFrame(state.ctx, canvasW, canvasH, pTime, layer);
+                }
+            }
         }
 
-        const glitterOpts = resolveEffectOpts(activeClip, 'glitterOptions', 'glitterOptions');
-        if (window.GlitterEffectEngine && isEffectInTimeRange(glitterOpts, effectiveTime)) {
-            window.GlitterEffectEngine.renderFrame(state.ctx, canvasW, canvasH, effectiveTime, glitterOpts);
+        if (window.GlitterEffectEngine) {
+            const glitterLayers = getGlitterLayersList(activeClip);
+            for (let i = 0; i < glitterLayers.length; i++) {
+                const layer = glitterLayers[i];
+                if (layer && layer.enabled && isEffectInTimeRange(layer, effectiveTime)) {
+                    window.GlitterEffectEngine.renderFrame(state.ctx, canvasW, canvasH, pTime, layer);
+                }
+            }
         }
     }
 
     let _particleOverlayLoopId = null;
     function _hasParticleOverlayActive() {
         const activeClip = state.clips ? state.clips.find(c => c.id === state.activeClipId) : null;
-        const smoke = resolveEffectOpts(activeClip, 'smokeOptions', 'smokeOptions');
-        const glitter = resolveEffectOpts(activeClip, 'glitterOptions', 'glitterOptions');
-        const t = state.currentTime || 0;
-        return isEffectInTimeRange(smoke, t) || isEffectInTimeRange(glitter, t);
+        const t = (state.customExportTime !== undefined) ? state.customExportTime : (state.currentTime || 0);
+        const smokeLayers = getSmokeLayersList(activeClip);
+        for (let i = 0; i < smokeLayers.length; i++) {
+            if (smokeLayers[i] && smokeLayers[i].enabled && isEffectInTimeRange(smokeLayers[i], t)) return true;
+        }
+        const glitterLayers = getGlitterLayersList(activeClip);
+        for (let i = 0; i < glitterLayers.length; i++) {
+            if (glitterLayers[i] && glitterLayers[i].enabled && isEffectInTimeRange(glitterLayers[i], t)) return true;
+        }
+        return false;
     }
     function startParticleOverlayLoop() {
         if (_particleOverlayLoopId) return;
@@ -9753,7 +9796,11 @@ document.addEventListener('DOMContentLoaded', () => {
                 _particleOverlayLoopId = null;
                 return;
             }
-            if (state.isPlaying || !_hasParticleOverlayActive()) {
+            if (state.isPlaying) {
+                _particleOverlayLoopId = null;
+                return;
+            }
+            if (!_hasParticleOverlayActive()) {
                 _particleOverlayLoopId = null;
                 return;
             }
@@ -20786,6 +20833,8 @@ document.addEventListener('DOMContentLoaded', () => {
                     return copy;
                 }),
                 blurRegions: state.blurRegions,
+                smokeLayers: state.smokeLayers,
+                glitterLayers: state.glitterLayers,
                 subtitles: state.subtitles,
                 clips: state.clips.map(c => {
                     const copy = {...c};
@@ -21336,6 +21385,37 @@ document.addEventListener('DOMContentLoaded', () => {
             if (typeof renderFillList === 'function') renderFillList();
             if (window.renderMultiTrackPanel) window.renderMultiTrackPanel();
             if (window.syncPhase9ClipUI) window.syncPhase9ClipUI();
+            // Reset all global and clip-level Phase 13 particle & 3D properties
+            state.smokeLayers = [];
+            state.glitterLayers = [];
+            state.smokeOptions = null;
+            state.glitterOptions = null;
+            state.rotX = 0;
+            state.rotY = 0;
+            state.rotZ = 0;
+            state.rot3dEnabled = false;
+            state.rot3dMode = 'continuous';
+            state.rot3dSpeed = 1.0;
+            state.flipH = false;
+            state.flipV = false;
+            if (state.clips && state.clips.length > 0) {
+                state.clips.forEach(c => {
+                    c.smokeLayers = [];
+                    c.glitterLayers = [];
+                    c.smokeOptions = null;
+                    c.glitterOptions = null;
+                    c.rotX = 0;
+                    c.rotY = 0;
+                    c.rotZ = 0;
+                    c.rot3dEnabled = false;
+                    c.rot3dMode = 'continuous';
+                    c.rot3dSpeed = 1.0;
+                    c.flipH = false;
+                    c.flipV = false;
+                });
+            }
+            if (typeof window.syncPhase133DAndSmokeUI === 'function') window.syncPhase133DAndSmokeUI();
+            if (typeof window.stopParticleOverlayLoop === 'function') window.stopParticleOverlayLoop();
             drawFrame();
         } finally {
             editorIsResetting = false;
@@ -21975,6 +22055,25 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // --- Keyboard Shortcuts (Phase 7F & Quick Navigation) ---
     window.addEventListener('keydown', (e) => {
+        // 1. NEVER intercept keyboard shortcuts when user is typing in ANY input, textarea, select, or editable element
+        const isInputTarget = e.target && (
+            e.target.tagName === 'INPUT' || 
+            e.target.tagName === 'TEXTAREA' || 
+            e.target.tagName === 'SELECT' || 
+            e.target.isContentEditable ||
+            (typeof e.target.closest === 'function' && !!e.target.closest('input, textarea, select, [contenteditable="true"]'))
+        );
+        const isInputActive = document.activeElement && (
+            document.activeElement.tagName === 'INPUT' || 
+            document.activeElement.tagName === 'TEXTAREA' || 
+            document.activeElement.tagName === 'SELECT' || 
+            document.activeElement.isContentEditable
+        );
+
+        if (isInputTarget || isInputActive) {
+            return;
+        }
+
         // Handle Alt + Number shortcuts (Alt+1 to Alt+5)
         if (e.altKey && e.key >= '1' && e.key <= '5') {
             e.preventDefault();
@@ -22003,17 +22102,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 return;
             }
         }
-
-        // Ignore shortcuts if the user is typing in any input field or textarea
-        const activeEl = document.activeElement;
-        if (activeEl && (
-            activeEl.tagName === 'INPUT' || 
-            activeEl.tagName === 'TEXTAREA' || 
-            activeEl.isContentEditable
-        )) {
-            return;
-        }
-
         const activeClip = state.clips.find(c => c.id === state.activeClipId);
         if (!activeClip) return;
 
@@ -22259,300 +22347,575 @@ document.addEventListener('DOMContentLoaded', () => {
             });
         }
 
-        // --- Smoke & Fog Effect Controls ---
-        const smokeToggle = document.getElementById('smoke-toggle');
-        const smokeContainer = document.getElementById('smoke-controls-container');
-        const smokeColorInput = document.getElementById('smoke-color-input');
-        const smokeColorVal = document.getElementById('smoke-color-val');
-        const smokeBlendMode = document.getElementById('smoke-blend-mode');
-        const smokeDensitySlider = document.getElementById('smoke-density-slider');
-        const smokeDensityVal = document.getElementById('smoke-density-val');
-        const smokeSpeedSlider = document.getElementById('smoke-speed-slider');
-        const smokeSpeedVal = document.getElementById('smoke-speed-val');
-        const smokeDirectionSlider = document.getElementById('smoke-direction-slider');
-        const smokeDirectionVal = document.getElementById('smoke-direction-val');
-        const smokeOpacitySlider = document.getElementById('smoke-opacity-slider');
-        const smokeOpacityVal = document.getElementById('smoke-opacity-val');
-        const smokeStartInput = document.getElementById('smoke-start-input');
-        const smokeEndInput = document.getElementById('smoke-end-input');
-
-        function getSmokeOpts() {
+        // --- Multi-Segment Smoke & Fog UI System ---
+        function getActiveSmokeLayersArray() {
             const activeClip = state.clips ? state.clips.find(c => c.id === state.activeClipId) : null;
             if (activeClip) {
-                if (!activeClip.smokeOptions) {
-                    activeClip.smokeOptions = { enabled: false, preset: 'smoke', color: '#b8c4d0', density: 22, speed: 0.7, direction: -90, opacity: 38, blendMode: 'screen', startSec: null, endSec: null };
-                }
-                return activeClip.smokeOptions;
+                if (!Array.isArray(activeClip.smokeLayers)) activeClip.smokeLayers = [];
+                return activeClip.smokeLayers;
             }
-            if (!state.smokeOptions) {
-                state.smokeOptions = { enabled: false, preset: 'smoke', color: '#b8c4d0', density: 22, speed: 0.7, direction: -90, opacity: 38, blendMode: 'screen', startSec: null, endSec: null };
+            if (!Array.isArray(state.smokeLayers)) state.smokeLayers = [];
+            return state.smokeLayers;
+        }
+
+        function formatTimeBadge(startSec, endSec) {
+            const hasStart = startSec != null && !isNaN(startSec);
+            const hasEnd = endSec != null && !isNaN(endSec);
+            if (!hasStart && !hasEnd) return 'Full Video (পুরো ভিডিও)';
+            const sStr = hasStart ? parseFloat(startSec).toFixed(1) + 's' : '0.0s';
+            const eStr = hasEnd ? parseFloat(endSec).toFixed(1) + 's' : 'End';
+            return sStr + ' - ' + eStr;
+        }
+
+        function renderSmokeSegmentsUI() {
+            const listEl = document.getElementById('smoke-segments-list');
+            if (!listEl) return;
+            const layers = getActiveSmokeLayersArray();
+            listEl.innerHTML = '';
+
+            if (layers.length === 0) {
+                const empty = document.createElement('div');
+                empty.className = 'particle-empty-state';
+                empty.innerHTML = '<p><i class="fa-solid fa-smog" style="color:#38bdf8; margin-right:6px;"></i>কোনো ধোঁয়া সেগমেন্ট তৈরি করা হয়নি। নতুন যোগ করতে নিচের বাটনে চাপুন।</p>';
+                listEl.appendChild(empty);
+                return;
             }
-            return state.smokeOptions;
-        }
 
-        function syncSmokeUI() {
-            const s = getSmokeOpts();
-            if (smokeToggle) smokeToggle.checked = !!s.enabled;
-            if (smokeContainer) smokeContainer.style.display = s.enabled ? 'block' : 'none';
+            layers.forEach((seg, idx) => {
+                if (!seg.id) seg.id = 'smoke_' + Date.now() + '_' + idx;
+                if (!seg.name) seg.name = 'ধোঁয়া সেগমেন্ট ' + (idx + 1);
 
-            if (smokeColorInput) smokeColorInput.value = s.color || '#b8c4d0';
-            if (smokeColorVal) smokeColorVal.textContent = s.color || '#b8c4d0';
-            if (smokeBlendMode) smokeBlendMode.value = s.blendMode || 'screen';
+                const item = document.createElement('div');
+                item.className = 'particle-segment-item' + (seg.expanded !== false ? ' expanded' : '');
+                item.dataset.id = seg.id;
 
-            if (smokeDensitySlider) smokeDensitySlider.value = s.density || 22;
-            if (smokeDensityVal) smokeDensityVal.textContent = s.density || 22;
+                const timeBadgeText = formatTimeBadge(seg.startSec, seg.endSec);
 
-            if (smokeSpeedSlider) smokeSpeedSlider.value = s.speed || 0.7;
-            if (smokeSpeedVal) smokeSpeedVal.textContent = (s.speed || 0.7) + 'x';
+                item.innerHTML = `
+                    <div class="particle-segment-header">
+                        <div class="particle-segment-title-area">
+                            <label class="switch" style="margin:0; transform:scale(0.8); transform-origin:left center;" title="এই সেগমেন্ট অন/অফ করুন" onclick="event.stopPropagation();">
+                                <input type="checkbox" class="smoke-seg-toggle" ${seg.enabled !== false ? 'checked' : ''}>
+                                <span class="slider round"></span>
+                            </label>
+                            <span class="particle-segment-name">${seg.name}</span>
+                            <span class="particle-time-badge">${timeBadgeText}</span>
+                        </div>
+                        <div class="particle-segment-actions">
+                            <button type="button" class="particle-del-btn smoke-seg-del-btn" title="এই সেগমেন্ট মুছে ফেলুন (Delete)" onclick="event.stopPropagation();">
+                                <i class="fa-solid fa-trash"></i>
+                            </button>
+                            <i class="fa-solid fa-chevron-down particle-chevron"></i>
+                        </div>
+                    </div>
+                    <div class="particle-segment-body">
+                        <div style="font-weight:600; font-size:11px; margin-bottom:6px; color:#cbd5e1;">Smoke Presets (ধোঁয়ার ধরন):</div>
+                        <div style="display:grid; grid-template-columns: repeat(3, 1fr); gap:6px; margin-bottom:10px;">
+                            <button type="button" class="btn btn-sm btn-outline ${seg.preset === 'smoke' ? 'active' : ''}" data-preset="smoke">Dense Smoke</button>
+                            <button type="button" class="btn btn-sm btn-outline ${seg.preset === 'fog' ? 'active' : ''}" data-preset="fog">Mystic Fog</button>
+                            <button type="button" class="btn btn-sm btn-outline ${seg.preset === 'mystic' ? 'active' : ''}" data-preset="mystic">Purple Magic</button>
+                            <button type="button" class="btn btn-sm btn-outline ${seg.preset === 'dark_smoke' ? 'active' : ''}" data-preset="dark_smoke">Dark Fire</button>
+                            <button type="button" class="btn btn-sm btn-outline ${seg.preset === 'golden_mist' ? 'active' : ''}" data-preset="golden_mist">Golden Mist</button>
+                        </div>
 
-            if (smokeDirectionSlider) smokeDirectionSlider.value = s.direction || -90;
-            if (smokeDirectionVal) smokeDirectionVal.textContent = (s.direction || -90) + '°';
+                        <div style="display:grid; grid-template-columns: 1fr 1fr; gap:10px; margin-bottom:10px;">
+                            <div class="control-group">
+                                <label>Color (রঙ)</label>
+                                <div class="color-picker-wrapper">
+                                    <input type="color" class="smoke-seg-color" value="${seg.color || '#b8c4d0'}">
+                                    <span class="color-value-text smoke-seg-color-val">${seg.color || '#b8c4d0'}</span>
+                                </div>
+                            </div>
+                            <div class="control-group">
+                                <label>Blend Mode (মোড)</label>
+                                <select class="form-select smoke-seg-blend">
+                                    <option value="screen" ${seg.blendMode === 'screen' ? 'selected' : ''}>Screen (উজ্জ্বল)</option>
+                                    <option value="lighter" ${seg.blendMode === 'lighter' ? 'selected' : ''}>Additive Glow</option>
+                                    <option value="source-over" ${seg.blendMode === 'source-over' ? 'selected' : ''}>Normal Overlay</option>
+                                </select>
+                            </div>
+                        </div>
 
-            if (smokeOpacitySlider) smokeOpacitySlider.value = s.opacity || 38;
-            if (smokeOpacityVal) smokeOpacityVal.textContent = (s.opacity || 38) + '%';
+                        <div class="control-group">
+                            <label style="display:flex; justify-content:space-between;">
+                                <span>Density (ঘনত্ব)</span>
+                                <span class="smoke-seg-density-val">${seg.density || 26}</span>
+                            </label>
+                            <input type="range" class="smoke-seg-density" min="10" max="100" value="${seg.density || 26}" step="1">
+                        </div>
 
-            if (smokeStartInput) smokeStartInput.value = (s.startSec != null && !isNaN(s.startSec)) ? s.startSec : '';
-            if (smokeEndInput) smokeEndInput.value = (s.endSec != null && !isNaN(s.endSec)) ? s.endSec : '';
-        }
+                        <div class="control-group mt-2">
+                            <label style="display:flex; justify-content:space-between;">
+                                <span>Speed (গতি)</span>
+                                <span class="smoke-seg-speed-val">${seg.speed || 0.7}x</span>
+                            </label>
+                            <input type="range" class="smoke-seg-speed" min="0.2" max="3.0" value="${seg.speed || 0.7}" step="0.1">
+                        </div>
 
-        if (smokeToggle) {
-            smokeToggle.addEventListener('change', (e) => {
-                const s = getSmokeOpts();
-                s.enabled = e.target.checked;
-                syncSmokeUI();
-                drawFrame();
-                if (s.enabled && typeof window.startParticleOverlayLoop === 'function') window.startParticleOverlayLoop();
-                if (typeof triggerAutoSave === 'function') triggerAutoSave();
-            });
-        }
-        if (smokeStartInput) {
-            smokeStartInput.addEventListener('input', (e) => {
-                const s = getSmokeOpts();
-                s.startSec = (e.target.value === '') ? null : Math.max(0, parseFloat(e.target.value) || 0);
-                drawFrame();
-                if (typeof triggerAutoSave === 'function') triggerAutoSave();
-            });
-        }
-        if (smokeEndInput) {
-            smokeEndInput.addEventListener('input', (e) => {
-                const s = getSmokeOpts();
-                s.endSec = (e.target.value === '') ? null : Math.max(0, parseFloat(e.target.value) || 0);
-                drawFrame();
-                if (typeof triggerAutoSave === 'function') triggerAutoSave();
-            });
-        }
-        if (smokeColorInput) {
-            smokeColorInput.addEventListener('input', (e) => {
-                const s = getSmokeOpts();
-                s.color = e.target.value;
-                if (smokeColorVal) smokeColorVal.textContent = e.target.value;
-                drawFrame();
-            });
-        }
-        if (smokeBlendMode) {
-            smokeBlendMode.addEventListener('change', (e) => {
-                const s = getSmokeOpts();
-                s.blendMode = e.target.value;
-                drawFrame();
-            });
-        }
-        if (smokeDensitySlider) {
-            smokeDensitySlider.addEventListener('input', (e) => {
-                const s = getSmokeOpts();
-                s.density = parseInt(e.target.value) || 22;
-                if (smokeDensityVal) smokeDensityVal.textContent = s.density;
-                drawFrame();
-            });
-        }
-        if (smokeSpeedSlider) {
-            smokeSpeedSlider.addEventListener('input', (e) => {
-                const s = getSmokeOpts();
-                s.speed = parseFloat(e.target.value) || 0.7;
-                if (smokeSpeedVal) smokeSpeedVal.textContent = s.speed + 'x';
-                drawFrame();
-            });
-        }
-        if (smokeDirectionSlider) {
-            smokeDirectionSlider.addEventListener('input', (e) => {
-                const s = getSmokeOpts();
-                s.direction = parseInt(e.target.value) || -90;
-                if (smokeDirectionVal) smokeDirectionVal.textContent = s.direction + '°';
-                drawFrame();
-            });
-        }
-        if (smokeOpacitySlider) {
-            smokeOpacitySlider.addEventListener('input', (e) => {
-                const s = getSmokeOpts();
-                s.opacity = parseInt(e.target.value) || 38;
-                if (smokeOpacityVal) smokeOpacityVal.textContent = s.opacity + '%';
-                drawFrame();
-            });
-        }
+                        <div class="control-group mt-2">
+                            <label style="display:flex; justify-content:space-between;">
+                                <span>Direction (বায়ুর দিক)</span>
+                                <span class="smoke-seg-dir-val">${seg.direction !== undefined ? seg.direction : -90}°</span>
+                            </label>
+                            <input type="range" class="smoke-seg-dir" min="-180" max="180" value="${seg.direction !== undefined ? seg.direction : -90}" step="5">
+                        </div>
 
-        // Smoke Presets
-        ['smoke', 'fog', 'mystic', 'dark_smoke', 'golden_mist'].forEach(pName => {
-            const pBtn = document.getElementById('smoke-preset-' + pName);
-            if (pBtn) {
-                pBtn.addEventListener('click', () => {
-                    const s = getSmokeOpts();
-                    if (window.SmokeEffectEngine && window.SmokeEffectEngine.presets[pName]) {
-                        var p = window.SmokeEffectEngine.presets[pName];
-                        s.preset = pName;
-                        s.color = p.color;
-                        s.density = p.density;
-                        s.speed = p.speed;
-                        s.direction = p.direction;
-                        s.opacity = p.opacity;
-                        s.blendMode = p.blendMode;
-                        
-                        document.querySelectorAll('[id^="smoke-preset-"]').forEach(b => b.classList.remove('active'));
-                        pBtn.classList.add('active');
+                        <div class="control-group mt-2">
+                            <label style="display:flex; justify-content:space-between;">
+                                <span>Opacity (আবছা ভাব)</span>
+                                <span class="smoke-seg-opacity-val">${seg.opacity || 55}%</span>
+                            </label>
+                            <input type="range" class="smoke-seg-opacity" min="10" max="100" value="${seg.opacity || 55}" step="1">
+                        </div>
 
-                        syncSmokeUI();
+                        <div class="mt-3">
+                            <p class="help-text" style="margin-bottom:6px;">ভিডিওর কোন সময় থেকে কোন সময় পর্যন্ত এই ধোঁয়াটি থাকবে:</p>
+                            <div style="display:grid; grid-template-columns: 1fr 1fr; gap:10px;">
+                                <div class="control-group">
+                                    <label>Show From (সেকেন্ড)</label>
+                                    <input type="number" step="any" min="0" class="form-input smoke-seg-start" placeholder="পুরো ভিডিও (0.0)" value="${(seg.startSec != null && !isNaN(seg.startSec)) ? seg.startSec : ''}">
+                                </div>
+                                <div class="control-group">
+                                    <label>Show Until (সেকেন্ড)</label>
+                                    <input type="number" step="any" min="0" class="form-input smoke-seg-end" placeholder="পুরো ভিডিও (End)" value="${(seg.endSec != null && !isNaN(seg.endSec)) ? seg.endSec : ''}">
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                `;
+
+                // Header toggle accordion
+                const header = item.querySelector('.particle-segment-header');
+                header.addEventListener('click', () => {
+                    seg.expanded = !item.classList.contains('expanded');
+                    item.classList.toggle('expanded');
+                });
+
+                // Enabled Toggle
+                const toggle = item.querySelector('.smoke-seg-toggle');
+                toggle.addEventListener('change', (e) => {
+                    seg.enabled = e.target.checked;
+                    drawFrame();
+                    if (seg.enabled && typeof window.startParticleOverlayLoop === 'function') window.startParticleOverlayLoop();
+                    if (typeof triggerAutoSave === 'function') triggerAutoSave();
+                });
+
+                // Delete Button
+                const delBtn = item.querySelector('.smoke-seg-del-btn');
+                delBtn.addEventListener('click', () => {
+                    const idx = layers.findIndex(l => l.id === seg.id);
+                    if (idx !== -1) {
+                        layers.splice(idx, 1);
+                        renderSmokeSegmentsUI();
                         drawFrame();
+                        if (typeof triggerAutoSave === 'function') triggerAutoSave();
                     }
                 });
-            }
-        });
 
-        // --- Golden Glitter Rain Controls ---
-        const glitterToggle = document.getElementById('glitter-toggle');
-        const glitterContainer = document.getElementById('glitter-controls-container');
-        const glitterDensitySlider = document.getElementById('glitter-density-slider');
-        const glitterDensityVal = document.getElementById('glitter-density-val');
-        const glitterSpeedSlider = document.getElementById('glitter-speed-slider');
-        const glitterSpeedVal = document.getElementById('glitter-speed-val');
-        const glitterSizeSlider = document.getElementById('glitter-size-slider');
-        const glitterSizeVal = document.getElementById('glitter-size-val');
-        const glitterOpacitySlider = document.getElementById('glitter-opacity-slider');
-        const glitterOpacityVal = document.getElementById('glitter-opacity-val');
-        const glitterStartInput = document.getElementById('glitter-start-input');
-        const glitterEndInput = document.getElementById('glitter-end-input');
+                // Presets
+                item.querySelectorAll('[data-preset]').forEach(btn => {
+                    btn.addEventListener('click', () => {
+                        const pName = btn.dataset.preset;
+                        if (window.SmokeEffectEngine && window.SmokeEffectEngine.presets[pName]) {
+                            const p = window.SmokeEffectEngine.presets[pName];
+                            seg.preset = pName;
+                            seg.color = p.color;
+                            seg.density = p.density;
+                            seg.speed = p.speed;
+                            seg.direction = p.direction;
+                            seg.opacity = p.opacity;
+                            seg.blendMode = p.blendMode;
+                            renderSmokeSegmentsUI();
+                            drawFrame();
+                            if (typeof window.startParticleOverlayLoop === 'function') window.startParticleOverlayLoop();
+                            if (typeof triggerAutoSave === 'function') triggerAutoSave();
+                        }
+                    });
+                });
 
-        function getGlitterOpts() {
+                // Color
+                const colorInp = item.querySelector('.smoke-seg-color');
+                const colorVal = item.querySelector('.smoke-seg-color-val');
+                colorInp.addEventListener('input', (e) => {
+                    seg.color = e.target.value;
+                    colorVal.textContent = e.target.value;
+                    drawFrame();
+                    if (typeof window.startParticleOverlayLoop === 'function') window.startParticleOverlayLoop();
+                });
+
+                // Blend
+                const blendSel = item.querySelector('.smoke-seg-blend');
+                blendSel.addEventListener('change', (e) => {
+                    seg.blendMode = e.target.value;
+                    drawFrame();
+                    if (typeof window.startParticleOverlayLoop === 'function') window.startParticleOverlayLoop();
+                });
+
+                // Density
+                const densitySlider = item.querySelector('.smoke-seg-density');
+                const densityVal = item.querySelector('.smoke-seg-density-val');
+                densitySlider.addEventListener('input', (e) => {
+                    seg.density = parseInt(e.target.value) || 26;
+                    densityVal.textContent = seg.density;
+                    drawFrame();
+                    if (typeof window.startParticleOverlayLoop === 'function') window.startParticleOverlayLoop();
+                });
+
+                // Speed
+                const speedSlider = item.querySelector('.smoke-seg-speed');
+                const speedVal = item.querySelector('.smoke-seg-speed-val');
+                speedSlider.addEventListener('input', (e) => {
+                    seg.speed = parseFloat(e.target.value) || 0.7;
+                    speedVal.textContent = seg.speed + 'x';
+                    drawFrame();
+                    if (typeof window.startParticleOverlayLoop === 'function') window.startParticleOverlayLoop();
+                });
+
+                // Direction
+                const dirSlider = item.querySelector('.smoke-seg-dir');
+                const dirVal = item.querySelector('.smoke-seg-dir-val');
+                dirSlider.addEventListener('input', (e) => {
+                    seg.direction = parseInt(e.target.value) || -90;
+                    dirVal.textContent = seg.direction + '°';
+                    drawFrame();
+                    if (typeof window.startParticleOverlayLoop === 'function') window.startParticleOverlayLoop();
+                });
+
+                // Opacity
+                const opSlider = item.querySelector('.smoke-seg-opacity');
+                const opVal = item.querySelector('.smoke-seg-opacity-val');
+                opSlider.addEventListener('input', (e) => {
+                    seg.opacity = parseInt(e.target.value) || 55;
+                    opVal.textContent = seg.opacity + '%';
+                    drawFrame();
+                    if (typeof window.startParticleOverlayLoop === 'function') window.startParticleOverlayLoop();
+                });
+
+                // Time ranges
+                const startInp = item.querySelector('.smoke-seg-start');
+                const endInp = item.querySelector('.smoke-seg-end');
+                const badgeEl = item.querySelector('.particle-time-badge');
+
+                const updateTimeBadge = () => {
+                    badgeEl.textContent = formatTimeBadge(seg.startSec, seg.endSec);
+                };
+
+                const handleSmokeTimeChange = () => {
+                    const sVal = startInp.value.trim();
+                    const eVal = endInp.value.trim();
+                    seg.startSec = (sVal === '' || isNaN(parseFloat(sVal))) ? null : Math.max(0, parseFloat(sVal));
+                    seg.endSec = (eVal === '' || isNaN(parseFloat(eVal))) ? null : Math.max(0, parseFloat(eVal));
+                    updateTimeBadge();
+                    drawFrame();
+                    if (typeof window.startParticleOverlayLoop === 'function') window.startParticleOverlayLoop();
+                    if (typeof triggerAutoSave === 'function') triggerAutoSave();
+                };
+
+                startInp.addEventListener('input', handleSmokeTimeChange);
+                startInp.addEventListener('change', handleSmokeTimeChange);
+                endInp.addEventListener('input', handleSmokeTimeChange);
+                endInp.addEventListener('change', handleSmokeTimeChange);
+
+                item.querySelectorAll('input, select').forEach(el => {
+                    el.addEventListener('keydown', e => e.stopPropagation());
+                });
+
+                listEl.appendChild(item);
+            });
+        }
+
+        const addSmokeBtn = document.getElementById('add-smoke-segment-btn');
+        if (addSmokeBtn) {
+            addSmokeBtn.addEventListener('click', () => {
+                const layers = getActiveSmokeLayersArray();
+                const newId = 'smoke_' + Date.now();
+                const newSeg = {
+                    id: newId,
+                    name: 'ধোঁয়া সেগমেন্ট ' + (layers.length + 1),
+                    enabled: true,
+                    preset: 'smoke',
+                    color: '#b8c4d0',
+                    density: 26,
+                    speed: 0.7,
+                    direction: -90,
+                    opacity: 55,
+                    blendMode: 'screen',
+                    startSec: (state.currentTime ? Math.max(0, Math.round(state.currentTime * 10) / 10) : null),
+                    endSec: null,
+                    expanded: true
+                };
+                layers.push(newSeg);
+                renderSmokeSegmentsUI();
+                drawFrame();
+                if (typeof window.startParticleOverlayLoop === 'function') window.startParticleOverlayLoop();
+                if (typeof triggerAutoSave === 'function') triggerAutoSave();
+            });
+        }
+
+        // --- Multi-Segment Golden Glitter Rain UI System ---
+        function getActiveGlitterLayersArray() {
             const activeClip = state.clips ? state.clips.find(c => c.id === state.activeClipId) : null;
             if (activeClip) {
-                if (!activeClip.glitterOptions) {
-                    activeClip.glitterOptions = { enabled: false, preset: 'golden_rain', density: 55, speed: 1.0, size: 1.0, opacity: 75, style: 'mixed', startSec: null, endSec: null };
-                }
-                return activeClip.glitterOptions;
+                if (!Array.isArray(activeClip.glitterLayers)) activeClip.glitterLayers = [];
+                return activeClip.glitterLayers;
             }
-            if (!state.glitterOptions) {
-                state.glitterOptions = { enabled: false, preset: 'golden_rain', density: 55, speed: 1.0, size: 1.0, opacity: 75, style: 'mixed', startSec: null, endSec: null };
+            if (!Array.isArray(state.glitterLayers)) state.glitterLayers = [];
+            return state.glitterLayers;
+        }
+
+        function renderGlitterSegmentsUI() {
+            const listEl = document.getElementById('glitter-segments-list');
+            if (!listEl) return;
+            const layers = getActiveGlitterLayersArray();
+            listEl.innerHTML = '';
+
+            if (layers.length === 0) {
+                const empty = document.createElement('div');
+                empty.className = 'particle-empty-state';
+                empty.innerHTML = '<p><i class="fa-solid fa-star" style="color:#fbbf24; margin-right:6px;"></i>কোনো গ্লিটার সেগমেন্ট তৈরি করা হয়নি। নতুন যোগ করতে নিচের বাটনে চাপুন।</p>';
+                listEl.appendChild(empty);
+                return;
             }
-            return state.glitterOptions;
-        }
 
-        function syncGlitterUI() {
-            const g = getGlitterOpts();
-            if (glitterToggle) glitterToggle.checked = !!g.enabled;
-            if (glitterContainer) glitterContainer.style.display = g.enabled ? 'block' : 'none';
+            layers.forEach((seg, idx) => {
+                if (!seg.id) seg.id = 'glitter_' + Date.now() + '_' + idx;
+                if (!seg.name) seg.name = 'গ্লিটার সেগমেন্ট ' + (idx + 1);
 
-            if (glitterDensitySlider) glitterDensitySlider.value = g.density || 55;
-            if (glitterDensityVal) glitterDensityVal.textContent = g.density || 55;
+                const item = document.createElement('div');
+                item.className = 'particle-segment-item' + (seg.expanded !== false ? ' expanded' : '');
+                item.dataset.id = seg.id;
 
-            if (glitterSpeedSlider) glitterSpeedSlider.value = g.speed || 1.0;
-            if (glitterSpeedVal) glitterSpeedVal.textContent = (g.speed || 1.0) + 'x';
+                const timeBadgeText = formatTimeBadge(seg.startSec, seg.endSec);
 
-            if (glitterSizeSlider) glitterSizeSlider.value = g.size || 1.0;
-            if (glitterSizeVal) glitterSizeVal.textContent = (g.size || 1.0) + 'x';
+                item.innerHTML = `
+                    <div class="particle-segment-header">
+                        <div class="particle-segment-title-area">
+                            <label class="switch" style="margin:0; transform:scale(0.8); transform-origin:left center;" title="এই সেগমেন্ট অন/অফ করুন" onclick="event.stopPropagation();">
+                                <input type="checkbox" class="glitter-seg-toggle" ${seg.enabled !== false ? 'checked' : ''}>
+                                <span class="slider round"></span>
+                            </label>
+                            <span class="particle-segment-name">${seg.name}</span>
+                            <span class="particle-time-badge glitter-badge">${timeBadgeText}</span>
+                        </div>
+                        <div class="particle-segment-actions">
+                            <button type="button" class="particle-del-btn glitter-seg-del-btn" title="এই সেগমেন্ট মুছে ফেলুন (Delete)" onclick="event.stopPropagation();">
+                                <i class="fa-solid fa-trash"></i>
+                            </button>
+                            <i class="fa-solid fa-chevron-down particle-chevron"></i>
+                        </div>
+                    </div>
+                    <div class="particle-segment-body">
+                        <div style="font-weight:600; font-size:11px; margin-bottom:6px; color:#cbd5e1;">Glitter Presets (ঝিরিঝিরির ধরন):</div>
+                        <div style="display:grid; grid-template-columns: repeat(2, 1fr); gap:6px; margin-bottom:10px;">
+                            <button type="button" class="btn btn-sm btn-outline ${seg.preset === 'golden_rain' ? 'active' : ''}" data-gpreset="golden_rain">Golden Rain</button>
+                            <button type="button" class="btn btn-sm btn-outline ${seg.preset === 'sparkle_stars' ? 'active' : ''}" data-gpreset="sparkle_stars">Sparkle Stars</button>
+                            <button type="button" class="btn btn-sm btn-outline ${seg.preset === 'confetti' ? 'active' : ''}" data-gpreset="confetti">Confetti</button>
+                            <button type="button" class="btn btn-sm btn-outline ${seg.preset === 'soft_dust' ? 'active' : ''}" data-gpreset="soft_dust">Soft Dust</button>
+                        </div>
 
-            if (glitterOpacitySlider) glitterOpacitySlider.value = g.opacity || 75;
-            if (glitterOpacityVal) glitterOpacityVal.textContent = (g.opacity || 75) + '%';
+                        <div class="control-group">
+                            <label style="display:flex; justify-content:space-between;">
+                                <span>Density (ঘনত্ব)</span>
+                                <span class="glitter-seg-density-val">${seg.density || 65}</span>
+                            </label>
+                            <input type="range" class="glitter-seg-density" min="10" max="120" value="${seg.density || 65}" step="1">
+                        </div>
 
-            if (glitterStartInput) glitterStartInput.value = (g.startSec != null && !isNaN(g.startSec)) ? g.startSec : '';
-            if (glitterEndInput) glitterEndInput.value = (g.endSec != null && !isNaN(g.endSec)) ? g.endSec : '';
-        }
+                        <div class="control-group mt-2">
+                            <label style="display:flex; justify-content:space-between;">
+                                <span>Speed (গতি)</span>
+                                <span class="glitter-seg-speed-val">${seg.speed || 1.0}x</span>
+                            </label>
+                            <input type="range" class="glitter-seg-speed" min="0.2" max="3.0" value="${seg.speed || 1.0}" step="0.1">
+                        </div>
 
-        if (glitterToggle) {
-            glitterToggle.addEventListener('change', (e) => {
-                const g = getGlitterOpts();
-                g.enabled = e.target.checked;
-                syncGlitterUI();
-                drawFrame();
-                if (g.enabled && typeof window.startParticleOverlayLoop === 'function') window.startParticleOverlayLoop();
-                if (typeof triggerAutoSave === 'function') triggerAutoSave();
-            });
-        }
-        if (glitterStartInput) {
-            glitterStartInput.addEventListener('input', (e) => {
-                const g = getGlitterOpts();
-                g.startSec = (e.target.value === '') ? null : Math.max(0, parseFloat(e.target.value) || 0);
-                drawFrame();
-                if (typeof triggerAutoSave === 'function') triggerAutoSave();
-            });
-        }
-        if (glitterEndInput) {
-            glitterEndInput.addEventListener('input', (e) => {
-                const g = getGlitterOpts();
-                g.endSec = (e.target.value === '') ? null : Math.max(0, parseFloat(e.target.value) || 0);
-                drawFrame();
-                if (typeof triggerAutoSave === 'function') triggerAutoSave();
-            });
-        }
-        if (glitterDensitySlider) {
-            glitterDensitySlider.addEventListener('input', (e) => {
-                const g = getGlitterOpts();
-                g.density = parseInt(e.target.value) || 55;
-                if (glitterDensityVal) glitterDensityVal.textContent = g.density;
-                drawFrame();
-            });
-        }
-        if (glitterSpeedSlider) {
-            glitterSpeedSlider.addEventListener('input', (e) => {
-                const g = getGlitterOpts();
-                g.speed = parseFloat(e.target.value) || 1.0;
-                if (glitterSpeedVal) glitterSpeedVal.textContent = g.speed + 'x';
-                drawFrame();
-            });
-        }
-        if (glitterSizeSlider) {
-            glitterSizeSlider.addEventListener('input', (e) => {
-                const g = getGlitterOpts();
-                g.size = parseFloat(e.target.value) || 1.0;
-                if (glitterSizeVal) glitterSizeVal.textContent = g.size + 'x';
-                drawFrame();
-            });
-        }
-        if (glitterOpacitySlider) {
-            glitterOpacitySlider.addEventListener('input', (e) => {
-                const g = getGlitterOpts();
-                g.opacity = parseInt(e.target.value) || 75;
-                if (glitterOpacityVal) glitterOpacityVal.textContent = g.opacity + '%';
-                drawFrame();
-            });
-        }
+                        <div class="control-group mt-2">
+                            <label style="display:flex; justify-content:space-between;">
+                                <span>Size (আকার)</span>
+                                <span class="glitter-seg-size-val">${seg.size || 1.1}x</span>
+                            </label>
+                            <input type="range" class="glitter-seg-size" min="0.3" max="2.5" value="${seg.size || 1.1}" step="0.1">
+                        </div>
 
-        // Glitter Presets
-        ['golden_rain', 'sparkle_stars', 'confetti', 'soft_dust'].forEach(pName => {
-            const pBtn = document.getElementById('glitter-preset-' + pName);
-            if (pBtn) {
-                pBtn.addEventListener('click', () => {
-                    const g = getGlitterOpts();
-                    if (window.GlitterEffectEngine && window.GlitterEffectEngine.presets[pName]) {
-                        var p = window.GlitterEffectEngine.presets[pName];
-                        g.preset = pName;
-                        g.density = p.density;
-                        g.speed = p.speed;
-                        g.size = p.size;
-                        g.opacity = p.opacity;
-                        g.style = p.style;
+                        <div class="control-group mt-2">
+                            <label style="display:flex; justify-content:space-between;">
+                                <span>Opacity (আবছা ভাব)</span>
+                                <span class="glitter-seg-opacity-val">${seg.opacity || 85}%</span>
+                            </label>
+                            <input type="range" class="glitter-seg-opacity" min="10" max="100" value="${seg.opacity || 85}" step="1">
+                        </div>
 
-                        document.querySelectorAll('[id^="glitter-preset-"]').forEach(b => b.classList.remove('active'));
-                        pBtn.classList.add('active');
+                        <div class="mt-3">
+                            <p class="help-text" style="margin-bottom:6px;">ভিডিওর কোন সময় থেকে কোন সময় পর্যন্ত এই গ্লিটারটি থাকবে:</p>
+                            <div style="display:grid; grid-template-columns: 1fr 1fr; gap:10px;">
+                                <div class="control-group">
+                                    <label>Show From (সেকেন্ড)</label>
+                                    <input type="number" step="any" min="0" class="form-input glitter-seg-start" placeholder="পুরো ভিডিও (0.0)" value="${(seg.startSec != null && !isNaN(seg.startSec)) ? seg.startSec : ''}">
+                                </div>
+                                <div class="control-group">
+                                    <label>Show Until (সেকেন্ড)</label>
+                                    <input type="number" step="any" min="0" class="form-input glitter-seg-end" placeholder="পুরো ভিডিও (End)" value="${(seg.endSec != null && !isNaN(seg.endSec)) ? seg.endSec : ''}">
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                `;
 
-                        syncGlitterUI();
+                // Header toggle accordion
+                const header = item.querySelector('.particle-segment-header');
+                header.addEventListener('click', () => {
+                    seg.expanded = !item.classList.contains('expanded');
+                    item.classList.toggle('expanded');
+                });
+
+                // Enabled Toggle
+                const toggle = item.querySelector('.glitter-seg-toggle');
+                toggle.addEventListener('change', (e) => {
+                    seg.enabled = e.target.checked;
+                    drawFrame();
+                    if (seg.enabled && typeof window.startParticleOverlayLoop === 'function') window.startParticleOverlayLoop();
+                    if (typeof triggerAutoSave === 'function') triggerAutoSave();
+                });
+
+                // Delete Button
+                const delBtn = item.querySelector('.glitter-seg-del-btn');
+                delBtn.addEventListener('click', () => {
+                    const idx = layers.findIndex(l => l.id === seg.id);
+                    if (idx !== -1) {
+                        layers.splice(idx, 1);
+                        renderGlitterSegmentsUI();
                         drawFrame();
+                        if (typeof triggerAutoSave === 'function') triggerAutoSave();
                     }
                 });
-            }
-        });
 
-        // Sync UI on clip change
+                // Presets
+                item.querySelectorAll('[data-gpreset]').forEach(btn => {
+                    btn.addEventListener('click', () => {
+                        const pName = btn.dataset.gpreset;
+                        if (window.GlitterEffectEngine && window.GlitterEffectEngine.presets[pName]) {
+                            const p = window.GlitterEffectEngine.presets[pName];
+                            seg.preset = pName;
+                            seg.density = p.density;
+                            seg.speed = p.speed;
+                            seg.size = p.size;
+                            seg.opacity = p.opacity;
+                            seg.style = p.style;
+                            renderGlitterSegmentsUI();
+                            drawFrame();
+                            if (typeof window.startParticleOverlayLoop === 'function') window.startParticleOverlayLoop();
+                            if (typeof triggerAutoSave === 'function') triggerAutoSave();
+                        }
+                    });
+                });
+
+                // Density
+                const densitySlider = item.querySelector('.glitter-seg-density');
+                const densityVal = item.querySelector('.glitter-seg-density-val');
+                densitySlider.addEventListener('input', (e) => {
+                    seg.density = parseInt(e.target.value) || 65;
+                    densityVal.textContent = seg.density;
+                    drawFrame();
+                    if (typeof window.startParticleOverlayLoop === 'function') window.startParticleOverlayLoop();
+                });
+
+                // Speed
+                const speedSlider = item.querySelector('.glitter-seg-speed');
+                const speedVal = item.querySelector('.glitter-seg-speed-val');
+                speedSlider.addEventListener('input', (e) => {
+                    seg.speed = parseFloat(e.target.value) || 1.0;
+                    speedVal.textContent = seg.speed + 'x';
+                    drawFrame();
+                    if (typeof window.startParticleOverlayLoop === 'function') window.startParticleOverlayLoop();
+                });
+
+                // Size
+                const sizeSlider = item.querySelector('.glitter-seg-size');
+                const sizeVal = item.querySelector('.glitter-seg-size-val');
+                sizeSlider.addEventListener('input', (e) => {
+                    seg.size = parseFloat(e.target.value) || 1.1;
+                    sizeVal.textContent = seg.size + 'x';
+                    drawFrame();
+                    if (typeof window.startParticleOverlayLoop === 'function') window.startParticleOverlayLoop();
+                });
+
+                // Opacity
+                const opSlider = item.querySelector('.glitter-seg-opacity');
+                const opVal = item.querySelector('.glitter-seg-opacity-val');
+                opSlider.addEventListener('input', (e) => {
+                    seg.opacity = parseInt(e.target.value) || 85;
+                    opVal.textContent = seg.opacity + '%';
+                    drawFrame();
+                    if (typeof window.startParticleOverlayLoop === 'function') window.startParticleOverlayLoop();
+                });
+
+                // Time ranges
+                const startInp = item.querySelector('.glitter-seg-start');
+                const endInp = item.querySelector('.glitter-seg-end');
+                const badgeEl = item.querySelector('.particle-time-badge');
+
+                const updateTimeBadge = () => {
+                    badgeEl.textContent = formatTimeBadge(seg.startSec, seg.endSec);
+                };
+
+                const handleSmokeTimeChange = () => {
+                    const sVal = startInp.value.trim();
+                    const eVal = endInp.value.trim();
+                    seg.startSec = (sVal === '' || isNaN(parseFloat(sVal))) ? null : Math.max(0, parseFloat(sVal));
+                    seg.endSec = (eVal === '' || isNaN(parseFloat(eVal))) ? null : Math.max(0, parseFloat(eVal));
+                    updateTimeBadge();
+                    drawFrame();
+                    if (typeof window.startParticleOverlayLoop === 'function') window.startParticleOverlayLoop();
+                    if (typeof triggerAutoSave === 'function') triggerAutoSave();
+                };
+
+                startInp.addEventListener('input', handleSmokeTimeChange);
+                startInp.addEventListener('change', handleSmokeTimeChange);
+                endInp.addEventListener('input', handleSmokeTimeChange);
+                endInp.addEventListener('change', handleSmokeTimeChange);
+
+                item.querySelectorAll('input, select').forEach(el => {
+                    el.addEventListener('keydown', e => e.stopPropagation());
+                });
+
+                listEl.appendChild(item);
+            });
+        }
+
+        const addGlitterBtn = document.getElementById('add-glitter-segment-btn');
+        if (addGlitterBtn) {
+            addGlitterBtn.addEventListener('click', () => {
+                const layers = getActiveGlitterLayersArray();
+                const newId = 'glitter_' + Date.now();
+                const newSeg = {
+                    id: newId,
+                    name: 'গ্লিটার সেগমেন্ট ' + (layers.length + 1),
+                    enabled: true,
+                    preset: 'golden_rain',
+                    style: 'mixed',
+                    density: 65,
+                    speed: 1.0,
+                    size: 1.1,
+                    opacity: 85,
+                    startSec: (state.currentTime ? Math.max(0, Math.round(state.currentTime * 10) / 10) : null),
+                    endSec: null,
+                    expanded: true
+                };
+                layers.push(newSeg);
+                renderGlitterSegmentsUI();
+                drawFrame();
+                if (typeof window.startParticleOverlayLoop === 'function') window.startParticleOverlayLoop();
+                if (typeof triggerAutoSave === 'function') triggerAutoSave();
+            });
+        }
+
+        window.renderSmokeSegmentsUI = renderSmokeSegmentsUI;
+        window.renderGlitterSegmentsUI = renderGlitterSegmentsUI;
+
         window.syncPhase133DAndSmokeUI = function () {
             updateRotUI();
-            syncSmokeUI();
-            syncGlitterUI();
+            renderSmokeSegmentsUI();
+            renderGlitterSegmentsUI();
         };
     }
 

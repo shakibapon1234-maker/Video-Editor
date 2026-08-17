@@ -4232,3 +4232,174 @@ input:checked + .slider:before {
     color: var(--text-secondary, #94a3b8);
 }
 
+/* Multi-segment Particle List Styles */
+.particle-add-btn {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 9px 14px;
+    border-radius: 8px;
+    font-size: 12px;
+    font-weight: 600;
+    border: 1px dashed rgba(56, 189, 248, 0.4);
+    background: linear-gradient(135deg, rgba(56, 189, 248, 0.08), rgba(99, 102, 241, 0.04));
+    color: #38bdf8;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    margin-top: 6px;
+}
+
+.particle-add-btn:hover {
+    border-color: #38bdf8;
+    background: linear-gradient(135deg, rgba(56, 189, 248, 0.16), rgba(99, 102, 241, 0.1));
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(56, 189, 248, 0.15);
+}
+
+.particle-segment-item {
+    background: rgba(15, 23, 42, 0.55);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 8px;
+    margin-bottom: 10px;
+    overflow: hidden;
+    transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.particle-segment-item:hover {
+    border-color: rgba(255, 255, 255, 0.18);
+}
+
+.particle-segment-item.active-preview {
+    border-color: rgba(56, 189, 248, 0.5);
+    box-shadow: 0 0 12px rgba(56, 189, 248, 0.12);
+}
+
+.particle-segment-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 9px 12px;
+    cursor: pointer;
+    background: rgba(255, 255, 255, 0.02);
+    user-select: none;
+    transition: background 0.15s ease;
+}
+
+.particle-segment-header:hover {
+    background: rgba(255, 255, 255, 0.05);
+}
+
+.particle-segment-title-area {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+    flex: 1;
+}
+
+.particle-segment-title-area .switch {
+    width: 32px;
+    height: 18px;
+    flex-shrink: 0;
+    margin: 0;
+}
+
+.particle-segment-title-area .switch .slider:before {
+    height: 12px;
+    width: 12px;
+    left: 3px;
+    bottom: 3px;
+}
+
+.particle-segment-title-area .switch input:checked + .slider:before {
+    transform: translateX(14px);
+}
+
+.particle-segment-name {
+    font-size: 12px;
+    font-weight: 600;
+    color: #e2e8f0;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.particle-time-badge {
+    font-size: 10px;
+    font-weight: 600;
+    padding: 2px 7px;
+    border-radius: 12px;
+    background: rgba(56, 189, 248, 0.15);
+    color: #38bdf8;
+    border: 1px solid rgba(56, 189, 248, 0.3);
+    white-space: nowrap;
+    flex-shrink: 0;
+}
+
+.particle-time-badge.glitter-badge {
+    background: rgba(251, 191, 36, 0.15);
+    color: #fbbf24;
+    border-color: rgba(251, 191, 36, 0.3);
+}
+
+.particle-segment-actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-shrink: 0;
+}
+
+.particle-del-btn {
+    background: none;
+    border: none;
+    color: #94a3b8;
+    cursor: pointer;
+    padding: 4px 6px;
+    border-radius: 4px;
+    font-size: 12px;
+    transition: all 0.15s ease;
+}
+
+.particle-del-btn:hover {
+    color: #ef4444;
+    background: rgba(239, 68, 68, 0.12);
+}
+
+.particle-chevron {
+    font-size: 11px;
+    color: #64748b;
+    transition: transform 0.2s ease;
+}
+
+.particle-segment-item.expanded .particle-chevron {
+    transform: rotate(180deg);
+}
+
+.particle-segment-body {
+    padding: 12px;
+    border-top: 1px solid rgba(255, 255, 255, 0.06);
+    background: rgba(0, 0, 0, 0.15);
+    display: none;
+}
+
+.particle-segment-item.expanded .particle-segment-body {
+    display: block;
+}
+
+.particle-empty-state {
+    padding: 14px 10px;
+    text-align: center;
+    border: 1px dashed rgba(255, 255, 255, 0.08);
+    border-radius: 8px;
+    margin-bottom: 8px;
+    background: rgba(255, 255, 255, 0.01);
+}
+
+.particle-empty-state p {
+    font-size: 11px;
+    color: var(--text-secondary, #94a3b8);
+    margin: 0;
+}
+

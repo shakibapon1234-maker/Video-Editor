@@ -1474,7 +1474,20 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Keyboard undo/redo
     window.addEventListener('keydown', (e) => {
-        if (e.target && (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.isContentEditable)) return;
+        const isInputTarget = e.target && (
+            e.target.tagName === 'INPUT' || 
+            e.target.tagName === 'TEXTAREA' || 
+            e.target.tagName === 'SELECT' || 
+            e.target.isContentEditable ||
+            (typeof e.target.closest === 'function' && !!e.target.closest('input, textarea, select, [contenteditable="true"]'))
+        );
+        const isInputActive = document.activeElement && (
+            document.activeElement.tagName === 'INPUT' || 
+            document.activeElement.tagName === 'TEXTAREA' || 
+            document.activeElement.tagName === 'SELECT' || 
+            document.activeElement.isContentEditable
+        );
+        if (isInputTarget || isInputActive) return;
         if (e.ctrlKey || e.metaKey) {
             if (e.key.toLowerCase() === 'z' && !e.shiftKey) {
                 e.preventDefault();

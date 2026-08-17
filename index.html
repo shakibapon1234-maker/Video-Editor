@@ -683,166 +683,48 @@
                             </div>
                         </div>
 
-                        <!-- Smoke & Fog Overlay Card (Phase 13) -->
+                        <!-- Smoke & Fog + Golden Glitter Rain Card (Phase 13 — Multi-Segment) -->
                         <div class="card mt-4" id="smoke-effect-card">
-                            <div class="card-header" style="display:flex; align-items:center; justify-content:space-between;">
+                            <div class="card-header" style="display:flex; align-items:center;">
                                 <div style="display:flex; align-items:center; gap:8px;">
-                                    <i class="fa-solid fa-smog card-icon" style="color: #38bdf8;"></i>
-                                    <h3>Smoke & Fog Effect (ধোঁয়া ও কুয়াশা ইফেক্ট)</h3>
+                                    <i class="fa-solid fa-wand-magic-sparkles card-icon" style="color: #38bdf8;"></i>
+                                    <h3>Particle Effects (ধোঁয়া ও গ্লিটার ইফেক্ট)</h3>
                                 </div>
-                                <label class="switch" title="ধোঁয়া/কুয়াশা ইফেক্ট অন/অফ করুন">
-                                    <input type="checkbox" id="smoke-toggle">
-                                    <span class="slider round"></span>
-                                </label>
                             </div>
                             <div class="card-body">
-                                <p class="help-text">ক্যানভাস ও এক্সপোর্ট ভিডিওতে রিয়েল-টাইম ধোঁয়া, কুয়াশা ও রহস্যময় মিস্ট পার্টিকেল যোগ করুন।</p>
 
-                                <div id="smoke-controls-container" style="display:none; margin-top:10px;">
-                                    <div style="font-weight:600; font-size:12px; margin-bottom:6px;">Smoke Presets (ধোঁয়ার ধরন):</div>
-                                    <div style="display:grid; grid-template-columns: repeat(3, 1fr); gap:6px; margin-bottom:12px;">
-                                        <button type="button" class="btn btn-sm btn-outline active" id="smoke-preset-smoke">Dense Smoke</button>
-                                        <button type="button" class="btn btn-sm btn-outline" id="smoke-preset-fog">Mystic Fog</button>
-                                        <button type="button" class="btn btn-sm btn-outline" id="smoke-preset-mystic">Purple Magic</button>
-                                        <button type="button" class="btn btn-sm btn-outline" id="smoke-preset-dark_smoke">Dark Fire</button>
-                                        <button type="button" class="btn btn-sm btn-outline" id="smoke-preset-golden_mist">Golden Mist</button>
-                                    </div>
-
-                                    <div style="display:grid; grid-template-columns: 1fr 1fr; gap:10px; margin-bottom:10px;">
-                                        <div class="control-group">
-                                            <label for="smoke-color-input">Color (ধোঁয়ার রঙ)</label>
-                                            <div class="color-picker-wrapper">
-                                                <input type="color" id="smoke-color-input" value="#b8c4d0">
-                                                <span class="color-value-text" id="smoke-color-val">#b8c4d0</span>
-                                            </div>
-                                        </div>
-                                        <div class="control-group">
-                                            <label for="smoke-blend-mode">Blend Mode (ব্লেন্ড মোড)</label>
-                                            <select id="smoke-blend-mode" class="form-select">
-                                                <option value="screen" selected>Screen (উজ্জ্বল)</option>
-                                                <option value="lighter">Additive Glow (চকচকে)</option>
-                                                <option value="source-over">Normal Overlay</option>
-                                            </select>
-                                        </div>
-                                    </div>
-
-                                    <div class="control-group">
-                                        <label style="display:flex; justify-content:space-between;">
-                                            <span>Density (ঘনত্ব)</span>
-                                            <span id="smoke-density-val">22</span>
-                                        </label>
-                                        <input type="range" id="smoke-density-slider" min="10" max="100" value="22" step="1">
-                                    </div>
-
-                                    <div class="control-group mt-2">
-                                        <label style="display:flex; justify-content:space-between;">
-                                            <span>Speed (গতি)</span>
-                                            <span id="smoke-speed-val">0.7x</span>
-                                        </label>
-                                        <input type="range" id="smoke-speed-slider" min="0.2" max="3.0" value="0.7" step="0.1">
-                                    </div>
-
-                                    <div class="control-group mt-2">
-                                        <label style="display:flex; justify-content:space-between;">
-                                            <span>Direction (বায়ুর দিক)</span>
-                                            <span id="smoke-direction-val">-90°</span>
-                                        </label>
-                                        <input type="range" id="smoke-direction-slider" min="-180" max="180" value="-90" step="5">
-                                    </div>
-
-                                    <div class="control-group mt-2">
-                                        <label style="display:flex; justify-content:space-between;">
-                                            <span>Opacity (আবছা ভাব)</span>
-                                            <span id="smoke-opacity-val">38%</span>
-                                        </label>
-                                        <input type="range" id="smoke-opacity-slider" min="10" max="100" value="38" step="1">
-                                    </div>
-
-                                    <div class="mt-3">
-                                        <p class="help-text">ধোঁয়াটি ভিডিওর কোন সময় থেকে কোন সময় পর্যন্ত দেখা যাবে তা ঠিক করুন। খালি রাখলে পুরো ভিডিও জুড়ে দেখা যাবে।</p>
-                                        <div style="display:grid; grid-template-columns: 1fr 1fr; gap:10px;">
-                                            <div class="control-group">
-                                                <label for="smoke-start-input">Show From (সেকেন্ড)</label>
-                                                <input type="number" id="smoke-start-input" class="form-input" min="0" step="0.1" placeholder="পুরো ভিডিও">
-                                            </div>
-                                            <div class="control-group">
-                                                <label for="smoke-end-input">Show Until (সেকেন্ড)</label>
-                                                <input type="number" id="smoke-end-input" class="form-input" min="0" step="0.1" placeholder="পুরো ভিডিও">
-                                            </div>
-                                        </div>
-                                    </div>
+                                <!-- ── Smoke & Fog Section ──────────────────────────── -->
+                                <div style="display:flex; align-items:center; gap:8px; margin-bottom:4px;">
+                                    <i class="fa-solid fa-smog" style="color:#38bdf8;"></i>
+                                    <span style="font-weight:600; font-size:13px;">Smoke &amp; Fog (ধোঁয়া ও কুয়াশা)</span>
                                 </div>
+                                <p class="help-text" style="margin-bottom:8px;">ক্যানভাস ও এক্সপোর্ট ভিডিওতে রিয়েল-টাইম ধোঁয়া/কুয়াশা যোগ করুন। একাধিক সেগমেন্ট ভিন্ন সময়ে যোগ করতে পারবেন।</p>
+
+                                <!-- Smoke Segment List -->
+                                <div id="smoke-segments-list"></div>
+
+                                <!-- Add Smoke Segment Button -->
+                                <button type="button" id="add-smoke-segment-btn" class="btn btn-sm btn-outline particle-add-btn">
+                                    <i class="fa-solid fa-plus"></i> ধোঁয়া সেগমেন্ট যোগ করুন (Add Smoke Segment)
+                                </button>
 
                                 <hr style="border-color: rgba(255,255,255,0.08); margin: 16px 0;">
 
-                                <!-- Golden Glitter Rain sub-section (independent toggle) -->
-                                <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:8px;">
-                                    <div style="display:flex; align-items:center; gap:8px;">
-                                        <i class="fa-solid fa-star" style="color: #fbbf24;"></i>
-                                        <span style="font-weight:600; font-size:13px;">Golden Glitter Rain (সোনালি ঝিরিঝিরি)</span>
-                                    </div>
-                                    <label class="switch" title="সোনালি গ্লিটার/কনফেটি ইফেক্ট অন/অফ">
-                                        <input type="checkbox" id="glitter-toggle">
-                                        <span class="slider round"></span>
-                                    </label>
+                                <!-- ── Golden Glitter Rain Section ──────────────────── -->
+                                <div style="display:flex; align-items:center; gap:8px; margin-bottom:4px;">
+                                    <i class="fa-solid fa-star" style="color: #fbbf24;"></i>
+                                    <span style="font-weight:600; font-size:13px;">Golden Glitter Rain (সোনালি ঝিরিঝিরি)</span>
                                 </div>
-                                <p class="help-text" style="margin-bottom:8px;">উপর থেকে সোনালি ঝিরিঝিরি, স্পার্কল ও কনফেটি পড়বে — বার্থডে পার্টির মতো।</p>
+                                <p class="help-text" style="margin-bottom:8px;">উপর থেকে সোনালি ঝিরিঝিরি, স্পার্কল ও কনফেটি পড়বে — বার্থডে পার্টির মতো। একাধিক সেগমেন্ট যোগ করতে পারবেন।</p>
 
-                                <div id="glitter-controls-container" style="display:none;">
-                                    <div style="font-weight:600; font-size:12px; margin-bottom:6px;">Glitter Presets (ঝিরিঝিরির ধরন):</div>
-                                    <div style="display:grid; grid-template-columns: repeat(2, 1fr); gap:6px; margin-bottom:12px;">
-                                        <button type="button" class="btn btn-sm btn-outline active" id="glitter-preset-golden_rain">Golden Rain</button>
-                                        <button type="button" class="btn btn-sm btn-outline" id="glitter-preset-sparkle_stars">Sparkle Stars</button>
-                                        <button type="button" class="btn btn-sm btn-outline" id="glitter-preset-confetti">Confetti</button>
-                                        <button type="button" class="btn btn-sm btn-outline" id="glitter-preset-soft_dust">Soft Dust</button>
-                                    </div>
+                                <!-- Glitter Segment List -->
+                                <div id="glitter-segments-list"></div>
 
-                                    <div class="control-group">
-                                        <label style="display:flex; justify-content:space-between;">
-                                            <span>Density (ঘনত্ব)</span>
-                                            <span id="glitter-density-val">55</span>
-                                        </label>
-                                        <input type="range" id="glitter-density-slider" min="10" max="120" value="55" step="1">
-                                    </div>
+                                <!-- Add Glitter Segment Button -->
+                                <button type="button" id="add-glitter-segment-btn" class="btn btn-sm btn-outline particle-add-btn" style="background: linear-gradient(135deg, rgba(251,191,36,0.12), rgba(245,158,11,0.08)); border-color: rgba(251,191,36,0.4); color: #fbbf24;">
+                                    <i class="fa-solid fa-plus"></i> গ্লিটার সেগমেন্ট যোগ করুন (Add Glitter Segment)
+                                </button>
 
-                                    <div class="control-group mt-2">
-                                        <label style="display:flex; justify-content:space-between;">
-                                            <span>Speed (গতি)</span>
-                                            <span id="glitter-speed-val">1.0x</span>
-                                        </label>
-                                        <input type="range" id="glitter-speed-slider" min="0.2" max="3.0" value="1.0" step="0.1">
-                                    </div>
-
-                                    <div class="control-group mt-2">
-                                        <label style="display:flex; justify-content:space-between;">
-                                            <span>Size (আকার)</span>
-                                            <span id="glitter-size-val">1.0x</span>
-                                        </label>
-                                        <input type="range" id="glitter-size-slider" min="0.3" max="2.5" value="1.0" step="0.1">
-                                    </div>
-
-                                    <div class="control-group mt-2">
-                                        <label style="display:flex; justify-content:space-between;">
-                                            <span>Opacity (আবছা ভাব)</span>
-                                            <span id="glitter-opacity-val">75%</span>
-                                        </label>
-                                        <input type="range" id="glitter-opacity-slider" min="10" max="100" value="75" step="1">
-                                    </div>
-
-                                    <div class="mt-3">
-                                        <p class="help-text">গ্লিটারটি ভিডিওর কোন সময় থেকে কোন সময় পর্যন্ত দেখা যাবে তা ঠিক করুন। খালি রাখলে পুরো ভিডিও জুড়ে দেখা যাবে।</p>
-                                        <div style="display:grid; grid-template-columns: 1fr 1fr; gap:10px;">
-                                            <div class="control-group">
-                                                <label for="glitter-start-input">Show From (সেকেন্ড)</label>
-                                                <input type="number" id="glitter-start-input" class="form-input" min="0" step="0.1" placeholder="পুরো ভিডিও">
-                                            </div>
-                                            <div class="control-group">
-                                                <label for="glitter-end-input">Show Until (সেকেন্ড)</label>
-                                                <input type="number" id="glitter-end-input" class="form-input" min="0" step="0.1" placeholder="পুরো ভিডিও">
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
                             </div>
                         </div>
 
@@ -4541,13 +4423,13 @@
     <script src="public/capacitor/capacitor.js"></script>
     <script src="audio.js?v=4"></script>
     <script src="audio-silence-generator.js?v=1"></script>
-    <script src="smoke-effect.js?v=2"></script>
-    <script src="glitter-effect.js?v=1"></script>
-    <script src="editor.js?v=10"></script>
+    <script src="smoke-effect.js?v=5"></script>
+    <script src="glitter-effect.js?v=4"></script>
+    <script src="editor.js?v=14"></script>
     <script src="keyframes.js?v=1"></script>
     <script src="render-engine.js?v=2"></script>
     <script src="exporter.js?v=4"></script>
-    <script src="phase9.js?v=4"></script>
+    <script src="phase9.js?v=5"></script>
     <script src="transitions-library.js?v=1"></script>
     <script src="multitrack.js?v=3"></script>
     <script src="subtitle-import.js?v=1"></script>
