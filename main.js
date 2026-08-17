@@ -1,4 +1,4 @@
-const { app, BrowserWindow, session, dialog, ipcMain } = require('electron');
+const { app, BrowserWindow, session, dialog, ipcMain, clipboard, nativeImage } = require('electron');
 const path = require('path');
 
 const gotLock = app.requestSingleInstanceLock();
@@ -57,6 +57,21 @@ if (!gotLock) {
             return mainWindow.isAlwaysOnTop();
         }
         return false;
+    });
+
+    // Chromium's web clipboard permission can reject image copying from a
+    // localhost Electron page. Use Electron's native clipboard instead.
+    ipcMain.handle('copy-image-to-clipboard', (event, dataUrl) => {
+        try {
+            if (typeof dataUrl !== 'string' || !dataUrl.startsWith('data:image/png')) return false;
+            const image = nativeImage.createFromDataURL(dataUrl);
+            if (image.isEmpty()) return false;
+            clipboard.writeImage(image);
+            return !clipboard.readImage().isEmpty();
+        } catch (error) {
+            console.error('Native image clipboard copy failed:', error);
+            return false;
+        }
     });
 
     app.whenReady().then(() => {

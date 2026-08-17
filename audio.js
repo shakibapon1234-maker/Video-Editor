@@ -465,6 +465,14 @@ document.addEventListener('DOMContentLoaded', () => {
         }) || null;
     }
 
+    // Use one normalized volume value for preview, ducking, and offline export.
+    // Old/restored projects can contain strings or missing values, so never let
+    // a malformed value silently become full volume in the render.
+    function getBgMusicTrackVolume(track) {
+        const value = Number(track && track.volume);
+        return Number.isFinite(value) ? Math.max(0, Math.min(1, value)) : 0.4;
+    }
+
     function renderBgMusicTrackList() {
         if (!bgMusicTrackListEl) return;
         bgMusicTrackListEl.innerHTML = '';
@@ -504,7 +512,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (bgMusicTrackStartInput) bgMusicTrackStartInput.value = t.startSec;
         if (bgMusicTrackEndInput) bgMusicTrackEndInput.value = (t.endSec == null) ? '' : t.endSec;
         if (bgMusicTrackLoopModeSelect) bgMusicTrackLoopModeSelect.value = t.loopMode;
-        const pct = Math.round(t.volume * 100);
+        const pct = Math.round(getBgMusicTrackVolume(t) * 100);
         if (bgMusicTrackVolumeSlider) bgMusicTrackVolumeSlider.value = pct;
         if (bgMusicTrackVolumeVal) bgMusicTrackVolumeVal.innerText = pct + '%';
     }
@@ -908,6 +916,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         if (active) {
             const el = getBgMusicTrackAudioEl(active);
+            el.volume = getBgMusicTrackVolume(active);
             const localElapsed = elapsed - active.startSec;
             const dur = el.duration || active.duration || 0;
 
@@ -1026,7 +1035,7 @@ document.addEventListener('DOMContentLoaded', () => {
         state.bgMusicTracks.forEach(t => {
             const el = bgMusicTrackAudioEls.get(t.id);
             if (el && !el.paused) {
-                const fullLevel = Math.min(1.0, t.volume);
+                const fullLevel = getBgMusicTrackVolume(t);
                 const duckedLevel = fullLevel * DUCK_DEPTH;
                 el.volume = Math.min(1.0, fullLevel - (fullLevel - duckedLevel) * duckAmount);
             }
@@ -1035,7 +1044,7 @@ document.addEventListener('DOMContentLoaded', () => {
         // Export mix: one Web Audio gain node per track, all ridden by the same duck amount.
         if (exportBgMusicGains.length && audioCtx) {
             exportBgMusicGains.forEach(({ gain, track }) => {
-                const fullLevel = Math.min(1.0, track.volume);
+                const fullLevel = getBgMusicTrackVolume(track);
                 const duckedLevel = fullLevel * DUCK_DEPTH;
                 const targetVolume = fullLevel - (fullLevel - duckedLevel) * duckAmount;
                 gain.gain.setValueAtTime(targetVolume, audioCtx.currentTime);
@@ -1869,8 +1878,12 @@ document.addEventListener('DOMContentLoaded', () => {
         bgMusicTrackVolumeSlider.addEventListener('input', (e) => {
             const t = state.bgMusicTracks.find(x => x.id === state.selectedBgMusicTrackId);
             if (t) {
-                t.volume = parseInt(e.target.value) / 100;
-                bgMusicTrackVolumeVal.innerText = e.target.value + '%';
+                const pct = Math.max(0, Math.min(100, Number(e.target.value) || 0));
+                t.volume = pct / 100;
+                bgMusicTrackVolumeVal.innerText = pct + '%';
+                const el = bgMusicTrackAudioEls.get(t.id);
+                if (el) el.volume = getBgMusicTrackVolume(t);
+                if (window.triggerAutoSave) window.triggerAutoSave();
             }
         });
     }
@@ -1970,7 +1983,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         state.bgMusicTracks.forEach(track => {
             const gain = audioCtx.createGain();
-            gain.gain.setValueAtTime(Math.min(1.0, track.volume), audioCtx.currentTime);
+            gain.gain.setValueAtTime(getBgMusicTrackVolume(track), audioCtx.currentTime);
             gain.connect(dest);
             bgMusicGainNodes.push({ gain, track });
         });
@@ -3304,7 +3317,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     source.loop = (track.loopMode === 'loop');
 
                     const trackGain = offlineCtx.createGain();
-                    trackGain.gain.setValueAtTime(Math.min(1.0, track.volume), 0);
+                    trackGain.gain.setValueAtTime(getBgMusicTrackVolume(track), 0);
 
                     source.connect(trackGain);
                     trackGain.connect(offlineCtx.destination);
@@ -3418,13 +3431,13 @@ document.addEventListener('DOMContentLoaded', () => {
 
                 if (speechActive) {
                     bgMusicGains.forEach(({ gainNode, track }) => {
-                        const fullLevel = Math.min(1.0, track.volume);
+                        const fullLevel = getBgMusicTrackVolume(track);
                         const duckedLevel = fullLevel * 0.25; // DUCK_DEPTH
                         gainNode.gain.setValueAtTime(duckedLevel, t);
                     });
                 } else {
                     bgMusicGains.forEach(({ gainNode, track }) => {
-                        const fullLevel = Math.min(1.0, track.volume);
+                        const fullLevel = getBgMusicTrackVolume(track);
                         gainNode.gain.setValueAtTime(fullLevel, t);
                     });
                 }

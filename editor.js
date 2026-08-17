@@ -2101,13 +2101,21 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     // --- Meta Ads & Reels Boost Safe Zone Bindings ---
-    const canvasSafezoneBtn = document.getElementById('canvas-safezone-btn');
-    if (canvasSafezoneBtn) {
-        canvasSafezoneBtn.addEventListener('click', () => {
+    // Keep the three preview actions outside the image area. The floating
+    // preview uses its compact header icons instead.
+    const previewActionDock = document.getElementById('canvas-overlay-actions');
+    const previewCanvasContainer = document.getElementById('canvas-container');
+    if (previewActionDock && previewCanvasContainer && previewActionDock.parentElement === previewCanvasContainer) {
+        previewCanvasContainer.insertAdjacentElement('afterend', previewActionDock);
+    }
+
+    const toggleSafeZoneOverlay = () => {
             const nextPreset = (state.safeZonePreset && state.safeZonePreset !== 'none') ? 'none' : 'fb-reels-boost';
             setSafeZonePreset(nextPreset);
-        });
-    }
+    };
+    document.querySelectorAll('#canvas-safezone-btn, #canvas-safezone-btn-float').forEach(btn => {
+        btn.addEventListener('click', toggleSafeZoneOverlay);
+    });
 
     const safeZoneBtns = document.querySelectorAll('#safezone-preset-grid .safezone-mode-btn');
     safeZoneBtns.forEach(btn => {
@@ -10244,11 +10252,13 @@ document.addEventListener('DOMContentLoaded', () => {
         });
 
         const overlayBtn = document.getElementById('canvas-safezone-btn');
+        const floatingOverlayBtn = document.getElementById('canvas-safezone-btn-float');
+        const isActive = (presetKey !== 'none');
         if (overlayBtn) {
-            const isActive = (presetKey !== 'none');
             overlayBtn.classList.toggle('active', isActive);
             overlayBtn.classList.toggle('safezone-active', isActive);
         }
+        if (floatingOverlayBtn) floatingOverlayBtn.classList.toggle('active', isActive);
 
         drawFrame();
         if (window.triggerAutoSave) window.triggerAutoSave();
@@ -20904,6 +20914,11 @@ document.addEventListener('DOMContentLoaded', () => {
                         const copy = {...c};
                         delete copy.file;
                         delete copy.imageImg;
+                        // DOM media elements are runtime-only. Serializing one
+                        // turns it into `{}`, which made restored audio clips
+                        // look initialized while having no playable element.
+                        delete copy._el;
+                        delete copy._exportEl;
                         return copy;
                     })
                 }))
@@ -21142,6 +21157,11 @@ document.addEventListener('DOMContentLoaded', () => {
                 state.endTime = state.duration || 0;
             }
 
+            // On reload the first image/video used to be drawn before its actual
+            // dimensions were applied, leaving a temporary wrong-sized preview.
+            // Recalculate only after the active media has finished restoring.
+            updateCanvasDimensions();
+
             // Refresh UI
             syncUIFromState();
             if (typeof renderBrollList === 'function') renderBrollList();
@@ -21202,17 +21222,18 @@ document.addEventListener('DOMContentLoaded', () => {
         triggerAutoSave();
     });
 
-    // Save project on page reload or navigation away
-    window.addEventListener('beforeunload', () => {
+    // Electron emits both beforeunload and pagehide for a refresh. Starting
+    // two IndexedDB saves in parallel can stall its renderer, so only run one.
+    let unloadSaveTriggered = false;
+    const saveProjectBeforeUnload = () => {
+        if (unloadSaveTriggered) return;
+        unloadSaveTriggered = true;
         if (state.activeProjectId && !editorIsResetting) {
             saveProjectToBrowserStorage(state.activeProjectId);
         }
-    });
-    window.addEventListener('pagehide', () => {
-        if (state.activeProjectId && !editorIsResetting) {
-            saveProjectToBrowserStorage(state.activeProjectId);
-        }
-    });
+    };
+    window.addEventListener('beforeunload', saveProjectBeforeUnload);
+    window.addEventListener('pagehide', saveProjectBeforeUnload);
 
     // --- UI Button Event Bindings for Save/Load ---
     let selectedSaveMode = 'settings'; // default mode

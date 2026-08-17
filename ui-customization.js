@@ -960,17 +960,54 @@
             });
         }
 
-        function copyBlobToClipboard(blob) {
+        async function copyBlobToClipboard(blob) {
+            // Electron's native clipboard is reliable even when Chromium's
+            // web clipboard permission is unavailable on localhost.
+            if (window.electronAPI && typeof window.electronAPI.copyImageToClipboard === 'function' && currentDataUrl) {
+                try {
+                    const copied = await window.electronAPI.copyImageToClipboard(currentDataUrl);
+                    if (copied) {
+                        window.showToast('📋 স্ক্রিনশট ক্লিপবোর্ডে কপি হয়েছে!', 'success');
+                        return;
+                    }
+                } catch (err) {
+                    console.warn('Electron clipboard write error:', err);
+                }
+            }
             if (navigator.clipboard && window.ClipboardItem) {
-                const item = new ClipboardItem({ 'image/png': blob });
-                navigator.clipboard.write([item]).then(() => {
+                try {
+                    const item = new ClipboardItem({ 'image/png': blob });
+                    await navigator.clipboard.write([item]);
                     window.showToast('📋 স্ক্রিনশট ক্লিপবোর্ডে কপি হয়েছে!', 'success');
-                }).catch(err => {
+                    return;
+                } catch (err) {
                     console.warn('Clipboard write error:', err);
-                    window.showToast('ক্লিপবোর্ডে কপি করা যায়নি', 'warning');
-                });
+                }
+            }
+
+            // Final fallback for browsers where ClipboardItem image writes are
+            // blocked: copy an actual selected <img> via the legacy clipboard
+            // path. Apps that accept rich clipboard content can paste it as an image.
+            const helper = document.createElement('div');
+            helper.contentEditable = 'true';
+            helper.style.cssText = 'position:fixed;left:-9999px;top:0;width:1px;height:1px;overflow:hidden;';
+            const image = document.createElement('img');
+            image.src = currentDataUrl;
+            helper.appendChild(image);
+            document.body.appendChild(helper);
+            const selection = window.getSelection();
+            const range = document.createRange();
+            range.selectNode(image);
+            selection.removeAllRanges();
+            selection.addRange(range);
+            let copied = false;
+            try { copied = document.execCommand('copy'); } catch (err) { console.warn('Legacy image clipboard copy error:', err); }
+            selection.removeAllRanges();
+            helper.remove();
+            if (copied) {
+                window.showToast('📋 স্ক্রিনশট ক্লিপবোর্ডে কপি হয়েছে!', 'success');
             } else {
-                window.showToast('আপনার ব্রাউজার ক্লিপবোর্ড কপি সমর্থন করে না', 'warning');
+                window.showToast('ক্লিপবোর্ডে কপি করা যায়নি — Save PNG ব্যবহার করুন', 'warning');
             }
         }
     })();

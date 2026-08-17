@@ -283,11 +283,18 @@
     }
 
     function ensureMediaEl(clip, type) {
-        if (clip._el) return clip._el;
+        if (clip._el && clip._el.src === clip.url) return clip._el;
+        if (clip._el) {
+            try { clip._el.pause(); clip._el.removeAttribute('src'); clip._el.load(); } catch (e) {}
+        }
         var el = document.createElement(type === 'audio' ? 'audio' : 'video');
         el.src = clip.url;
         el.preload = 'auto';
         el.playsInline = true;
+        // A restored Blob URL can become available just after the editor is
+        // painted. Explicitly reload it so the first playback never keeps a
+        // stale, silent media element from before refresh.
+        el.load();
         clip._el = el;
         return el;
     }

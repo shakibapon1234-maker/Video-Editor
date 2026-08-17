@@ -830,15 +830,25 @@ body {
     background: rgba(99, 102, 241, 0.15);
 }
 
-/* Canvas-overlay action toolbar (bottom-right) */
+/* External preview action dock: it is placed below the canvas, never over it. */
 .canvas-overlay-actions {
-    position: absolute;
-    bottom: 12px;
-    right: 12px;
+    position: relative;
+    align-self: center;
+    margin-top: 10px;
+    padding: 7px;
     display: flex;
     align-items: center;
     gap: 8px;
     z-index: 50;
+    border: 1px solid rgba(99, 102, 241, 0.36);
+    border-radius: 14px;
+    background: linear-gradient(135deg, rgba(30, 41, 59, 0.96), rgba(15, 23, 42, 0.96));
+    box-shadow: 0 10px 26px rgba(0, 0, 0, 0.34), inset 0 1px 0 rgba(255, 255, 255, 0.08);
+}
+
+/* A floating preview has its own compact header controls. */
+.canvas-container.is-floating-preview + .canvas-overlay-actions {
+    display: none !important;
 }
 
 .canvas-overlay-btn,
@@ -850,7 +860,9 @@ body {
     border: 1px solid rgba(99, 102, 241, 0.45);
     color: #c7d2fe;
     border-radius: 8px;
-    padding: 6px 13px;
+    width: 36px;
+    height: 34px;
+    padding: 0;
     cursor: pointer;
     font-size: 12px;
     font-weight: 600;
@@ -864,6 +876,14 @@ body {
     font-family: inherit;
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
 }
+
+.canvas-overlay-btn span {
+    display: none;
+}
+
+#canvas-safezone-btn { color: #6ee7b7; border-color: rgba(16, 185, 129, 0.48); }
+#canvas-snapshot-btn { color: #bfdbfe; border-color: rgba(59, 130, 246, 0.48); }
+#canvas-fullscreen-btn { color: #ddd6fe; border-color: rgba(139, 92, 246, 0.48); }
 
 .canvas-overlay-btn:hover,
 #canvas-fullscreen-btn:hover {
