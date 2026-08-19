@@ -1,5 +1,10 @@
 const { app, BrowserWindow, session, dialog, ipcMain, clipboard, nativeImage } = require('electron');
 const path = require('path');
+const fs = require('fs');
+
+try {
+    app.setAppUserModelId('com.shakib.videoeditor');
+} catch (_) {}
 
 const gotLock = app.requestSingleInstanceLock();
 if (!gotLock) {
@@ -17,7 +22,9 @@ if (!gotLock) {
     process.env.SF_DATA_DIR = app.getPath('userData');
 
     function createWindow() {
+        const iconPath = path.join(__dirname, 'icon.png');
         mainWindow = new BrowserWindow({
+            icon: fs.existsSync(iconPath) ? iconPath : undefined,
             width: 1400,
             height: 900,
             minWidth: 1000,
