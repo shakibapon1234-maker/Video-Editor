@@ -373,6 +373,315 @@ class VoiceChangerEffect {
     }
 }
 
+// ============================================================
+// [VOICE ENGINE] Voice Profiles & WSOLA High-Quality DSP Suite
+// (Directly calibrated from voice_tool.html for studio-grade voice morphing)
+// ============================================================
+const VOICE_PROFILES = {
+    male_deep: {
+        name: 'Deep Male Voice (গম্ভীর পুরুষ কণ্ঠ)',
+        pitch: 0.82, dist: 0, verb: 0.18,
+        bands: [
+            { type: 'lowpass', freq: 7500 },
+            { type: 'lowshelf', freq: 130, gain: 7.0 },
+            { type: 'peaking', freq: 2400, gain: 1.5, q: 1.0 }
+        ]
+    },
+    female_sweet: {
+        name: 'Sweet Female Voice (মিষ্টি নারী কণ্ঠ)',
+        pitch: 1.24, dist: 0, verb: 0.10,
+        bands: [
+            { type: 'highpass', freq: 180 },
+            { type: 'peaking', freq: 300, gain: -8.0, q: 1.2 },
+            { type: 'peaking', freq: 1200, gain: 3.0, q: 1.0 },
+            { type: 'peaking', freq: 2800, gain: 4.0, q: 1.2 },
+            { type: 'highshelf', freq: 6000, gain: 2.5 }
+        ]
+    },
+    female_bright: {
+        name: 'Bright Female Voice (চিকন নারী কণ্ঠ)',
+        pitch: 1.30, dist: 0, verb: 0.08,
+        bands: [
+            { type: 'highpass', freq: 200 },
+            { type: 'peaking', freq: 280, gain: -9.0, q: 1.4 },
+            { type: 'peaking', freq: 1500, gain: 3.5, q: 1.1 },
+            { type: 'peaking', freq: 3200, gain: 4.5, q: 1.3 },
+            { type: 'highshelf', freq: 7000, gain: 3.0 }
+        ]
+    },
+    female_warm: {
+        name: 'Mature Female Voice (ম্যাচিউর নারী কণ্ঠ)',
+        pitch: 1.18, dist: 0, verb: 0.14,
+        bands: [
+            { type: 'highpass', freq: 150 },
+            { type: 'peaking', freq: 320, gain: -6.0, q: 1.0 },
+            { type: 'peaking', freq: 1100, gain: 2.5, q: 0.9 },
+            { type: 'peaking', freq: 2500, gain: 3.0, q: 1.0 },
+            { type: 'highshelf', freq: 5500, gain: 1.5 }
+        ]
+    },
+    male_bold: {
+        name: 'Bold Male Voice (আকর্ষণীয় পুরুষ কণ্ঠ)',
+        pitch: 0.88, dist: 0, verb: 0.12,
+        bands: [
+            { type: 'highpass', freq: 100 },
+            { type: 'lowshelf', freq: 160, gain: 4.0 },
+            { type: 'peaking', freq: 2600, gain: 2.5, q: 1.0 }
+        ]
+    },
+    cartoon: {
+        name: 'Cartoon Voice (চিপমাঙ্ক/কার্টুন কণ্ঠ)',
+        pitch: 1.45, dist: 0, verb: 0,
+        bands: [
+            { type: 'highpass', freq: 350 }
+        ]
+    },
+    monster: {
+        name: 'Monster Voice (দানব কণ্ঠ)',
+        pitch: 0.65, dist: 0, verb: 0,
+        bands: [
+            { type: 'lowpass', freq: 2500 },
+            { type: 'lowshelf', freq: 120, gain: 6.0 }
+        ]
+    },
+    robot: {
+        name: 'Robotic Voice (রোবটিক কণ্ঠ)',
+        pitch: 1.0, dist: 18, verb: 0,
+        bands: []
+    },
+    echo_ambient: {
+        name: 'Echo / Ambient Voice (প্রতিধ্বনি কণ্ঠ)',
+        pitch: 1.0, dist: 0, verb: 0.35,
+        bands: []
+    },
+    none: {
+        name: 'Original Voice (সাধারণ কণ্ঠ)',
+        pitch: 1.0, dist: 0, verb: 0,
+        bands: []
+    }
+};
+
+function cubicSample(data, x) {
+    const n = data.length;
+    const i1 = Math.floor(x);
+    const frac = x - i1;
+    const i0 = i1 > 0 ? i1 - 1 : 0;
+    const i2 = i1 + 1 < n ? i1 + 1 : n - 1;
+    const i3 = i1 + 2 < n ? i1 + 2 : n - 1;
+    const y0 = data[i0], y1 = data[Math.min(i1, n - 1)], y2 = data[i2], y3 = data[i3];
+    const a0 = y3 - y2 - y0 + y1;
+    const a1 = y0 - y1 - a0;
+    const a2 = y2 - y0;
+    const a3 = y1;
+    return a0 * frac * frac * frac + a1 * frac * frac + a2 * frac + a3;
+}
+
+function timeStretchWSOLA(ctx, buffer, stretchFactor) {
+    const sampleRate = buffer.sampleRate;
+    const numChannels = buffer.numberOfChannels;
+    const inputLength = buffer.length;
+    const outputLength = Math.max(1, Math.floor(inputLength * stretchFactor));
+    const outBuffer = ctx.createBuffer(numChannels, outputLength, sampleRate);
+
+    const analysisHop = Math.floor(sampleRate * 0.02);
+    const synthesisHop = Math.max(1, Math.round(analysisHop * stretchFactor));
+    const grainSize = analysisHop * 4;
+    const searchRadius = Math.floor(analysisHop * 0.75);
+    const paddedLength = inputLength + grainSize;
+
+    for (let ch = 0; ch < numChannels; ch++) {
+        const raw = buffer.getChannelData(ch);
+        const input = new Float32Array(paddedLength);
+        input.set(raw, 0);
+
+        const output = new Float32Array(outputLength);
+        const windowSum = new Float32Array(outputLength);
+
+        for (let synthPos = 0; synthPos < outputLength; synthPos += synthesisHop) {
+            const idealAnalysisPos = Math.floor(synthPos / stretchFactor);
+
+            let bestOffset = 0;
+            if (synthPos > 0) {
+                let bestScore = -Infinity;
+                const overlapLen = Math.min(grainSize, synthesisHop * 2);
+                for (let off = -searchRadius; off <= searchRadius; off++) {
+                    const candidateStart = idealAnalysisPos + off;
+                    if (candidateStart < 0 || candidateStart + grainSize > paddedLength) continue;
+                    let score = 0;
+                    for (let k = 0; k < overlapLen; k++) {
+                        const outIdx = synthPos + k;
+                        if (outIdx >= outputLength) break;
+                        score += output[outIdx] * input[candidateStart + k];
+                    }
+                    if (score > bestScore) { bestScore = score; bestOffset = off; }
+                }
+            }
+
+            const grainStart = Math.max(0, Math.min(paddedLength - grainSize, idealAnalysisPos + bestOffset));
+            for (let i = 0; i < grainSize; i++) {
+                const outIdx = synthPos + i;
+                if (outIdx >= outputLength) break;
+                const srcIdx = grainStart + i;
+                const win = 0.5 - 0.5 * Math.cos(2 * Math.PI * i / (grainSize - 1));
+                output[outIdx] += input[srcIdx] * win;
+                windowSum[outIdx] += win;
+            }
+        }
+        for (let i = 0; i < outputLength; i++) {
+            output[i] = windowSum[i] > 0.0001 ? output[i] / windowSum[i] : output[i];
+        }
+        outBuffer.copyToChannel(output, ch);
+    }
+    return outBuffer;
+}
+
+function resampleBuffer(ctx, buffer, rateFactor) {
+    const sampleRate = buffer.sampleRate;
+    const numChannels = buffer.numberOfChannels;
+    const inputLength = buffer.length;
+    const outputLength = Math.max(1, Math.floor(inputLength / rateFactor));
+    const outBuffer = ctx.createBuffer(numChannels, outputLength, sampleRate);
+
+    for (let ch = 0; ch < numChannels; ch++) {
+        const input = buffer.getChannelData(ch);
+        const output = new Float32Array(outputLength);
+        for (let i = 0; i < outputLength; i++) {
+            output[i] = cubicSample(input, i * rateFactor);
+        }
+        outBuffer.copyToChannel(output, ch);
+    }
+    return outBuffer;
+}
+
+function pitchShiftBuffer(ctx, buffer, pitchFactor) {
+    if (Math.abs(pitchFactor - 1.0) < 0.01) return buffer;
+    const stretched = timeStretchWSOLA(ctx, buffer, pitchFactor);
+    return resampleBuffer(ctx, stretched, pitchFactor);
+}
+
+function createImpulseResponse(ctx, duration = 1.1, decay = 3.5) {
+    const rate = ctx.sampleRate;
+    const length = Math.max(1, Math.floor(rate * duration));
+    const impulse = ctx.createBuffer(2, length, rate);
+    for (let ch = 0; ch < 2; ch++) {
+        const data = impulse.getChannelData(ch);
+        for (let i = 0; i < length; i++) {
+            data[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / length, decay);
+        }
+    }
+    return impulse;
+}
+
+function makeDistortionCurve(amount) {
+    const k = amount, n = 44100;
+    const curve = new Float32Array(n);
+    for (let i = 0; i < n; i++) {
+        const x = i * 2 / n - 1;
+        curve[i] = (3 + k) * x * 20 * (Math.PI / 180) / (Math.PI + k * Math.abs(x));
+    }
+    return curve;
+}
+
+function bufferToWavBlob(abuffer) {
+    const numOfChan = abuffer.numberOfChannels;
+    const length = abuffer.length * numOfChan * 2 + 44;
+    const buffer = new ArrayBuffer(length);
+    const view = new DataView(buffer);
+    const channels = [];
+    let offset = 0, pos = 0;
+
+    function setUint16(data) { view.setUint16(pos, data, true); pos += 2; }
+    function setUint32(data) { view.setUint32(pos, data, true); pos += 4; }
+
+    setUint32(0x46464952); setUint32(length - 8); setUint32(0x45564157);
+    setUint32(0x20746d66); setUint32(16); setUint16(1);
+    setUint16(numOfChan); setUint32(abuffer.sampleRate);
+    setUint32(abuffer.sampleRate * 2 * numOfChan); setUint16(numOfChan * 2); setUint16(16);
+    setUint32(0x61746164); setUint32(length - pos - 4);
+
+    for (let i = 0; i < abuffer.numberOfChannels; i++) channels.push(abuffer.getChannelData(i));
+
+    while (pos < length) {
+        for (let i = 0; i < numOfChan; i++) {
+            let sample = Math.max(-1, Math.min(1, channels[i][offset]));
+            sample = sample < 0 ? sample * 0x8000 : sample * 0x7FFF;
+            view.setInt16(pos, sample, true); pos += 2;
+        }
+        offset++;
+    }
+    return new Blob([buffer], { type: 'audio/wav' });
+}
+
+async function processVoiceChangerAudioBuffer(audioCtx, inBuffer, profileName) {
+    if (!inBuffer) return inBuffer;
+    const profile = VOICE_PROFILES[profileName] || VOICE_PROFILES.none;
+    if (profileName === 'none' || !profile) return inBuffer;
+
+    const shiftedBuffer = pitchShiftBuffer(audioCtx, inBuffer, profile.pitch || 1.0);
+
+    const offlineCtx = new OfflineAudioContext(
+        shiftedBuffer.numberOfChannels,
+        shiftedBuffer.length,
+        shiftedBuffer.sampleRate
+    );
+
+    const src = offlineCtx.createBufferSource();
+    src.buffer = shiftedBuffer;
+    src.playbackRate.value = 1.0;
+
+    let node = src;
+
+    if (profile.dist > 0) {
+        const ws = offlineCtx.createWaveShaper();
+        ws.curve = makeDistortionCurve(profile.dist);
+        ws.oversample = '4x';
+        node.connect(ws);
+        node = ws;
+    }
+
+    (profile.bands || []).forEach(b => {
+        const f = offlineCtx.createBiquadFilter();
+        f.type = b.type;
+        f.frequency.value = b.freq;
+        if (b.gain !== undefined) f.gain.value = b.gain;
+        if (b.q !== undefined) f.Q.value = b.q;
+        node.connect(f);
+        node = f;
+    });
+
+    if (profile.verb > 0) {
+        const convolver = offlineCtx.createConvolver();
+        convolver.buffer = createImpulseResponse(offlineCtx, 1.1, 3.5);
+        const wet = offlineCtx.createGain();
+        wet.gain.value = profile.verb;
+        const dry = offlineCtx.createGain();
+        dry.gain.value = 1.0;
+        const merged = offlineCtx.createGain();
+        node.connect(dry); dry.connect(merged);
+        node.connect(convolver); convolver.connect(wet); wet.connect(merged);
+        node = merged;
+    }
+
+    const comp = offlineCtx.createDynamicsCompressor();
+    comp.threshold.value = -18;
+    comp.knee.value = 24;
+    comp.ratio.value = 4;
+    comp.attack.value = 0.005;
+    comp.release.value = 0.15;
+    node.connect(comp);
+
+    const gain = offlineCtx.createGain();
+    gain.gain.value = 1.15;
+    comp.connect(gain);
+    gain.connect(offlineCtx.destination);
+
+    src.start(0);
+    return await offlineCtx.startRendering();
+}
+window.VOICE_PROFILES = VOICE_PROFILES;
+window.processVoiceChangerAudioBuffer = processVoiceChangerAudioBuffer;
+window.bufferToWavBlob = bufferToWavBlob;
+
 document.addEventListener('DOMContentLoaded', () => {
     const state = window.VideoEditor;
 
@@ -1485,15 +1794,15 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         };
         
-        mediaRecorder.onstop = () => {
-            state.voiceoverBlob = new Blob(recordedChunks, { type: mediaRecorder.mimeType || 'audio/webm' });
-            state.voiceoverUrl = URL.createObjectURL(state.voiceoverBlob);
+        mediaRecorder.onstop = async () => {
+            const rawBlob = new Blob(recordedChunks, { type: mediaRecorder.mimeType || 'audio/webm' });
+            state.voiceoverRawBlob = rawBlob;
+            await applyVoiceChangerToRecordedVoiceover(state.voiceoverProfile || 'none');
+            state.voiceoverRecorded = true;
             
             // Show preview player
-            voiceoverAudioPreview.src = state.voiceoverUrl;
             voiceoverPreviewBox.style.display = 'block';
             voiceoverVolumeContainer.style.display = 'block';
-            state.voiceoverRecorded = true;
             
             // Stop UI animation
             micStatus.classList.remove('recording');
@@ -1535,6 +1844,7 @@ document.addEventListener('DOMContentLoaded', () => {
     });
     
     deleteVoiceBtn.addEventListener('click', () => {
+        state.voiceoverRawBlob = null;
         state.voiceoverBlob = null;
         state.voiceoverUrl = null;
         state.voiceoverRecorded = false;
@@ -1608,41 +1918,138 @@ document.addEventListener('DOMContentLoaded', () => {
         ttsStatus.innerText = msg || '';
     }
 
+    let ttsAudioPreviewEl = null;
+
     if (ttsPlayBtn) {
-        ttsPlayBtn.addEventListener('click', () => {
-            if (!('speechSynthesis' in window)) {
-                showTtsStatus('⚠️ এই ব্রাউজারে Text-to-Speech সাপোর্ট করে না।');
-                return;
-            }
-            const u = buildTtsUtterance();
-            if (!u) { showTtsStatus('দয়া করে ভয়েসওভারের জন্য কিছু টেক্সট লিখুন।'); return; }
-            window.speechSynthesis.cancel();
+        ttsPlayBtn.addEventListener('click', async () => {
+            const text = (ttsText && ttsText.value || '').trim();
+            if (!text) { showTtsStatus('দয়া করে ভয়েসওভারের জন্য কিছু টেক্সট লিখুন।'); return; }
+
+            const lang = (ttsLang && ttsLang.value) || 'bn-BD';
             if (ttsPlayBtn) ttsPlayBtn.style.display = 'none';
             if (ttsStopBtn) ttsStopBtn.style.display = 'inline-flex';
-            showTtsStatus('🔊 বাজানো হচ্ছে...');
-            u.onend = () => {
-                if (ttsPlayBtn) ttsPlayBtn.style.display = 'inline-flex';
-                if (ttsStopBtn) ttsStopBtn.style.display = 'none';
-                showTtsStatus('');
-            };
-            u.onerror = () => {
-                if (ttsPlayBtn) ttsPlayBtn.style.display = 'inline-flex';
-                if (ttsStopBtn) ttsStopBtn.style.display = 'none';
-                showTtsStatus('⚠️ টেক্সট বাজানো যায়নি।');
-            };
-            ttsUtterance = u;
-            window.speechSynthesis.speak(u);
+            showTtsStatus('🔊 বাংলা ভয়েস লোড হচ্ছে...');
+
+            try {
+                if (ttsAudioPreviewEl) {
+                    ttsAudioPreviewEl.pause();
+                    ttsAudioPreviewEl = null;
+                }
+
+                // Use the server Google Translate TTS proxy which produces 100% natural, authentic Bengali speech
+                const response = await fetch('/api/tts-proxy', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        provider: 'free-google',
+                        voice: lang,
+                        text: text
+                    })
+                });
+
+                if (!response.ok) {
+                    throw new Error('TTS proxy response error: ' + response.status);
+                }
+
+                const blob = await response.blob();
+                let playUrl = URL.createObjectURL(blob);
+
+                // If a voice changer profile is selected, process it through the WSOLA DSP engine
+                if (state.voiceoverProfile && state.voiceoverProfile !== 'none') {
+                    try {
+                        const actx = audioCtx || new (window.AudioContext || window.webkitAudioContext)();
+                        const abuf = await blob.arrayBuffer();
+                        const decBuf = await actx.decodeAudioData(abuf);
+                        const processedBuf = await processVoiceChangerAudioBuffer(actx, decBuf, state.voiceoverProfile);
+                        const wavBlob = bufferToWavBlob(processedBuf);
+                        playUrl = URL.createObjectURL(wavBlob);
+                    } catch (dspErr) {
+                        console.warn('DSP preview error, playing original TTS:', dspErr);
+                    }
+                }
+
+                ttsAudioPreviewEl = new Audio(playUrl);
+                showTtsStatus('🔊 বাজানো হচ্ছে...');
+
+                ttsAudioPreviewEl.onended = () => {
+                    if (ttsPlayBtn) ttsPlayBtn.style.display = 'inline-flex';
+                    if (ttsStopBtn) ttsStopBtn.style.display = 'none';
+                    showTtsStatus('');
+                };
+
+                ttsAudioPreviewEl.onerror = () => {
+                    if (ttsPlayBtn) ttsPlayBtn.style.display = 'inline-flex';
+                    if (ttsStopBtn) ttsStopBtn.style.display = 'none';
+                    showTtsStatus('⚠️ টেক্সট বাজানো যায়নি।');
+                };
+
+                await ttsAudioPreviewEl.play();
+            } catch (err) {
+                console.warn('TTS proxy failed, trying Web Speech fallback:', err);
+                if ('speechSynthesis' in window) {
+                    const u = buildTtsUtterance();
+                    window.speechSynthesis.cancel();
+                    u.onend = () => {
+                        if (ttsPlayBtn) ttsPlayBtn.style.display = 'inline-flex';
+                        if (ttsStopBtn) ttsStopBtn.style.display = 'none';
+                        showTtsStatus('');
+                    };
+                    u.onerror = () => {
+                        if (ttsPlayBtn) ttsPlayBtn.style.display = 'inline-flex';
+                        if (ttsStopBtn) ttsStopBtn.style.display = 'none';
+                        showTtsStatus('⚠️ টেক্সট বাজানো যায়নি।');
+                    };
+                    ttsUtterance = u;
+                    window.speechSynthesis.speak(u);
+                } else {
+                    if (ttsPlayBtn) ttsPlayBtn.style.display = 'inline-flex';
+                    if (ttsStopBtn) ttsStopBtn.style.display = 'none';
+                    showTtsStatus('⚠️ টেক্সট প্লে করা যায়নি।');
+                }
+            }
         });
     }
 
     if (ttsStopBtn) {
         ttsStopBtn.addEventListener('click', () => {
+            if (ttsAudioPreviewEl) {
+                ttsAudioPreviewEl.pause();
+                ttsAudioPreviewEl = null;
+            }
             if ('speechSynthesis' in window) window.speechSynthesis.cancel();
             if (ttsPlayBtn) ttsPlayBtn.style.display = 'inline-flex';
             if (ttsStopBtn) ttsStopBtn.style.display = 'none';
             showTtsStatus('');
         });
     }
+
+    // Apply voice changer DSP to stored voiceover raw audio and refresh player
+    async function applyVoiceChangerToRecordedVoiceover(profileName) {
+        if (!state.voiceoverRawBlob) return;
+        const profile = profileName || state.voiceoverProfile || 'none';
+        if (profile === 'none') {
+            state.voiceoverBlob = state.voiceoverRawBlob;
+            state.voiceoverUrl = URL.createObjectURL(state.voiceoverRawBlob);
+            if (voiceoverAudioPreview) voiceoverAudioPreview.src = state.voiceoverUrl;
+            return;
+        }
+        try {
+            const actx = audioCtx || new (window.AudioContext || window.webkitAudioContext)();
+            const abuf = await state.voiceoverRawBlob.arrayBuffer();
+            const decBuf = await actx.decodeAudioData(abuf);
+            const processedBuf = await processVoiceChangerAudioBuffer(actx, decBuf, profile);
+            const wavBlob = bufferToWavBlob(processedBuf);
+            state.voiceoverBlob = wavBlob;
+            state.voiceoverUrl = URL.createObjectURL(wavBlob);
+            if (voiceoverAudioPreview) voiceoverAudioPreview.src = state.voiceoverUrl;
+        } catch (e) {
+            console.error('Voice changer buffer processing error:', e);
+            state.voiceoverBlob = state.voiceoverRawBlob;
+            state.voiceoverUrl = URL.createObjectURL(state.voiceoverRawBlob);
+            if (voiceoverAudioPreview) voiceoverAudioPreview.src = state.voiceoverUrl;
+        }
+    }
+    window.applyVoiceChangerToRecordedVoiceover = applyVoiceChangerToRecordedVoiceover;
 
     if (ttsRecordBtn) {
         ttsRecordBtn.addEventListener('click', async () => {
@@ -1678,11 +2085,11 @@ document.addEventListener('DOMContentLoaded', () => {
                     throw new Error('অডিও ফাইল খালি (Empty audio returned)');
                 }
 
-                // Feed the captured TTS audio into the existing voiceover pipeline.
-                state.voiceoverBlob = blob;
-                state.voiceoverUrl = URL.createObjectURL(blob);
+                // Store raw blob & apply voice changer
+                state.voiceoverRawBlob = blob;
+                await applyVoiceChangerToRecordedVoiceover(state.voiceoverProfile || 'none');
                 state.voiceoverRecorded = true;
-                if (voiceoverAudioPreview) voiceoverAudioPreview.src = state.voiceoverUrl;
+
                 if (voiceoverPreviewBox) voiceoverPreviewBox.style.display = 'block';
                 if (voiceoverVolumeContainer) voiceoverVolumeContainer.style.display = 'block';
                 
@@ -1713,10 +2120,13 @@ document.addEventListener('DOMContentLoaded', () => {
     // Voice Changer Select Controls
     if (voiceChangerSelect) {
         voiceChangerSelect.value = state.voiceoverProfile || 'none';
-        voiceChangerSelect.addEventListener('change', (e) => {
+        voiceChangerSelect.addEventListener('change', async (e) => {
             state.voiceoverProfile = e.target.value;
             if (window.voiceoverVoiceChanger) {
                 window.voiceoverVoiceChanger.setProfile(state.voiceoverProfile);
+            }
+            if (state.voiceoverRawBlob) {
+                await applyVoiceChangerToRecordedVoiceover(state.voiceoverProfile);
             }
             // Keep the original video's own voice changer in sync, but only if
             // the user has opted into applying it there too.
@@ -3483,4 +3893,285 @@ document.addEventListener('DOMContentLoaded', () => {
     // user stops it. So there's intentionally no 'ended' or 'seeking' handler
     // here tied to subtitle timing anymore -- the clip is purely a visual
     // reference now, not a timing source.
+
+    // ============================================================
+    // [VT] Studio Voice Tool — Full Event Wiring
+    // (WSOLA pitch shift + OfflineAudioContext EQ/reverb pipeline)
+    // ============================================================
+    (function initVoiceTool() {
+        // --- Element References ---
+        const vtTabs       = document.querySelectorAll('.vt-tab');
+        const vtPanelVc    = document.getElementById('vt-panel-vc');
+        const vtPanelTts   = document.getElementById('vt-panel-tts');
+        const vtPresets    = document.querySelectorAll('#vt-presets .vt-preset');
+        const vtPitchSlider = document.getElementById('vt-pitch-slider');
+        const vtPitchVal   = document.getElementById('vt-pitch-val');
+        const vtProcessBtn = document.getElementById('vt-process-btn');
+        const vtAudioFile  = document.getElementById('vt-audio-file');
+        const vtStatus     = document.getElementById('vt-status');
+        const vtDownloadBtn = document.getElementById('vt-download-btn');
+
+        // Shared Voice Tool audio buffer (from mic, file upload, or TTS)
+        let vtAudioBuffer = null;
+
+        // Current preset profile built from the active pill's data-* attributes
+        let vtCurrentPreset = {
+            pitch: 0.82,
+            dist: 0,
+            verb: 0.18,
+            bands: [
+                { type: 'lowpass', freq: 7500 },
+                { type: 'lowshelf', freq: 130, gain: 7.0 },
+                { type: 'peaking', freq: 2400, gain: 1.5, q: 1.0 }
+            ]
+        };
+
+        function vtSetStatus(msg, color) {
+            if (!vtStatus) return;
+            vtStatus.style.display = msg ? 'block' : 'none';
+            vtStatus.innerText = msg || '';
+            vtStatus.style.color = color || '';
+        }
+
+        function vtEnableProcess(buffer) {
+            vtAudioBuffer = buffer;
+            if (vtProcessBtn) vtProcessBtn.disabled = false;
+        }
+
+        // --- 1. Tab Switching ---
+        vtTabs.forEach(tab => {
+            tab.addEventListener('click', () => {
+                vtTabs.forEach(t => t.classList.remove('active'));
+                tab.classList.add('active');
+                const target = tab.dataset.vttab;
+                if (vtPanelVc) vtPanelVc.classList.toggle('active', target === 'vc');
+                if (vtPanelTts) vtPanelTts.classList.toggle('active', target === 'tts');
+            });
+        });
+
+        // --- 2. Preset Pill Click ---
+        vtPresets.forEach(pill => {
+            pill.addEventListener('click', () => {
+                vtPresets.forEach(p => p.classList.remove('active'));
+                pill.classList.add('active');
+
+                const pitch = parseFloat(pill.dataset.pitch) || 1.0;
+                const dist  = parseFloat(pill.dataset.dist)  || 0;
+                const verb  = parseFloat(pill.dataset.verb)  || 0;
+                let bands = [];
+                try { bands = JSON.parse(pill.dataset.bands || '[]'); } catch(e) {}
+
+                vtCurrentPreset = { pitch, dist, verb, bands };
+
+                if (vtPitchSlider) vtPitchSlider.value = pitch;
+                if (vtPitchVal)    vtPitchVal.textContent = pitch.toFixed(2);
+            });
+        });
+
+        // --- 3. Pitch Slider (Custom mode) ---
+        if (vtPitchSlider) {
+            vtPitchSlider.addEventListener('input', () => {
+                const val = parseFloat(vtPitchSlider.value);
+                if (vtPitchVal) vtPitchVal.textContent = val.toFixed(2);
+                // Update just the pitch in the current preset
+                vtCurrentPreset.pitch = val;
+            });
+        }
+
+        // --- 4. Audio File Upload ---
+        if (vtAudioFile) {
+            vtAudioFile.addEventListener('change', async () => {
+                const file = vtAudioFile.files[0];
+                if (!file) return;
+                vtSetStatus('⏳ ফাইল লোড হচ্ছে...', '#a5b4fc');
+                try {
+                    const actx = new (window.AudioContext || window.webkitAudioContext)();
+                    const arrayBuf = await file.arrayBuffer();
+                    const decoded = await actx.decodeAudioData(arrayBuf);
+                    vtEnableProcess(decoded);
+                    vtSetStatus(`✔ "${file.name}" রেডি — এফেক্ট প্রয়োগ করুন`, '#34d399');
+                } catch (err) {
+                    console.error('VT file decode error:', err);
+                    vtSetStatus('⚠️ ফাইল পড়তে সমস্যা হয়েছে।', '#f87171');
+                }
+                vtAudioFile.value = '';
+            });
+        }
+
+        // --- 5. Apply Effect Button ---
+        if (vtProcessBtn) {
+            vtProcessBtn.addEventListener('click', async () => {
+                if (!vtAudioBuffer) {
+                    vtSetStatus('⚠️ প্রথমে অডিও রেকর্ড বা আপলোড করুন।', '#f87171');
+                    return;
+                }
+
+                vtProcessBtn.disabled = true;
+                vtSetStatus('⚙️ এফেক্ট প্রসেস হচ্ছে... অনুগ্রহ করে অপেক্ষা করুন।', '#fbbf24');
+
+                try {
+                    const actx = new (window.AudioContext || window.webkitAudioContext)();
+                    const preset = vtCurrentPreset;
+
+                    // Step 1 — WSOLA pitch shift
+                    const shiftedBuffer = pitchShiftBuffer(actx, vtAudioBuffer, preset.pitch || 1.0);
+
+                    // Step 2 — OfflineAudioContext processing chain
+                    const offlineCtx = new OfflineAudioContext(
+                        shiftedBuffer.numberOfChannels,
+                        shiftedBuffer.length,
+                        shiftedBuffer.sampleRate
+                    );
+
+                    const src = offlineCtx.createBufferSource();
+                    src.buffer = shiftedBuffer;
+                    src.playbackRate.value = 1.0;
+
+                    let node = src;
+
+                    // Distortion (robot effect)
+                    if (preset.dist > 0) {
+                        const ws = offlineCtx.createWaveShaper();
+                        ws.curve = makeDistortionCurve(preset.dist);
+                        ws.oversample = '4x';
+                        node.connect(ws);
+                        node = ws;
+                    }
+
+                    // EQ bands from preset
+                    (preset.bands || []).forEach(b => {
+                        const f = offlineCtx.createBiquadFilter();
+                        f.type = b.type;
+                        f.frequency.value = b.freq;
+                        if (b.gain !== undefined) f.gain.value = b.gain;
+                        if (b.q !== undefined) f.Q.value = b.q;
+                        node.connect(f);
+                        node = f;
+                    });
+
+                    // Convolution reverb (wet/dry mix)
+                    if (preset.verb > 0) {
+                        const convolver = offlineCtx.createConvolver();
+                        convolver.buffer = createImpulseResponse(offlineCtx, 1.1, 3.5);
+                        const wet = offlineCtx.createGain();
+                        wet.gain.value = preset.verb;
+                        const dry = offlineCtx.createGain();
+                        dry.gain.value = 1.0;
+                        const merged = offlineCtx.createGain();
+                        node.connect(dry); dry.connect(merged);
+                        node.connect(convolver); convolver.connect(wet); wet.connect(merged);
+                        node = merged;
+                    }
+
+                    // Dynamics compressor (-18 dB, ratio 4)
+                    const comp = offlineCtx.createDynamicsCompressor();
+                    comp.threshold.value = -18;
+                    comp.knee.value = 24;
+                    comp.ratio.value = 4;
+                    comp.attack.value = 0.005;
+                    comp.release.value = 0.15;
+                    node.connect(comp);
+
+                    // Makeup gain
+                    const gain = offlineCtx.createGain();
+                    gain.gain.value = 1.15;
+                    comp.connect(gain);
+                    gain.connect(offlineCtx.destination);
+
+                    src.start(0);
+                    const rendered = await offlineCtx.startRendering();
+
+                    // Step 3 — Convert to WAV and store in state
+                    const wavBlob = bufferToWavBlob(rendered);
+                    state.voiceoverBlob = wavBlob;
+                    state.voiceoverUrl  = URL.createObjectURL(wavBlob);
+                    state.voiceoverRawBlob  = wavBlob; // also update raw so delete works
+                    state.voiceoverRecorded = true;
+
+                    // Update the shared voiceover player
+                    if (voiceoverAudioPreview) voiceoverAudioPreview.src = state.voiceoverUrl;
+                    if (voiceoverPreviewBox)    voiceoverPreviewBox.style.display    = 'block';
+                    if (voiceoverVolumeContainer) voiceoverVolumeContainer.style.display = 'block';
+
+                    // Update download link
+                    if (vtDownloadBtn) {
+                        vtDownloadBtn.href = state.voiceoverUrl;
+                        vtDownloadBtn.download = 'voice_changed.wav';
+                    }
+
+                    vtSetStatus('✅ রেডি! প্লে করে শুনুন এবং ভিডিওতে ব্যবহার করুন।', '#34d399');
+                } catch (err) {
+                    console.error('VT process error:', err);
+                    vtSetStatus('⚠️ প্রসেস করতে সমস্যা হয়েছে: ' + (err && err.message ? err.message : err), '#f87171');
+                } finally {
+                    vtProcessBtn.disabled = false;
+                }
+            });
+        }
+
+        // --- 6. Mic Recording → feed vtAudioBuffer ---
+        // Extend the existing mediaRecorder.onstop to also decode into vtAudioBuffer
+        // We patch this by hooking into the deleteVoiceBtn and the recording stop flow.
+        // The rawBlob stored in state.voiceoverRawBlob is reused after onstop fires.
+        const origStopRecordBtn = document.getElementById('stop-record-btn');
+        if (origStopRecordBtn) {
+            // After the original onstop fires, decode the raw blob for VT
+            origStopRecordBtn.addEventListener('click', () => {
+                // Wait a tick for mediaRecorder.onstop to complete and set state.voiceoverRawBlob
+                setTimeout(async () => {
+                    if (state.voiceoverRawBlob) {
+                        try {
+                            const actx = new (window.AudioContext || window.webkitAudioContext)();
+                            const arrayBuf = await state.voiceoverRawBlob.arrayBuffer();
+                            const decoded = await actx.decodeAudioData(arrayBuf);
+                            vtEnableProcess(decoded);
+                            vtSetStatus('🎙️ রেকর্ডিং রেডি — এখন এফেক্ট প্রয়োগ করুন', '#34d399');
+                        } catch (e) {
+                            console.warn('VT mic decode error:', e);
+                        }
+                    }
+                }, 500);
+            });
+        }
+
+        // --- 7. TTS → Voice Tool pipeline ---
+        // When tts-record-btn fires and stores state.voiceoverRawBlob,
+        // also decode into vtAudioBuffer so the user can immediately apply VT effects
+        const origTtsRecordBtn = document.getElementById('tts-record-btn');
+        if (origTtsRecordBtn) {
+            origTtsRecordBtn.addEventListener('click', () => {
+                // Poll until state.voiceoverRawBlob is populated by the TTS handler
+                let attempts = 0;
+                const pollInterval = setInterval(async () => {
+                    attempts++;
+                    if (state.voiceoverRawBlob || attempts > 40) {
+                        clearInterval(pollInterval);
+                        if (state.voiceoverRawBlob) {
+                            try {
+                                const actx = new (window.AudioContext || window.webkitAudioContext)();
+                                const arrayBuf = await state.voiceoverRawBlob.arrayBuffer();
+                                const decoded = await actx.decodeAudioData(arrayBuf);
+                                vtEnableProcess(decoded);
+                                // Switch to VC tab
+                                vtTabs.forEach(t => t.classList.remove('active'));
+                                const vcTab = document.querySelector('.vt-tab[data-vttab="vc"]');
+                                if (vcTab) vcTab.classList.add('active');
+                                if (vtPanelVc)  vtPanelVc.classList.add('active');
+                                if (vtPanelTts) vtPanelTts.classList.remove('active');
+                                vtSetStatus('🎙️ TTS অডিও রেডি — এখন এফেক্ট প্রয়োগ করুন', '#34d399');
+                            } catch (e) {
+                                console.warn('VT TTS decode error:', e);
+                            }
+                        }
+                    }
+                }, 250);
+            });
+        }
+
+        // Expose vtEnableProcess globally so other modules can feed the VT buffer
+        window.vtEnableProcess = vtEnableProcess;
+    })();
+    // ============================================================
+
 });
+

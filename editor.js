@@ -1404,30 +1404,44 @@ document.addEventListener('DOMContentLoaded', () => {
     const imageDurationInput = document.getElementById('image-duration-input');
     const imageDurationApplyBtn = document.getElementById('image-duration-apply-btn');
     const imageDurationApplyAllBtn = document.getElementById('image-duration-apply-all-btn');
+    const quickApplyDurationAllBtn = document.getElementById('quick-apply-duration-all-btn');
 
     // Shows/hides the "ছবির সময়কাল (Image Duration)" control based on whether
-    // the currently active clip is a still image, and fills it with that
-    // clip's current length. Images default to a fixed 5.0s on import, which
-    // also caps how long a B-roll caption on that image can stay on screen
-    // (see showBrollTimingFor's `maxVal = state.endTime || state.duration`) --
-    // this lets that length be extended per-clip.
+    // the currently active clip or any clip is a still image, and fills it with that
+    // clip's current length.
     function syncImageDurationUI() {
         if (!imageDurationContainer) return;
         const clip = state.clips && state.clips.find(c => c.id === state.activeClipId);
-        if (clip && clip.type === 'image') {
+        const hasAnyImage = state.clips && state.clips.some(c => c.type === 'image');
+        
+        if ((clip && clip.type === 'image') || hasAnyImage) {
             imageDurationContainer.style.display = 'flex';
+            const curDur = (clip && clip.type === 'image') ? (clip.end - clip.start || clip.duration || 5.0) : 5.0;
             if (imageDurationInput && document.activeElement !== imageDurationInput) {
-                imageDurationInput.value = clip.duration || 5.0;
+                imageDurationInput.value = Number(curDur).toFixed(1);
             }
         } else {
             imageDurationContainer.style.display = 'none';
         }
+
+        if (quickApplyDurationAllBtn) {
+            const imageCount = (state.clips || []).filter(c => c.type === 'image').length;
+            quickApplyDurationAllBtn.style.display = (imageCount > 1 && clip && clip.type === 'image') ? 'inline-block' : 'none';
+            if (clip && clip.type === 'image') {
+                const dur = (clip.end - clip.start || clip.duration || 5.0).toFixed(1);
+                quickApplyDurationAllBtn.innerText = `⏱️ সব ছবিতে ${dur}s প্রয়োগ করুন`;
+            }
+        }
     }
+    window.syncImageDurationUI = syncImageDurationUI;
 
     if (imageDurationApplyBtn) {
         imageDurationApplyBtn.addEventListener('click', () => {
             const clip = state.clips && state.clips.find(c => c.id === state.activeClipId);
-            if (!clip || clip.type !== 'image') return;
+            if (!clip || clip.type !== 'image') {
+                if (window.showToast) window.showToast('দয়া করে প্রথমে টাইমলাইনে একটি ছবি সিলেক্ট করুন।', 'warning');
+                return;
+            }
 
             let newDuration = parseFloat(imageDurationInput.value);
             if (!newDuration || isNaN(newDuration) || newDuration <= 0) {
@@ -1436,84 +1450,94 @@ document.addEventListener('DOMContentLoaded', () => {
             }
             newDuration = Math.min(600, Math.max(0.5, newDuration));
 
-            // If the trim end was sitting at the old full length, extend it to
-            // match the new length too, so the whole image stays visible by
-            // default. If the user had already trimmed it shorter on purpose,
-            // leave that trim point alone.
-            const wasFullLength = Math.abs((clip.end || 0) - (clip.duration || 0)) < 0.05;
             clip.duration = newDuration;
-            if (wasFullLength || clip.end > newDuration) {
-                clip.end = newDuration;
-            }
-            if (clip.start > clip.end) clip.start = 0;
+            clip.start = 0;
+            clip.end = newDuration;
 
             // Mirror into the live state if this is the clip currently on screen.
             if (state.activeClipId === clip.id) {
                 state.duration = clip.duration;
-                state.startTime = clip.start;
-                state.endTime = clip.end;
-                if (trimStart) { trimStart.max = state.duration; trimStart.value = state.startTime; }
+                state.startTime = 0;
+                state.endTime = clip.duration;
+                if (trimStart) { trimStart.max = state.duration; trimStart.value = 0; }
                 if (trimEnd) { trimEnd.max = state.duration; trimEnd.value = state.endTime; }
-                if (startVal) startVal.value = formatTime(state.startTime);
+                if (startVal) startVal.value = formatTime(0);
                 if (endVal) endVal.value = formatTime(state.endTime);
                 drawFrame();
             }
 
-            imageDurationInput.value = newDuration;
+            imageDurationInput.value = newDuration.toFixed(1);
             if (typeof renderClipTimeline === 'function') renderClipTimeline();
+            syncImageDurationUI();
             if (window.recordEditorHistory) {
                 window.recordEditorHistory(`Image duration set to ${newDuration}s`);
             } else if (window.triggerAutoSave) {
                 window.triggerAutoSave();
             }
+            if (window.showToast) window.showToast(`এই ছবির সময়কাল ${newDuration.toFixed(1)}s করা হয়েছে`, 'success');
         });
     }
 
-    // Apply one duration to every still image at once. This avoids having to
-    // visit each image clip individually when, for example, a 15-photo
-    // slideshow should change from 5 seconds to 30 seconds per photo.
+    function applyDurationToAllImages(durationToApply) {
+        let newDuration = parseFloat(durationToApply);
+        if (!newDuration || isNaN(newDuration) || newDuration <= 0) {
+            alert('সঠিক একটি সময় (সেকেন্ডে) দিন।');
+            return;
+        }
+        newDuration = Math.min(600, Math.max(0.5, newDuration));
+
+        const imageClips = (state.clips || []).filter(clip => clip.type === 'image');
+        if (!imageClips.length) {
+            alert('একসাথে প্রয়োগ করার জন্য কোনো ছবি নেই।');
+            return;
+        }
+
+        imageClips.forEach(clip => {
+            clip.duration = newDuration;
+            clip.start = 0;
+            clip.end = newDuration;
+        });
+
+        const activeClip = state.clips.find(clip => clip.id === state.activeClipId);
+        if (activeClip && activeClip.type === 'image') {
+            state.duration = activeClip.duration;
+            state.startTime = 0;
+            state.endTime = activeClip.end;
+            if (trimStart) { trimStart.max = state.duration; trimStart.value = 0; }
+            if (trimEnd) { trimEnd.max = state.duration; trimEnd.value = state.endTime; }
+            if (startVal) startVal.value = formatTime(0);
+            if (endVal) endVal.value = formatTime(state.endTime);
+            drawFrame();
+        }
+
+        if (imageDurationInput) imageDurationInput.value = newDuration.toFixed(1);
+        if (typeof renderClipTimeline === 'function') renderClipTimeline();
+        syncImageDurationUI();
+        if (window.recordEditorHistory) {
+            window.recordEditorHistory(`Image duration set to ${newDuration}s for ${imageClips.length} images`);
+        } else if (window.triggerAutoSave) {
+            window.triggerAutoSave();
+        }
+        if (window.showToast) {
+            window.showToast(`সবগুলো (${imageClips.length}টি) ছবির সময়কাল ${newDuration.toFixed(1)}s করা হয়েছে!`, 'success');
+        } else {
+            alert(`সবগুলো (${imageClips.length}টি) ছবির সময়কাল ${newDuration.toFixed(1)}s করা হয়েছে!`);
+        }
+    }
+    window.applyDurationToAllImages = applyDurationToAllImages;
+
+    // Apply one duration to every still image at once.
     if (imageDurationApplyAllBtn) {
         imageDurationApplyAllBtn.addEventListener('click', () => {
-            let newDuration = parseFloat(imageDurationInput.value);
-            if (!newDuration || isNaN(newDuration) || newDuration <= 0) {
-                alert('সঠিক একটি সময় (সেকেন্ডে) দিন।');
-                return;
-            }
-            newDuration = Math.min(600, Math.max(0.5, newDuration));
+            applyDurationToAllImages(imageDurationInput ? imageDurationInput.value : 5.0);
+        });
+    }
 
-            const imageClips = (state.clips || []).filter(clip => clip.type === 'image');
-            if (!imageClips.length) {
-                alert('একসাথে প্রয়োগ করার জন্য কোনো ছবি নেই।');
-                return;
-            }
-
-            imageClips.forEach(clip => {
-                const wasFullLength = Math.abs((clip.end || 0) - (clip.duration || 0)) < 0.05;
-                clip.duration = newDuration;
-                if (wasFullLength || clip.end > newDuration) clip.end = newDuration;
-                if (clip.start > clip.end) clip.start = 0;
-            });
-
-            const activeClip = state.clips.find(clip => clip.id === state.activeClipId);
-            if (activeClip && activeClip.type === 'image') {
-                state.duration = activeClip.duration;
-                state.startTime = activeClip.start;
-                state.endTime = activeClip.end;
-                if (trimStart) { trimStart.max = state.duration; trimStart.value = state.startTime; }
-                if (trimEnd) { trimEnd.max = state.duration; trimEnd.value = state.endTime; }
-                if (startVal) startVal.value = formatTime(state.startTime);
-                if (endVal) endVal.value = formatTime(state.endTime);
-                drawFrame();
-            }
-
-            imageDurationInput.value = newDuration;
-            if (typeof renderClipTimeline === 'function') renderClipTimeline();
-            if (window.recordEditorHistory) {
-                window.recordEditorHistory(`Image duration set to ${newDuration}s for ${imageClips.length} images`);
-            } else if (window.triggerAutoSave) {
-                window.triggerAutoSave();
-            }
-            if (window.showToast) window.showToast(`${imageClips.length}টি ছবির সময়কাল ${newDuration}s করা হয়েছে`, 'success');
+    if (quickApplyDurationAllBtn) {
+        quickApplyDurationAllBtn.addEventListener('click', () => {
+            const clip = state.clips && state.clips.find(c => c.id === state.activeClipId);
+            const dur = (clip && clip.type === 'image') ? (clip.end - clip.start || clip.duration || 5.0) : 5.0;
+            applyDurationToAllImages(dur);
         });
     }
     
@@ -1863,7 +1887,17 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('select-video-trigger').addEventListener('click', () => videoInput.click());
     
     videoInput.addEventListener('change', (e) => {
-        handleVideoFile(e.target.files[0]);
+        const files = Array.from(e.target.files || []);
+        if (!files.length) return;
+        handleVideoFile(files[0]);
+        if (files.length > 1) {
+            setTimeout(() => {
+                for (let i = 1; i < files.length; i++) {
+                    addClipToTimeline(files[i]);
+                }
+            }, 350);
+        }
+        videoInput.value = '';
     });
     
     videoDropzone.addEventListener('dragover', (e) => {
@@ -1878,7 +1912,16 @@ document.addEventListener('DOMContentLoaded', () => {
     videoDropzone.addEventListener('drop', (e) => {
         e.preventDefault();
         videoDropzone.classList.remove('hover');
-        handleVideoFile(e.dataTransfer.files[0]);
+        const files = Array.from(e.dataTransfer.files || []);
+        if (!files.length) return;
+        handleVideoFile(files[0]);
+        if (files.length > 1) {
+            setTimeout(() => {
+                for (let i = 1; i < files.length; i++) {
+                    addClipToTimeline(files[i]);
+                }
+            }, 350);
+        }
     });
     
     // --- Logo Watermark Loading ---
@@ -3314,8 +3357,12 @@ document.addEventListener('DOMContentLoaded', () => {
     if (addClipDropzone) {
         addClipDropzone.addEventListener('click', () => addClipInput.click());
         addClipInput.addEventListener('change', (e) => {
-            const file = e.target.files[0];
-            if (file) addClipToTimeline(file);
+            const files = Array.from(e.target.files || []);
+            files.forEach(file => {
+                if (file && (file.type.startsWith('video/') || file.type.startsWith('image/'))) {
+                    addClipToTimeline(file);
+                }
+            });
             addClipInput.value = '';
         });
         addClipDropzone.addEventListener('dragover', (e) => {
@@ -3328,8 +3375,12 @@ document.addEventListener('DOMContentLoaded', () => {
         addClipDropzone.addEventListener('drop', (e) => {
             e.preventDefault();
             addClipDropzone.classList.remove('drag-over');
-            const file = e.dataTransfer.files[0];
-            if (file && (file.type.startsWith('video/') || file.type.startsWith('image/'))) addClipToTimeline(file);
+            const files = Array.from(e.dataTransfer.files || []);
+            files.forEach(file => {
+                if (file && (file.type.startsWith('video/') || file.type.startsWith('image/'))) {
+                    addClipToTimeline(file);
+                }
+            });
         });
     }
 
@@ -13432,6 +13483,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const cropActionsContainer = document.getElementById('crop-actions-container');
     const resetCropBtn = document.getElementById('reset-crop-btn');
     const autoReframeBtn = document.getElementById('auto-reframe-btn');
+    const applyCropAllClipsBtn = document.getElementById('apply-crop-all-clips-btn');
     
     cropToolToggle.addEventListener('change', (e) => {
         state.isAdjustingCrop = e.target.checked;
@@ -13448,6 +13500,58 @@ document.addEventListener('DOMContentLoaded', () => {
         updateCanvasDimensions();
         drawFrame();
     });
+
+    if (resetCropBtn) {
+        resetCropBtn.addEventListener('click', () => {
+            state.cropX = 0;
+            state.cropY = 0;
+            state.cropW = 1;
+            state.cropH = 1;
+            syncCropToActiveClip();
+            updateCropDimensionsDisplay();
+            updateCanvasDimensions();
+            drawFrame();
+            if (window.recordEditorHistory) window.recordEditorHistory('Crop reset');
+        });
+    }
+
+    if (autoReframeBtn) {
+        autoReframeBtn.addEventListener('click', () => {
+            // Center crop 9:16 or 1:1 depending on canvas aspect ratio
+            const ar = state.aspectRatio === '9:16' ? (9/16) : (state.aspectRatio === '1:1' ? 1 : (16/9));
+            state.cropW = Math.min(1, Math.max(0.4, ar));
+            state.cropH = Math.min(1, Math.max(0.4, 1 / ar));
+            state.cropX = Math.max(0, (1 - state.cropW) / 2);
+            state.cropY = Math.max(0, (1 - state.cropH) / 2);
+            syncCropToActiveClip();
+            updateCropDimensionsDisplay();
+            updateCanvasDimensions();
+            drawFrame();
+            if (window.recordEditorHistory) window.recordEditorHistory('Auto reframe applied');
+        });
+    }
+
+    if (applyCropAllClipsBtn) {
+        applyCropAllClipsBtn.addEventListener('click', () => {
+            if (!state.clips || !state.clips.length) {
+                if (window.showToast) window.showToast('কোনো ক্লিপ পাওয়া যায়নি', 'warning');
+                return;
+            }
+            syncCropToActiveClip();
+            state.clips.forEach(c => {
+                c.cropX = state.cropX;
+                c.cropY = state.cropY;
+                c.cropW = state.cropW;
+                c.cropH = state.cropH;
+            });
+            if (window.showToast) {
+                window.showToast(`সবগুলো ক্লিপে (${state.clips.length}টি) বর্তমান ক্রপ সফলভাবে প্রয়োগ করা হয়েছে!`, 'success');
+            } else {
+                alert(`সবগুলো ক্লিপে (${state.clips.length}টি) বর্তমান ক্রপ প্রয়োগ করা হয়েছে!`);
+            }
+            if (window.recordEditorHistory) window.recordEditorHistory('Applied crop to all clips');
+        });
+    }
 
     // --- Blur/Mosaic Tool Bindings (Phase 4B) ---
     const blurToolToggle = document.getElementById('blur-tool-toggle');

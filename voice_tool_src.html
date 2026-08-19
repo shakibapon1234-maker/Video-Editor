@@ -1,0 +1,499 @@
+<!DOCTYPE html>
+<html lang="bn">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ভয়েস চেঞ্জার ও টেক্সট টু স্পিচ</title>
+<style>
+  :root{
+    --bg:#0f0f14; --card:#1a1a22; --accent:#d4a24c; --accent2:#7c9eff;
+    --text:#f2f2f2; --muted:#9a9aa5; --border:#2a2a35;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0; font-family:'Segoe UI', Arial, sans-serif; background:var(--bg);
+    color:var(--text); padding:20px; min-height:100vh;
+  }
+  .wrap{max-width:640px; margin:0 auto;}
+  h1{font-size:22px; text-align:center; margin-bottom:4px;}
+  .sub{text-align:center; color:var(--muted); font-size:13px; margin-bottom:20px;}
+  .tabs{display:flex; gap:8px; margin-bottom:16px;}
+  .tab{
+    flex:1; padding:10px; text-align:center; background:var(--card);
+    border:1px solid var(--border); border-radius:10px; cursor:pointer; font-size:14px;
+  }
+  .tab.active{background:var(--accent); color:#1a1a22; font-weight:600; border-color:var(--accent);}
+  .card{
+    background:var(--card); border:1px solid var(--border); border-radius:14px;
+    padding:18px; margin-bottom:14px;
+  }
+  .panel{display:none;}
+  .panel.active{display:block;}
+  label{display:block; font-size:13px; color:var(--muted); margin:12px 0 6px;}
+  textarea, select, input[type=file]{
+    width:100%; background:#0f0f14; color:var(--text); border:1px solid var(--border);
+    border-radius:8px; padding:10px; font-size:14px;
+  }
+  textarea{min-height:90px; resize:vertical;}
+  .row{display:flex; gap:10px;}
+  .row > div{flex:1;}
+  input[type=range]{width:100%; accent-color:var(--accent);}
+  .rangeval{font-size:12px; color:var(--accent); float:left;}
+  button{
+    background:var(--accent); color:#1a1a22; border:none; border-radius:10px;
+    padding:12px 16px; font-size:14px; font-weight:600; cursor:pointer; width:100%; margin-top:10px;
+  }
+  button.secondary{background:var(--accent2);}
+  button.ghost{background:transparent; border:1px solid var(--border); color:var(--text);}
+  button:disabled{opacity:.5; cursor:not-allowed;}
+  .presets{display:flex; flex-wrap:wrap; gap:8px; margin-top:8px;}
+  .preset{
+    padding:8px 12px; background:#0f0f14; border:1px solid var(--border); border-radius:20px;
+    font-size:12px; cursor:pointer; color:var(--text);
+  }
+  .preset.active{background:var(--accent2); color:#0f0f14; border-color:var(--accent2);}
+  audio{width:100%; margin-top:10px;}
+  .note{font-size:12px; color:var(--muted); line-height:1.6; margin-top:10px;}
+  .status{font-size:12px; color:var(--accent2); margin-top:8px; min-height:16px;}
+  a.dl{
+    display:block; text-align:center; background:#2ecc71; color:#0f0f14; text-decoration:none;
+    padding:12px; border-radius:10px; font-weight:600; margin-top:10px;
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>🎙️ ভয়েস চেঞ্জার &amp; টেক্সট টু স্পিচ</h1>
+  <div class="sub">১০০% ব্রাউজারে চলে — কোনো API, কোনো ইন্টারনেট খরচ, কোনো লিমিট নেই</div>
+
+  <div class="tabs">
+    <div class="tab active" data-tab="vc">🔊 ভয়েস চেঞ্জার</div>
+    <div class="tab" data-tab="tts">📝 টেক্সট টু স্পিচ</div>
+  </div>
+
+  <!-- VOICE CHANGER -->
+  <div class="panel active" id="panel-vc">
+    <div class="card">
+      <label>অডিও ফাইল আপলোড করুন (mp3 / wav / m4a)</label>
+      <input type="file" id="audioFile" accept="audio/*">
+
+      <label>এফেক্ট বেছে নিন</label>
+      <div class="presets" id="presets">
+        <div class="preset active" data-pitch="0.82" data-dist="0" data-verb="0.18" data-bands='[{"type":"lowpass","freq":7500},{"type":"lowshelf","freq":130,"gain":7.0},{"type":"peaking","freq":2400,"gain":1.5,"q":1.0}]'>গম্ভীর পুরুষ কণ্ঠ (মার্কেটিং)</div>
+        <div class="preset" data-pitch="1.24" data-dist="0" data-verb="0.10" data-bands='[{"type":"highpass","freq":180},{"type":"peaking","freq":300,"gain":-8.0,"q":1.2},{"type":"peaking","freq":1200,"gain":3.0,"q":1.0},{"type":"peaking","freq":2800,"gain":4.0,"q":1.2},{"type":"highshelf","freq":6000,"gain":2.5}]'>নারী কণ্ঠ (ন্যাচারাল ও নরম)</div>
+        <div class="preset" data-pitch="1.30" data-dist="0" data-verb="0.08" data-bands='[{"type":"highpass","freq":200},{"type":"peaking","freq":280,"gain":-9.0,"q":1.4},{"type":"peaking","freq":1500,"gain":3.5,"q":1.1},{"type":"peaking","freq":3200,"gain":4.5,"q":1.3},{"type":"highshelf","freq":7000,"gain":3.0}]'>চিকন নারী কণ্ঠ (উজ্জ্বল)</div>
+        <div class="preset" data-pitch="1.18" data-dist="0" data-verb="0.14" data-bands='[{"type":"highpass","freq":150},{"type":"peaking","freq":320,"gain":-6.0,"q":1.0},{"type":"peaking","freq":1100,"gain":2.5,"q":0.9},{"type":"peaking","freq":2500,"gain":3.0,"q":1.0},{"type":"highshelf","freq":5500,"gain":1.5}]'>ম্যাচিউর নারী কণ্ঠ (মার্কেটিং)</div>
+        <div class="preset" data-pitch="0.65" data-dist="0" data-verb="0" data-bands='[{"type":"lowpass","freq":2500},{"type":"lowshelf","freq":120,"gain":6}]'>রাক্ষুসে / দানব কণ্ঠ</div>
+        <div class="preset" data-pitch="1.45" data-dist="0" data-verb="0" data-bands='[{"type":"highpass","freq":350}]'>চিপমাঙ্ক (কার্টুন)</div>
+        <div class="preset" data-pitch="1.0" data-dist="18" data-verb="0" data-bands='[]'>রোবট</div>
+        <div class="preset" data-pitch="1.0" data-dist="0" data-verb="0" data-bands='[]'>কাস্টম</div>
+      </div>
+
+      <label>পিচ (<span class="rangeval" id="pitchVal">0.82</span>)</label>
+      <input type="range" id="pitchSlider" min="0.5" max="1.8" step="0.01" value="0.82">
+
+      <button id="processBtn" disabled>▶️ এফেক্ট প্রয়োগ করুন</button>
+
+      <div class="status" id="vcStatus"></div>
+      <audio id="vcOutput" controls style="display:none;"></audio>
+      <a href="#" class="dl" id="vcDownload" style="display:none;">⬇️ ডাউনলোড করুন (webm)</a>
+
+      <div class="note">
+        টিপস: প্রথমে অডিও ফাইল আপলোড করুন, তারপর একটা এফেক্ট প্রিসেট বেছে নিন বা পিচ স্লাইডার নিজে সেট করুন, তারপর "এফেক্ট প্রয়োগ করুন" চাপুন। প্রসেস শেষ হলে প্লে করে শুনুন এবং ডাউনলোড বাটনে ফাইল সেভ করুন।
+      </div>
+    </div>
+  </div>
+
+  <!-- TTS -->
+  <div class="panel" id="panel-tts">
+    <div class="card">
+      <label>টেক্সট লিখুন</label>
+      <textarea id="ttsText" placeholder="এখানে আপনার স্ক্রিপ্ট লিখুন...">Warisha Fashion — যেখানে প্রতিটা সুতোয় লেখা থাকে আভিজাত্যের গল্প।</textarea>
+
+      <label>ভয়েস বেছে নিন</label>
+      <select id="voiceSelect"></select>
+
+      <div class="row">
+        <div>
+          <label>পিচ (<span class="rangeval" id="ttsPitchVal">1</span>)</label>
+          <input type="range" id="ttsPitch" min="0" max="2" step="0.1" value="1">
+        </div>
+        <div>
+          <label>স্পিড (<span class="rangeval" id="ttsRateVal">1</span>)</label>
+          <input type="range" id="ttsRate" min="0.5" max="2" step="0.1" value="1">
+        </div>
+      </div>
+
+      <button id="speakBtn">▶️ প্লে করুন</button>
+      <button id="stopBtn" class="ghost">⏹️ বন্ধ করুন</button>
+
+      <div class="note">
+        সীমাবদ্ধতা: এটা আপনার ব্রাউজার/ডিভাইসের সিস্টেম ভয়েস ব্যবহার করে — ElevenLabs-এর মতো ন্যাচারাল শোনাবে না, এবং সব ডিভাইসে বাংলা ভয়েস নাও থাকতে পারে (তালিকায় "bn" বা "Bangla" লেখা ভয়েস খুঁজুন)। ব্রাউজার সরাসরি এই ভয়েস ডাউনলোড করতে দেয় না — শোনার পর ভালো লাগলে, উপরের "ভয়েস চেঞ্জার" ট্যাবে স্ক্রিন-রেকর্ড করা অডিও আপলোড করে আরও এফেক্ট দিতে পারেন।
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+// ---------- TAB SWITCH ----------
+document.querySelectorAll('.tab').forEach(tab=>{
+  tab.onclick = ()=>{
+    document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
+    document.querySelectorAll('.panel').forEach(p=>p.classList.remove('active'));
+    tab.classList.add('active');
+    document.getElementById('panel-'+tab.dataset.tab).classList.add('active');
+  };
+});
+
+// ---------- VOICE CHANGER ----------
+let audioCtx, audioBuffer, fileLoaded=false;
+const fileInput = document.getElementById('audioFile');
+const processBtn = document.getElementById('processBtn');
+const pitchSlider = document.getElementById('pitchSlider');
+const pitchVal = document.getElementById('pitchVal');
+const vcStatus = document.getElementById('vcStatus');
+const vcOutput = document.getElementById('vcOutput');
+const vcDownload = document.getElementById('vcDownload');
+
+let currentPreset = {
+  dist:0, verb:0.20,
+  bands:[{type:"lowpass",freq:7000},{type:"lowshelf",freq:120,gain:8.5},{type:"peaking",freq:2600,gain:1.5,q:1.0}]
+};
+
+pitchSlider.oninput = ()=> pitchVal.textContent = pitchSlider.value;
+
+document.querySelectorAll('.preset').forEach(p=>{
+  p.onclick = ()=>{
+    document.querySelectorAll('.preset').forEach(x=>x.classList.remove('active'));
+    p.classList.add('active');
+    pitchSlider.value = p.dataset.pitch;
+    pitchVal.textContent = p.dataset.pitch;
+    currentPreset = {
+      dist:+(p.dataset.dist||0),
+      verb:+(p.dataset.verb||0),
+      bands: JSON.parse(p.dataset.bands || '[]')
+    };
+  };
+});
+
+fileInput.onchange = async (e)=>{
+  const file = e.target.files[0];
+  if(!file) return;
+  vcStatus.textContent = "ফাইল লোড হচ্ছে...";
+  audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  const arrayBuffer = await file.arrayBuffer();
+  audioBuffer = await audioCtx.decodeAudioData(arrayBuffer);
+  fileLoaded = true;
+  processBtn.disabled = false;
+  vcStatus.textContent = "ফাইল রেডি ✔ — এখন এফেক্ট প্রয়োগ করুন";
+};
+
+// Duration-preserving pitch shift (simple granular / overlap-add technique).
+// Unlike playbackRate (which also changes speed -> sounds sped up/slowed down),
+// this keeps the original duration so the voice sounds natural at moderate shifts.
+function cubicSample(data, x){
+  // Catmull-Rom cubic interpolation instead of linear — linear interpolation
+  // was the main source of the buzzy/broken sound on the old presets,
+  // because it smears high frequencies whenever pitchFactor isn't 1.
+  const n = data.length;
+  const i1 = Math.floor(x);
+  const frac = x - i1;
+  const i0 = i1 > 0 ? i1 - 1 : 0;
+  const i2 = i1 + 1 < n ? i1 + 1 : n - 1;
+  const i3 = i1 + 2 < n ? i1 + 2 : n - 1;
+  const y0 = data[i0], y1 = data[Math.min(i1, n-1)], y2 = data[i2], y3 = data[i3];
+  const a0 = y3 - y2 - y0 + y1;
+  const a1 = y0 - y1 - a0;
+  const a2 = y2 - y0;
+  const a3 = y1;
+  return a0*frac*frac*frac + a1*frac*frac + a2*frac + a3;
+}
+
+// WSOLA time-stretch: changes DURATION by stretchFactor while keeping pitch
+// the same. Unlike a single fixed-hop granular copy, this searches a small
+// window around each grain's expected position for the best-matching offset
+// (via cross-correlation with what's already been written), so consecutive
+// grains line up in phase instead of fighting each other. That phase
+// fighting is what made the old male/female/monster/chipmunk presets sound
+// warbly and broken.
+function timeStretchWSOLA(ctx, buffer, stretchFactor){
+  const sampleRate = buffer.sampleRate;
+  const numChannels = buffer.numberOfChannels;
+  const inputLength = buffer.length;
+  const outputLength = Math.max(1, Math.floor(inputLength * stretchFactor));
+  const outBuffer = ctx.createBuffer(numChannels, outputLength, sampleRate);
+
+  const analysisHop = Math.floor(sampleRate * 0.02); // 20ms
+  const synthesisHop = Math.max(1, Math.round(analysisHop * stretchFactor));
+  const grainSize = analysisHop * 4; // generous overlap for a smooth crossfade
+  const searchRadius = Math.floor(analysisHop * 0.75); // wider search = better-matched grains = smoother voice
+  const paddedLength = inputLength + grainSize; // zero-pad the tail so end-of-clip grains aren't clamped/repeated
+
+  for(let ch=0; ch<numChannels; ch++){
+    const raw = buffer.getChannelData(ch);
+    const input = new Float32Array(paddedLength);
+    input.set(raw, 0); // samples past inputLength stay 0 (silence), not a repeat of the last grain
+
+    const output = new Float32Array(outputLength);
+    const windowSum = new Float32Array(outputLength);
+
+    for(let synthPos=0; synthPos<outputLength; synthPos+=synthesisHop){
+      const idealAnalysisPos = Math.floor(synthPos / stretchFactor);
+
+      // Find the offset (within +/- searchRadius of the ideal position)
+      // whose waveform best matches what's already sitting in the output
+      // buffer's overlap region, so this grain blends in cleanly.
+      let bestOffset = 0;
+      if(synthPos > 0){
+        let bestScore = -Infinity;
+        const overlapLen = Math.min(grainSize, synthesisHop * 2);
+        for(let off=-searchRadius; off<=searchRadius; off++){
+          const candidateStart = idealAnalysisPos + off;
+          if(candidateStart < 0 || candidateStart + grainSize > paddedLength) continue;
+          let score = 0;
+          for(let k=0; k<overlapLen; k++){
+            const outIdx = synthPos + k;
+            if(outIdx >= outputLength) break;
+            score += output[outIdx] * input[candidateStart + k];
+          }
+          if(score > bestScore){ bestScore = score; bestOffset = off; }
+        }
+      }
+
+      const grainStart = Math.max(0, Math.min(paddedLength - grainSize, idealAnalysisPos + bestOffset));
+      for(let i=0; i<grainSize; i++){
+        const outIdx = synthPos + i;
+        if(outIdx >= outputLength) break;
+        const srcIdx = grainStart + i;
+        const win = 0.5 - 0.5*Math.cos(2*Math.PI*i/(grainSize-1)); // Hann window
+        output[outIdx] += input[srcIdx] * win;
+        windowSum[outIdx] += win;
+      }
+    }
+    for(let i=0; i<outputLength; i++){
+      output[i] = windowSum[i] > 0.0001 ? output[i]/windowSum[i] : output[i];
+    }
+    outBuffer.copyToChannel(output, ch);
+  }
+  return outBuffer;
+}
+
+// Resample (change sample count) by rateFactor using cubic interpolation.
+// rateFactor > 1 shortens the buffer and raises pitch; < 1 lengthens and
+// lowers pitch. Used as the second stage of the pitch shift below.
+function resampleBuffer(ctx, buffer, rateFactor){
+  const sampleRate = buffer.sampleRate;
+  const numChannels = buffer.numberOfChannels;
+  const inputLength = buffer.length;
+  const outputLength = Math.max(1, Math.floor(inputLength / rateFactor));
+  const outBuffer = ctx.createBuffer(numChannels, outputLength, sampleRate);
+
+  for(let ch=0; ch<numChannels; ch++){
+    const input = buffer.getChannelData(ch);
+    const output = new Float32Array(outputLength);
+    for(let i=0; i<outputLength; i++){
+      output[i] = cubicSample(input, i * rateFactor);
+    }
+    outBuffer.copyToChannel(output, ch);
+  }
+  return outBuffer;
+}
+
+// Duration-preserving pitch shift: first time-stretch by pitchFactor itself
+// (WSOLA, pitch unchanged — e.g. pitchFactor 1.16 makes it 16% longer,
+// 0.8 makes it 20% shorter), then resample by the same pitchFactor, which
+// shifts the pitch and brings the length back to (roughly) the original.
+// Using pitchFactor (not its inverse) for the stretch stage matters: it's
+// what keeps the female preset an expansion rather than a compression —
+// WSOLA compresses less cleanly, which was smearing away the "female"
+// character of that preset and blurring the male preset's smoothness too.
+function pitchShiftBuffer(ctx, buffer, pitchFactor){
+  if (Math.abs(pitchFactor - 1.0) < 0.01) return buffer; // no-op, keeps "custom"/"robot" untouched
+
+  const stretched = timeStretchWSOLA(ctx, buffer, pitchFactor);
+  return resampleBuffer(ctx, stretched, pitchFactor);
+}
+
+// A short synthetic room/plate impulse response, used to give the marketing
+// presets a touch of depth ("গম্ভীরতা") instead of sounding dry and thin.
+function createImpulseResponse(ctx, duration, decay){
+  const rate = ctx.sampleRate;
+  const length = Math.max(1, Math.floor(rate * duration));
+  const impulse = ctx.createBuffer(2, length, rate);
+  for(let ch=0; ch<2; ch++){
+    const data = impulse.getChannelData(ch);
+    for(let i=0;i<length;i++){
+      data[i] = (Math.random()*2 - 1) * Math.pow(1 - i/length, decay);
+    }
+  }
+  return impulse;
+}
+
+function makeDistortionCurve(amount){
+  const k = amount, n = 44100;
+  const curve = new Float32Array(n);
+  for(let i=0;i<n;i++){
+    const x = i*2/n - 1;
+    curve[i] = (3+k)*x*20*(Math.PI/180) / (Math.PI + k*Math.abs(x));
+  }
+  return curve;
+}
+
+processBtn.onclick = async ()=>{
+  if(!fileLoaded) return;
+  processBtn.disabled = true;
+  vcStatus.textContent = "প্রসেস হচ্ছে... (একটু সময় লাগতে পারে)";
+  await new Promise(r => setTimeout(r, 30)); // let the status text paint first
+
+  const pitch = parseFloat(pitchSlider.value);
+
+  // Pitch-shift while keeping the original duration (natural-sounding),
+  // instead of speeding up/slowing down the whole clip.
+  const shiftedBuffer = pitchShiftBuffer(audioCtx, audioBuffer, pitch);
+
+  const offlineCtx = new OfflineAudioContext(
+    shiftedBuffer.numberOfChannels,
+    shiftedBuffer.length,
+    shiftedBuffer.sampleRate
+  );
+
+  const src = offlineCtx.createBufferSource();
+  src.buffer = shiftedBuffer;
+  src.playbackRate.value = 1.0;
+
+  let node = src;
+
+  if(currentPreset.dist > 0){
+    const ws = offlineCtx.createWaveShaper();
+    ws.curve = makeDistortionCurve(currentPreset.dist);
+    ws.oversample = '4x';
+    node.connect(ws); node = ws;
+  }
+  // Generic EQ chain: each preset supplies an ordered list of bands
+  // (highpass/lowpass/peaking/lowshelf/highshelf) with freq/gain/Q, so
+  // presets aren't limited to one fixed shelf + two peaking slots.
+  // The female presets use this to do a low-mid "chest resonance" cut
+  // (a peaking cut, not a shelf) plus a formant-presence boost and a
+  // high-shelf for air/clarity — mirroring how a real voice's formants
+  // shift, which pitch-shifting alone doesn't do.
+  (currentPreset.bands || []).forEach(b=>{
+    const f = offlineCtx.createBiquadFilter();
+    f.type = b.type;
+    f.frequency.value = b.freq;
+    if(b.gain !== undefined) f.gain.value = b.gain;
+    if(b.q !== undefined) f.Q.value = b.q;
+    node.connect(f); node = f;
+  });
+
+  if(currentPreset.verb > 0){
+    const convolver = offlineCtx.createConvolver();
+    convolver.buffer = createImpulseResponse(offlineCtx, 1.1, 3.5);
+    const wet = offlineCtx.createGain();
+    wet.gain.value = currentPreset.verb;
+    const dry = offlineCtx.createGain();
+    dry.gain.value = 1;
+    const merged = offlineCtx.createGain();
+    node.connect(dry); dry.connect(merged);
+    node.connect(convolver); convolver.connect(wet); wet.connect(merged);
+    node = merged;
+  }
+
+  // A compressor instead of a flat gain multiplier: it evens out loudness
+  // and stops the boosted low/mid frequencies from clipping (which is what
+  // made several of the old presets sound broken/distorted).
+  const comp = offlineCtx.createDynamicsCompressor();
+  comp.threshold.value = -18;
+  comp.knee.value = 24;
+  comp.ratio.value = 4;
+  comp.attack.value = 0.005;
+  comp.release.value = 0.15;
+  node.connect(comp);
+
+  const gain = offlineCtx.createGain();
+  gain.gain.value = 1.15;
+  comp.connect(gain);
+  gain.connect(offlineCtx.destination);
+
+  src.start(0);
+  const rendered = await offlineCtx.startRendering();
+
+  // convert to WAV blob
+  const wavBlob = bufferToWav(rendered);
+  const url = URL.createObjectURL(wavBlob);
+  vcOutput.src = url;
+  vcOutput.style.display = 'block';
+  vcDownload.href = url;
+  vcDownload.download = 'voice_changed.wav';
+  vcDownload.style.display = 'block';
+  vcStatus.textContent = "✔ রেডি! প্লে করে শুনুন এবং ডাউনলোড করুন";
+  processBtn.disabled = false;
+};
+
+// simple AudioBuffer -> WAV encoder
+function bufferToWav(abuffer){
+  const numOfChan = abuffer.numberOfChannels;
+  const length = abuffer.length * numOfChan * 2 + 44;
+  const buffer = new ArrayBuffer(length);
+  const view = new DataView(buffer);
+  const channels = [];
+  let offset = 0, pos = 0;
+
+  function setUint16(data){ view.setUint16(pos, data, true); pos += 2; }
+  function setUint32(data){ view.setUint32(pos, data, true); pos += 4; }
+
+  setUint32(0x46464952); setUint32(length-8); setUint32(0x45564157);
+  setUint32(0x20746d66); setUint32(16); setUint16(1);
+  setUint16(numOfChan); setUint32(abuffer.sampleRate);
+  setUint32(abuffer.sampleRate*2*numOfChan); setUint16(numOfChan*2); setUint16(16);
+  setUint32(0x61746164); setUint32(length-pos-4);
+
+  for(let i=0;i<abuffer.numberOfChannels;i++) channels.push(abuffer.getChannelData(i));
+
+  while(pos < length){
+    for(let i=0;i<numOfChan;i++){
+      let sample = Math.max(-1, Math.min(1, channels[i][offset]));
+      sample = sample < 0 ? sample*0x8000 : sample*0x7FFF;
+      view.setInt16(pos, sample, true); pos += 2;
+    }
+    offset++;
+  }
+  return new Blob([buffer], {type:'audio/wav'});
+}
+
+// ---------- TTS ----------
+const ttsText = document.getElementById('ttsText');
+const voiceSelect = document.getElementById('voiceSelect');
+const ttsPitch = document.getElementById('ttsPitch');
+const ttsRate = document.getElementById('ttsRate');
+const speakBtn = document.getElementById('speakBtn');
+const stopBtn = document.getElementById('stopBtn');
+
+ttsPitch.oninput = ()=> document.getElementById('ttsPitchVal').textContent = ttsPitch.value;
+ttsRate.oninput = ()=> document.getElementById('ttsRateVal').textContent = ttsRate.value;
+
+let voices = [];
+function loadVoices(){
+  voices = speechSynthesis.getVoices();
+  voiceSelect.innerHTML = '';
+  voices.forEach((v,i)=>{
+    const opt = document.createElement('option');
+    opt.value = i;
+    opt.textContent = v.name + ' (' + v.lang + ')' + (/bn|ben/i.test(v.lang) ? ' 🇧🇩' : '');
+    voiceSelect.appendChild(opt);
+  });
+}
+speechSynthesis.onvoiceschanged = loadVoices;
+loadVoices();
+
+speakBtn.onclick = ()=>{
+  speechSynthesis.cancel();
+  const utter = new SpeechSynthesisUtterance(ttsText.value);
+  if(voices[voiceSelect.value]) utter.voice = voices[voiceSelect.value];
+  utter.pitch = parseFloat(ttsPitch.value);
+  utter.rate = parseFloat(ttsRate.value);
+  speechSynthesis.speak(utter);
+};
+stopBtn.onclick = ()=> speechSynthesis.cancel();
+</script>
+</body>
+</html>
