@@ -1201,6 +1201,9 @@ document.addEventListener('DOMContentLoaded', () => {
     // over at the right moment during live preview.
     let lastActiveBgMusicTrackId = null;
 
+    // Track whether videoGainNode has been reduced by bgMusic (to restore cleanly)
+    let _bgMusicVideoGainActive = false;
+
     function bgMusicSyncTick() {
         const isPlaying = state.video && !state.video.paused && !state.video.ended;
         if (!isPlaying) {
@@ -1209,6 +1212,16 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (el && !el.paused) el.pause();
             });
             lastActiveBgMusicTrackId = null;
+
+            // Restore video gain when playback stops
+            if (_bgMusicVideoGainActive && window.videoGainNode && audioCtx) {
+                window.videoGainNode.gain.linearRampToValueAtTime(
+                    state.videoVolume !== undefined ? state.videoVolume : 1.0,
+                    audioCtx.currentTime + 0.1
+                );
+                _bgMusicVideoGainActive = false;
+            }
+
             requestAnimationFrame(bgMusicSyncTick);
             return;
         }
@@ -1222,6 +1235,30 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (el && !el.paused) el.pause();
             }
         });
+
+        // --- Control original video audio volume when bgMusic is active ---
+        // Read the user-set volume level (0 = full mute, 100 = keep original full)
+        if (window.videoGainNode && audioCtx && !speakerMutedState) {
+            const slider = document.getElementById('bgmusic-original-vol-slider');
+            const targetRatio = slider ? (parseFloat(slider.value) / 100) : 0;
+            const fullVol = state.videoVolume !== undefined ? state.videoVolume : 1.0;
+
+            if (active) {
+                // bgMusic is active → apply user-chosen original audio level
+                const targetGain = fullVol * targetRatio;
+                if (!_bgMusicVideoGainActive) {
+                    window.videoGainNode.gain.linearRampToValueAtTime(targetGain, audioCtx.currentTime + 0.15);
+                    _bgMusicVideoGainActive = true;
+                }
+            } else {
+                // No bgMusic for this segment → restore full video audio
+                if (_bgMusicVideoGainActive) {
+                    window.videoGainNode.gain.linearRampToValueAtTime(fullVol, audioCtx.currentTime + 0.15);
+                    _bgMusicVideoGainActive = false;
+                }
+            }
+        }
+        // -----------------------------------------------------------------
 
         if (active) {
             const el = getBgMusicTrackAudioEl(active);
@@ -1467,6 +1504,7 @@ document.addEventListener('DOMContentLoaded', () => {
             videoGainNode = audioCtx.createGain();
             videoGainNode.gain.setValueAtTime(state.videoVolume, audioCtx.currentTime);
             window.videoGainNode = videoGainNode;
+            window._audioCtx = audioCtx; // expose for multitrack.js gain control
 
             // Voice Changer for the original video's own audio. Reuses the exact
             // same VoiceChangerEffect class as the voiceover, but is a SEPARATE
@@ -3569,6 +3607,25 @@ document.addEventListener('DOMContentLoaded', () => {
             // 1.0 for clips created before this feature was added.
             const perClipVol = (clip.volume !== undefined ? clip.volume : 1.0);
             clipGain.gain.setValueAtTime(state.videoVolume * perClipVol, 0);
+
+            // Apply multitrack audio track ducking during export (matches live preview)
+            const savedMtRatio = localStorage.getItem('multitrack_orig_vol');
+            const mtRatio = savedMtRatio !== null ? (parseFloat(savedMtRatio) / 100) : 0;
+            if (state.extraTracks && state.extraTracks.length > 0) {
+                state.extraTracks.forEach(t => {
+                    if (t.type === 'audio' && !t.muted) {
+                        (t.clips || []).forEach(c => {
+                            const cStart = introDur + (c.timelineOffset || 0);
+                            const cDur = Math.max(0.1, (c.sourceEnd || 0) - (c.sourceStart || 0));
+                            const cEnd = cStart + cDur;
+                            if (cStart >= 0 && cEnd > cStart) {
+                                clipGain.gain.setValueAtTime(state.videoVolume * perClipVol * mtRatio, Math.max(0, cStart));
+                                clipGain.gain.setValueAtTime(state.videoVolume * perClipVol, Math.max(0, cEnd));
+                            }
+                        });
+                    }
+                });
+            }
 
             // Connect voice changer if enabled on original video
             if (state.applyVoiceChangerToVideo && state.voiceoverProfile && state.voiceoverProfile !== 'none') {

@@ -777,13 +777,10 @@
         }
     }
 
-    // Called SYNCHRONOUSLY from INSIDE editor.js's drawFrame(), at the exact
-    // point described above. Handles both live preview (state.customExportTime
-    // undefined — syncs play/pause/soft-seek AND draws, same behavior this
-    // module always had) and export (state.customExportTime set — assumes
-    // prepareExtraTracksForExportFrame() already ran for this frame, so it
-    // only draws, using the already-seeked export element). Stacking order:
-    // state.extraTracks array order, later tracks paint over earlier ones.
+    // Persistent state for audio ducking — tracks whether video gain/mute is currently
+    // ducked by a multitrack audio clip.
+    var _mtDuckState = false; // false = video at full vol, true = ducked
+
     function drawExtraTracksMidFrame() {
         var state = ve();
         if (!state || !state.extraTracks || !state.extraTracks.length) return;
@@ -791,6 +788,58 @@
         if (!ctx || !canvas || !canvas.width || !canvas.height) return;
         var isExporting = (state.customExportTime !== undefined) || !!state.isExportingVideo;
         var globalT = isExporting ? (state.exportTickerTime || 0) : computeGlobalTime();
+
+        // ── AUDIO DUCKING (Live Preview) ──────────────────────────────────────────
+        // Scan all audio tracks to check if ANY unmuted clip owns the current global time.
+        // Controls BOTH the HTML5 video element directly (guaranteed mute) and Web Audio.
+        if (!isExporting) {
+            var anyAudioActive = state.extraTracks.some(function (t) {
+                if (t.type !== 'audio' || t.muted) return false;
+                return !!findActiveClipInTrack(t, globalT);
+            });
+
+            var volSlider = document.getElementById('multitrack-original-vol-slider');
+            var savedRatioStr = localStorage.getItem('multitrack_orig_vol');
+            var ratio = volSlider ? (parseFloat(volSlider.value) / 100) : (savedRatioStr !== null ? parseFloat(savedRatioStr) / 100 : 0);
+            if (isNaN(ratio)) ratio = 0;
+            var fullVol = (state.videoVolume !== undefined ? state.videoVolume : 1.0);
+
+            if (anyAudioActive) {
+                var duckGain = fullVol * ratio;
+                // 1. Direct HTML5 video element control (100% reliable across all browsers)
+                if (state.video) {
+                    if (ratio === 0) {
+                        state.video.muted = true;
+                    } else {
+                        state.video.muted = false;
+                        state.video.volume = Math.max(0, Math.min(1, duckGain));
+                    }
+                }
+                // 2. Web Audio DSP Gain Node control
+                if (window.videoGainNode && window._audioCtx) {
+                    try {
+                        window.videoGainNode.gain.cancelScheduledValues(window._audioCtx.currentTime);
+                        window.videoGainNode.gain.setValueAtTime(duckGain, window._audioCtx.currentTime);
+                    } catch (e) {}
+                }
+                _mtDuckState = true;
+
+            } else if (_mtDuckState) {
+                // Playhead exited the audio clip segment → Restore original video audio
+                if (state.video && !window.speakerMutedState) {
+                    state.video.muted = false;
+                    state.video.volume = Math.max(0, Math.min(1, fullVol));
+                }
+                if (window.videoGainNode && window._audioCtx) {
+                    try {
+                        window.videoGainNode.gain.cancelScheduledValues(window._audioCtx.currentTime);
+                        window.videoGainNode.gain.setValueAtTime(fullVol, window._audioCtx.currentTime);
+                    } catch (e) {}
+                }
+                _mtDuckState = false;
+            }
+        }
+        // ─────────────────────────────────────────────────────────────────────────────
 
         state.extraTracks.forEach(function (track) {
             if (track.type === 'audio') {
@@ -1604,6 +1653,47 @@
                 tracksWrap.appendChild(buildTrackRow(track, totalDur));
             });
             body.appendChild(tracksWrap);
+
+            // Show original audio volume control only when an Audio Track exists
+            var hasAudioTrack = state.extraTracks.some(function (t) { return t.type === 'audio'; });
+            if (hasAudioTrack) {
+                var audioCtrlBox = document.createElement('div');
+                styleEl(audioCtrlBox, {
+                    marginTop: '10px', padding: '10px 12px',
+                    background: 'rgba(16,185,129,0.08)',
+                    border: '1px solid rgba(16,185,129,0.25)',
+                    borderRadius: '8px', display: 'flex',
+                    alignItems: 'center', gap: '10px', flexWrap: 'wrap'
+                });
+                var savedVal = localStorage.getItem('multitrack_orig_vol') || '0';
+                audioCtrlBox.innerHTML =
+                    '<i class="fa-solid fa-sliders" style="color:#10b981;font-size:14px;flex-shrink:0"></i>' +
+                    '<div style="flex:1;min-width:160px">' +
+                      '<div style="font-size:12px;font-weight:600;color:#10b981;margin-bottom:4px">' +
+                        '🎚️ Audio Track চলাকালীন ভিডিওর নিজস্ব অডিও ভলিউম' +
+                      '</div>' +
+                      '<div style="font-size:11px;color:rgba(255,255,255,0.5);margin-bottom:6px">' +
+                        '0% = Audio Track শুধু বাজবে (ভিডিওর অডিও বন্ধ) &nbsp;|&nbsp; 100% = দুটো একসাথে মিক্স হবে' +
+                      '</div>' +
+                      '<div style="display:flex;align-items:center;gap:8px">' +
+                        '<input type="range" id="multitrack-original-vol-slider" min="0" max="100" value="' + savedVal + '" style="flex:1;accent-color:#10b981;cursor:pointer">' +
+                        '<span id="multitrack-original-vol-val" style="font-size:12px;font-weight:700;color:#10b981;min-width:32px">' + savedVal + '%</span>' +
+                      '</div>' +
+                    '</div>';
+                body.appendChild(audioCtrlBox);
+
+                // Wire slider → live display + persist
+                setTimeout(function () {
+                    var sl = document.getElementById('multitrack-original-vol-slider');
+                    var vl = document.getElementById('multitrack-original-vol-val');
+                    if (sl && vl) {
+                        sl.addEventListener('input', function () {
+                            vl.textContent = sl.value + '%';
+                            localStorage.setItem('multitrack_orig_vol', sl.value);
+                        });
+                    }
+                }, 0);
+            }
         } else {
             var empty = document.createElement('p');
             empty.className = 'help-text';
