@@ -728,6 +728,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const bgMusicTrackVolumeVal = document.getElementById('bgmusic-track-volume-val');
     const removeBgMusicTrackBtn = document.getElementById('remove-bgmusic-track-btn');
     const bgMusicDuckingToggle = document.getElementById('bgmusic-ducking-toggle');
+    const bgMusicMuteOriginalToggle = document.getElementById('bgmusic-mute-original-toggle');
 
     // One <audio> element per track, created on demand and never inserted into the
     // DOM (played/volume-controlled entirely by JS below — see Bug 7 in
@@ -1237,23 +1238,22 @@ document.addEventListener('DOMContentLoaded', () => {
         });
 
         // --- Control original video audio volume when bgMusic is active ---
-        // Read the user-set volume level (0 = full mute, 100 = keep original full)
         if (window.videoGainNode && audioCtx && !speakerMutedState) {
-            const slider = document.getElementById('bgmusic-original-vol-slider');
-            const targetRatio = slider ? (parseFloat(slider.value) / 100) : 0;
-            const fullVol = state.videoVolume !== undefined ? state.videoVolume : 1.0;
+            const shouldMuteOriginal = (state.bgMusicMuteOriginal !== undefined)
+                ? !!state.bgMusicMuteOriginal
+                : (bgMusicMuteOriginalToggle ? bgMusicMuteOriginalToggle.checked : false);
+            const fullVol = (state.videoVolume !== undefined) ? state.videoVolume : 1.0;
 
-            if (active) {
-                // bgMusic is active → apply user-chosen original audio level
-                const targetGain = fullVol * targetRatio;
+            if (active && shouldMuteOriginal) {
+                // bgMusic is active AND user turned ON the option to mute original audio
                 if (!_bgMusicVideoGainActive) {
-                    window.videoGainNode.gain.linearRampToValueAtTime(targetGain, audioCtx.currentTime + 0.15);
+                    window.videoGainNode.gain.linearRampToValueAtTime(0, audioCtx.currentTime + 0.05);
                     _bgMusicVideoGainActive = true;
                 }
             } else {
-                // No bgMusic for this segment → restore full video audio
+                // No bgMusic OR user kept original audio enabled (toggle is OFF)
                 if (_bgMusicVideoGainActive) {
-                    window.videoGainNode.gain.linearRampToValueAtTime(fullVol, audioCtx.currentTime + 0.15);
+                    window.videoGainNode.gain.linearRampToValueAtTime(fullVol, audioCtx.currentTime + 0.05);
                     _bgMusicVideoGainActive = false;
                 }
             }
@@ -2342,9 +2342,27 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    bgMusicDuckingToggle.addEventListener('change', (e) => {
-        state.bgMusicDuckingEnabled = e.target.checked;
-    });
+    if (bgMusicDuckingToggle) {
+        bgMusicDuckingToggle.addEventListener('change', (e) => {
+            state.bgMusicDuckingEnabled = e.target.checked;
+            if (window.triggerAutoSave) window.triggerAutoSave();
+        });
+    }
+
+    if (bgMusicMuteOriginalToggle) {
+        bgMusicMuteOriginalToggle.checked = !!state.bgMusicMuteOriginal;
+        bgMusicMuteOriginalToggle.addEventListener('change', (e) => {
+            state.bgMusicMuteOriginal = e.target.checked;
+            if (window.videoGainNode && audioCtx && !speakerMutedState) {
+                const fullVol = (state.videoVolume !== undefined) ? state.videoVolume : 1.0;
+                if (!state.bgMusicMuteOriginal) {
+                    window.videoGainNode.gain.linearRampToValueAtTime(fullVol, audioCtx.currentTime + 0.05);
+                    _bgMusicVideoGainActive = false;
+                }
+            }
+            if (window.triggerAutoSave) window.triggerAutoSave();
+        });
+    }
 
 
 
@@ -3623,6 +3641,18 @@ document.addEventListener('DOMContentLoaded', () => {
                                 clipGain.gain.setValueAtTime(state.videoVolume * perClipVol, Math.max(0, cEnd));
                             }
                         });
+                    }
+                });
+            }
+
+            // Apply background music mute original video audio if enabled
+            if (state.bgMusicMuteOriginal && state.bgMusicTracks && state.bgMusicTracks.length > 0) {
+                state.bgMusicTracks.forEach(t => {
+                    const cStart = introDur + (t.startSec || 0);
+                    const cEnd = (t.endSec == null || !isFinite(t.endSec)) ? totalDuration : introDur + t.endSec;
+                    if (cStart >= 0 && cEnd > cStart) {
+                        clipGain.gain.setValueAtTime(0, Math.max(0, cStart));
+                        clipGain.gain.setValueAtTime(state.videoVolume * perClipVol, Math.max(0, cEnd));
                     }
                 });
             }

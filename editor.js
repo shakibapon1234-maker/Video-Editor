@@ -1076,6 +1076,7 @@ window.VideoEditor = {
     bgMusicTracks: [],
     selectedBgMusicTrackId: null,
     bgMusicDuckingEnabled: true,
+    bgMusicMuteOriginal: false,
 
     // Intro Transition states
     introTransitionType: 'none', // 'none', 'fade', 'zoom_spin', 'slide_right', 'slide_left', 'slide_top', 'slide_bottom'
@@ -10128,26 +10129,46 @@ document.addEventListener('DOMContentLoaded', () => {
 
         if (state.textOverlays && state.textOverlays.length > 0) {
             state.textOverlays.forEach((item) => {
-                const itemX = item.x * canvasW;
-                const itemY = item.y * canvasH;
+                const itemCenterX = item.x * canvasW;
+                const itemCenterY = item.y * canvasH;
                 const ctx = state.ctx;
                 ctx.save();
                 const fontSize = item.fontSize || 32;
-                ctx.font = `${fontSize}px sans-serif`;
-                const textWidth = ctx.measureText(item.text || '').width || 100;
-                const itemW = item.w ? item.w * canvasW : textWidth;
-                const itemH = item.h ? item.h * canvasH : fontSize * 1.4;
+                const fontFamily = item.font || 'Hind Siliguri';
+                ctx.font = `bold ${fontSize}px "${fontFamily}", "Plus Jakarta Sans", sans-serif`;
+
+                const resolvedText = (typeof resolveTextOverlayTokens === 'function')
+                    ? resolveTextOverlayTokens(item.text || '', item, state.currentTime || 0)
+                    : (item.text || '');
+                const textLines = resolvedText.split('\n');
+                let maxLineW = 0;
+                textLines.forEach(l => {
+                    const lw = ctx.measureText(l).width;
+                    if (lw > maxLineW) maxLineW = lw;
+                });
+                const lineHeight = fontSize * 1.25;
+                const textH = textLines.length * lineHeight;
+                const boxPadX = Math.max(16, fontSize * 0.45);
+                const boxPadY = Math.max(10, fontSize * 0.32);
+                const hasBox = item.boxStyle && item.boxStyle !== 'none';
+                const itemW = Math.max(item.fixedBoxW || 0, maxLineW + (hasBox ? boxPadX * 2 : 10)) * (item.scale ?? 1);
+                const itemH = Math.max(item.fixedBoxH || 0, textH + (hasBox ? boxPadY * 2 : 10)) * (item.scale ?? 1);
                 ctx.restore();
 
+                const left = itemCenterX - itemW / 2;
+                const right = itemCenterX + itemW / 2;
+                const top = itemCenterY - itemH / 2;
+                const bottom = itemCenterY + itemH / 2;
+
                 const isColliding = (
-                    itemY < yMin - 5 || 
-                    (itemY + itemH) > yMax + 5 || 
-                    (itemX + itemW) > xMax + 5 ||
-                    itemX < xMin - 10
+                    top < yMin - 5 || 
+                    bottom > yMax + 5 || 
+                    right > xMax + 5 || 
+                    left < xMin - 10
                 );
 
                 if (isColliding) {
-                    collidingItems.push({ type: 'text', id: item.id, item, itemX, itemY, itemW, itemH });
+                    collidingItems.push({ type: 'text', id: item.id, item, itemX: left, itemY: top, itemW, itemH });
 
                     // Draw red outline warning around colliding text overlay
                     ctx.save();
@@ -10156,18 +10177,19 @@ document.addEventListener('DOMContentLoaded', () => {
                     ctx.setLineDash([4, 3]);
                     ctx.shadowColor = 'rgba(239, 68, 68, 0.8)';
                     ctx.shadowBlur = 6;
-                    ctx.strokeRect(itemX - 4, itemY - 4, itemW + 8, itemH + 8);
+                    ctx.strokeRect(left - 4, top - 4, itemW + 8, itemH + 8);
                     
                     const tagText = "⚠️ বুস্ট বাটন/সাইড আইকনে ঢাকা পড়বে!";
                     ctx.font = `700 10px "Hind Siliguri", sans-serif`;
                     ctx.fillStyle = '#dc2626';
                     ctx.shadowBlur = 0;
                     const tw = ctx.measureText(tagText).width;
-                    ctx.fillRect(itemX - 4, Math.max(4, itemY - 22), tw + 8, 16);
+                    const tagX = Math.max(4, Math.min(canvasW - tw - 12, left));
+                    ctx.fillRect(tagX - 4, Math.max(4, top - 22), tw + 8, 16);
                     ctx.fillStyle = '#ffffff';
                     ctx.textAlign = 'left';
                     ctx.textBaseline = 'middle';
-                    ctx.fillText(tagText, itemX, Math.max(12, itemY - 14));
+                    ctx.fillText(tagText, tagX, Math.max(12, top - 14));
                     ctx.restore();
                 }
             });
@@ -10240,32 +10262,57 @@ document.addEventListener('DOMContentLoaded', () => {
             state.textOverlays.forEach(item => {
                 const ctx = state.ctx;
                 ctx.save();
-                ctx.font = `${item.fontSize || 32}px sans-serif`;
-                const textWidth = ctx.measureText(item.text || '').width || 100;
-                const itemWNorm = item.w ? item.w : (textWidth / canvasW);
-                const itemHNorm = item.h ? item.h : ((item.fontSize || 32) * 1.4 / canvasH);
+                const fontSize = item.fontSize || 32;
+                const fontFamily = item.font || 'Hind Siliguri';
+                ctx.font = `bold ${fontSize}px "${fontFamily}", "Plus Jakarta Sans", sans-serif`;
+
+                const resolvedText = (typeof resolveTextOverlayTokens === 'function')
+                    ? resolveTextOverlayTokens(item.text || '', item, state.currentTime || 0)
+                    : (item.text || '');
+                const textLines = resolvedText.split('\n');
+                let maxLineW = 0;
+                textLines.forEach(l => {
+                    const lw = ctx.measureText(l).width;
+                    if (lw > maxLineW) maxLineW = lw;
+                });
+                const lineHeight = fontSize * 1.25;
+                const textH = textLines.length * lineHeight;
+                const boxPadX = Math.max(16, fontSize * 0.45);
+                const boxPadY = Math.max(10, fontSize * 0.32);
+                const hasBox = item.boxStyle && item.boxStyle !== 'none';
+                const itemW = Math.max(item.fixedBoxW || 0, maxLineW + (hasBox ? boxPadX * 2 : 10)) * (item.scale ?? 1);
+                const itemH = Math.max(item.fixedBoxH || 0, textH + (hasBox ? boxPadY * 2 : 10)) * (item.scale ?? 1);
                 ctx.restore();
+
+                const halfWNorm = (itemW / 2) / canvasW;
+                const halfHNorm = (itemH / 2) / canvasH;
 
                 let changed = false;
 
-                if (item.y < yMinNorm) {
-                    item.y = yMinNorm;
+                // Adjust Y if top or bottom exceeds safe bounds
+                if (item.y - halfHNorm < yMinNorm) {
+                    item.y = yMinNorm + halfHNorm;
+                    changed = true;
+                } else if (item.y + halfHNorm > yMaxNorm) {
+                    item.y = yMaxNorm - halfHNorm;
                     changed = true;
                 }
 
-                if (item.y + itemHNorm > yMaxNorm) {
-                    item.y = Math.max(yMinNorm, yMaxNorm - itemHNorm);
-                    changed = true;
-                }
-
-                if (item.x + itemWNorm > xMaxNorm) {
-                    item.x = Math.max(xMinNorm, xMaxNorm - itemWNorm);
-                    changed = true;
-                }
-
-                if (item.x < xMinNorm) {
-                    item.x = xMinNorm;
-                    changed = true;
+                // Adjust X if left or right exceeds safe bounds (preserve centering if text fits)
+                if ((itemW / canvasW) <= (xMaxNorm - xMinNorm)) {
+                    if (item.x - halfWNorm < xMinNorm) {
+                        item.x = xMinNorm + halfWNorm;
+                        changed = true;
+                    } else if (item.x + halfWNorm > xMaxNorm) {
+                        item.x = xMaxNorm - halfWNorm;
+                        changed = true;
+                    }
+                } else {
+                    // If text is wider than safe area, keep it centered horizontally
+                    if (Math.abs(item.x - 0.5) > 0.01) {
+                        item.x = 0.5;
+                        changed = true;
+                    }
                 }
 
                 if (changed) adjustedCount++;

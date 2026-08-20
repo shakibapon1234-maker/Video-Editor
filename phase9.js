@@ -1740,6 +1740,7 @@ document.addEventListener('DOMContentLoaded', () => {
         'noise-cancel-toggle':        { label: 'Noise cancellation toggled',   labelBn: 'নয়েজ কান্সেলেশন চালু/বন্ধ',   category: 'audio' },
         'ai-denoise-toggle':          { label: 'AI denoise toggled',           labelBn: 'AI ডিনয়েজ চালু/বন্ধ',         category: 'audio' },
         'bgmusic-ducking-toggle':     { label: 'Music ducking toggled',        labelBn: 'মিউজিক ডাকিং চালু/বন্ধ',      category: 'audio' },
+        'bgmusic-mute-original-toggle': { label: 'Mute original video audio toggled', labelBn: 'ভিডিওর নিজস্ব অডিও মিউট চালু/বন্ধ', category: 'audio' },
         'voice-changer-apply-video-toggle': { label: 'Voice changer toggled',  labelBn: 'ভয়েস চেঞ্জার চালু/বন্ধ',     category: 'audio' },
         'addaudio-shortest-toggle':   { label: 'Match shortest track toggled', labelBn: 'শর্টেস্ট ট্র্যাক মিলানো চালু/বন্ধ', category: 'audio' },
         // ── Filter / Color ──────────────────────────────────────────
