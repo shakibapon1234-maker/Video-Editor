@@ -7514,10 +7514,19 @@ document.addEventListener('DOMContentLoaded', () => {
                         // once revealed it just stays on screen — only the real exit (right at
                         // item.endSec) animates lines away, and it does so all together so the
                         // whole block leaves cleanly.
-                        const useSequential = !!item.sequentialLines && numLines > 1;
+                        // Typewriter must always finish line 1 before line 2
+                        // begins. Keep the optional sequentialLines setting
+                        // for other animation styles, but make this behaviour
+                        // automatic for a multi-line Typewriter B-roll.
+                        const useSequential = (!!item.sequentialLines || style === 'typewriter') && numLines > 1;
                         const totalDur = Math.max(0.01, item.endSec - item.startSec);
-                        const seqSlot = totalDur / numLines;
-                        const seqPerLineDur = Math.min(animDur, Math.max(0.12, seqSlot * 0.7));
+                        // For Typewriter, divide its configured entry duration
+                        // among the lines (rather than spreading lines across
+                        // the entire clip); once complete, all typed lines stay
+                        // visible until the normal exit animation.
+                        const sequentialWindow = style === 'typewriter' ? Math.max(0.12, animDur) : totalDur;
+                        const seqSlot = sequentialWindow / numLines;
+                        const seqPerLineDur = Math.max(0.12, seqSlot * 0.9);
 
                         sublines.forEach((lineObj, k) => {
                             let isEntry, lineP;
@@ -8915,9 +8924,19 @@ document.addEventListener('DOMContentLoaded', () => {
                 // applied per-draw-mode below.
                 let textToDraw = resolvedItemText;
                 if (textAnimStyle === 'typewriter' && textRevealAnim.phase === 'in') {
-                    const textGraphemes = splitGraphemes(resolvedItemText);
-                    const revealCount = Math.max(0, Math.min(textGraphemes.length, Math.round(textGraphemes.length * textRevealAnim.p)));
-                    textToDraw = textGraphemes.slice(0, revealCount).join('');
+                    // Allocate the reveal budget line by line. A plain slice
+                    // through the entire string can make wrapped/newline text
+                    // look as though both lines are typing together; this
+                    // guarantees line 2 stays empty until line 1 is complete.
+                    const revealLines = resolvedItemText.split('\n');
+                    const lineGraphemes = revealLines.map((line) => splitGraphemes(line));
+                    const totalGraphemes = Math.max(1, lineGraphemes.reduce((total, chars) => total + chars.length, 0));
+                    let remaining = Math.max(0, Math.min(totalGraphemes, Math.round(totalGraphemes * textRevealAnim.p)));
+                    textToDraw = lineGraphemes.map((chars) => {
+                        const visible = Math.min(chars.length, remaining);
+                        remaining -= chars.length;
+                        return chars.slice(0, Math.max(0, visible)).join('');
+                    }).join('\n');
                 }
 
                 const drawTextContent = (ctx2) => {
