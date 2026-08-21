@@ -22,7 +22,8 @@
     }
 
     var scaleSlider, scaleVal, durationSlider, durationVal, focusXSlider, focusXVal,
-        focusYSlider, focusYVal, addBtn, updateBtn, listEl, pickBtn;
+        focusYSlider, focusYVal, addBtn, updateBtn, listEl, pickBtn, quickBtn;
+    var quickAddPending = false;
 
     function setPickBtnActive(isActive) {
         if (!pickBtn) return;
@@ -39,6 +40,11 @@
             if (state.canvas) state.canvas.style.cursor = 'default';
         }
         setPickBtnActive(false);
+        if (quickBtn) {
+            quickBtn.classList.remove('active');
+            quickBtn.innerHTML = '<i class="fa-solid fa-crosshairs"></i> Quick Zoom: ভিডিওতে জায়গা বাছুন';
+        }
+        quickAddPending = false;
     }
 
     var selectedId = null; // id of the punch zoom point currently loaded into the sliders for editing
@@ -54,6 +60,33 @@
 
     function uid() {
         return 'pz_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2, 8);
+    }
+
+    // The simple path: the user pauses on the moment they want to discuss,
+    // presses Quick Zoom and taps the subject. One tap creates the effect,
+    // centred on that playhead moment. Advanced sliders remain available for
+    // editors who need exact control.
+    function addQuickZoomAtFocus(focusX, focusY) {
+        var state = ve();
+        var clip = getActiveClip();
+        if (!state || !clip) return;
+        if (!Array.isArray(clip.punchZooms)) clip.punchZooms = [];
+        var v = currentFormValues();
+        var playheadInClip = Math.max(0, (state.currentTime || 0) - (state.startTime || 0));
+        var newPz = {
+            id: uid(),
+            // The selected frame is the peak, not the beginning of the zoom.
+            time: Math.max(0, playheadInClip - v.duration / 2),
+            duration: v.duration,
+            scale: v.scale,
+            focusX: focusX,
+            focusY: focusY
+        };
+        clip.punchZooms.push(newPz);
+        selectedId = newPz.id;
+        if (updateBtn) updateBtn.style.display = 'block';
+        if (window.recordEditorHistory) window.recordEditorHistory('Quick punch zoom added');
+        renderList();
     }
 
     function renderList() {
@@ -277,6 +310,22 @@
                 }
             });
         }
+
+        if (quickBtn) {
+            quickBtn.addEventListener('click', function () {
+                var state = ve();
+                if (!state) return;
+                if (quickAddPending) {
+                    stopPunchZoomPicking();
+                    return;
+                }
+                quickAddPending = true;
+                state.isPunchZoomPicking = true;
+                if (state.canvas) state.canvas.style.cursor = 'crosshair';
+                quickBtn.classList.add('active');
+                quickBtn.innerHTML = '<i class="fa-solid fa-hand-pointer"></i> এবার ভিডিওর জায়গাটিতে ট্যাপ করুন';
+            });
+        }
     }
 
     // Called from editor.js's canvas pointerdown/pointermove handlers while
@@ -289,6 +338,12 @@
         focusYSlider.value = Math.round(Math.max(0, Math.min(1, fy)) * 100);
         syncLabels();
         updateLivePreview();
+        if (quickAddPending) {
+            addQuickZoomAtFocus(fx, fy);
+            stopPunchZoomPicking();
+            clearLivePreview();
+            if (window.drawEditorFrame) window.drawEditorFrame();
+        }
     };
 
     // Called from editor.js's canvas pointerup handler when a click/drag
@@ -311,6 +366,7 @@
         updateBtn = document.getElementById('punch-zoom-update-btn');
         listEl = document.getElementById('punch-zoom-list');
         pickBtn = document.getElementById('punch-zoom-pick-btn');
+        quickBtn = document.getElementById('punch-zoom-quick-btn');
 
         if (!scaleSlider || !listEl) return false; // panel not in DOM yet
         wireEvents();

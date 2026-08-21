@@ -1038,7 +1038,19 @@
                                 <h3>Punch Zoom (কয়েক সেকেন্ডের জন্য পয়েন্ট জুম)</h3>
                             </div>
                             <div class="card-body">
-                                <p class="help-text">ভিডিও চলার মাঝে একটা নির্দিষ্ট পয়েন্টে কয়েক সেকেন্ডের জন্য জুম-ইন করে আবার স্বাভাবিক হয়ে আসবে। ভিডিও ও ছবি — দুই ধরনের ক্লিপেই কাজ করে।</p>
+                                <p class="help-text">ভিডিও চলার মাঝে একটি জায়গায় কয়েক সেকেন্ড জুম-ইন করে আবার স্বাভাবিক হয়ে আসবে।</p>
+
+                                <div class="punch-zoom-quick" id="punch-zoom-quick-help">
+                                    <strong><i class="fa-solid fa-wand-magic-sparkles"></i> Quick Zoom</strong>
+                                    <span>প্লেহেডে যে মুহূর্তটি জুমে দেখাবেন সেটি রাখুন, তারপর বাটনে চাপুন এবং ভিডিওর সেই জায়গায় ট্যাপ করুন।</span>
+                                </div>
+                                <button id="punch-zoom-quick-btn" class="btn btn-primary mt-2" style="width: 100%;">
+                                    <i class="fa-solid fa-crosshairs"></i> Quick Zoom: ভিডিওতে জায়গা বাছুন
+                                </button>
+
+                                <details class="punch-zoom-advanced mt-3">
+                                    <summary>জুমের পরিমাণ ও সময় বদলান (ঐচ্ছিক)</summary>
+                                    <div class="punch-zoom-advanced-content">
 
                                 <div class="control-group mt-2">
                                     <div style="display: flex; justify-content: space-between; align-items: center;">
@@ -1084,6 +1096,8 @@
                                 <button id="punch-zoom-update-btn" class="btn btn-secondary mt-2" style="width: 100%; display: none;">
                                     <i class="fa-solid fa-check"></i> নির্বাচিত পয়েন্ট আপডেট করুন / Update selected
                                 </button>
+                                    </div>
+                                </details>
 
                                 <div id="punch-zoom-list" class="mt-3"></div>
                             </div>
