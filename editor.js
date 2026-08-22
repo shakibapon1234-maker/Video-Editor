@@ -21127,7 +21127,11 @@ document.addEventListener('DOMContentLoaded', () => {
             });
 
             state.brollOverlays.forEach(b => {
-                if ((b.type === 'image' || b.type === 'gif') && b.file) {
+                // Keep the original file for every visual B-roll type.  The
+                // settings JSON deliberately excludes DOM media elements, so a
+                // video file must be available here to recreate its <video>
+                // element after a page refresh.
+                if ((b.type === 'image' || b.type === 'gif' || b.type === 'video') && b.file) {
                     store.put(b.file, `${projId}_broll_${b.id}`);
                 }
             });
@@ -21235,7 +21239,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
             }
 
-            // B-roll images
+            // B-roll media
             for (let i = 0; i < savedData.brollOverlays.length; i++) {
                 const broll = savedData.brollOverlays[i];
                 if (broll.type === 'image' || broll.type === 'gif') {
@@ -21260,6 +21264,46 @@ document.addEventListener('DOMContentLoaded', () => {
                                 if (parsed && parsed.frames.length > 0) broll.gifParsed = parsed;
                             } catch (e) {}
                             ensureAnimatedGifPreview();
+                        }
+                    }
+                } else if (broll.type === 'video') {
+                    const file = await getFileFromDBWithFallback(`broll_${broll.id}`, activeProjId);
+                    if (file) {
+                        const videoUrl = URL.createObjectURL(file);
+                        const videoEl = document.createElement('video');
+                        videoEl.muted = true;
+                        videoEl.playsInline = true;
+                        videoEl.preload = 'auto';
+                        videoEl.style.position = 'absolute';
+                        videoEl.style.width = '1px';
+                        videoEl.style.height = '1px';
+                        videoEl.style.opacity = '0';
+                        videoEl.style.pointerEvents = 'none';
+                        document.body.appendChild(videoEl);
+
+                        videoEl.src = videoUrl;
+                        videoEl.load();
+                        await new Promise(resolve => {
+                            const finish = () => resolve();
+                            videoEl.addEventListener('loadeddata', finish, { once: true });
+                            videoEl.addEventListener('error', finish, { once: true });
+                        });
+
+                        if (videoEl.videoWidth && videoEl.videoHeight) {
+                            // Existing B-roll rendering reads naturalWidth and
+                            // naturalHeight, so retain the same image-compatible
+                            // alias used when the video was initially imported.
+                            Object.defineProperty(videoEl, 'naturalWidth', { get: () => videoEl.videoWidth });
+                            Object.defineProperty(videoEl, 'naturalHeight', { get: () => videoEl.videoHeight });
+                            broll.file = file;
+                            broll.videoUrl = videoUrl;
+                            broll.videoEl = videoEl;
+                            broll.imageImg = videoEl;
+                            broll.videoDuration = videoEl.duration || broll.videoDuration || 0;
+                        } else {
+                            console.warn('Unable to restore B-roll video:', broll.name || broll.id);
+                            videoEl.remove();
+                            URL.revokeObjectURL(videoUrl);
                         }
                     }
                 }
