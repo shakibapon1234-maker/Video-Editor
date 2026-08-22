@@ -3792,6 +3792,10 @@
                                     <div class="render-eta-row">
                                         <span id="render-eta-text" class="render-eta-text"></span>
                                     </div>
+                                    <div id="render-health-warning" class="render-health-warning" role="status" aria-live="polite" style="display: none;">
+                                        <i class="fa-solid fa-triangle-exclamation"></i>
+                                        <span id="render-health-warning-text"></span>
+                                    </div>
                                     <button id="cancel-render-btn" class="btn btn-danger btn-block mt-3" type="button">
                                         <i class="fa-solid fa-xmark"></i> Cancel Render (বাতিল করুন)
                                     </button>
@@ -4501,7 +4505,7 @@
     </div>
 
     <!-- Hidden Video element for decoding/playing the original video source -->
-    <video id="hidden-video" style="display: none;" crossOrigin="anonymous"></video>
+    <video id="hidden-video" style="display: none;" crossOrigin="anonymous" preload="auto"></video>
 
     <!-- JS Scripts -->
     <div id="gif-host" aria-hidden="true" style="position:fixed; left:-9999px; top:-9999px; width:500px; height:500px; overflow:hidden; opacity:0.01; pointer-events:none; z-index:-9999; isolation:isolate;"></div>

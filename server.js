@@ -363,9 +363,11 @@ wss.on('connection', (ws) => {
                     ws.send(JSON.stringify({ type: 'audio_ok' }));
                 }
                 else if (data.type === 'compile') {
-                    console.log('Starting compile...');
+                    console.log(`Starting compile... Received ${frameCount} frames.`);
                     mode = 'idle';
-                    compileVideo(ws, tempDir, expectedFilename, totalFrames);
+                    const diskFrames = fs.existsSync(tempDir) ? fs.readdirSync(tempDir).filter(f => f.startsWith('frame_')).length : frameCount;
+                    const finalFrameCount = Math.max(diskFrames, frameCount, totalFrames || 0);
+                    compileVideo(ws, tempDir, expectedFilename, finalFrameCount);
                 }
             } else {
                 // Handle binary payloads
@@ -421,6 +423,10 @@ function compileVideo(ws, tempDir, filename, totalFrames) {
     const customThumbnailPath = path.join(tempDir, 'custom-thumbnail.jpg');
     const finalOutputPath = path.join(OUTPUT_DIR, filename);
 
+    // Count exact number of frame files on disk to guarantee zero truncated frames
+    const diskFrames = fs.existsSync(tempDir) ? fs.readdirSync(tempDir).filter(f => f.startsWith('frame_')).length : 0;
+    const actualFrames = diskFrames > 0 ? diskFrames : totalFrames;
+
     // If file already exists, generate unique name
     let compiledPath = finalOutputPath;
     let baseName = path.basename(filename, path.extname(filename));
@@ -431,19 +437,16 @@ function compileVideo(ws, tempDir, filename, totalFrames) {
         counter++;
     }
 
-    console.log(`Compiling video at ${compiledPath}`);
+    console.log(`Compiling video at ${compiledPath} (totalFrames=${totalFrames}, actualFrames=${actualFrames})`);
     ws.send(JSON.stringify({ type: 'progress', step: 'compiling', current: 0, total: 100 }));
 
     // Duplicate the last frame to pad the image sequence by exactly 1 frame.
-    // This ensures FFmpeg has a frame at the boundary timestamp (e.g. 215.0s),
-    // allowing the output video stream to have the exact requested duration
-    // instead of stopping at the last frame's presentation timestamp (214.967s).
-    const lastFramePath = path.join(tempDir, `frame_${String(totalFrames).padStart(5, '0')}.jpg`);
-    const extraFramePath = path.join(tempDir, `frame_${String(totalFrames + 1).padStart(5, '0')}.jpg`);
+    const lastFramePath = path.join(tempDir, `frame_${String(actualFrames).padStart(5, '0')}.jpg`);
+    const extraFramePath = path.join(tempDir, `frame_${String(actualFrames + 1).padStart(5, '0')}.jpg`);
     if (fs.existsSync(lastFramePath)) {
         try {
             fs.copyFileSync(lastFramePath, extraFramePath);
-            console.log(`Padded video sequence: duplicated frame ${totalFrames} to ${totalFrames + 1}`);
+            console.log(`Padded video sequence: duplicated frame ${actualFrames} to ${actualFrames + 1}`);
         } catch (e) {
             console.error('Failed to duplicate frame for padding:', e);
         }
@@ -451,38 +454,29 @@ function compileVideo(ws, tempDir, filename, totalFrames) {
 
     const hasAudio = fs.existsSync(audioPath);
     const inputPattern = path.join(tempDir, 'frame_%05d.jpg').replace(/\\/g, '/');
-    // JPEG image sequences do not contain a reliable frame-rate marker.  FFmpeg
-    // otherwise assumes 25 FPS, which makes a 30 FPS export too long.  Apply the
-    // frame rate to both sides of the pipeline explicitly.
     let command = ffmpeg()
         .input(inputPattern)
         .inputOptions(['-framerate 30'])
         .fps(30)
-        // H.264 encodes internally in 16x16 macroblocks. Rounding only to an
-        // even number (old: trunc(iw/2)*2) still leaves dimensions like 410
-        // that aren't a multiple of 16 -- the encoder then pads the coded
-        // frame up to 416 and relies on an SPS "conformance window" to crop
-        // the extra pixels back off on playback. Not every decoder/renderer
-        // honors that crop consistently (notably plain Windows Media Player,
-        // and PotPlayer once it switches to hardware/DXVA decoding on loop),
-        // so the padding shows up as a visible black/garbage strip. Rounding
-        // to the nearest multiple of 16 removes the need for that crop
-        // rectangle entirely, so every player decodes the same pixels.
         .videoFilters('scale=trunc(iw/16)*16:trunc(ih/16)*16,setsar=1');
 
     if (hasAudio) {
         command = command.input(audioPath.replace(/\\/g, '/'));
     }
 
-    // Set output duration explicitly to prevent FFmpeg from truncating the last second early
-    const duration = totalFrames / 30 + 0.05;
+    // Set output duration explicitly from actual frames so outro is never cut
+    const duration = actualFrames / 30 + 0.05;
 
     command
         .outputOptions([
             '-c:v libx264',
             '-pix_fmt yuv420p',
-            '-preset medium',
+            '-preset fast',
             '-crf 23',
+            '-g 60',
+            '-keyint_min 30',
+            '-sc_threshold 0',
+            '-movflags +faststart',
             `-t ${duration}`
         ])
         .output(compiledPath.replace(/\\/g, '/'));
@@ -490,7 +484,8 @@ function compileVideo(ws, tempDir, filename, totalFrames) {
     if (hasAudio) {
         command = command.outputOptions([
             '-c:a aac',
-            '-b:a 192k'
+            '-b:a 192k',
+            '-ar 44100'
         ]);
     }
 

@@ -1,4 +1,4 @@
-// ============================================================
+﻿// ============================================================
 // UI Customization: Collapsible Sidebar, Collapsible Top Bar,
 // and a Floating/Draggable Playhead (transport) control.
 //
@@ -503,8 +503,11 @@
             document.addEventListener('touchend', () => { isCfSliderBeingDragged = false; });
         }
 
-        function syncLoop() {
+        var _syncLoopLast = 0;
+        function syncLoop(now) {
             const isFloatingPreviewActive = canvasContainer && canvasContainer.classList.contains('is-floating-preview');
+            if ((now - _syncLoopLast) < 100) { requestAnimationFrame(syncLoop); return; }
+            _syncLoopLast = now;
 
             if (panel.classList.contains('visible') || isFloatingPreviewActive) {
                 if (realSlider) {

@@ -60,19 +60,49 @@ document.addEventListener('DOMContentLoaded', () => {
     // We now wait unconditionally for the 'seeked' event. The maxWaitMs safety
     // timeout (5 s) is only there to prevent a truly broken seek from hanging
     // the export forever; in practice it should never fire for valid clips.
-    async function waitForSeek(video, targetTime, maxWaitMs = 5000) {
-        video.currentTime = targetTime;
+    async function waitForSeek(video, targetTime, maxWaitMs = 2000) {
+        if (!video || !video.src) return;
+
+        // Ensure video element has loaded frame data
+        if (video.readyState < 2) {
+            await new Promise((resolve) => {
+                let settled = false;
+                const onReady = () => {
+                    if (settled) return;
+                    settled = true;
+                    video.removeEventListener('loadeddata', onReady);
+                    video.removeEventListener('canplay', onReady);
+                    resolve();
+                };
+                video.addEventListener('loadeddata', onReady);
+                video.addEventListener('canplay', onReady);
+                setTimeout(onReady, 1000);
+            });
+        }
+
+        const clampedTarget = (video.duration && targetTime >= video.duration)
+            ? Math.max(0, video.duration - 0.01)
+            : Math.max(0, targetTime);
+
+        if (Math.abs(video.currentTime - clampedTarget) < 0.002) {
+            return;
+        }
+
+        video.currentTime = clampedTarget;
         await new Promise((resolve) => {
             let settled = false;
-            const done = () => {
+            let safetyTimer = null;
+
+            const onSeeked = () => {
                 if (settled) return;
                 settled = true;
-                video.removeEventListener('seeked', done);
+                video.removeEventListener('seeked', onSeeked);
+                if (safetyTimer) clearTimeout(safetyTimer);
                 resolve();
             };
-            video.addEventListener('seeked', done);
-            // Safety timeout — removes listener so it never leaks.
-            setTimeout(done, maxWaitMs);
+
+            video.addEventListener('seeked', onSeeked, { once: true });
+            safetyTimer = setTimeout(onSeeked, maxWaitMs);
         });
     }
 
@@ -409,6 +439,15 @@ document.addEventListener('DOMContentLoaded', () => {
             type: 'ws',
             ws: null,
             wasmEngine: null,
+            async waitForSocketBuffer(maxBufferedBytes = 4 * 1024 * 1024) {
+                const startedAt = performance.now();
+                while (this.ws && this.ws.readyState === WebSocket.OPEN && this.ws.bufferedAmount > maxBufferedBytes) {
+                    if (performance.now() - startedAt > 30000) {
+                        throw new Error('Render server is not receiving frames. Please cancel and restart the render server.');
+                    }
+                    await new Promise(resolve => setTimeout(resolve, 20));
+                }
+            },
             async init(totalFrames, filename, customThumbnailData, onStatus) {
                 if (this.type === 'wasm') {
                     this.wasmEngine = new window.MobileRenderEngine();
@@ -438,6 +477,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (this.type === 'wasm') {
                     await this.wasmEngine.sendFrame(blob);
                 } else {
+                    await this.waitForSocketBuffer();
                     this.ws.send(blob);
                 }
             },
@@ -487,6 +527,8 @@ document.addEventListener('DOMContentLoaded', () => {
                     const videoBlob = await this.wasmEngine.compile(onProgress);
                     return { type: 'wasm', blob: videoBlob };
                 } else {
+                    // Flush all remaining frame blobs over the network before compiling
+                    await this.waitForSocketBuffer(0);
                     await serverLog('Sending compile control message...');
                     this.ws.send(JSON.stringify({ type: 'compile' }));
                     const compileResult = await new Promise((resolve, reject) => {
@@ -678,222 +720,64 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         }
 
-        // C2. Seek-per-frame capture — the only approach that guarantees correct
-        // visual content regardless of hardware speed.
-        //
-        // WHY requestVideoFrameCallback fails on low-config PCs:
-        //   When video.play() is called, the browser may decode multiple frames
-        //   before the callback fires (especially with hardware acceleration or
-        //   cached data). The captured canvas frame is then from the WRONG
-        //   position inside the source file. On a slow PC this is unpredictable,
-        //   causing completely wrong scenes to appear in the rendered video (e.g.
-        //   blue particles instead of a pricing page at the same timestamp).
-        //
-        // This approach:
-        //   • For every frame, seeks the video to the mathematically exact time.
-        //   • Waits for the seek to settle (waitForSeek handles this robustly).
-        //   • Captures the canvas at that exact frame position.
-        //   • Skips redundant seeks: if the video is already within 1 frame of
-        //     the target (sequential capture), no seek is issued — so clean
-        //     sequential clips only pay for 1 seek at the clip boundary.
-        //
-        // Trade-off: slightly slower than play-based, but 100% frame-accurate.
-        // C2. Pipelined playback-based capture — self-adjusting for low-config PCs.
-        // Runs at a controlled rate (0.4x) to decode smoothly without seeking.
-        // Automatically pauses/resumes if canvas compression lags behind.
+        // C2. Deterministic frame-accurate sequential capture.
+        // Seeks to each precise frame timestamp, waits for decoding to settle,
+        // and captures canvas. Eliminates frame skipping, duplication, and progress jumping.
         async function captureVideoClipSequential(clip, clipTrimStart, clipTrimEnd, clipFrames, clipIndex) {
             await serverLog(`captureVideoClipSequential start: clipTrimStart=${clipTrimStart}, clipTrimEnd=${clipTrimEnd}, clipFrames=${clipFrames}, clipIndex=${clipIndex}`);
-            // Speed Ramping (Phase 11): getClipSourceTimeForOutputElapsed (phase9.js)
-            // maps output-elapsed-within-clip -> source time, respecting the clip's
-            // 3-segment ramp if enabled. Falls back to the plain constant-speed
-            // formula (identical to pre-ramping behavior) if phase9.js hasn't loaded
-            // for any reason, so this never breaks export.
             const clipSpeed = Math.max(0.5, Math.min(2, Number(clip.speed) || 1));
             const sourceTimeForFrame = window.getClipSourceTimeForOutputElapsed
                 ? (frame) => window.getClipSourceTimeForOutputElapsed(clip, frame / 30)
                 : (frame) => clipTrimStart + ((frame / 30) * clipSpeed);
-            // Decode pacing only (how fast to real-time-play the source video while
-            // capturing) — NOT used for frame-position accuracy, that's entirely
-            // sourceTimeForFrame's job. Uses the clip's duration-weighted average
-            // speed under ramping so decode keeps pace with the fastest/slowest
-            // segments reasonably well; any mismatch is absorbed by the existing
-            // overshoot-fill / undershoot-wait logic below, same as before ramping.
-            const clipOutputDur = window.getClipOutputDuration ? window.getClipOutputDuration(clip) : ((clipTrimEnd - clipTrimStart) / clipSpeed);
-            const decodePaceSpeed = Math.max(0.5, Math.min(2, (clipTrimEnd - clipTrimStart) / Math.max(0.001, clipOutputDur)));
+
             video.pause();
-            video.playbackRate = 0.4 * decodePaceSpeed; // Stable decoding while preserving the selected timeline speed.
-            await serverLog(`Seeking to start of clip: ${clipTrimStart}`);
-            await waitForSeek(video, clipTrimStart);
-            await serverLog(`Seeked to ${clipTrimStart}. Beginning frame processing.`);
+            delete state._exportBrollPlaybackRate;
 
-            let clipFrameIndex = 0;
-            let finished = false;
+            for (let f = 0; f < clipFrames; f++) {
+                if (exportCancelled) break;
 
-            await new Promise((resolve) => {
-                let frameCallbackId = null;
-                let safetyTimer = null;
-                let activeBlobPromises = [];
-                let inFrame = false;
+                const currentTarget = sourceTimeForFrame(f);
+                state.currentTime = currentTarget;
+                state.customExportTime = currentTarget;
+                state.exportTickerTime = elapsedBeforeCurrentClip + (f / 30);
 
-                const finish = async () => {
-                    if (finished) return;
-                    finished = true;
-                    await serverLog(`finish() called. clipFrameIndex: ${clipFrameIndex}, activeBlobPromises: ${activeBlobPromises.length}`);
-                    if (safetyTimer) { clearTimeout(safetyTimer); safetyTimer = null; }
-                    if (frameCallbackId !== null && video.cancelVideoFrameCallback) {
-                        video.cancelVideoFrameCallback(frameCallbackId);
-                        frameCallbackId = null;
-                    }
-                    video.pause();
-                    // Wait for all remaining canvas compression/uploads to finish
-                    await Promise.all(activeBlobPromises);
-                    await serverLog('All activeBlobPromises resolved. Resolving sequential clip promise.');
-                    resolve();
-                };
+                // Ensure the video element is seeked and decoded to the exact frame
+                await waitForSeek(video, currentTarget, 2000);
 
-                const onFrame = async (now, meta) => {
-                    if (inFrame || finished || exportCancelled) return;
-                    inFrame = true;
-                    try {
-                        if (safetyTimer) { clearTimeout(safetyTimer); safetyTimer = null; }
-                        frameCallbackId = null;
+                // Sync any B-roll video overlays for this exact timestamp
+                await syncBrollVideoOverlays(currentTarget);
 
-                        const mediaTime = (meta && meta.mediaTime != null) ? meta.mediaTime : video.currentTime;
-                        let currentTarget = sourceTimeForFrame(clipFrameIndex);
+                if (window.phase9PrepareTransitionFrame) {
+                    await window.phase9PrepareTransitionFrame(clip, currentTarget);
+                }
 
-                        // 1. Frame is too early — let the video keep playing
-                        if (mediaTime < currentTarget - (1 / 60)) {
-                            scheduleNext();
-                            return;
-                        }
+                // Seek extra multi-track tracks BEFORE drawing
+                if (window.prepareExtraTracksForExportFrame) {
+                    await window.prepareExtraTracksForExportFrame(state.exportTickerTime);
+                }
 
-                        // 2. Video overshot/skipped frames — fill the gap by duplicating
-                        while (clipFrameIndex < clipFrames) {
-                            const loopTarget = sourceTimeForFrame(clipFrameIndex);
-                            if (mediaTime <= loopTarget + (1 / 60)) {
-                                break; // Not overshot anymore
-                            }
+                if (window.drawEditorFrame) {
+                    window.drawEditorFrame();
+                }
 
-                            state.customExportTime = loopTarget;
-                            state.exportTickerTime = elapsedBeforeCurrentClip + (clipFrameIndex / 30);
-                            await syncBrollVideoOverlays(loopTarget);
-                            if (window.phase9PrepareTransitionFrame) {
-                                await window.phase9PrepareTransitionFrame(clip, loopTarget);
-                            }
-                            // Multi-Track Timeline (render-order fix): seek extra video
-                            // tracks BEFORE drawing — editor.js's drawFrame() draws them
-                            // itself, synchronously, at the correct point in its own
-                            // render order (above the main video, below captions/overlays).
-                            if (window.prepareExtraTracksForExportFrame) {
-                                await window.prepareExtraTracksForExportFrame(state.exportTickerTime);
-                            }
-                            if (window.drawEditorFrame) window.drawEditorFrame();
+                const frameBlob = await new Promise(resolve => canvas.toBlob(resolve, 'image/jpeg', 0.85));
+                if (frameBlob && !exportCancelled) {
+                    await renderTarget.sendFrame(frameBlob);
+                }
 
-                            const p = new Promise(async (r) => {
-                                const blob = await new Promise(res => canvas.toBlob(res, 'image/jpeg', 0.85));
-                                // NOTE: do not gate this on `!finished`. This frame has already
-                                // been counted toward clipFrameIndex/frameIndex below, so it is
-                                // owed to the output — finish() sets `finished = true` synchronously
-                                // and then just awaits this same promise; checking `!finished` here
-                                // raced against that flag and silently dropped whatever frame(s)
-                                // were still mid-encode when the clip's target frame count was
-                                // reached, which is exactly what caused the exported video to
-                                // consistently come out ~1s short.
-                                if (blob && !exportCancelled) await renderTarget.sendFrame(blob);
-                                r();
-                            });
-                            activeBlobPromises.push(p);
+                frameIndex++;
 
-                            clipFrameIndex++;
-                            frameIndex++;
+                // Smooth frame-by-frame progress update
+                const totalElapsed = elapsedBeforeCurrentClip + ((f + 1) / 30);
+                const progressPercent = grandTotalDuration > 0 ? Math.min(100, (totalElapsed / grandTotalDuration) * 100) : 100;
+                setProgress(10 + Math.round(progressPercent * 0.8));
 
-                            if (activeBlobPromises.length > 5) {
-                                await activeBlobPromises.shift();
-                            }
-                        }
-
-                        if (clipFrameIndex >= clipFrames) {
-                            finish();
-                            return;
-                        }
-
-                        // 3. Draw and queue the correct frame
-                        currentTarget = sourceTimeForFrame(clipFrameIndex);
-                        state.customExportTime = currentTarget;
-                        state.exportTickerTime = elapsedBeforeCurrentClip + (clipFrameIndex / 30);
-                        await syncBrollVideoOverlays(currentTarget);
-                        if (window.phase9PrepareTransitionFrame) {
-                            await window.phase9PrepareTransitionFrame(clip, currentTarget);
-                        }
-                        // Multi-Track Timeline (render-order fix): seek extra video
-                        // tracks BEFORE drawing — editor.js's drawFrame() draws them
-                        // itself, synchronously, at the correct point in its own
-                        // render order (above the main video, below captions/overlays).
-                        if (window.prepareExtraTracksForExportFrame) {
-                            await window.prepareExtraTracksForExportFrame(state.exportTickerTime);
-                        }
-                        if (window.drawEditorFrame) window.drawEditorFrame();
-
-                        const p = new Promise(async (r) => {
-                            const blob = await new Promise(res => canvas.toBlob(res, 'image/jpeg', 0.85));
-                            // See note above in the overshoot loop — must not check
-                            // `!finished` here, or the frame that triggers finish()
-                            // (almost always the clip's LAST frame) gets dropped.
-                            if (blob && !exportCancelled) await renderTarget.sendFrame(blob);
-                            r();
-                        });
-                        activeBlobPromises.push(p);
-
-                        clipFrameIndex++;
-                        frameIndex++;
-
-                        // Dynamically throttle if browser encoding queue is too full
-                        if (activeBlobPromises.length > 3) {
-                            await activeBlobPromises.shift();
-                        }
-
-                        // Progress update
-                        const totalElapsed = elapsedBeforeCurrentClip + (clipFrameIndex / 30);
-                        const progressPercent = grandTotalDuration > 0 ? Math.min(100, (totalElapsed / grandTotalDuration) * 100) : 100;
-                        setProgress(10 + Math.round(progressPercent * 0.8));
-
-                        if (isBatch) {
-                            renderStatusText.innerText = `[Batch ${batchIndex}/${batchCount}] rendering ${batchFilename}... ${Math.round((frameIndex / grandTotalFrames) * 100)}%`;
-                        } else {
-                            renderStatusText.innerText = `ক্লিপ ${clipIndex + 1}/${state.clips.length} প্রসেস হচ্ছে... (ফ্রেম: ${clipFrameIndex}/${clipFrames})`;
-                        }
-
-                        if (clipFrameIndex >= clipFrames) {
-                            finish();
-                        } else {
-                            scheduleNext();
-                        }
-                    } finally {
-                        inFrame = false;
-                    }
-                };
-
-                const scheduleNext = () => {
-                    if (finished || exportCancelled) return;
-                    frameCallbackId = video.requestVideoFrameCallback(onFrame);
-                    safetyTimer = setTimeout(() => {
-                        safetyTimer = null;
-                        if (frameCallbackId !== null && video.cancelVideoFrameCallback) {
-                            video.cancelVideoFrameCallback(frameCallbackId);
-                            frameCallbackId = null;
-                        }
-                        // If stalls, manually force frame progression
-                        onFrame(null, { mediaTime: clipTrimStart + (clipFrameIndex / 30) });
-                    }, 1500);
-                };
-
-                video.play().then(() => {
-                    scheduleNext();
-                }).catch(() => {
-                    // Fallback if play fails
-                    onFrame(null, null);
-                });
-            });
+                if (isBatch) {
+                    renderStatusText.innerText = `[Batch ${batchIndex}/${batchCount}] rendering ${batchFilename}... ${Math.round((frameIndex / grandTotalFrames) * 100)}%`;
+                } else {
+                    renderStatusText.innerText = `ক্লিপ ${clipIndex + 1}/${state.clips.length} প্রসেস হচ্ছে... (ফ্রেম: ${f + 1}/${clipFrames})`;
+                }
+            }
         }
 
         let elapsedBeforeCurrentClip = 0;
@@ -1020,8 +904,6 @@ document.addEventListener('DOMContentLoaded', () => {
         // STEP 3 — Multi-Track Timeline: release the dedicated export-only
         // <video> elements created for extra track clips (prepareExtraTracksForExportFrame).
         if (window.cleanupExtraTracksExportMedia) window.cleanupExtraTracksExportMedia();
-        // Resume animated backgrounds in live preview
-        if (window.startBgAnimLoop) window.startBgAnimLoop();
 
         // C3. Render Outro if enabled
         if (state.outroEnabled && outroDur > 0 && !exportCancelled) {
@@ -1096,6 +978,8 @@ document.addEventListener('DOMContentLoaded', () => {
             video.volume = Math.min(1.0, state.videoVolume);
         }
         if (window.drawEditorFrame) window.drawEditorFrame();
+        // Resume animated backgrounds now that export is fully completed
+        if (window.startBgAnimLoop) window.startBgAnimLoop();
 
         // Finalize Download / Save
         setProgress(98);

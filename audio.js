@@ -1223,7 +1223,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 _bgMusicVideoGainActive = false;
             }
 
-            requestAnimationFrame(bgMusicSyncTick);
+            // Throttle to ~4 fps when idle so this loop doesn't compete with
+            // the main 60-fps drawFrame/updateLoop during video playback.
+            setTimeout(() => requestAnimationFrame(bgMusicSyncTick), 250);
             return;
         }
 
@@ -1360,7 +1362,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function duckingTick() {
         if (!state.bgMusicDuckingEnabled || state.bgMusicTracks.length === 0) {
-            requestAnimationFrame(duckingTick);
+            // No active ducking — poll at 4 fps to stay responsive to changes
+            // without hogging the main thread at 60 fps.
+            setTimeout(() => requestAnimationFrame(duckingTick), 250);
             return;
         }
 

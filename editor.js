@@ -3299,6 +3299,36 @@ document.addEventListener('DOMContentLoaded', () => {
             ensureAnimatedGifPreview();
         }
     });
+
+    // Auto-resume: if the video stalls/buffers mid-playback, restart the
+    // updateLoop once the browser signals it can play again. Without this the
+    // rAF loop exits (state.isPlaying is still true but video.paused becomes
+    // true internally) and playback appears frozen until the user presses play.
+    let _waitingResumeScheduled = false;
+    state.video.addEventListener('waiting', () => {
+        if (state.isPlaying && !_waitingResumeScheduled) {
+            _waitingResumeScheduled = true;
+        }
+    });
+    state.video.addEventListener('stalled', () => {
+        if (state.isPlaying && !_waitingResumeScheduled) {
+            _waitingResumeScheduled = true;
+        }
+    });
+    state.video.addEventListener('playing', () => {
+        if (_waitingResumeScheduled) {
+            _waitingResumeScheduled = false;
+            // Re-kick the updateLoop in case it fell out while video was buffering.
+            if (state.isPlaying) requestAnimationFrame(updateLoop);
+        }
+    });
+    state.video.addEventListener('canplay', () => {
+        if (_waitingResumeScheduled && state.isPlaying) {
+            _waitingResumeScheduled = false;
+            state.video.play().catch(() => {});
+            requestAnimationFrame(updateLoop);
+        }
+    });
     
     // Update playhead UI position
     function updatePlayhead() {

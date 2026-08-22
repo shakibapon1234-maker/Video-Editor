@@ -1741,8 +1741,16 @@
     }
 
     function startMultiTrackProgressLoop() {
-        function tick() {
-            updateMultiTrackProgress();
+        // Throttle to ~10 fps so repeated document.querySelector calls inside
+        // updateMultiTrackProgress() don't compete with the 60-fps video
+        // playback loop (editor.js updateLoop + drawFrame) and cause stuttering.
+        var _lastProgressTick = 0;
+        var _PROGRESS_INTERVAL = 100; // ms between DOM updates (~10 fps)
+        function tick(now) {
+            if (now - _lastProgressTick >= _PROGRESS_INTERVAL) {
+                _lastProgressTick = now;
+                updateMultiTrackProgress();
+            }
             requestAnimationFrame(tick);
         }
         requestAnimationFrame(tick);
