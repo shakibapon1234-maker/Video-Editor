@@ -720,66 +720,7 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         }
 
-        // C2. Deterministic frame-accurate sequential capture.
-        // Seeks to each precise frame timestamp, waits for decoding to settle,
-        // and captures canvas. Eliminates frame skipping, duplication, and progress jumping.
-        async function captureVideoClipSequential(clip, clipTrimStart, clipTrimEnd, clipFrames, clipIndex) {
-            await serverLog(`captureVideoClipSequential start: clipTrimStart=${clipTrimStart}, clipTrimEnd=${clipTrimEnd}, clipFrames=${clipFrames}, clipIndex=${clipIndex}`);
-            const clipSpeed = Math.max(0.5, Math.min(2, Number(clip.speed) || 1));
-            const sourceTimeForFrame = window.getClipSourceTimeForOutputElapsed
-                ? (frame) => window.getClipSourceTimeForOutputElapsed(clip, frame / 30)
-                : (frame) => clipTrimStart + ((frame / 30) * clipSpeed);
-
-            video.pause();
-            delete state._exportBrollPlaybackRate;
-
-            for (let f = 0; f < clipFrames; f++) {
-                if (exportCancelled) break;
-
-                const currentTarget = sourceTimeForFrame(f);
-                state.currentTime = currentTarget;
-                state.customExportTime = currentTarget;
-                state.exportTickerTime = elapsedBeforeCurrentClip + (f / 30);
-
-                // Ensure the video element is seeked and decoded to the exact frame
-                await waitForSeek(video, currentTarget, 2000);
-
-                // Sync any B-roll video overlays for this exact timestamp
-                await syncBrollVideoOverlays(currentTarget);
-
-                if (window.phase9PrepareTransitionFrame) {
-                    await window.phase9PrepareTransitionFrame(clip, currentTarget);
-                }
-
-                // Seek extra multi-track tracks BEFORE drawing
-                if (window.prepareExtraTracksForExportFrame) {
-                    await window.prepareExtraTracksForExportFrame(state.exportTickerTime);
-                }
-
-                if (window.drawEditorFrame) {
-                    window.drawEditorFrame();
-                }
-
-                const frameBlob = await new Promise(resolve => canvas.toBlob(resolve, 'image/jpeg', 0.85));
-                if (frameBlob && !exportCancelled) {
-                    await renderTarget.sendFrame(frameBlob);
-                }
-
-                frameIndex++;
-
-                // Smooth frame-by-frame progress update
-                const totalElapsed = elapsedBeforeCurrentClip + ((f + 1) / 30);
-                const progressPercent = grandTotalDuration > 0 ? Math.min(100, (totalElapsed / grandTotalDuration) * 100) : 100;
-                setProgress(10 + Math.round(progressPercent * 0.8));
-
-                if (isBatch) {
-                    renderStatusText.innerText = `[Batch ${batchIndex}/${batchCount}] rendering ${batchFilename}... ${Math.round((frameIndex / grandTotalFrames) * 100)}%`;
-                } else {
-                    renderStatusText.innerText = `ক্লিপ ${clipIndex + 1}/${state.clips.length} প্রসেস হচ্ছে... (ফ্রেম: ${f + 1}/${clipFrames})`;
-                }
-            }
-        }
-
+        // C2. Render Clips Frame-by-Frame (Deterministic 30 FPS Capture)
         let elapsedBeforeCurrentClip = 0;
         // Running count of frames actually emitted for the clips timeline so far.
         // Used to derive each clip's frame count from the *cumulative* elapsed
@@ -836,62 +777,57 @@ document.addEventListener('DOMContentLoaded', () => {
 
             // Ideal cumulative frame count if the clips timeline up to and
             // including this clip were rendered with zero rounding error, then
-            // subtract what's already been emitted. This is the frame-budget
-            // (Bresenham-style) technique: any leftover fraction of a frame is
-            // carried forward and absorbed by the next clip instead of being
-            // silently dropped or duplicated every single time.
+            // subtract what's already been emitted.
             const targetCumulativeFrames = Math.round((elapsedBeforeCurrentClip + clipOutputDuration) * 30);
             const clipFrames = Math.max(1, targetCumulativeFrames - clipsFramesEmitted);
             clipsFramesEmitted += clipFrames;
             
-            if (clip.type === 'image') {
-                for (let f = 0; f < clipFrames; f++) {
-                    if (exportCancelled) break;
+            for (let f = 0; f < clipFrames; f++) {
+                if (exportCancelled) break;
 
-                    const elapsedSecInClip = f / 30;
-                    const targetTime = window.getClipSourceTimeForOutputElapsed
-                        ? window.getClipSourceTimeForOutputElapsed(clip, elapsedSecInClip)
-                        : (clipTrimStart + (elapsedSecInClip * clipSpeed));
-                    state.currentTime = targetTime;
+                const elapsedSecInClip = f / 30;
+                const targetTime = window.getClipSourceTimeForOutputElapsed
+                    ? window.getClipSourceTimeForOutputElapsed(clip, elapsedSecInClip)
+                    : (clipTrimStart + (elapsedSecInClip * clipSpeed));
+                state.currentTime = targetTime;
 
-                    // Same explicit-clock fix as the video path above so the
-                    // ticker/B-roll clock is exact and independent of any lag.
-                    state.customExportTime = targetTime;
-                    state.exportTickerTime = elapsedBeforeCurrentClip + elapsedSecInClip;
+                // Explicit-clock so the ticker/B-roll clock is exact and independent of any lag.
+                state.customExportTime = targetTime;
+                state.exportTickerTime = elapsedBeforeCurrentClip + elapsedSecInClip;
 
-                    await syncBrollVideoOverlays(targetTime);
-
-                    if (window.phase9PrepareTransitionFrame) {
-                        await window.phase9PrepareTransitionFrame(clip, targetTime);
-                    }
-
-                    // Multi-Track Timeline (render-order fix): seek extra video
-                    // tracks BEFORE drawing — editor.js's drawFrame() draws them
-                    // itself, synchronously, at the correct point in its own
-                    // render order (above the main video, below captions/overlays).
-                    if (window.prepareExtraTracksForExportFrame) {
-                        await window.prepareExtraTracksForExportFrame(state.exportTickerTime);
-                    }
-
-                    if (window.drawEditorFrame) {
-                        window.drawEditorFrame();
-                    }
-
-                    const frameBlob = await new Promise(resolve => canvas.toBlob(resolve, 'image/jpeg', 0.85));
-                    await renderTarget.sendFrame(frameBlob);
-
-                    frameIndex++;
-                    const uiProgress = 10 + Math.round((frameIndex / grandTotalFrames) * 80);
-                    setProgress(uiProgress);
-                    
-                    if (isBatch) {
-                        renderStatusText.innerText = `[Batch ${batchIndex}/${batchCount}] rendering ${batchFilename}... ${Math.round((frameIndex / grandTotalFrames) * 100)}%`;
-                    } else {
-                        renderStatusText.innerText = `ক্লিপ ${clipIndex + 1}/${state.clips.length} প্রসেস হচ্ছে... (ফ্রেম: ${f + 1}/${clipFrames})`;
-                    }
+                if (clip.type !== 'image') {
+                    await waitForSeek(video, targetTime);
                 }
-            } else {
-                await captureVideoClipSequential(clip, clipTrimStart, clipTrimEnd, clipFrames, clipIndex);
+
+                await syncBrollVideoOverlays(targetTime);
+
+                if (window.phase9PrepareTransitionFrame) {
+                    await window.phase9PrepareTransitionFrame(clip, targetTime);
+                }
+
+                // Multi-Track Timeline: seek extra video tracks BEFORE drawing
+                if (window.prepareExtraTracksForExportFrame) {
+                    await window.prepareExtraTracksForExportFrame(state.exportTickerTime);
+                }
+
+                if (window.drawEditorFrame) {
+                    window.drawEditorFrame();
+                }
+
+                const frameBlob = await new Promise(resolve => canvas.toBlob(resolve, 'image/jpeg', 0.85));
+                if (frameBlob && !exportCancelled) {
+                    await renderTarget.sendFrame(frameBlob);
+                }
+
+                frameIndex++;
+                const uiProgress = 10 + Math.round((frameIndex / grandTotalFrames) * 80);
+                setProgress(uiProgress);
+                
+                if (isBatch) {
+                    renderStatusText.innerText = `[Batch ${batchIndex}/${batchCount}] rendering ${batchFilename}... ${Math.round((frameIndex / grandTotalFrames) * 100)}%`;
+                } else {
+                    renderStatusText.innerText = `ক্লিপ ${clipIndex + 1}/${state.clips.length} প্রসেস হচ্ছে... (ফ্রেম: ${f + 1}/${clipFrames})`;
+                }
             }
             
             elapsedBeforeCurrentClip += clipOutputDuration;

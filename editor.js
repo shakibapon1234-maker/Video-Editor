@@ -14209,7 +14209,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     if (textOverlayAnimSpeedSlider) {
         textOverlayAnimSpeedSlider.addEventListener('input', (e) => {
-            if (textOverlayAnimSpeedVal) textOverlayAnimSpeedVal.innerText = e.target.value + 's';
+            if (textOverlayAnimSpeedVal) textOverlayAnimSpeedVal.innerText = parseFloat(e.target.value).toFixed(1) + 's';
             const item = getSelectedTextOverlay();
             if (item) {
                 item.textAnimSpeedSec = parseFloat(e.target.value);
@@ -14252,7 +14252,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     if (textOverlayBoxAnimSpeedSlider) {
         textOverlayBoxAnimSpeedSlider.addEventListener('input', (e) => {
-            if (textOverlayBoxAnimSpeedVal) textOverlayBoxAnimSpeedVal.innerText = e.target.value + 's';
+            if (textOverlayBoxAnimSpeedVal) textOverlayBoxAnimSpeedVal.innerText = parseFloat(e.target.value).toFixed(1) + 's';
             const item = getSelectedTextOverlay();
             if (item) {
                 item.boxAnimSpeedSec = parseFloat(e.target.value);
@@ -14746,7 +14746,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (textOverlayAnimSpeedSlider) {
             const speed = item.textAnimSpeedSec !== undefined ? item.textAnimSpeedSec : (item.animSpeedSec !== undefined ? item.animSpeedSec : 0.5);
             textOverlayAnimSpeedSlider.value = speed;
-            if (textOverlayAnimSpeedVal) textOverlayAnimSpeedVal.innerText = speed + 's';
+            if (textOverlayAnimSpeedVal) textOverlayAnimSpeedVal.innerText = parseFloat(speed).toFixed(1) + 's';
         }
         if (textOverlayAnimLoopEnabled) {
             textOverlayAnimLoopEnabled.checked = !!item.textAnimLoop;
@@ -14763,7 +14763,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (textOverlayBoxAnimSpeedSlider) {
             const boxSpeed = item.boxAnimSpeedSec !== undefined ? item.boxAnimSpeedSec : 0.5;
             textOverlayBoxAnimSpeedSlider.value = boxSpeed;
-            if (textOverlayBoxAnimSpeedVal) textOverlayBoxAnimSpeedVal.innerText = boxSpeed + 's';
+            if (textOverlayBoxAnimSpeedVal) textOverlayBoxAnimSpeedVal.innerText = parseFloat(boxSpeed).toFixed(1) + 's';
         }
         textOverlayCurveSlider.value = item.curve || 0;
         textOverlayCurveVal.innerText = item.curve || 0;
@@ -15260,18 +15260,25 @@ document.addEventListener('DOMContentLoaded', () => {
     // style drag bar so the person can dial in exactly how snappy the entry/exit feels.
     // Slow end raised from 1.2s to 2.6s (v2.6) — at the old cap, even the slowest setting
     // still read as "fast" for entry/exit animations; 2.6s gives a real slow-motion feel.
+    const BROLL_SPEED_MIN_SEC = 0.15;
+    const BROLL_SPEED_MAX_SEC = 15.0;
     function brollSpeedValueToSec(value) {
         const v = Math.max(1, Math.min(100, value));
-        return 2.6 - ((v - 1) / 99) * (2.6 - 0.15);
+        const t = (100 - v) / 99;
+        const sec = BROLL_SPEED_MIN_SEC + Math.pow(t, 2.5) * (BROLL_SPEED_MAX_SEC - BROLL_SPEED_MIN_SEC);
+        return Math.round(sec * 10) / 10;
     }
     function brollSpeedSecToValue(sec) {
-        const s = Math.max(0.15, Math.min(2.6, sec || 0.4));
-        return Math.round(1 + ((2.6 - s) / (2.6 - 0.15)) * 99);
+        const s = Math.max(BROLL_SPEED_MIN_SEC, Math.min(BROLL_SPEED_MAX_SEC, sec || 0.5));
+        const t = Math.pow((s - BROLL_SPEED_MIN_SEC) / (BROLL_SPEED_MAX_SEC - BROLL_SPEED_MIN_SEC), 1 / 2.5);
+        return Math.round(100 - t * 99);
     }
     function brollSpeedLabel(sec) {
-        if (sec <= 0.3) return 'দ্রুত (Fast)';
-        if (sec >= 1.5) return 'ধীর (Slow)';
-        return 'স্বাভাবিক (Normal)';
+        const s = Number(sec).toFixed(1) + 's';
+        if (sec <= 0.3) return `${s} (দ্রুত / Fast)`;
+        if (sec >= 4.0) return `${s} (খুব ধীর / Very Slow)`;
+        if (sec >= 1.5) return `${s} (ধীর / Slow)`;
+        return `${s} (স্বাভাবিক / Normal)`;
     }
 
     // Unified animation style list (v2.5) — every style works the same way in

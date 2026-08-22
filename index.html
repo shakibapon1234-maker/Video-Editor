@@ -650,7 +650,7 @@
                                                 <span>Speed (গতি)</span>
                                                 <span id="rot3d-speed-val">1.0x</span>
                                             </label>
-                                            <input type="range" id="rot3d-speed-slider" min="0.2" max="3.0" value="1.0" step="0.1">
+                                            <input type="range" id="rot3d-speed-slider" min="0.05" max="5.0" value="1.0" step="0.05">
                                         </div>
                                     </div>
 
@@ -848,7 +848,7 @@
                                 <div class="control-group mt-3">
                                     <label>Transition Duration (সময়কাল)</label>
                                     <div class="slider-val-container">
-                                        <input type="range" id="intro-transition-duration" min="0.5" max="3.0" value="1.0" step="0.1">
+                                        <input type="range" id="intro-transition-duration" min="0.2" max="8.0" value="1.0" step="0.1">
                                         <span id="intro-transition-duration-val">1.0s</span>
                                     </div>
                                 </div>
@@ -895,7 +895,7 @@
                                 <div class="control-group mt-3">
                                     <label>Duration (0.2s – 1.5s)</label>
                                     <div class="slider-val-container">
-                                        <input type="range" id="clip-transition-duration" min="0.2" max="1.5" value="0.5" step="0.1">
+                                        <input type="range" id="clip-transition-duration" min="0.2" max="5.0" value="0.5" step="0.1">
                                         <span id="clip-transition-duration-val">0.5s</span>
                                     </div>
                                 </div>
@@ -1065,7 +1065,7 @@
                                         <label>স্থায়িত্ব / Duration (সেকেন্ড)</label>
                                         <span id="punch-zoom-duration-val" style="font-size: 12px; color: var(--text-secondary);">2.0s</span>
                                     </div>
-                                    <input type="range" id="punch-zoom-duration-slider" min="0.5" max="6" step="0.1" value="2" class="form-range" style="width: 100%;">
+                                    <input type="range" id="punch-zoom-duration-slider" min="0.2" max="15" step="0.1" value="2" class="form-range" style="width: 100%;">
                                 </div>
 
                                 <div class="control-group mt-2">
@@ -1609,7 +1609,7 @@
                                     </div>
                                     <div class="control-group mt-2">
                                         <label>Draw Speed (আঁকার গতি)</label>
-                                        <div class="slider-val-container"><input type="range" id="highlight-draw-speed" min="0.2" max="1.5" step="0.1" value="0.6"><span id="highlight-draw-speed-val">0.6s</span></div>
+                                        <div class="slider-val-container"><input type="range" id="highlight-draw-speed" min="0.1" max="5.0" step="0.1" value="0.6"><span id="highlight-draw-speed-val">0.6s</span></div>
                                     </div>
                                     <div id="highlight-list" class="text-overlay-list mt-3"></div>
                                     <div id="highlight-timing-container" class="text-overlay-timing mt-3" style="display:none;">
@@ -1846,7 +1846,7 @@
                                 <div class="control-group mt-3" id="text-overlay-anim-speed-group">
                                     <label>Text Animation Speed (টেক্সট অ্যানিমেশন স্পিড)</label>
                                     <div class="slider-val-container">
-                                        <input type="range" id="text-overlay-anim-speed" min="0.1" max="2.0" step="0.1" value="0.5">
+                                        <input type="range" id="text-overlay-anim-speed" min="0.1" max="20.0" step="0.1" value="0.5">
                                         <span id="text-overlay-anim-speed-val">0.5s</span>
                                     </div>
                                 </div>
@@ -1863,7 +1863,7 @@
                                 <div class="control-group mt-2" id="text-overlay-anim-loop-group" style="display:none;">
                                     <label>Loop Every (কত সেকেন্ড পরপর রিপিট হবে)</label>
                                     <div class="slider-val-container">
-                                        <input type="range" id="text-overlay-anim-loop-sec" min="1" max="30" step="0.5" value="5">
+                                        <input type="range" id="text-overlay-anim-loop-sec" min="1" max="60" step="0.5" value="5">
                                         <span id="text-overlay-anim-loop-sec-val">5s</span>
                                     </div>
                                     <p class="help-text mt-1">চালু থাকলে, ওভারলে যতক্ষণ স্ক্রিনে থাকবে ততক্ষণ এই টেক্সট অ্যানিমেশনটি (যেমন স্মোক ভেপার, টাইপরাইটার) একবার চলে থেমে না গিয়ে, প্রতি এই কত সেকেন্ড পরপর আবার চলবে।</p>
@@ -2066,7 +2066,7 @@
                                 <div class="control-group mt-3" id="text-overlay-box-anim-speed-group">
                                     <label>Box Animation Speed (বক্স অ্যানিমেশন স্পিড)</label>
                                     <div class="slider-val-container">
-                                        <input type="range" id="text-overlay-box-anim-speed" min="0.1" max="2.0" step="0.1" value="0.5">
+                                        <input type="range" id="text-overlay-box-anim-speed" min="0.1" max="20.0" step="0.1" value="0.5">
                                         <span id="text-overlay-box-anim-speed-val">0.5s</span>
                                     </div>
                                 </div>
@@ -2399,6 +2399,13 @@
                                                 </div>
                                             </div>
                                         </div>
+                                        <div class="mt-2" id="broll-line-reveal-seconds-row" style="display:none;">
+                                            <label>প্রতি লাইনে কত সেকেন্ড পর পরেরটা আসবে</label>
+                                            <div class="slider-val-container">
+                                                <input type="range" id="broll-line-reveal-seconds" min="5" max="300" value="25">
+                                                <span id="broll-line-reveal-seconds-val">2.5s</span>
+                                            </div>
+                                        </div>
                                         <div class="control-group mt-2">
 
                                             <label class="checkbox-label" style="display:flex; align-items:center; gap:8px;">
@@ -2604,7 +2611,7 @@
                                         <div class="mt-2" id="broll-line-reveal-seconds-row" style="display:none;">
                                             <label>প্রতি লাইনে কত সেকেন্ড পর পরেরটা আসবে</label>
                                             <div class="slider-val-container">
-                                                <input type="range" id="broll-line-reveal-seconds" min="5" max="60" value="25">
+                                                <input type="range" id="broll-line-reveal-seconds" min="5" max="300" value="25">
                                                 <span id="broll-line-reveal-seconds-val">2.5s</span>
                                             </div>
                                         </div>
