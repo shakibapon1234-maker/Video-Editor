@@ -20487,16 +20487,29 @@ document.addEventListener('DOMContentLoaded', () => {
 
             // Load video src
             if (state.clips.length > 0) {
-                const activeClip = state.clips.find(c => c.id === state.activeClipId);
-                if (activeClip && activeClip.type !== 'image') {
-                    state.video.src = activeClip.url;
-                    state.video.load();
-                    await new Promise(r => state.video.onloadedmetadata = r);
+                const activeClip = state.clips.find(c => c.id === state.activeClipId) || state.clips[0];
+                if (activeClip) {
+                    state.activeClipId = activeClip.id;
+                    if (activeClip.type !== 'image' && activeClip.url) {
+                        state.video.src = activeClip.url;
+                        state.video.load();
+                        await loadSafeVideoMetadataPromise(state.video);
+                        if (state.video.duration && !isNaN(state.video.duration)) {
+                            state.duration = state.video.duration;
+                        }
+                    } else if (activeClip.type === 'image') {
+                        if (!state.duration) state.duration = activeClip.duration || 5.0;
+                    }
+                    state.startTime = activeClip.start || 0;
+                    state.endTime = activeClip.end || activeClip.duration || state.duration || 0;
                 }
             }
 
-            // Trigger immediate local storage auto-save
-            saveProjectToBrowserStorage();
+            // Recalculate preview canvas dimensions with active media
+            updateCanvasDimensions();
+
+            // Trigger immediate local storage / indexedDB auto-save
+            await saveProjectToBrowserStorage();
 
             // Re-sync and render
             syncUIFromState();
@@ -20510,7 +20523,7 @@ document.addEventListener('DOMContentLoaded', () => {
             alert("প্রজেক্ট সফলভাবে লোড হয়েছে!");
         } catch (e) {
             console.error("Apply import failed:", e);
-            alert("প্রজেক্ট ফাইল অ্যাপ্লাই করতে ত্রুটি ঘটেছে।");
+            alert("প্রজেক্ট ফাইল অ্যাপ্লাই করতে ত্রুটি ঘটেছে: " + (e.message || e));
         }
     }
 
@@ -21131,13 +21144,11 @@ document.addEventListener('DOMContentLoaded', () => {
                 }))
             };
 
-            localStorage.setItem(`studio_flow_project_${projId}`, JSON.stringify(settingsToSave));
-            localStorage.setItem('studio_flow_active_project_id', projId);
-            registerProjectMetadata(projId, projName);
-
-            // Write files to IndexedDB
+            // Write settings and files to IndexedDB first
             const tx = db.transaction(STORE_NAME, 'readwrite');
             const store = tx.objectStore(STORE_NAME);
+
+            store.put(settingsToSave, `${projId}_project_settings`);
 
             if (state.logoFile) {
                 store.put(state.logoFile, `${projId}_logo`);
@@ -21164,7 +21175,7 @@ document.addEventListener('DOMContentLoaded', () => {
             });
 
             state.brollOverlays.forEach(b => {
-                // Keep the original file for every visual B-roll type.  The
+                // Keep the original file for every visual B-roll type. The
                 // settings JSON deliberately excludes DOM media elements, so a
                 // video file must be available here to recreate its <video>
                 // element after a page refresh.
@@ -21187,6 +21198,24 @@ document.addEventListener('DOMContentLoaded', () => {
             });
 
             console.log(`IndexedDB Auto-save completed for project ${projId}.`);
+
+            // Safe localStorage mirror (non-blocking, automatically cleans stale keys if full)
+            try {
+                localStorage.setItem('studio_flow_active_project_id', projId);
+                localStorage.setItem(`studio_flow_project_${projId}`, JSON.stringify(settingsToSave));
+            } catch (storageErr) {
+                try {
+                    // Free up space by removing older project snapshots from localStorage
+                    for (let i = localStorage.length - 1; i >= 0; i--) {
+                        const k = localStorage.key(i);
+                        if (k && k.startsWith('studio_flow_project_') && k !== `studio_flow_project_${projId}`) {
+                            localStorage.removeItem(k);
+                        }
+                    }
+                    localStorage.setItem('studio_flow_active_project_id', projId);
+                } catch (e) {}
+            }
+            registerProjectMetadata(projId, projName);
         } catch (e) {
             console.error("Auto-save storage failed:", e);
         }
@@ -21194,7 +21223,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
     async function getFileFromDBWithFallback(key, projId) {
         if (projId) {
-            return await getFileFromDB(`${projId}_${key}`);
+            const found = await getFileFromDB(`${projId}_${key}`);
+            if (found !== null && found !== undefined) return found;
         }
         return await getFileFromDB(key);
     }
@@ -21203,13 +21233,22 @@ document.addEventListener('DOMContentLoaded', () => {
     async function restoreProjectFromBrowserStorage(targetProjectId, activeVideoFile) {
         try {
             const projId = targetProjectId || localStorage.getItem('studio_flow_active_project_id') || getCurrentProjectId();
-            let savedSettingsRaw = localStorage.getItem(`studio_flow_project_${projId}`);
-            if (!savedSettingsRaw && !targetProjectId) {
-                savedSettingsRaw = localStorage.getItem('studio_flow_project_settings');
+            let savedData = await getFileFromDBWithFallback('project_settings', projId);
+            if (!savedData) {
+                let savedSettingsRaw = null;
+                try {
+                    savedSettingsRaw = localStorage.getItem(`studio_flow_project_${projId}`);
+                    if (!savedSettingsRaw && !targetProjectId) {
+                        savedSettingsRaw = localStorage.getItem('studio_flow_project_settings');
+                    }
+                } catch (e) {}
+                if (savedSettingsRaw) {
+                    try {
+                        savedData = JSON.parse(savedSettingsRaw);
+                    } catch (e) {}
+                }
             }
-            if (!savedSettingsRaw) return false;
-
-            const savedData = JSON.parse(savedSettingsRaw);
+            if (!savedData) return false;
             const activeProjId = savedData.projectId || projId;
             state.activeProjectId = activeProjId;
             state.projectVideoFingerprint = savedData.videoFingerprint || '';

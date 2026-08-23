@@ -291,6 +291,16 @@ app.post('/api/thumbnail-proxy', async (req, res) => {
     }
 });
 
+// Serve favicon to prevent 404 in console
+app.get('/favicon.ico', (req, res) => {
+    const iconPath = path.join(__dirname, 'icon.png');
+    if (fs.existsSync(iconPath)) {
+        res.sendFile(iconPath);
+    } else {
+        res.status(204).end();
+    }
+});
+
 // Serve editor static files
 app.use(express.static(__dirname));
 
