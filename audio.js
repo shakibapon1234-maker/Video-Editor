@@ -3745,7 +3745,14 @@ document.addEventListener('DOMContentLoaded', () => {
                 } else {
                     const animDur = item.animationSpeedSec || 0.4;
                     synthBrollSfx(offlineCtx, makeup, item.soundEffect, introDur + startSec);
-                    const exitSec = Math.max(0, Math.min(totalDuration, (item.endSec || startSec) - animDur));
+                    const repeatSec = parseFloat(item.autoRepeatSec) || 0;
+                    const endSec = Math.max(0, Math.min(totalDuration, item.endSec || startSec));
+                    if (repeatSec > 0) {
+                        for (let t = startSec + repeatSec; t < endSec - animDur; t += repeatSec) {
+                            synthBrollSfx(offlineCtx, makeup, item.soundEffect, introDur + t);
+                        }
+                    }
+                    const exitSec = Math.max(0, Math.min(totalDuration, endSec - animDur));
                     if (exitSec - startSec > 0.05) {
                         synthBrollSfx(offlineCtx, makeup, item.soundEffect, introDur + exitSec);
                     }

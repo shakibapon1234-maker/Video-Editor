@@ -6680,6 +6680,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (state.isPlaying && currentTime < item.startSec - 0.05) {
                     item._sfxEnterPlayed = false;
                     item._sfxExitPlayed = false;
+                    item._lastSfxCycle = -1;
                 }
 
                 // While paused in Step 3 we always show the overlay being EDITED (the
@@ -6707,6 +6708,10 @@ document.addEventListener('DOMContentLoaded', () => {
                 const tIn = currentTime - item.startSec;
                 const tOut = item.endSec - currentTime;
                 const animDur = item.animationSpeedSec || 0.4;
+                const repeatSec = parseFloat(item.autoRepeatSec) || 0;
+                const cycleElapsed = (repeatSec > 0) ? (tIn % repeatSec) : tIn;
+                const cycleIndex = (repeatSec > 0) ? Math.floor(tIn / repeatSec) : 0;
+                const effectiveTIn = cycleElapsed;
                 const resolvedExitDir = (!item.exitDirection || item.exitDirection === 'same')
                     ? (item.entryDirection || 'bottom')
                     : item.exitDirection;
@@ -6750,6 +6755,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 // in real time during actual playback/export, timed to line up with
                 // the visual animation (exit sound starts right as the exit anim begins).
                 if (state.isPlaying && item.soundEffect && item.soundEffect !== 'none') {
+                    const currentCycle = (repeatSec > 0) ? Math.floor(tIn / repeatSec) : 0;
                     if (item.soundEffect === 'custom') {
                         // A real uploaded clip plays once at entry only — replaying a
                         // longer voice clip again on exit would usually overlap badly.
@@ -6758,8 +6764,8 @@ document.addEventListener('DOMContentLoaded', () => {
                             if (item.customSoundBuffer && window.playBrollCustomSound) window.playBrollCustomSound(item.customSoundBuffer);
                         }
                     } else {
-                        if (!item._sfxEnterPlayed && currentTime >= item.startSec) {
-                            item._sfxEnterPlayed = true;
+                        if (item._lastSfxCycle !== currentCycle && effectiveTIn < animDur && currentTime < item.endSec - animDur) {
+                            item._lastSfxCycle = currentCycle;
                             if (window.playBrollSfx) window.playBrollSfx(item.soundEffect);
                         }
                         if (!item._sfxExitPlayed && tOut <= animDur && currentTime < item.endSec) {
@@ -6877,56 +6883,54 @@ document.addEventListener('DOMContentLoaded', () => {
                         // 70% with a bouncy overshoot settle; 'slide' just glides in flat.
                         let eased = 1;
                         let dir = null;
-                        if (tIn < animDur) {
-                            eased = (style === 'slide-pop') ? easeOutBackOvershoot(Math.max(0, tIn / animDur)) : brollEaseOut(tIn / animDur);
-                            dir = item.entryDirection || 'bottom';
-                        } else if (tOut < animDur) {
+                        if (tOut < animDur) {
                             eased = (style === 'slide-pop') ? easeOutBackOvershoot(Math.max(0, tOut / animDur)) : brollEaseOut(tOut / animDur);
                             dir = resolvedExitDir;
+                        } else if (effectiveTIn < animDur) {
+                            eased = (style === 'slide-pop') ? easeOutBackOvershoot(Math.max(0, effectiveTIn / animDur)) : brollEaseOut(effectiveTIn / animDur);
+                            dir = item.entryDirection || 'bottom';
                         }
                         if (dir) {
                             const d = brollSlideOffset(dir, boxX, boxY, boxW, boxH);
-                            offX = d.x * (1 - eased);
-                            offY = d.y * (1 - eased);
+                            const distFactor = (repeatSec > 0 && cycleIndex > 0) ? 0.35 : 1.0;
+                            offX = d.x * (1 - eased) * distFactor;
+                            offY = d.y * (1 - eased) * distFactor;
                         }
                         if (style === 'slide-pop') {
-                            scaleAmt = (tIn < animDur || tOut < animDur) ? (0.7 + 0.3 * eased) : 1;
-                            alpha = Math.max(0.15, tIn < animDur ? eased : (tOut < animDur ? eased : 1));
+                            if (tOut < animDur) {
+                                scaleAmt = 0.7 + 0.3 * eased;
+                                alpha = Math.max(0.15, eased);
+                            } else if (effectiveTIn < animDur) {
+                                scaleAmt = 0.7 + 0.3 * eased;
+                                if (cycleIndex === 0) alpha = Math.max(0.15, eased);
+                            }
                         }
                     } else if (style === 'wipe' || style === 'highlight-sweep' || style === 'comparison-slide' || style === 'plane-banner-trail') {
                         // Directional reveal: a growing clip rectangle wipes the box's
                         // content into view from the entry edge, then wipes it away on exit.
-                        // 'highlight-sweep' reuses this exact reveal mechanic and additionally
-                        // paints a translucent marker-color bar in step with it (see the
-                        // drawing section below), so the content looks "highlighted on".
-                        // 'plane-banner-trail' also reuses it: the content (text/image)
-                        // reveals left-to-right exactly like sky-writing letters trailing
-                        // behind a plane; the plane + dashed trail itself is drawn on top
-                        // in the annotation section below, flying in lockstep with wipeFrac.
-                        if (tIn < animDur) {
-                            wipeFrac = brollEaseOut(tIn / animDur);
-                        } else if (tOut < animDur) {
+                        if (tOut < animDur) {
                             wipeFrac = brollEaseOut(tOut / animDur);
+                        } else if (effectiveTIn < animDur) {
+                            wipeFrac = brollEaseOut(effectiveTIn / animDur);
                         }
                     } else if (style === 'hanging-sign-swing') {
                         // A sign hung on a string from a fixed pin above the box: it
                         // lowers into place while swinging like a damped pendulum, then
                         // gently keeps swaying while on screen, and swings back up on exit.
-                        // The rotation pivot is the pin point (above the box), not the box
-                        // center, so this is handled with its own transform below rather
-                        // than the generic rotateAmt/scaleAmt path.
-                        if (tIn < animDur) {
-                            const p = Math.max(0, Math.min(1, tIn / animDur));
+                        if (tOut < animDur) {
+                            const p = Math.max(0, Math.min(1, tOut / animDur));
                             const dropEase = brollEaseOut(Math.min(1, p / 0.6));
                             offY = -(boxH * 0.7) * (1 - dropEase);
                             alpha = Math.max(0.25, dropEase);
                             const decay = Math.pow(1 - p, 1.5);
                             hangAngle = decay * Math.sin(p * Math.PI * 3.4) * (Math.PI / 8);
-                        } else if (tOut < animDur) {
-                            const p = Math.max(0, Math.min(1, tOut / animDur));
+                        } else if (effectiveTIn < animDur) {
+                            const p = Math.max(0, Math.min(1, effectiveTIn / animDur));
                             const dropEase = brollEaseOut(Math.min(1, p / 0.6));
-                            offY = -(boxH * 0.7) * (1 - dropEase);
-                            alpha = Math.max(0.25, dropEase);
+                            if (cycleIndex === 0) {
+                                offY = -(boxH * 0.7) * (1 - dropEase);
+                                alpha = Math.max(0.25, dropEase);
+                            }
                             const decay = Math.pow(1 - p, 1.5);
                             hangAngle = decay * Math.sin(p * Math.PI * 3.4) * (Math.PI / 8);
                         } else {
@@ -6936,79 +6940,72 @@ document.addEventListener('DOMContentLoaded', () => {
                         }
                     } else if (style === 'rotate-in') {
                         // Gentle spin-and-scale settle on the way in, mirrored on the way out.
-                        if (tIn < animDur) {
-                            const eased = brollEaseOut(tIn / animDur);
-                            rotateAmt = (1 - eased) * (Math.PI / 10);
-                            scaleAmt = 0.82 + 0.18 * eased;
-                            alpha = Math.max(0, eased);
-                        } else if (tOut < animDur) {
+                        if (tOut < animDur) {
                             const eased = brollEaseOut(tOut / animDur);
                             rotateAmt = -(1 - eased) * (Math.PI / 10);
                             scaleAmt = 0.82 + 0.18 * eased;
                             alpha = Math.max(0, eased);
+                        } else if (effectiveTIn < animDur) {
+                            const eased = brollEaseOut(effectiveTIn / animDur);
+                            rotateAmt = (1 - eased) * (Math.PI / 10);
+                            scaleAmt = 0.82 + 0.18 * eased;
+                            if (cycleIndex === 0) alpha = Math.max(0, eased);
                         }
                     } else if (style === 'bounce-in' || style === 'bounce-drop') {
                         // Drops in from off the top edge with a bouncy overshoot landing,
-                        // then bounces back out the same way at the end. ('bounce-drop' is
-                        // kept as an alias of 'bounce-in' — same effect, old PiP name.)
-                        if (tIn < animDur) {
-                            const eased = easeOutBackOvershoot(Math.max(0, Math.min(1, tIn / animDur)));
-                            offY = -(boxY + boxH) * (1 - eased);
-                            alpha = Math.max(0.15, eased);
-                        } else if (tOut < animDur) {
+                        // then bounces back out the same way at the end.
+                        if (tOut < animDur) {
                             const eased = easeOutBackOvershoot(Math.max(0, Math.min(1, tOut / animDur)));
                             offY = -(boxY + boxH) * (1 - eased);
                             alpha = Math.max(0.15, eased);
+                        } else if (effectiveTIn < animDur) {
+                            const eased = easeOutBackOvershoot(Math.max(0, Math.min(1, effectiveTIn / animDur)));
+                            const hopFactor = (repeatSec > 0 && cycleIndex > 0) ? Math.min(60, boxH * 0.5) : (boxY + boxH);
+                            offY = -hopFactor * (1 - eased);
+                            if (cycleIndex === 0) alpha = Math.max(0.15, eased);
                         }
                     } else if (style === 'spin-pop') {
                         // Spins in from a 60° offset while scaling up from 75%, settles flat.
-                        if (tIn < animDur) {
-                            const eased = easeOutBackOvershoot(Math.max(0, tIn / animDur));
-                            rotateAmt = (1 - eased) * (Math.PI / 3);
-                            scaleAmt = 0.75 + 0.25 * eased;
-                            alpha = Math.max(0.15, eased);
-                        } else if (tOut < animDur) {
+                        if (tOut < animDur) {
                             const eased = easeOutBackOvershoot(Math.max(0, tOut / animDur));
                             rotateAmt = -(1 - eased) * (Math.PI / 3);
                             scaleAmt = 0.75 + 0.25 * eased;
                             alpha = Math.max(0.15, eased);
+                        } else if (effectiveTIn < animDur) {
+                            const eased = easeOutBackOvershoot(Math.max(0, effectiveTIn / animDur));
+                            rotateAmt = (1 - eased) * (Math.PI / 3);
+                            scaleAmt = 0.75 + 0.25 * eased;
+                            if (cycleIndex === 0) alpha = Math.max(0.15, eased);
                         }
                     } else if (style === 'zoom-pop' || style === 'confetti-pop' || style === 'heart-burst' || style === 'cash-spin' || style === 'cash-stack' || style === 'question-bounce' || style === 'checkmark-pop' || style === 'magnifier-zoom' || style === 'badge-pop-dot' || style === 'comic-burst-text' || style === 'cta-button-arrow' || style === 'comic-speed-rays' || style === 'cursor-line-draw' || style === 'torn-paper-marker') {
-                        // Quick pop-in scale from 70% with a bouncy overshoot — distinct
-                        // from the slow continuous Ken Burns 'zoom' below. 'confetti-pop'
-                        // and 'heart-burst' reuse this exact box pop and additionally burst
-                        // colorful particles / hearts outward (drawn in the annotation section below).
-                        // 'badge-pop-dot' additionally lands on a small fixed tilt (like a
-                        // sticker slapped on at an angle) instead of landing flat.
-                        if (tIn < animDur) {
-                            const eased = easeOutBackOvershoot(Math.max(0, tIn / animDur));
-                            scaleAmt = 0.7 + 0.3 * eased;
-                            alpha = Math.max(0.15, eased);
-                            if (style === 'cash-spin') rotateAmt = (1 - eased) * Math.PI * 2;
-                            // Was -0.07 rad (~4°) — barely readable as a "tilted sticker".
-                            // -0.14 rad (~8°) is a clearly visible slap-on tilt.
-                            if (style === 'badge-pop-dot') rotateAmt = -0.14 * eased;
-                        } else if (tOut < animDur) {
+                        // Quick pop-in scale from 70% with a bouncy overshoot
+                        if (tOut < animDur) {
                             const eased = easeOutBackOvershoot(Math.max(0, tOut / animDur));
                             scaleAmt = 0.7 + 0.3 * eased;
                             alpha = Math.max(0.15, eased);
                             if (style === 'cash-spin') rotateAmt = -(1 - eased) * Math.PI * 2;
+                            if (style === 'badge-pop-dot') rotateAmt = -0.14 * eased;
+                        } else if (effectiveTIn < animDur) {
+                            const eased = easeOutBackOvershoot(Math.max(0, effectiveTIn / animDur));
+                            scaleAmt = 0.7 + 0.3 * eased;
+                            if (cycleIndex === 0) alpha = Math.max(0.15, eased);
+                            if (style === 'cash-spin') rotateAmt = (1 - eased) * Math.PI * 2;
                             if (style === 'badge-pop-dot') rotateAmt = -0.14 * eased;
                         } else if (style === 'badge-pop-dot') {
                             rotateAmt = -0.14; // stays gently tilted while held on screen
                         }
                     } else if (style === 'blur-pop') {
                         // Starts heavily blurred and small, sharpens and scales up to settle.
-                        if (tIn < animDur) {
-                            const eased = brollEaseOut(tIn / animDur);
-                            blurPx = Math.max(0, 1 - eased) * 10;
-                            scaleAmt = 0.85 + 0.15 * eased;
-                            alpha = Math.max(0, eased);
-                        } else if (tOut < animDur) {
+                        if (tOut < animDur) {
                             const eased = brollEaseOut(tOut / animDur);
                             blurPx = Math.max(0, 1 - eased) * 10;
                             scaleAmt = 0.85 + 0.15 * eased;
                             alpha = Math.max(0, eased);
+                        } else if (effectiveTIn < animDur) {
+                            const eased = brollEaseOut(effectiveTIn / animDur);
+                            blurPx = Math.max(0, 1 - eased) * 10;
+                            scaleAmt = 0.85 + 0.15 * eased;
+                            if (cycleIndex === 0) alpha = Math.max(0, eased);
                         }
                     } else if (style === 'typewriter') {
                         // No box-level fade-in — the character-by-character reveal drawn
@@ -7016,27 +7013,32 @@ document.addEventListener('DOMContentLoaded', () => {
                         // Exit still fades out normally like everything else.
                         if (tOut < animDur) alpha = Math.max(0, tOut / animDur);
                     } else {
-                        // 'fade', 'zoom', 'zoom-out', 'pan' and 'blur-focus' all fade
-                        // in/out at the edges of the range; 'blur-focus' layers a
-                        // sharpen-in/blur-out on top of that same fade envelope. The
-                        // actual zoom/pan *motion* for images is applied separately
-                        // below (it animates the source crop window, not the box).
-                        if (tIn < animDur) alpha = Math.max(0, tIn / animDur);
-                        if (tOut < animDur) alpha = Math.min(alpha, Math.max(0, tOut / animDur));
+                        // 'fade', 'zoom', 'zoom-out', 'pan' and 'blur-focus'
+                        if (tOut < animDur) {
+                            alpha = Math.min(alpha, Math.max(0, tOut / animDur));
+                        }
+                        if (cycleIndex === 0 && effectiveTIn < animDur) {
+                            alpha = Math.max(0, effectiveTIn / animDur);
+                        } else if (repeatSec > 0 && style === 'fade') {
+                            const p = Math.max(0, Math.min(1, cycleElapsed / repeatSec));
+                            alpha = 0.75 + 0.25 * Math.sin(p * Math.PI);
+                        }
                         if (style === 'blur-focus') {
                             let blurP = 0;
-                            if (tIn < animDur) blurP = Math.max(blurP, 1 - tIn / animDur);
                             if (tOut < animDur) blurP = Math.max(blurP, 1 - tOut / animDur);
+                            else if (effectiveTIn < animDur && (cycleIndex === 0 || repeatSec > 0)) blurP = Math.max(blurP, 1 - effectiveTIn / animDur);
                             blurPx = Math.max(0, Math.min(1, blurP)) * 14;
                         }
-                        if ((style === 'zoom' || style === 'zoom-out') && item.type === 'text') {
-                            // Images get a true Ken Burns source-crop zoom (below). For text
-                            // there's no source image to crop, so 'zoom'/'zoom-out' instead
-                            // continuously scale the text box itself over the item's full
-                            // duration, growing (zoom) or shrinking-from-large (zoom-out).
-                            const totalDur = Math.max(0.01, item.endSec - item.startSec);
-                            const p = Math.max(0, Math.min(1, tIn / totalDur));
-                            scaleAmt = (style === 'zoom-out') ? (1.18 - 0.18 * p) : (1 + 0.18 * p);
+                        if (style === 'zoom' || style === 'zoom-out') {
+                            if (repeatSec > 0) {
+                                const p = Math.max(0, Math.min(1, cycleElapsed / repeatSec));
+                                const pulse = Math.sin(p * Math.PI);
+                                scaleAmt = (style === 'zoom-out') ? (1.20 - 0.20 * pulse) : (1 + 0.20 * pulse);
+                            } else {
+                                const totalDur = Math.max(0.01, item.endSec - item.startSec);
+                                const p = Math.max(0, Math.min(1, tIn / totalDur));
+                                scaleAmt = (style === 'zoom-out') ? (1.18 - 0.18 * p) : (1 + 0.18 * p);
+                            }
                         }
                     }
                 }
@@ -7906,11 +7908,8 @@ document.addEventListener('DOMContentLoaded', () => {
                             sy = Math.max(0, Math.min(sy, imgDims.height - sh));
                         }
                     }
-                    if (brollAnimActive && (style === 'zoom' || style === 'zoom-out')) {
-                        // 'zoom' grows to 18% zoomed-in by the end; 'zoom-out' starts
-                        // 18% zoomed-in and eases back down to normal. Works identically
-                        // for a Fullscreen frame or a small PiP box — it just crops a
-                        // little tighter into whichever source region is being shown.
+                    if (brollAnimActive && (style === 'zoom' || style === 'zoom-out') && !fsSmall && item.mode === 'fullscreen' && repeatSec === 0) {
+                        // Fullscreen Ken Burns zoom (only for 100% fullscreen unlooped images; PiP and looped use box scaleAmt)
                         const totalDur = Math.max(0.01, item.endSec - item.startSec);
                         const zoomProgress = Math.max(0, Math.min(1, tIn / totalDur));
                         const zoom = style === 'zoom-out'
@@ -18368,18 +18367,13 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function drawBuiltInBroll(ctx, item, x, y, width, height, elapsed, animDuration) {
+        const repeatSec = parseFloat(item.autoRepeatSec) || 0;
+        const effectiveElapsed = (repeatSec > 0) ? (elapsed % repeatSec) : elapsed;
         if (item.builtInType === 'cash' || item.type === 'cash') {
-            drawCashBroll(ctx, item, x, y, width, height, elapsed, animDuration);
+            drawCashBroll(ctx, item, x, y, width, height, effectiveElapsed, animDuration);
             return;
         }
         if (item.builtInType === 'wings-brand') {
-            // Auto-repeat: if autoRepeatSec > 0, replay animation every N seconds
-            // so the logo stays visually alive for the whole duration of the B-roll.
-            const repeatSec = parseFloat(item.autoRepeatSec);
-            let effectiveElapsed = elapsed;
-            if (repeatSec > 0) {
-                effectiveElapsed = elapsed % repeatSec;
-            }
             drawWingsBrandBroll(ctx, item, x, y, width, height, effectiveElapsed);
             return;
         }
@@ -18388,7 +18382,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const cx = x + width / 2;
         const cy = y + height / 2;
         const duration = Math.max(0.1, animDuration || 0.55);
-        const drawProgress = Math.max(0, Math.min(1, elapsed / duration));
+        const drawProgress = Math.max(0, Math.min(1, effectiveElapsed / duration));
 
         ctx.save();
         ctx.translate(cx, cy);
