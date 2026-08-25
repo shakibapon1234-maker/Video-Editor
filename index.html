@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
@@ -886,6 +886,16 @@
                                             <option value="spin_out">Spin Out to Fit</option>
                                             <option value="zoom_rotate">Zoom + Rotate to Fit</option>
                                         </optgroup>
+                                        <optgroup label="Cinematic (রিলস স্পেশাল)">
+                                            <option value="shatter">💎 Glass Shatter (কাচ ভাঙা)</option>
+                                            <option value="warp_zoom">🚀 Warp Zoom (ওয়ার্প জুম)</option>
+                                            <option value="portal_ripple">🌀 Portal Ripple (পোর্টাল রিপল)</option>
+                                        </optgroup>
+                                        <optgroup label="3D Motion">
+                                            <option value="flip_3d_y">🧊 3D Flip Left/Right</option>
+                                            <option value="flip_3d_x">🧊 3D Flip Up/Down</option>
+                                            <option value="spin_3d">🧊 3D Spin Rotate</option>
+                                        </optgroup>
                                         <optgroup label="Glitch">
                                             <option value="glitch">Digital Glitch</option>
                                         </optgroup>
@@ -1482,6 +1492,9 @@
                                 <button type="button" class="step3-subtab-btn" data-card="news-ticker" id="subtab-btn-ticker">
                                     <i class="fa-solid fa-rss"></i> 📰 Ticker
                                 </button>
+                                <button type="button" class="step3-subtab-btn" data-card="glass-cards" id="subtab-btn-glass-cards">
+                                    <i class="fa-solid fa-layer-group"></i> 🫧 Glass Cards
+                                </button>
                                 <button type="button" class="step3-subtab-btn" data-card="find-replace" id="subtab-btn-find">
                                     <i class="fa-solid fa-magnifying-glass"></i> 🔍 Find &amp; Replace
                                 </button>
@@ -1494,6 +1507,59 @@
                                 <button type="button" class="shortcuts-help-btn" id="show-shortcuts-modal-btn" onclick="openShortcutsModal();">
                                     <i class="fa-solid fa-keyboard"></i> ⌨️ Shortcuts Help
                                 </button>
+                            </div>
+                        </div>
+
+                        <!-- Glassmorphism Card Stack Overlay Panel -->
+                        <div class="card" id="card-glass-cards">
+                            <div class="card-header" style="display:flex; align-items:center; justify-content:space-between;">
+                                <div style="display:flex; align-items:center; gap:8px;">
+                                    <i class="fa-solid fa-layer-group card-icon" style="color:#38bdf8;"></i>
+                                    <h3>Glass Card Stack (গ্লাস কার্ড স্ট্যাক)</h3>
+                                </div>
+                                <label class="switch">
+                                    <input type="checkbox" id="glass-cards-enable">
+                                    <span class="slider round"></span>
+                                </label>
+                            </div>
+                            <div class="card-body">
+                                <p class="help-text">ভিডিওর ওপর প্রফেশনাল মোশন গ্রাফিক্স কার্ড (যেমন: Advantage+ Campaign, AI Target, ROAS) ক্রমান্বয়ে ভেসে উঠবে।</p>
+                                
+                                <div class="control-group mt-2">
+                                    <label>Position (কার্ডের পজিশন)</label>
+                                    <select id="glass-cards-pos" class="form-select">
+                                        <option value="bottom-right" selected>Bottom Right (নিচে ডানে)</option>
+                                        <option value="bottom-left">Bottom Left (নিচে বামে)</option>
+                                        <option value="center">Center (মাঝামাঝি)</option>
+                                    </select>
+                                </div>
+
+                                <div style="display:grid; grid-template-columns: 1fr 1fr; gap:10px;" class="mt-3">
+                                    <div class="control-group">
+                                        <label>Start Time (সেকেন্ড)</label>
+                                        <input type="number" id="glass-cards-start" class="form-input" min="0" step="0.5" value="0">
+                                    </div>
+                                    <div class="control-group">
+                                        <label>Duration (সেকেন্ড)</label>
+                                        <input type="number" id="glass-cards-dur" class="form-input" min="1" step="0.5" value="5">
+                                    </div>
+                                </div>
+
+                                <div class="control-group mt-3">
+                                    <label>Glow Accent Color (থিম কালার)</label>
+                                    <input type="color" id="glass-cards-color" value="#38bdf8" style="width:100%; height:36px; border-radius:6px; border:1px solid rgba(255,255,255,0.15); cursor:pointer;">
+                                </div>
+
+                                <hr class="mt-3 mb-3" style="border-color: rgba(255,255,255,0.08);">
+                                
+                                <div style="display:flex; align-items:center; justify-content:space-between;" class="mb-2">
+                                    <label style="margin:0; font-weight:600;"><i class="fa-solid fa-list-check"></i> Stack Cards (কার্ডের তালিকা)</label>
+                                    <button type="button" id="add-glass-card-item-btn" class="btn btn-outline" style="font-size:12px; padding:4px 10px;"><i class="fa-solid fa-plus"></i> Add Card</button>
+                                </div>
+
+                                <div id="glass-cards-items-list">
+                                    <!-- Populated by glass-cards.js -->
+                                </div>
                             </div>
                         </div>
 
@@ -1800,6 +1866,14 @@
                                 <div class="control-group mt-2">
                                     <label>Text Animation (টেক্সট অ্যানিমেশন)</label>
                                     <select id="text-overlay-anim-select" class="form-select">
+                                        <optgroup label="3D &amp; Cinematic Reels (রিলস স্পেশাল)">
+                                            <option value="3d-pop-tilt">🔥 3D Pop &amp; Tilt (3D প্রফেশনাল পপ-ইন)</option>
+                                            <option value="neon-blur-in">💡 Neon Glow Blur-In (নিয়ন ফোকাস ব্লার)</option>
+                                            <option value="glass-badge-in">🫧 Glass Badge Slide (গ্লাস ব্যাজ স্লাইড)</option>
+                                            <option value="word-3d-stagger">🎯 Word 3D Tilt Stagger (প্রতি শব্দে 3D টিল্ট)</option>
+                                            <option value="letter-track-expand">↔️ Letter Tracking Expand (অক্ষর এক্সপান্ড)</option>
+                                            <option value="shockwave-pop">💥 Shockwave Pop (শকওয়েভ বার্স্ট)</option>
+                                        </optgroup>
                                         <optgroup label="Entry / Exit">
                                             <option value="none">None</option>
                                             <option value="fade">Fade</option>
@@ -2026,6 +2100,14 @@
                                 <div class="control-group mt-3" id="text-overlay-box-anim-group">
                                     <label>Box Animation (বক্সের অ্যানিমেশন)</label>
                                     <select id="text-overlay-box-anim-select" class="form-select">
+                                        <optgroup label="3D &amp; Cinematic Reels (রিলস স্পেশাল)">
+                                            <option value="3d-pop-tilt">🔥 3D Pop &amp; Tilt (3D প্রফেশনাল পপ-ইন)</option>
+                                            <option value="neon-blur-in">💡 Neon Glow Blur-In (নিয়ন ফোকাস ব্লার)</option>
+                                            <option value="glass-badge-in">🫧 Glass Badge Slide (গ্লাস ব্যাজ স্লাইড)</option>
+                                            <option value="word-3d-stagger">🎯 Word 3D Tilt Stagger (প্রতি শব্দে 3D টিল্ট)</option>
+                                            <option value="letter-track-expand">↔️ Letter Tracking Expand (অক্ষর এক্সপান্ড)</option>
+                                            <option value="shockwave-pop">💥 Shockwave Pop (শকওয়েভ বার্স্ট)</option>
+                                        </optgroup>
                                         <optgroup label="Entry / Exit">
                                             <option value="none">None</option>
                                             <option value="fade">Fade</option>
@@ -2238,6 +2320,12 @@
                                         <button type="button" id="add-built-checkmark-btn" class="btn btn-outline" title="Checkmark"><i class="fa-solid fa-check"></i> Checkmark (✔️)</button>
                                         <button type="button" id="add-built-crossmark-btn" class="btn btn-outline" title="Cross Mark"><i class="fa-solid fa-xmark"></i> Cross Mark (❌)</button>
                                         <button type="button" id="add-built-magnifier-btn" class="btn btn-outline" title="Magnifying Glass"><i class="fa-solid fa-magnifying-glass"></i> Magnifier (🔍)</button>
+                                        <button type="button" id="add-floating-coins-btn" class="btn btn-outline" title="Floating Coins"><i class="fa-solid fa-coins"></i> 🪙 Coins Float (টাকা)</button>
+                                        <button type="button" id="add-growth-chart-btn" class="btn btn-outline" title="Growth Chart"><i class="fa-solid fa-chart-line"></i> 📈 Growth Chart (গ্রাফ)</button>
+                                        <button type="button" id="add-like-burst-btn" class="btn btn-outline" title="Reaction Burst"><i class="fa-solid fa-heart-circle-bolt"></i> ❤️ Reaction Burst</button>
+                                        <button type="button" id="add-speedometer-btn" class="btn btn-outline" title="Speedometer / ROAS"><i class="fa-solid fa-gauge-high"></i> 🏎️ Speedometer</button>
+                                        <button type="button" id="add-glass-card-btn" class="btn btn-outline" title="Glass Card"><i class="fa-solid fa-id-card"></i> 🫧 Glass Card</button>
+                                        <button type="button" id="add-floating-emoji-btn" class="btn btn-outline" title="Floating Emojis"><i class="fa-solid fa-face-smile"></i> 😍 Emojis Stream</button>
                                         <button type="button" id="add-wings-brand-btn" class="btn btn-outline" title="Wings Fly Brand Reveal" style="grid-column: span 2; background: linear-gradient(135deg,#0ea5e9,#1e3a8a); color:#fff; border:none;"><i class="fa-solid fa-star"></i> 🎆 Wings Fly ব্র্যান্ড লোগো (Animated)</button>
                                     </div>
                                     <p class="help-text mt-1">চিহ্নগুলো স্ক্রিনে আসবে, যা আপনি নিজের মতো পজিশনে বসাতে ও রিসাইজ করতে পারবেন। টাকার অ্যানিমেশনে বাংলাদেশি ১০০০ টাকার নোটের ছবি ব্যবহার করা হবে।</p>
@@ -4637,5 +4725,6 @@
 
     <script src="punch-zoom-ui.js?v=4"></script>
     <script src="ui-customization.js?v=6"></script>
+    <script src="glass-cards.js?v=1"></script>
 </body>
 </html>

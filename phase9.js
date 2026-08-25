@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Studio Flow — Phase 9 feature module
  * Split/Freeze/PIP were implemented earlier in editor.js.
  * This module adds the remaining Phase 9 plan items.
@@ -1411,6 +1411,140 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
 
+        if (type === 'shatter') {
+            const w = state.canvas.width, h = state.canvas.height;
+            ctx.save();
+            drawOutgoing();
+            ctx.restore();
+
+            transitionCanvas.width = w;
+            transitionCanvas.height = h;
+            transitionCtx.clearRect(0, 0, w, h);
+            transitionCtx.drawImage(state.canvas, 0, 0, w, h);
+
+            ctx.clearRect(0, 0, w, h);
+            ctx.save();
+            drawIncoming();
+            ctx.restore();
+
+            const shards = 20;
+            const shardAlpha = Math.max(0, 1 - p * 1.5);
+            for (let i = 0; i < shards; i++) {
+                const seed = i * 43.17;
+                const angle = ((seed * 7.3) % (Math.PI * 2));
+                const dist = p * Math.min(w, h) * (0.3 + ((seed % 10) / 10) * 0.5);
+                const rot = (p * ((seed % 5) - 2) * Math.PI);
+                const sx = ((i % 5) / 5) * w;
+                const sy = (Math.floor(i / 5) / 4) * h;
+                const sw = w / 5;
+                const sh = h / 4;
+                const cx = sx + sw / 2;
+                const cy = sy + sh / 2;
+                const tx = cx + Math.cos(angle) * dist;
+                const ty = cy + Math.sin(angle) * dist;
+
+                ctx.save();
+                ctx.globalAlpha = shardAlpha;
+                ctx.translate(tx, ty);
+                ctx.rotate(rot);
+                ctx.scale(Math.max(0.01, 1 - p * 0.4), Math.max(0.01, 1 - p * 0.4));
+                ctx.translate(-cx, -cy);
+                ctx.beginPath();
+                ctx.rect(sx, sy, sw, sh);
+                ctx.clip();
+                ctx.drawImage(transitionCanvas, 0, 0, w, h);
+                ctx.restore();
+            }
+            return;
+        }
+
+        if (type === 'warp_zoom') {
+            const w = state.canvas.width, h = state.canvas.height;
+            const cx = w / 2, cy = h / 2;
+            ctx.save();
+            drawOutgoing();
+            ctx.restore();
+
+            const layers = 5;
+            for (let i = 0; i < layers; i++) {
+                const layerP = i / (layers - 1);
+                const scale = 0.15 + p * (1.2 + layerP * 0.6);
+                const alpha = (p > 0.05 ? (1 / layers) : 0) * (1 - layerP * 0.5) * Math.min(1, p * 2);
+                if (alpha <= 0.01) continue;
+                ctx.save();
+                ctx.globalAlpha = alpha;
+                ctx.translate(cx, cy);
+                ctx.scale(scale, scale);
+                ctx.translate(-cx, -cy);
+                drawIncoming();
+                ctx.restore();
+            }
+            if (p > 0.6) {
+                ctx.save();
+                ctx.globalAlpha = (p - 0.6) / 0.4;
+                drawIncoming();
+                ctx.restore();
+            }
+            return;
+        }
+
+        if (type === 'portal_ripple') {
+            const w = state.canvas.width, h = state.canvas.height;
+            const cx = w / 2, cy = h / 2;
+            const maxR = Math.sqrt(w * w + h * h) / 2;
+            const radius = Math.max(0.1, p * maxR);
+            ctx.save();
+            drawOutgoing();
+            ctx.restore();
+
+            ctx.save();
+            ctx.beginPath();
+            ctx.arc(cx, cy, radius, 0, Math.PI * 2);
+            ctx.clip();
+            drawIncoming();
+            ctx.restore();
+
+            ctx.save();
+            ctx.strokeStyle = '#22d3ee';
+            ctx.shadowColor = '#22d3ee';
+            ctx.shadowBlur = 16;
+            ctx.lineWidth = Math.max(2, 6 * (1 - p));
+            ctx.globalAlpha = Math.max(0, 1 - p * 1.2);
+            ctx.beginPath();
+            ctx.arc(cx, cy, radius, 0, Math.PI * 2);
+            ctx.stroke();
+            ctx.restore();
+            return;
+        }
+
+        if (['flip_3d_y', 'flip_3d_x', 'spin_3d'].includes(type)) {
+            const w = state.canvas.width, h = state.canvas.height;
+            const cx = w / 2, cy = h / 2;
+            const isFirstHalf = p < 0.5;
+            const halfP = isFirstHalf ? p * 2 : (p - 0.5) * 2;
+            const cosVal = Math.cos(halfP * (Math.PI / 2));
+
+            ctx.save();
+            ctx.translate(cx, cy);
+            if (type === 'flip_3d_y') {
+                ctx.scale(isFirstHalf ? cosVal : (1 - cosVal), 1);
+            } else if (type === 'flip_3d_x') {
+                ctx.scale(1, isFirstHalf ? cosVal : (1 - cosVal));
+            } else if (type === 'spin_3d') {
+                ctx.scale(isFirstHalf ? cosVal : (1 - cosVal), isFirstHalf ? cosVal : (1 - cosVal));
+                ctx.rotate(p * Math.PI * 2);
+            }
+            ctx.translate(-cx, -cy);
+
+            if (isFirstHalf) {
+                drawOutgoing();
+            } else {
+                drawIncoming();
+            }
+            ctx.restore();
+            return;
+        }
+
         // Crossfade / push / wipe — draw outgoing then incoming with composite
         ctx.save();
         if (type === 'crossfade') ctx.globalAlpha = 1 - p;
@@ -1436,12 +1570,6 @@ document.addEventListener('DOMContentLoaded', () => {
         drawIncoming();
         ctx.restore();
     };
-
-    // Speed Ramping (Phase 11): during playback, video.currentTime moves
-    // across the clip's 3 fixed segments — this keeps playbackRate in sync
-    // as each boundary is crossed. No-op (never fires a rate change) for
-    // clips without ramping enabled, since getClipSpeedAtSourceTime then
-    // just returns the same constant clip.speed every time.
     let lastRampSpeedApplied = null;
     if (state.video) {
         state.video.addEventListener('timeupdate', () => {

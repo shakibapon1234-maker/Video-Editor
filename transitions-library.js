@@ -79,6 +79,14 @@
             ]
         },
         {
+            label: 'Cinematic', icon: 'fa-wand-magic-sparkles',
+            items: [
+                { type: 'shatter', label: 'Glass Shatter' },
+                { type: 'warp_zoom', label: 'Warp Zoom' },
+                { type: 'portal_ripple', label: 'Portal Ripple' }
+            ]
+        },
+        {
             label: 'Smoke & Fog', icon: 'fa-smog',
             items: [
                 { type: 'smoke_dissolve', label: 'Smoke Dissolve' }
@@ -92,7 +100,8 @@
         wipe_right: 'fa-droplet', wipe_left: 'fa-droplet',
         zoom_in: 'fa-magnifying-glass', zoom_out: 'fa-magnifying-glass',
         spin_in: 'fa-magnifying-glass', spin_out: 'fa-magnifying-glass', zoom_rotate: 'fa-magnifying-glass',
-        glitch: 'fa-bolt', flip_3d_y: 'fa-cube', flip_3d_x: 'fa-cube', spin_3d: 'fa-cube', smoke_dissolve: 'fa-smog'
+        glitch: 'fa-bolt', flip_3d_y: 'fa-cube', flip_3d_x: 'fa-cube', spin_3d: 'fa-cube', smoke_dissolve: 'fa-smog',
+        shatter: 'fa-gem', warp_zoom: 'fa-maximize', portal_ripple: 'fa-circle-dot'
     };
 
     function afterAssign(label) {

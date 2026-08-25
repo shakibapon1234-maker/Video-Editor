@@ -1,4 +1,4 @@
-// ============================================================
+﻿// ============================================================
 // Wings Fly Brand Reveal -- embedded logo assets (v1.0)
 // Combines the Wings Fly gold badge, the Wings Fly wordmark, and the
 // NSDA (National Skills Development Authority) recognition seal into
@@ -43,7 +43,7 @@ function getWingsBrandNsdaImg() {
 //   0.35s - firework burst #2 (staggered, slightly wider)
 //   0.42s - blue wordmark slides up and settles under the badge
 //   0.78s - NSDA seal pops in bottom-right with a pulsing focus-glow ring
-//           and a small "NSDA অনুমোদিত" caption -- this pulse continues
+//           and a small "NSDA à¦…à¦¨à§à¦®à§‹à¦¦à¦¿à¦¤" caption -- this pulse continues
 //           for as long as the B-roll stays on screen, so the NSDA
 //           authorization stays visually in focus, not just a quick flash.
 function drawWingsBrandBroll(ctx, item, x, y, width, height, elapsed) {
@@ -170,7 +170,7 @@ function drawWingsBrandBroll(ctx, item, x, y, width, height, elapsed) {
             ctx.textBaseline = 'middle';
             const labelX = nsdaCx + nsdaD / 2 * 0.85;
             const labelY = nsdaCy;
-            const label = 'NSDA অনুমোদিত';
+            const label = 'NSDA à¦…à¦¨à§à¦®à§‹à¦¦à¦¿à¦¤';
             const labelW = ctx.measureText(label).width + labelSize * 0.9;
             const labelH = labelSize * 1.5;
             const rx = labelSize * 0.4;
@@ -193,10 +193,10 @@ function drawWingsBrandBroll(ctx, item, x, y, width, height, elapsed) {
 // ============================================================
 // Blank Page Animated Background Engine (v1.0)
 // Themes extracted from Wings Fly projects by the same author:
-//   "space"       — Wings Fly Public Site (stars + glowing planets)
-//   "holographic" — Wings Fly Academy Dashboard (tech grid + orbs)
-//   "aurora"      — Bonus: sweeping aurora borealis gradients
-//   "water"       — Wings Fly Lagoon: sunlit water + floating logo
+//   "space"       â€” Wings Fly Public Site (stars + glowing planets)
+//   "holographic" â€” Wings Fly Academy Dashboard (tech grid + orbs)
+//   "aurora"      â€” Bonus: sweeping aurora borealis gradients
+//   "water"       â€” Wings Fly Lagoon: sunlit water + floating logo
 // ============================================================
 
 // Lazily-loaded, cached logo used by the "water" theme's floating
@@ -212,7 +212,7 @@ function getWaterLogoImg() {
 }
 
 // Draws a wavy, fading reflection of `img` directly beneath a
-// floating object — sliced into thin horizontal bands, each nudged
+// floating object â€” sliced into thin horizontal bands, each nudged
 // sideways by a slow sine wave so the reflection ripples like real
 // water, then faded out with depth.
 function drawWaterReflection(ctx, img, cx, topY, size, t, seed) {
@@ -302,7 +302,7 @@ function drawBlankPageAnimation(ctx, W, H, item, timeSec) {
     ctx.save();
 
     if (theme === 'space') {
-        // ── THEME 1: Wings Fly Public Site ──────────────────────
+        // â”€â”€ THEME 1: Wings Fly Public Site â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
         // Deep space: purple/red shifting gradient + twinkling
         // stars + two glowing floating planets
 
@@ -427,7 +427,7 @@ function drawBlankPageAnimation(ctx, W, H, item, timeSec) {
         }
 
     } else if (theme === 'holographic') {
-        // ── THEME 2: Wings Fly Academy Dashboard ────────────────
+        // â”€â”€ THEME 2: Wings Fly Academy Dashboard â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
         // Dark base + animated grid + glowing growing bubbles/orbs
 
         // 1) Dark base
@@ -450,12 +450,12 @@ function drawBlankPageAnimation(ctx, W, H, item, timeSec) {
             ctx.fillRect(0, 0, W, H);
         });
 
-        // 3) Animated tech grid — faster movement, clearly visible
+        // 3) Animated tech grid â€” faster movement, clearly visible
         const gridSize = Math.min(W, H) * 0.10;
-        const gridOffset = (t % 4) / 4 * gridSize; // 4s cycle — very visible
+        const gridOffset = (t % 4) / 4 * gridSize; // 4s cycle â€” very visible
         ctx.save();
         ctx.translate(gridOffset, gridOffset);
-        // Major grid lines — teal, clearly visible
+        // Major grid lines â€” teal, clearly visible
         ctx.strokeStyle = `rgba(0,217,255,${0.12 + 0.06 * Math.sin(t * 0.8)})`;
         ctx.lineWidth = 1;
         for (let x = -gridSize * 2; x < W + gridSize; x += gridSize) {
@@ -506,7 +506,7 @@ function drawBlankPageAnimation(ctx, W, H, item, timeSec) {
             ctx.restore();
         });
 
-        // 5) Floating particles (small dots orbiting) — reduced count for performance
+        // 5) Floating particles (small dots orbiting) â€” reduced count for performance
         const rngH = (seed) => { const x = Math.sin(seed * 9301 + 49297) * 23357; return x - Math.floor(x); };
         const particleCount = isExporting ? 6 : 12;
         for (let i = 0; i < particleCount; i++) {
@@ -536,7 +536,7 @@ function drawBlankPageAnimation(ctx, W, H, item, timeSec) {
         ctx.fillRect(0, scanY - 60, W, 120);
 
     } else if (theme === 'aurora') {
-        // ── THEME 3: Aurora Borealis (Bonus) ────────────────────
+        // â”€â”€ THEME 3: Aurora Borealis (Bonus) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
         // Dark navy base + sweeping curtains of green/teal/purple
 
         ctx.fillStyle = '#020c1b';
@@ -585,7 +585,7 @@ function drawBlankPageAnimation(ctx, W, H, item, timeSec) {
         ctx.restore();
 
     } else if (theme === 'skyflight') {
-        // ── THEME 4: Sky Flight ──────────────────────────────────
+        // â”€â”€ THEME 4: Sky Flight â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
         // Bright daytime sky, drifting clouds, sun glow and an
         // airplane cruising across the frame trailing a soft contrail.
 
@@ -709,7 +709,7 @@ function drawBlankPageAnimation(ctx, W, H, item, timeSec) {
         }
 
     } else if (theme === 'nightflight') {
-        // ── THEME 5: Night Flight ────────────────────────────────
+        // â”€â”€ THEME 5: Night Flight â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
         // Deep night sky with stars, a city skyline glittering below,
         // and a plane crossing with blinking navigation lights.
 
@@ -836,7 +836,7 @@ function drawBlankPageAnimation(ctx, W, H, item, timeSec) {
         }
 
     } else if (theme === 'cloudsunset') {
-        // ── THEME 6: Cloud Sunset ────────────────────────────────
+        // â”€â”€ THEME 6: Cloud Sunset â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
         // Warm dusk gradient over layered clouds with a plane
         // silhouette gliding past the sun.
 
@@ -931,7 +931,7 @@ function drawBlankPageAnimation(ctx, W, H, item, timeSec) {
             ctx.restore();
         }
     } else if (theme === 'water') {
-        // ── THEME 7: Wings Fly Lagoon ────────────────────────────
+        // â”€â”€ THEME 7: Wings Fly Lagoon â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
         // Sunlit water body with drifting caustic light, rippling
         // surface texture, rising bubbles, and the academy emblem
         // floating on the surface with a rippled reflection below.
@@ -1114,13 +1114,13 @@ window.VideoEditor = {
     brightness: 100,
     contrast: 100,
     saturation: 100,
-    vignetteIntensity: 0, // 0-100, independent of filterPreset — combines with any preset
+    vignetteIntensity: 0, // 0-100, independent of filterPreset â€” combines with any preset
     duotoneEnabled: false,
     duotoneShadowColor: '#1a1a4d',
     duotoneHighlightColor: '#ffcc00',
-    filmGrainIntensity: 0, // 0-100, independent overlay — see film-grain.js
+    filmGrainIntensity: 0, // 0-100, independent overlay â€” see film-grain.js
 
-    // Advanced Color Grading — custom per-channel RGB curves (Phase 4C)
+    // Advanced Color Grading â€” custom per-channel RGB curves (Phase 4C)
     colorGradeEnabled: false,
     gradeRShadow: 0, gradeRMid: 0, gradeRHigh: 0,
     gradeGShadow: 0, gradeGMid: 0, gradeGHigh: 0,
@@ -1190,7 +1190,7 @@ window.VideoEditor = {
     symbolRotateStartRotation: 0,
 
     // Shape + Text Overlays (Word-style shapes: ribbon banner, wavy banner,
-    // thought cloud, 6-point star, oval callout) — user types text on top.
+    // thought cloud, 6-point star, oval callout) â€” user types text on top.
     shapeOverlays: [],
     selectedShapeOverlayId: null,
     isDraggingShapeOverlay: false,
@@ -1251,7 +1251,7 @@ window.VideoEditor = {
     blurDrawStartX: 0,
     blurDrawStartY: 0,
 
-    // Video highlights / callouts — normalized to the rendered video rectangle
+    // Video highlights / callouts â€” normalized to the rendered video rectangle
     highlights: [],
     selectedHighlightId: null,
     isAddingHighlight: false,
@@ -1265,7 +1265,7 @@ window.VideoEditor = {
     highlightFreehandSegmentStart: null,
     highlightPreviewPoint: null,
 
-    // Background Fill Regions — solid colour rectangles drawn on top of everything
+    // Background Fill Regions â€” solid colour rectangles drawn on top of everything
     fillRegions: [],
     selectedFillId: null,
     isAddingFill: false,
@@ -1323,14 +1323,14 @@ window.VideoEditor = {
     clips: [],
     activeClipId: null,
 
-    // Multi-Track Timeline (Phase 11, step 1 — data model + UI only).
+    // Multi-Track Timeline (Phase 11, step 1 â€” data model + UI only).
     // Extra layered tracks that sit alongside the main `clips` timeline above.
     // Each track: { id, name, type: 'video'|'image'|'audio', muted, volume, clips: [...] }
     // Each track clip: { id, type, url, file, name, duration (full source length),
     //   sourceStart, sourceEnd (trim window within the source),
     //   timelineOffset (seconds, position on the shared timeline) }
     // NOTE: rendering these into the live canvas preview/export is a later step
-    // (see PHASE11_ADVANCED_EDITING_PLAN.txt) — this step only stores and lets
+    // (see PHASE11_ADVANCED_EDITING_PLAN.txt) â€” this step only stores and lets
     // the user arrange the data safely without affecting today's single-track render.
     extraTracks: [],
 
@@ -1407,7 +1407,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const imageDurationApplyAllBtn = document.getElementById('image-duration-apply-all-btn');
     const quickApplyDurationAllBtn = document.getElementById('quick-apply-duration-all-btn');
 
-    // Shows/hides the "ছবির সময়কাল (Image Duration)" control based on whether
+    // Shows/hides the "à¦›à¦¬à¦¿à¦° à¦¸à¦®à¦¯à¦¼à¦•à¦¾à¦² (Image Duration)" control based on whether
     // the currently active clip or any clip is a still image, and fills it with that
     // clip's current length.
     function syncImageDurationUI() {
@@ -1430,7 +1430,7 @@ document.addEventListener('DOMContentLoaded', () => {
             quickApplyDurationAllBtn.style.display = (imageCount > 1 && clip && clip.type === 'image') ? 'inline-block' : 'none';
             if (clip && clip.type === 'image') {
                 const dur = (clip.end - clip.start || clip.duration || 5.0).toFixed(1);
-                quickApplyDurationAllBtn.innerText = `⏱️ সব ছবিতে ${dur}s প্রয়োগ করুন`;
+                quickApplyDurationAllBtn.innerText = `â±ï¸ à¦¸à¦¬ à¦›à¦¬à¦¿à¦¤à§‡ ${dur}s à¦ªà§à¦°à¦¯à¦¼à§‹à¦— à¦•à¦°à§à¦¨`;
             }
         }
     }
@@ -1440,13 +1440,13 @@ document.addEventListener('DOMContentLoaded', () => {
         imageDurationApplyBtn.addEventListener('click', () => {
             const clip = state.clips && state.clips.find(c => c.id === state.activeClipId);
             if (!clip || clip.type !== 'image') {
-                if (window.showToast) window.showToast('দয়া করে প্রথমে টাইমলাইনে একটি ছবি সিলেক্ট করুন।', 'warning');
+                if (window.showToast) window.showToast('à¦¦à§Ÿà¦¾ à¦•à¦°à§‡ à¦ªà§à¦°à¦¥à¦®à§‡ à¦Ÿà¦¾à¦‡à¦®à¦²à¦¾à¦‡à¦¨à§‡ à¦à¦•à¦Ÿà¦¿ à¦›à¦¬à¦¿ à¦¸à¦¿à¦²à§‡à¦•à§à¦Ÿ à¦•à¦°à§à¦¨à¥¤', 'warning');
                 return;
             }
 
             let newDuration = parseFloat(imageDurationInput.value);
             if (!newDuration || isNaN(newDuration) || newDuration <= 0) {
-                alert('সঠিক একটি সময় (সেকেন্ডে) দিন।');
+                alert('à¦¸à¦ à¦¿à¦• à¦à¦•à¦Ÿà¦¿ à¦¸à¦®à¦¯à¦¼ (à¦¸à§‡à¦•à§‡à¦¨à§à¦¡à§‡) à¦¦à¦¿à¦¨à¥¤');
                 return;
             }
             newDuration = Math.min(600, Math.max(0.5, newDuration));
@@ -1475,21 +1475,21 @@ document.addEventListener('DOMContentLoaded', () => {
             } else if (window.triggerAutoSave) {
                 window.triggerAutoSave();
             }
-            if (window.showToast) window.showToast(`এই ছবির সময়কাল ${newDuration.toFixed(1)}s করা হয়েছে`, 'success');
+            if (window.showToast) window.showToast(`à¦à¦‡ à¦›à¦¬à¦¿à¦° à¦¸à¦®à§Ÿà¦•à¦¾à¦² ${newDuration.toFixed(1)}s à¦•à¦°à¦¾ à¦¹à§Ÿà§‡à¦›à§‡`, 'success');
         });
     }
 
     function applyDurationToAllImages(durationToApply) {
         let newDuration = parseFloat(durationToApply);
         if (!newDuration || isNaN(newDuration) || newDuration <= 0) {
-            alert('সঠিক একটি সময় (সেকেন্ডে) দিন।');
+            alert('à¦¸à¦ à¦¿à¦• à¦à¦•à¦Ÿà¦¿ à¦¸à¦®à¦¯à¦¼ (à¦¸à§‡à¦•à§‡à¦¨à§à¦¡à§‡) à¦¦à¦¿à¦¨à¥¤');
             return;
         }
         newDuration = Math.min(600, Math.max(0.5, newDuration));
 
         const imageClips = (state.clips || []).filter(clip => clip.type === 'image');
         if (!imageClips.length) {
-            alert('একসাথে প্রয়োগ করার জন্য কোনো ছবি নেই।');
+            alert('à¦à¦•à¦¸à¦¾à¦¥à§‡ à¦ªà§à¦°à¦¯à¦¼à§‹à¦— à¦•à¦°à¦¾à¦° à¦œà¦¨à§à¦¯ à¦•à§‹à¦¨à§‹ à¦›à¦¬à¦¿ à¦¨à§‡à¦‡à¥¤');
             return;
         }
 
@@ -1520,9 +1520,9 @@ document.addEventListener('DOMContentLoaded', () => {
             window.triggerAutoSave();
         }
         if (window.showToast) {
-            window.showToast(`সবগুলো (${imageClips.length}টি) ছবির সময়কাল ${newDuration.toFixed(1)}s করা হয়েছে!`, 'success');
+            window.showToast(`à¦¸à¦¬à¦—à§à¦²à§‹ (${imageClips.length}à¦Ÿà¦¿) à¦›à¦¬à¦¿à¦° à¦¸à¦®à§Ÿà¦•à¦¾à¦² ${newDuration.toFixed(1)}s à¦•à¦°à¦¾ à¦¹à§Ÿà§‡à¦›à§‡!`, 'success');
         } else {
-            alert(`সবগুলো (${imageClips.length}টি) ছবির সময়কাল ${newDuration.toFixed(1)}s করা হয়েছে!`);
+            alert(`à¦¸à¦¬à¦—à§à¦²à§‹ (${imageClips.length}à¦Ÿà¦¿) à¦›à¦¬à¦¿à¦° à¦¸à¦®à§Ÿà¦•à¦¾à¦² ${newDuration.toFixed(1)}s à¦•à¦°à¦¾ à¦¹à§Ÿà§‡à¦›à§‡!`);
         }
     }
     window.applyDurationToAllImages = applyDurationToAllImages;
@@ -1560,7 +1560,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const videoVolumeVal = document.getElementById('video-volume-val');
 
     // Step 2 "Quick Volume" mirror control, kept in sync with the Step 3 slider above.
-    // (The old Background Music quick-volume mirror here was removed in v2.3 — with
+    // (The old Background Music quick-volume mirror here was removed in v2.3 â€” with
     // multiple music tracks now possible, a single "quick" slider no longer maps to
     // one clear value. Each track's volume is set in its own row in Step 3 instead.)
     const videoVolumeSliderStep2 = document.getElementById('video-volume-slider-step2');
@@ -1751,7 +1751,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 const msg = state.video.error ? state.video.error.message : '';
                 videoDropzone.querySelector('h3').innerText = originalText;
                 isVideoLoading = false;
-                alert(`ভিডিও লোড হতে পারেনি (Error Code: ${code}, Message: ${msg})। অনুগ্রহ করে MP4 ফরম্যাটের ফাইল ব্যবহার করুন।`);
+                alert(`à¦­à¦¿à¦¡à¦¿à¦“ à¦²à§‹à¦¡ à¦¹à¦¤à§‡ à¦ªà¦¾à¦°à§‡à¦¨à¦¿ (Error Code: ${code}, Message: ${msg})à¥¤ à¦…à¦¨à§à¦—à§à¦°à¦¹ à¦•à¦°à§‡ MP4 à¦«à¦°à¦®à§à¦¯à¦¾à¦Ÿà§‡à¦° à¦«à¦¾à¦‡à¦² à¦¬à§à¦¯à¦¬à¦¹à¦¾à¦° à¦•à¦°à§à¦¨à¥¤`);
             };
 
             const setupVideoAndMetadata = async (urlToLoad) => {
@@ -1872,7 +1872,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 reader.onerror = (err) => {
                     console.error("FileReader error: ", err);
                     videoDropzone.querySelector('h3').innerText = originalText;
-                    alert("ফাইলটি পড়তে সমস্যা হয়েছে।");
+                    alert("à¦«à¦¾à¦‡à¦²à¦Ÿà¦¿ à¦ªà§œà¦¤à§‡ à¦¸à¦®à¦¸à§à¦¯à¦¾ à¦¹à§Ÿà§‡à¦›à§‡à¥¤");
                 };
                 reader.readAsDataURL(file);
             } else {
@@ -2026,35 +2026,35 @@ document.addEventListener('DOMContentLoaded', () => {
             ratio: '4-5',
             layoutMode: 'fill',
             maxDuration: 240,
-            warning: 'Facebook Feed ভিডিওর সর্বোচ্চ দৈর্ঘ্য ২৪০ সেকেন্ড (৪ মিনিট)। ক্যাপশনের জন্য নিচে ও উপরে ব্যানার ব্যবহার করুন।'
+            warning: 'Facebook Feed à¦­à¦¿à¦¡à¦¿à¦“à¦° à¦¸à¦°à§à¦¬à§‹à¦šà§à¦š à¦¦à§ˆà¦°à§à¦˜à§à¦¯ à§¨à§ªà§¦ à¦¸à§‡à¦•à§‡à¦¨à§à¦¡ (à§ª à¦®à¦¿à¦¨à¦¿à¦Ÿ)à¥¤ à¦•à§à¦¯à¦¾à¦ªà¦¶à¦¨à§‡à¦° à¦œà¦¨à§à¦¯ à¦¨à¦¿à¦šà§‡ à¦“ à¦‰à¦ªà¦°à§‡ à¦¬à§à¦¯à¦¾à¦¨à¦¾à¦° à¦¬à§à¦¯à¦¬à¦¹à¦¾à¦° à¦•à¦°à§à¦¨à¥¤'
         },
         'fb-reels': {
             name: 'Facebook Reels',
             ratio: '9-16',
             layoutMode: 'fill',
             maxDuration: 90,
-            warning: 'Facebook Reels-এর সর্বোচ্চ সময়সীমা ৯০ সেকেন্ড। ভিডিওটি সে অনুযায়ী Trim করুন।'
+            warning: 'Facebook Reels-à¦à¦° à¦¸à¦°à§à¦¬à§‹à¦šà§à¦š à¦¸à¦®à¦¯à¦¼à¦¸à§€à¦®à¦¾ à§¯à§¦ à¦¸à§‡à¦•à§‡à¦¨à§à¦¡à¥¤ à¦­à¦¿à¦¡à¦¿à¦“à¦Ÿà¦¿ à¦¸à§‡ à¦…à¦¨à§à¦¯à¦¾à¦¯à¦¼à§€ Trim à¦•à¦°à§à¦¨à¥¤'
         },
         'ig-reels': {
             name: 'Instagram Reels',
             ratio: '9-16',
             layoutMode: 'fill',
             maxDuration: 90,
-            warning: 'Instagram Reels সর্বোচ্চ ৯০ সেকেন্ড পর্যন্ত সাপোর্ট করে। নিশ্চিত করুন ভিডিওটির দৈর্ঘ্য সীমার মধ্যে আছে।'
+            warning: 'Instagram Reels à¦¸à¦°à§à¦¬à§‹à¦šà§à¦š à§¯à§¦ à¦¸à§‡à¦•à§‡à¦¨à§à¦¡ à¦ªà¦°à§à¦¯à¦¨à§à¦¤ à¦¸à¦¾à¦ªà§‹à¦°à§à¦Ÿ à¦•à¦°à§‡à¥¤ à¦¨à¦¿à¦¶à§à¦šà¦¿à¦¤ à¦•à¦°à§à¦¨ à¦­à¦¿à¦¡à¦¿à¦“à¦Ÿà¦¿à¦° à¦¦à§ˆà¦°à§à¦˜à§à¦¯ à¦¸à§€à¦®à¦¾à¦° à¦®à¦§à§à¦¯à§‡ à¦†à¦›à§‡à¥¤'
         },
         'ig-story': {
             name: 'Instagram Story',
             ratio: '9-16',
             layoutMode: 'fill',
             maxDuration: 60,
-            warning: 'Instagram Story সর্বোচ্চ ৬০ সেকেন্ড। দীর্ঘ ভিডিও স্বয়ংক্রিয়ভাবে কেটে যায়।'
+            warning: 'Instagram Story à¦¸à¦°à§à¦¬à§‹à¦šà§à¦š à§¬à§¦ à¦¸à§‡à¦•à§‡à¦¨à§à¦¡à¥¤ à¦¦à§€à¦°à§à¦˜ à¦­à¦¿à¦¡à¦¿à¦“ à¦¸à§à¦¬à¦¯à¦¼à¦‚à¦•à§à¦°à¦¿à¦¯à¦¼à¦­à¦¾à¦¬à§‡ à¦•à§‡à¦Ÿà§‡ à¦¯à¦¾à¦¯à¦¼à¥¤'
         },
         'yt-shorts': {
             name: 'YouTube Shorts',
             ratio: '9-16',
             layoutMode: 'fill',
             maxDuration: 60,
-            warning: 'YouTube Shorts সর্বোচ্চ ৬০ সেকেন্ড। ভিডিও ট্রিম করে সীমার মধ্যে রাখুন।'
+            warning: 'YouTube Shorts à¦¸à¦°à§à¦¬à§‹à¦šà§à¦š à§¬à§¦ à¦¸à§‡à¦•à§‡à¦¨à§à¦¡à¥¤ à¦­à¦¿à¦¡à¦¿à¦“ à¦Ÿà§à¦°à¦¿à¦® à¦•à¦°à§‡ à¦¸à§€à¦®à¦¾à¦° à¦®à¦§à§à¦¯à§‡ à¦°à¦¾à¦–à§à¦¨à¥¤'
         },
         'yt-long': {
             name: 'YouTube Landscape',
@@ -2100,7 +2100,7 @@ document.addEventListener('DOMContentLoaded', () => {
             if (preset.warning || exceedsDuration) {
                 let warningMsg = preset.warning || '';
                 if (exceedsDuration) {
-                    warningMsg += ` ⚠️ বর্তমান ভিডিওর দৈর্ঘ্য ${totalDuration.toFixed(0)}s, যা সীমার (${preset.maxDuration}s) বেশি।`;
+                    warningMsg += ` âš ï¸ à¦¬à¦°à§à¦¤à¦®à¦¾à¦¨ à¦­à¦¿à¦¡à¦¿à¦“à¦° à¦¦à§ˆà¦°à§à¦˜à§à¦¯ ${totalDuration.toFixed(0)}s, à¦¯à¦¾ à¦¸à§€à¦®à¦¾à¦° (${preset.maxDuration}s) à¦¬à§‡à¦¶à¦¿à¥¤`;
                 }
                 platformPresetWarningText.textContent = warningMsg;
                 platformPresetWarning.style.display = 'flex';
@@ -2425,7 +2425,7 @@ document.addEventListener('DOMContentLoaded', () => {
         drawFrame();
     });
 
-    // Vignette (Phase 13) — independent of filterPreset, so it's guarded with
+    // Vignette (Phase 13) â€” independent of filterPreset, so it's guarded with
     // if() rather than assumed present, and doesn't touch the preset switch.
     const vignetteSlider = document.getElementById('vignette-slider');
     const vignetteVal = document.getElementById('vignette-val');
@@ -2437,7 +2437,7 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    // Duotone (Phase 13) — independent toggle, combines with any filterPreset.
+    // Duotone (Phase 13) â€” independent toggle, combines with any filterPreset.
     const duotoneToggle = document.getElementById('duotone-toggle');
     const duotoneContainer = document.getElementById('duotone-container');
     const duotoneShadowInput = document.getElementById('duotone-shadow-color');
@@ -2462,7 +2462,7 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    // Film Grain (Phase 13) — independent slider, combines with any preset.
+    // Film Grain (Phase 13) â€” independent slider, combines with any preset.
     const filmGrainSlider = document.getElementById('film-grain-slider');
     const filmGrainVal = document.getElementById('film-grain-val');
     if (filmGrainSlider) {
@@ -2546,7 +2546,7 @@ document.addEventListener('DOMContentLoaded', () => {
     });
     
     // --- Mirror / Flip (Phase 13) ---
-    // Deliberately NOT using the .layout-mode-btn class/selector above — these
+    // Deliberately NOT using the .layout-mode-btn class/selector above â€” these
     // buttons toggle a per-clip flag on activeClip, not state.layoutMode.
     const flipHBtn = document.getElementById('flip-h-btn');
     const flipVBtn = document.getElementById('flip-v-btn');
@@ -2816,13 +2816,13 @@ document.addEventListener('DOMContentLoaded', () => {
                 previewMuteBtn.style.background = 'rgba(248, 113, 113, 0.15)';
                 previewMuteBtn.style.borderColor = '#f87171';
                 previewMuteBtn.style.color = '#f87171';
-                previewMuteBtn.title = 'প্রিভিউ সাউন্ড অন করুন (Unmute preview)';
+                previewMuteBtn.title = 'à¦ªà§à¦°à¦¿à¦­à¦¿à¦‰ à¦¸à¦¾à¦‰à¦¨à§à¦¡ à¦…à¦¨ à¦•à¦°à§à¦¨ (Unmute preview)';
             } else {
                 previewMuteBtn.innerHTML = '<i class="fa-solid fa-volume-high"></i>';
                 previewMuteBtn.style.background = 'rgba(148, 163, 184, 0.15)';
                 previewMuteBtn.style.borderColor = '#94a3b8';
                 previewMuteBtn.style.color = '#94a3b8';
-                previewMuteBtn.title = 'প্রিভিউ সাউন্ড অফ করুন — শুধু আপনার স্পিকারের জন্য, এক্সপোর্ট করা ভিডিওর অডিওতে কোনো প্রভাব পড়বে না (Mute preview only)';
+                previewMuteBtn.title = 'à¦ªà§à¦°à¦¿à¦­à¦¿à¦‰ à¦¸à¦¾à¦‰à¦¨à§à¦¡ à¦…à¦« à¦•à¦°à§à¦¨ â€” à¦¶à§à¦§à§ à¦†à¦ªà¦¨à¦¾à¦° à¦¸à§à¦ªà¦¿à¦•à¦¾à¦°à§‡à¦° à¦œà¦¨à§à¦¯, à¦à¦•à§à¦¸à¦ªà§‹à¦°à§à¦Ÿ à¦•à¦°à¦¾ à¦­à¦¿à¦¡à¦¿à¦“à¦° à¦…à¦¡à¦¿à¦“à¦¤à§‡ à¦•à§‹à¦¨à§‹ à¦ªà§à¦°à¦­à¦¾à¦¬ à¦ªà¦¡à¦¼à¦¬à§‡ à¦¨à¦¾ (Mute preview only)';
             }
         });
     }
@@ -2850,7 +2850,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
             const currentTime = state.currentTime || 0;
             if (currentTime <= activeClip.start + 0.15 || currentTime >= activeClip.end - 0.15) {
-                alert("ক্লিপটি প্লেহেড পজিশনে বিভক্ত করা সম্ভব নয় (একেবারে শুরুতে বা শেষে বিভক্ত করা যায় না)।");
+                alert("à¦•à§à¦²à¦¿à¦ªà¦Ÿà¦¿ à¦ªà§à¦²à§‡à¦¹à§‡à¦¡ à¦ªà¦œà¦¿à¦¶à¦¨à§‡ à¦¬à¦¿à¦­à¦•à§à¦¤ à¦•à¦°à¦¾ à¦¸à¦®à§à¦­à¦¬ à¦¨à§Ÿ (à¦à¦•à§‡à¦¬à¦¾à¦°à§‡ à¦¶à§à¦°à§à¦¤à§‡ à¦¬à¦¾ à¦¶à§‡à¦·à§‡ à¦¬à¦¿à¦­à¦•à§à¦¤ à¦•à¦°à¦¾ à¦¯à¦¾à§Ÿ à¦¨à¦¾)à¥¤");
                 return;
             }
 
@@ -2905,7 +2905,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // Freeze Frame insert (v2.7): grabs the currently visible frame at the
     // playhead and holds it as a still image for a chosen duration, splitting
     // the active clip around it. The video pauses on that frame while the
-    // audio track keeps playing underneath — a simple, reliable way to fix a
+    // audio track keeps playing underneath â€” a simple, reliable way to fix a
     // video that's running a second or two ahead of its audio without needing
     // full time-stretching/speed-ramping support.
     if (freezeFrameBtn) {
@@ -2915,7 +2915,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
             const currentTime = state.currentTime || 0;
             if (currentTime <= activeClip.start + 0.15 || currentTime >= activeClip.end - 0.15) {
-                alert("এই পজিশনে ফ্রিজ ফ্রেম যোগ করা সম্ভব নয় (ক্লিপের একেবারে শুরুতে বা শেষে যোগ করা যায় না)। প্লেহেড একটু সরিয়ে আবার চেষ্টা করুন।");
+                alert("à¦à¦‡ à¦ªà¦œà¦¿à¦¶à¦¨à§‡ à¦«à§à¦°à¦¿à¦œ à¦«à§à¦°à§‡à¦® à¦¯à§‹à¦— à¦•à¦°à¦¾ à¦¸à¦®à§à¦­à¦¬ à¦¨à¦¯à¦¼ (à¦•à§à¦²à¦¿à¦ªà§‡à¦° à¦à¦•à§‡à¦¬à¦¾à¦°à§‡ à¦¶à§à¦°à§à¦¤à§‡ à¦¬à¦¾ à¦¶à§‡à¦·à§‡ à¦¯à§‹à¦— à¦•à¦°à¦¾ à¦¯à¦¾à¦¯à¦¼ à¦¨à¦¾)à¥¤ à¦ªà§à¦²à§‡à¦¹à§‡à¦¡ à¦à¦•à¦Ÿà§ à¦¸à¦°à¦¿à¦¯à¦¼à§‡ à¦†à¦¬à¦¾à¦° à¦šà§‡à¦·à§à¦Ÿà¦¾ à¦•à¦°à§à¦¨à¥¤");
                 return;
             }
 
@@ -2932,7 +2932,7 @@ document.addEventListener('DOMContentLoaded', () => {
             // viewer was just seeing.
             state.canvas.toBlob((blob) => {
                 if (!blob) {
-                    alert("ফ্রেম ক্যাপচার করা যায়নি, আবার চেষ্টা করুন।");
+                    alert("à¦«à§à¦°à§‡à¦® à¦•à§à¦¯à¦¾à¦ªà¦šà¦¾à¦° à¦•à¦°à¦¾ à¦¯à¦¾à¦¯à¦¼à¦¨à¦¿, à¦†à¦¬à¦¾à¦° à¦šà§‡à¦·à§à¦Ÿà¦¾ à¦•à¦°à§à¦¨à¥¤");
                     return;
                 }
                 const freezeFile = new File([blob], `freeze_frame_${Date.now()}.jpg`, { type: 'image/jpeg' });
@@ -3004,11 +3004,11 @@ document.addEventListener('DOMContentLoaded', () => {
             const endCut = parseFloat(trimEnd.value) || 0;
 
             if (endCut <= startCut + 0.1) {
-                alert("বাদ দেওয়ার জন্য সঠিক সময়সীমা সিলেক্ট করুন।");
+                alert("à¦¬à¦¾à¦¦ à¦¦à§‡à¦“à§Ÿà¦¾à¦° à¦œà¦¨à§à¦¯ à¦¸à¦ à¦¿à¦• à¦¸à¦®à§Ÿà¦¸à§€à¦®à¦¾ à¦¸à¦¿à¦²à§‡à¦•à§à¦Ÿ à¦•à¦°à§à¦¨à¥¤");
                 return;
             }
 
-            const confirmMsg = `আপনি কি নিশ্চিত যে ক্লিপটির ${startCut.toFixed(1)}s থেকে ${endCut.toFixed(1)}s অংশটি কেটে বাদ দিতে চান?`;
+            const confirmMsg = `à¦†à¦ªà¦¨à¦¿ à¦•à¦¿ à¦¨à¦¿à¦¶à§à¦šà¦¿à¦¤ à¦¯à§‡ à¦•à§à¦²à¦¿à¦ªà¦Ÿà¦¿à¦° ${startCut.toFixed(1)}s à¦¥à§‡à¦•à§‡ ${endCut.toFixed(1)}s à¦…à¦‚à¦¶à¦Ÿà¦¿ à¦•à§‡à¦Ÿà§‡ à¦¬à¦¾à¦¦ à¦¦à¦¿à¦¤à§‡ à¦šà¦¾à¦¨?`;
             if (!confirm(confirmMsg)) return;
 
             const clipIndex = state.clips.indexOf(activeClip);
@@ -3028,7 +3028,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const keepSecond = endCut < endBound - 0.15;
 
             if (!keepFirst && !keepSecond) {
-                alert("পুরো ক্লিপটি একসাথে বাদ দেওয়া যাবে না। ক্লিপ ডিলিট করতে ক্লিপ তালিকার X বাটনে ক্লিক করুন।");
+                alert("à¦ªà§à¦°à§‹ à¦•à§à¦²à¦¿à¦ªà¦Ÿà¦¿ à¦à¦•à¦¸à¦¾à¦¥à§‡ à¦¬à¦¾à¦¦ à¦¦à§‡à¦“à§Ÿà¦¾ à¦¯à¦¾à¦¬à§‡ à¦¨à¦¾à¥¤ à¦•à§à¦²à¦¿à¦ª à¦¡à¦¿à¦²à¦¿à¦Ÿ à¦•à¦°à¦¤à§‡ à¦•à§à¦²à¦¿à¦ª à¦¤à¦¾à¦²à¦¿à¦•à¦¾à¦° X à¦¬à¦¾à¦Ÿà¦¨à§‡ à¦•à§à¦²à¦¿à¦• à¦•à¦°à§à¦¨à¥¤");
                 return;
             }
 
@@ -3129,7 +3129,7 @@ document.addEventListener('DOMContentLoaded', () => {
         // Extra-track audio/video (multitrack.js) is normally paused inside
         // the per-frame updateLoop -> drawFrame -> drawExtraTracksMidFrame
         // chain, but that loop bails out (`if (!state.isPlaying) return;`)
-        // the instant isPlaying goes false, before drawFrame() runs again —
+        // the instant isPlaying goes false, before drawFrame() runs again â€”
         // so without this call, an extra audio track just kept playing with
         // no way to stop it.
         if (window.pauseAllExtraTracksMedia) window.pauseAllExtraTracksMedia();
@@ -3195,7 +3195,7 @@ document.addEventListener('DOMContentLoaded', () => {
     window.redrawPausedFrame = redrawPausedFrame;
     window.redrawPausedFrameGlobal = redrawPausedFrame;
 
-    // ── Background Animation Loop ────────────────────────────────────────────
+    // â”€â”€ Background Animation Loop â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     // Drives animated blank-page backgrounds (space/holographic/aurora) via
     // real wall-clock time so they animate even when the video is paused.
     let _bgAnimLoopId = null;
@@ -3211,7 +3211,7 @@ document.addEventListener('DOMContentLoaded', () => {
     function startBgAnimLoop() {
         if (_bgAnimLoopId) return;
         function _loop() {
-            // STOP during export — export pipeline calls drawFrame() itself;
+            // STOP during export â€” export pipeline calls drawFrame() itself;
             // running alongside it causes a race condition and kills performance.
             if (state.customExportTime !== undefined) {
                 _bgAnimLoopId = null;
@@ -3238,13 +3238,13 @@ document.addEventListener('DOMContentLoaded', () => {
     let gifPreviewRefreshActive = false;
 
     // B-roll timing is local to the clip being edited. Without this link an
-    // overlay set to 1–4 seconds on an image clip also appears at 1–4 seconds
+    // overlay set to 1â€“4 seconds on an image clip also appears at 1â€“4 seconds
     // of every other clip, because each clip has its own local playhead.
     function brollBelongsToActiveClip(item) {
         return !item.clipId || item.clipId === state.activeClipId;
     }
 
-    // Text overlays must be local to the clip they were created on too —
+    // Text overlays must be local to the clip they were created on too â€”
     // otherwise a text set on image 1 leaks into every other clip's preview
     // and export, since they all share the same currentTime range.
     function textOverlayBelongsToActiveClip(item) {
@@ -3252,7 +3252,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     window.textOverlayBelongsToActiveClip = textOverlayBelongsToActiveClip;
 
-    // Stickers/Emoji must be local to the clip they were added on — otherwise
+    // Stickers/Emoji must be local to the clip they were added on â€” otherwise
     // a sticker placed on one video/image shows up on every clip and blocks
     // clicks meant for that other clip's own content.
     function stickerBelongsToActiveClip(item) {
@@ -3605,7 +3605,7 @@ document.addEventListener('DOMContentLoaded', () => {
         // Update total duration display
         const totalDurationEl = document.getElementById('clip-timeline-total-duration');
         if (totalDurationEl) {
-            totalDurationEl.textContent = `মোট সময় (Total): ${formatTime(totalDuration)} (${totalDuration.toFixed(1)}s)`;
+            totalDurationEl.textContent = `à¦®à§‹à¦Ÿ à¦¸à¦®à¦¯à¦¼ (Total): ${formatTime(totalDuration)} (${totalDuration.toFixed(1)}s)`;
         }
 
         state.clips.forEach((clip, idx) => {
@@ -3625,7 +3625,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
             const label = document.createElement('span');
             const trimmedDuration = (clip.end - clip.start).toFixed(1);
-            label.innerText = `${idx + 1}. ${clip.name.length > 22 ? clip.name.slice(0, 22) + '…' : clip.name} (${trimmedDuration}s)`;
+            label.innerText = `${idx + 1}. ${clip.name.length > 22 ? clip.name.slice(0, 22) + 'â€¦' : clip.name} (${trimmedDuration}s)`;
             label.style.fontSize = '13px';
             label.style.flex = '1';
             label.style.overflow = 'hidden';
@@ -3694,7 +3694,7 @@ document.addEventListener('DOMContentLoaded', () => {
             state.startTime = val;
         }
         startVal.value = formatTime(state.startTime);
-        state.currentTime = state.startTime; // triggers 'seeked' event → redraws canvas
+        state.currentTime = state.startTime; // triggers 'seeked' event â†’ redraws canvas
         updatePlayhead();
         syncActiveClipTrim();
     });
@@ -3708,14 +3708,14 @@ document.addEventListener('DOMContentLoaded', () => {
             state.endTime = val;
         }
         endVal.value = formatTime(state.endTime);
-        state.currentTime = state.endTime; // triggers 'seeked' event → redraws canvas
+        state.currentTime = state.endTime; // triggers 'seeked' event â†’ redraws canvas
         updatePlayhead();
         syncActiveClipTrim();
     });
 
-    // Dedicated seek/scrub bar — freely move the playhead without touching the trim range.
+    // Dedicated seek/scrub bar â€” freely move the playhead without touching the trim range.
     // Pauses playback while actively dragging (so scrubbing feels responsive), and does NOT
-    // resume automatically on release — matches how most video players' scrub bars behave.
+    // resume automatically on release â€” matches how most video players' scrub bars behave.
     let wasPlayingBeforeSeek = false;
     if (seekSlider) {
         seekSlider.addEventListener('mousedown', () => {
@@ -3987,7 +3987,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // via drawFrame() once the preview finishes).
     function runIntroOutroPreview(config) {
         if (!state.duration) {
-            alert('প্রিভিউ দেখতে আগে একটি ভিডিও/ছবি লোড করুন।');
+            alert('à¦ªà§à¦°à¦¿à¦­à¦¿à¦‰ à¦¦à§‡à¦–à¦¤à§‡ à¦†à¦—à§‡ à¦à¦•à¦Ÿà¦¿ à¦­à¦¿à¦¡à¦¿à¦“/à¦›à¦¬à¦¿ à¦²à§‹à¦¡ à¦•à¦°à§à¦¨à¥¤');
             return;
         }
         const canvas = state.canvas;
@@ -4066,9 +4066,9 @@ document.addEventListener('DOMContentLoaded', () => {
     // (as opposed to the entry/exit-only styles above them in the dropdown).
     const TEXT_OVERLAY_CONTINUOUS_ANIM_STYLES = new Set(['pulse', 'wiggle', 'float', 'glow-pulse', 'breathe', 'rainbow-flow', 'neon-flash', 'shine-sweep', 'heartbeat', 'drift', 'dvd-bounce']);
     // Styles that only make sense for the *text glyphs themselves* (progressive
-    // reveal of characters/words/particles) — never offered on the Box Animation dropdown,
+    // reveal of characters/words/particles) â€” never offered on the Box Animation dropdown,
     // and handled separately at draw time rather than through the transform below.
-    const TEXT_OVERLAY_REVEAL_ANIM_STYLES = new Set(['typewriter', 'letter-cascade', 'word-stagger', 'particle-dust', 'glitch', 'wave-reveal', 'blur-fade', 'smoke-vapor']);
+    const TEXT_OVERLAY_REVEAL_ANIM_STYLES = new Set(['typewriter', 'letter-cascade', 'word-stagger', 'word-3d-stagger', 'letter-track-expand', 'particle-dust', 'glitch', 'wave-reveal', 'blur-fade', 'smoke-vapor', 'neon-blur-in']);
 
     // Triangle-wave reflection: bounces a value back and forth between 0 and
     // `range` at the given speed (px/sec), the way a classic "DVD logo"
@@ -4085,7 +4085,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // Shared entry/exit + continuous animation engine used for BOTH the text
     // glyphs and the background box, called separately for each with its own
     // style/speed/reference-size so they can move fully independently (or be
-    // combined — e.g. box fades in while text pops in).
+    // combined â€” e.g. box fades in while text pops in).
     // The trailing bounds* params are only used by 'dvd-bounce' so it knows
     // how far it's allowed to travel: the canvas size, the overlay's own
     // "home" position (its anchor before this transform is applied), and its
@@ -4107,7 +4107,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 case 'glow-pulse':
                     result.alpha = 0.82 + Math.sin(t * 3.6) * 0.18; break;
                 case 'heartbeat': {
-                    // Two quick, subtle beats followed by a rest — useful for CTA badges.
+                    // Two quick, subtle beats followed by a rest â€” useful for CTA badges.
                     const beat = Math.pow(Math.max(0, Math.sin(t * 5.4)), 8);
                     result.scale = 1 + beat * 0.09;
                     result.alpha = 0.94 + beat * 0.06;
@@ -4129,7 +4129,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 case 'dvd-bounce': {
                     // Classic "DVD screensaver" bounce: travels in a straight
                     // line and reflects off each screen edge, wandering to a
-                    // new spot every time it hits a wall — continues for as
+                    // new spot every time it hits a wall â€” continues for as
                     // long as the overlay is on screen.
                     if (boundsCanvasW && boundsCanvasH) {
                         const halfW = Math.max(1, (boundsObjW || refSize * 3) / 2);
@@ -4224,6 +4224,38 @@ document.addEventListener('DOMContentLoaded', () => {
                 result.offY = (1 - eased) * (-refSize * 0.4);
                 result.alpha = eased;
                 break;
+            // ============================================================
+            // NEW â€” Reels-inspired animation styles (Phase Reels)
+            // ============================================================
+            case '3d-pop-tilt': {
+                // Mimics the "Facebook Ads-à¦à¦° à¦—à§‡à¦®à¦Ÿà¦¾" 3D perspective entry:
+                // scaleY collapses (perspective tilt illusion) then springs back
+                // with overshoot, while a slight x-rotation-feel is added via
+                // combined scaleY + offY.
+                const tiltSpring = Math.max(0.02, easeOutBackOvershoot(p));
+                result.scaleY = 0.12 + 0.88 * tiltSpring;
+                result.scale  = 0.60 + 0.40 * eased;
+                result.offY   = (1 - tiltSpring) * refSize * -0.25;
+                result.alpha  = Math.min(1, eased * 1.5);
+                break;
+            }
+            case 'shockwave-pop': {
+                // Expands from nothing â†’ 1.30x â†’ 1.0x with a ripple overshoot,
+                // creating the feel of a shockwave/explosion burst from centre.
+                const sw = Math.max(0.01, easeOutBackOvershoot(p));
+                result.scale = 0.05 + 1.25 * sw;
+                if (result.scale > 1.30) result.scale = 1.30 - (result.scale - 1.30);
+                result.alpha = Math.min(1, eased * 2);
+                break;
+            }
+            case 'glass-badge-in': {
+                // Text slides up while the badge width-wipes open from centre
+                // (the box style handles the glass backdrop separately).
+                result.offY   = (1 - eased) * refSize * 0.9;
+                result.scaleX = 0.1 + 0.9 * eased;
+                result.alpha  = Math.min(1, eased * 1.8);
+                break;
+            }
             default:
                 break;
         }
@@ -4231,11 +4263,11 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // (reuses the existing hexToRgba(hex, alpha) helper defined below for
-    // shadow color conversion — no need to duplicate it here.)
+    // shadow color conversion â€” no need to duplicate it here.)
 
     // Applies a Text Overlay's drop-shadow/glow settings around a draw callback.
     // `drawFn(ctx)` should perform the actual fillText/strokeText (or curved/
-    // staggered) drawing at the current origin — it may be called once (single
+    // staggered) drawing at the current origin â€” it may be called once (single
     // shadow) or twice (double-layer: a soft light "highlight" pass underneath,
     // then the main dark shadow pass on top, whose opaque text fill hides the
     // first pass's fill while both shadows remain visible).
@@ -4756,7 +4788,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
                 // Now draw the glowing running dot on the border path using compositing.
                 // We draw a thick, short arc-segment of glowing color that sweeps.
-                // Convert perimeter position → border segment (top/right/bottom/left)
+                // Convert perimeter position â†’ border segment (top/right/bottom/left)
                 const segLen = 80; // length of the glowing segment in px
                 ctx.save();
                 ctx.shadowColor = runGlow;
@@ -4766,14 +4798,14 @@ document.addEventListener('DOMContentLoaded', () => {
                 ctx.lineCap = 'round';
 
                 // Helper: draw a segment of the border rect path between px positions a and b
-                // along the perimeter (top→right→bottom→left, clockwise).
+                // along the perimeter (topâ†’rightâ†’bottomâ†’left, clockwise).
                 // We use the canvas path and clip to just the visible stroke.
                 const drawBorderSegment = (fromPx, toPx) => {
                     // Clamp and wrap
                     const frac = (p) => (((p % perim) + perim) % perim);
                     let a = frac(fromPx), b = frac(toPx);
                     // Collect corner points of the rect path (clockwise, starting top-left)
-                    // [top-left → top-right → bottom-right → bottom-left → top-left]
+                    // [top-left â†’ top-right â†’ bottom-right â†’ bottom-left â†’ top-left]
                     const corners = [
                         { cumLen: 0,       draw: (pxLocal, ctx2) => {
                             // Top edge: left to right
@@ -4832,7 +4864,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Splits text into visual "grapheme clusters" rather than raw UTF-16 code units.
     // Critical for Bengali (and other complex scripts): prevents breaking base consonants
-    // from their matras (e.g. ো, ি, ু), hasanta (্), or conjuncts (যেমন: র্স, ন্য, ক্স).
+    // from their matras (e.g. à§‹, à¦¿, à§), hasanta (à§), or conjuncts (à¦¯à§‡à¦®à¦¨: à¦°à§à¦¸, à¦¨à§à¦¯, à¦•à§à¦¸).
     function splitGraphemes(text) {
         if (!text) return [];
         try {
@@ -4981,7 +5013,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     ctx.fillStyle = overrideColor ? hexToRgba(overrideColor, 0.15 + (1 - i / depthSteps) * 0.2) : `rgba(6, 182, 212, ${0.15 + (1 - i / depthSteps) * 0.2})`;
                     ctx.fillText(text, x, y);
                 } else if (template.includes('depth')) {
-                    // Long, dark, sharply-directional shadow slab — reads as a
+                    // Long, dark, sharply-directional shadow slab â€” reads as a
                     // card floating well above the background, not a bevel edge.
                     const darkVal = Math.round(6 + (i / depthSteps) * 22);
                     ctx.fillStyle = overrideColor ? hexToRgba(shadeColorTO(overrideColor, -65), 0.6) : `rgba(${darkVal}, ${darkVal}, ${Math.round(darkVal * 1.4)}, 0.6)`;
@@ -5090,7 +5122,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 ctx.fillStyle = getFrontFill(0) === '#ffffff' ? '#e8edff' : getFrontFill(0);
                 ctx.fillText(text, x, y);
             } else if (template.includes('glass')) {
-                // Frosted, semi-translucent face with a bright rim-light —
+                // Frosted, semi-translucent face with a bright rim-light â€”
                 // visibly cooler and airier than the solid bevel look.
                 ctx.shadowColor = 'rgba(160, 220, 255, 0.7)';
                 ctx.shadowBlur = Math.max(14, fontPx * 0.3);
@@ -5228,7 +5260,7 @@ document.addEventListener('DOMContentLoaded', () => {
         ctx.restore();
     }
 
-    // Catmull-Rom spline sampler — returns a dense array of {x,y} points
+    // Catmull-Rom spline sampler â€” returns a dense array of {x,y} points
     // smoothly passing through all input `points`.
     function sampleCatmullRom(points, segmentsPerSpan) {
         if (!points || points.length < 2) return points ? points.slice() : [];
@@ -5347,8 +5379,8 @@ document.addEventListener('DOMContentLoaded', () => {
     // animation progress `progress` (0..1). Used for the letter-cascade and
     // word-stagger Text Overlay animation presets.
     // Shared multi-line dispatcher for the per-character/per-word Text Overlay
-    // animations below. Canvas fillText() has no concept of "\n" — it draws the
-    // whole string on a single row — so any of these effects, given multi-line
+    // animations below. Canvas fillText() has no concept of "\n" â€” it draws the
+    // whole string on a single row â€” so any of these effects, given multi-line
     // text, previously rendered every line concatenated onto one long row that
     // overflowed the background box. This splits on "\n", vertically centers
     // the stack of lines exactly like the default (non-animated) renderer does,
@@ -5537,7 +5569,7 @@ document.addEventListener('DOMContentLoaded', () => {
     function drawTextOverlayWaveLine(ctx, text, progress, phase, fontSize, currentTime, strokeColor, strokeWidth) {
         const isEditingStill = (state.currentStep === 3 && !state.isPlaying);
         const effectivePhase = isEditingStill ? 'settled' : phase;
-        // settled phase: 0.45 gives waveAmp ≈ fontSize*0.196 — always visible
+        // settled phase: 0.45 gives waveAmp â‰ˆ fontSize*0.196 â€” always visible
         const pWave = (effectivePhase === 'in') ? (1 - progress) :
                       (effectivePhase === 'out') ? (1 - progress) : 0.45;
         const waveAmp = fontSize * 0.35 * (0.2 + pWave * 0.8);
@@ -5610,7 +5642,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Smoke Vapor text animation: glowing dust/smoke particles drift in from
     // scattered positions and converge to form the solid letters (and the
-    // reverse on exit) — matches the reference look of floating embers/dust
+    // reverse on exit) â€” matches the reference look of floating embers/dust
     // gathering into shape, not just a blur/opacity fade of the whole word.
     function drawTextOverlaySmokeVapor(ctx, text, progress, phase, fontSize, strokeColor, strokeWidth, textColor, currentTime) {
         if (!text) return;
@@ -5758,7 +5790,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Builds a 256-entry per-channel lookup table from Shadows/Midtones/Highlights
     // control points (Phase 4C - Advanced Color Grading). Piecewise-linear between
-    // (0, shadowAdj), (128, midAdj), (255, highAdj) — simple and predictable, no
+    // (0, shadowAdj), (128, midAdj), (255, highAdj) â€” simple and predictable, no
     // overshoot/ringing like a spline could introduce.
     function buildChannelLUT(shadowAdj, midAdj, highAdj) {
         const lut = new Uint8ClampedArray(256);
@@ -5854,7 +5886,7 @@ document.addEventListener('DOMContentLoaded', () => {
         state.ctx.restore();
     }
 
-    // Radial-gradient vignette — darkens the frame edges. `intensity` is 0-100.
+    // Radial-gradient vignette â€” darkens the frame edges. `intensity` is 0-100.
     // Kept as a small standalone helper (Phase 13) so it can be called from
     // drawFrame without touching the existing filterPreset switch/CSS-filter
     // logic above it.
@@ -6118,7 +6150,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 cVal = cVal * 1.25;
                 break;
             case 'noir':
-                // High-contrast, slightly darker B&W — more dramatic than 'bw'.
+                // High-contrast, slightly darker B&W â€” more dramatic than 'bw'.
                 grayscaleVal = 100;
                 cVal = cVal * 1.4;
                 bVal = bVal * 0.9;
@@ -6133,7 +6165,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 cVal = cVal * 1.15;
                 break;
             case 'dreamy':
-                // Soft, slightly hazy romantic look — brightness up, contrast and
+                // Soft, slightly hazy romantic look â€” brightness up, contrast and
                 // saturation down a touch, a hint of warmth.
                 bVal = bVal * 1.1;
                 cVal = cVal * 0.85;
@@ -6144,7 +6176,7 @@ document.addEventListener('DOMContentLoaded', () => {
         
         if (state.duotoneEnabled) {
             // Duotone needs a monochrome luminosity base to re-color via the
-            // 'color' composite operation below — force grayscale regardless
+            // 'color' composite operation below â€” force grayscale regardless
             // of which filterPreset (if any) is active.
             grayscaleVal = 100;
         }
@@ -6178,7 +6210,7 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         }
 
-        // Duotone — remaps the grayscale base (forced above) onto a two-color
+        // Duotone â€” remaps the grayscale base (forced above) onto a two-color
         // gradient using the canvas 'color' composite operation, which takes
         // the hue/saturation of what's drawn next (the gradient) and keeps the
         // luminosity of what's already on the canvas (the grayscale frame).
@@ -6201,7 +6233,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         state.ctx.restore();
 
-        // Vignette overlay — a radial gradient darkening the edges. Drawn as a
+        // Vignette overlay â€” a radial gradient darkening the edges. Drawn as a
         // plain composite operation (no per-pixel read/write), so it's cheap on
         // low-spec hardware and combines with any filterPreset since it's a
         // separate draw call rather than part of the CSS filter string above.
@@ -6209,7 +6241,7 @@ document.addEventListener('DOMContentLoaded', () => {
             drawVignetteOverlay(state.ctx, canvasW, canvasH, state.vignetteIntensity);
         }
 
-        // Film grain — drawn after vignette so the grain sits on top of the
+        // Film grain â€” drawn after vignette so the grain sits on top of the
         // darkened edges too. Delegated to film-grain.js (separate file, see
         // its header comment for the perf reasoning).
         if (state.filmGrainIntensity > 0 && typeof window.drawFilmGrainOverlay === 'function') {
@@ -6220,7 +6252,7 @@ document.addEventListener('DOMContentLoaded', () => {
         // NOTE: Smoke/Glitter are rendered at the END of drawFrame (before safe zone)
         // so they appear on top of video and are not covered by later overlay passes.
 
-        // Image clip resize handles — shown on Steps 1-3 (Media Import, Trim & Layout,
+        // Image clip resize handles â€” shown on Steps 1-3 (Media Import, Trim & Layout,
         // Overlays) so the user can drag/resize the image right where they added it,
         // not only after clicking through to the Overlays step.
         if (state.currentStep >= 1 && state.currentStep <= 3 && isImageClip && activeClip.id === state.activeClipId) {
@@ -6383,11 +6415,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
 
         // Multi-Track Timeline (multitrack.js, Phase 11): extra video/image
-        // tracks are drawn here — above the main video/blur regions, but
+        // tracks are drawn here â€” above the main video/blur regions, but
         // BELOW every caption/overlay type drawn from this point onward
         // (B-roll, banners, ticker, watermark, progress bar, text, stickers,
         // symbols, shapes, highlights, captions). This is a single, narrow
-        // hook — multitrack.js owns 100% of what it draws and how; this line
+        // hook â€” multitrack.js owns 100% of what it draws and how; this line
         // only fixes WHERE in the stacking order it draws.
         if (window.drawExtraTracksMidFrame) window.drawExtraTracksMidFrame();
 
@@ -6398,13 +6430,13 @@ document.addEventListener('DOMContentLoaded', () => {
         // separate dropdown option lists (e.g. "Wipe Reveal" only existed for
         // Fullscreen, "Spin Pop" only for PiP). They're unified here: every style
         // in the Animation Style dropdown now works the same way regardless of
-        // Display Mode — the only thing that changes between modes is the size/
+        // Display Mode â€” the only thing that changes between modes is the size/
         // position of the box being animated (full video frame vs. a small
         // floating corner box), not which effects are available.
         if (state.brollOverlays && state.brollOverlays.length > 0) {
             const currentTime = state.currentTime;
             const brollEaseOut = (p) => 1 - Math.pow(1 - Math.max(0, Math.min(1, p)), 3);
-            // Distance (in px) to slide a box fully off-canvas in a given direction —
+            // Distance (in px) to slide a box fully off-canvas in a given direction â€”
             // used by both 'slide' and 'slide-pop'. Works for any box size/position:
             // for a Fullscreen box (~ the whole frame) it slides the whole picture off
             // the edge; for a small PiP box it slides just that corner box off.
@@ -6433,7 +6465,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 return Array.from(text);
             };
 
-            // Kinetic Typography (v2.8) — per-letter / per-word text entrance & exit
+            // Kinetic Typography (v2.8) â€” per-letter / per-word text entrance & exit
             // styles, layered in addition to the existing whole-box styles (zoom,
             // slide, rotate-in, etc. still work on text too, they just move the
             // whole text box as one rigid unit). These instead animate the
@@ -6442,15 +6474,15 @@ document.addEventListener('DOMContentLoaded', () => {
             // the caller falls back to a normal single centered fillText draw, same
             // as every other style.
             //
-            //   letter-rotate-settle — each letter spins in (alternating left/right)
+            //   letter-rotate-settle â€” each letter spins in (alternating left/right)
             //     and scales up, staggered left-to-right, landing flat.
-            //   letter-converge      — splits the caption into a left/right half at
+            //   letter-converge      â€” splits the caption into a left/right half at
             //     the nearest word boundary (or, for a single word, at the middle
             //     grapheme so a conjunct is never cut) and slides both halves in
             //     from off-canvas on opposite sides so they arrive together.
-            //   letter-cascade-fade  — each letter fades in and settles down from
-            //     slightly above, staggered — a soft "rising captions" look.
-            //   word-pop-stagger     — each whole word pops in from 0 scale with a
+            //   letter-cascade-fade  â€” each letter fades in and settles down from
+            //     slightly above, staggered â€” a soft "rising captions" look.
+            //   word-pop-stagger     â€” each whole word pops in from 0 scale with a
             //     bouncy overshoot, one word after another.
             //
             // Exit plays the same stagger in reverse order (last unit in is first
@@ -6549,7 +6581,7 @@ document.addEventListener('DOMContentLoaded', () => {
             // exits together right at item.endSec.
             // The per-line ENTRANCE LOOK, though, still respects whichever
             // Animation Style the person picked for this item (typewriter,
-            // letter-cascade, slide, zoom, etc.) — each line just plays that same
+            // letter-cascade, slide, zoom, etc.) â€” each line just plays that same
             // style on its own, at its own turn, instead of all lines playing it
             // at once.
             const drawLineRevealUnderline = (ctx, item, text, x, y, align) => {
@@ -6585,7 +6617,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 sublines.forEach((lineObj, k) => {
                     const revealAt = k * secondsPerLine;
                     const localT = tSinceStart - revealAt;
-                    if (localT < 0) return; // this line's turn hasn't come yet — draw nothing
+                    if (localT < 0) return; // this line's turn hasn't come yet â€” draw nothing
 
                     const lineY = firstLineY + k * lineHeight;
                     const lineX = isBulletPage ? (textX + lineObj.bulletWidth) : textX;
@@ -6686,7 +6718,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 // While paused in Step 3 we always show the overlay being EDITED (the
                 // currently selected one) so it can be positioned/sized regardless of
                 // where the playhead sits. Other, non-selected overlays still respect
-                // their real start/end timing — otherwise every B-roll item you've ever
+                // their real start/end timing â€” otherwise every B-roll item you've ever
                 // added stacks up on screen at once while you're editing a new one,
                 // which is both visually confusing and breaks click-to-select (an old,
                 // already-exported item's box can sit on top of the one you're trying
@@ -6698,7 +6730,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (!inRange) {
                     // Pause an overlay video the moment it's no longer on screen so it
                     // doesn't keep decoding/playing in the background. Skipped during
-                    // export — the exporter takes full manual control of seeking there.
+                    // export â€” the exporter takes full manual control of seeking there.
                     if (item.type === 'video' && item.videoEl && state.customExportTime === undefined && !item.videoEl.paused) {
                         item.videoEl.pause();
                     }
@@ -6723,7 +6755,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
                 // Keep an overlay video's own playback in sync with the main timeline
                 // during LIVE preview. During export (customExportTime is set) this is
-                // skipped entirely — the exporter seeks each active video overlay to the
+                // skipped entirely â€” the exporter seeks each active video overlay to the
                 // exact frame itself, synchronously, before capturing the canvas, since
                 // free-running playback can't guarantee the right frame lands on the
                 // right captured tick.
@@ -6746,18 +6778,18 @@ document.addEventListener('DOMContentLoaded', () => {
                 // Whether animations/sounds should actively play right now. They're only
                 // suppressed when the user is parked in Step 3 WITHOUT playback (so the
                 // overlay sits still and full-opacity for easy positioning/sizing). The
-                // moment playback starts — even while still on Step 3 previewing the
-                // B-roll they just added — animations and sound must run for real,
+                // moment playback starts â€” even while still on Step 3 previewing the
+                // B-roll they just added â€” animations and sound must run for real,
                 // otherwise "testing" the effect right where you configure it looks broken.
                 const brollAnimActive = !(state.currentStep === 3 && !state.isPlaying);
 
-                // Fire entry/exit sound effects (Web Audio, synthesized — see audio.js)
+                // Fire entry/exit sound effects (Web Audio, synthesized â€” see audio.js)
                 // in real time during actual playback/export, timed to line up with
                 // the visual animation (exit sound starts right as the exit anim begins).
                 if (state.isPlaying && item.soundEffect && item.soundEffect !== 'none') {
                     const currentCycle = (repeatSec > 0) ? Math.floor(tIn / repeatSec) : 0;
                     if (item.soundEffect === 'custom') {
-                        // A real uploaded clip plays once at entry only — replaying a
+                        // A real uploaded clip plays once at entry only â€” replaying a
                         // longer voice clip again on exit would usually overlap badly.
                         if (!item._sfxEnterPlayed && currentTime >= item.startSec) {
                             item._sfxEnterPlayed = true;
@@ -6818,7 +6850,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     if (item.mode === 'fullscreen') {
                         const scale = ((item.size !== undefined ? item.size : 100)) / 100;
                         if (scale >= 0.999) {
-                            // Full coverage (default) — identical to the old behaviour
+                            // Full coverage (default) â€” identical to the old behaviour
                             boxX = drawX; boxY = drawY; boxW = drawW; boxH = drawH;
                         } else {
                             // Custom size: scale from the center of the video draw rect.
@@ -6965,7 +6997,7 @@ document.addEventListener('DOMContentLoaded', () => {
                             if (cycleIndex === 0) alpha = Math.max(0.15, eased);
                         }
                     } else if (style === 'spin-pop') {
-                        // Spins in from a 60° offset while scaling up from 75%, settles flat.
+                        // Spins in from a 60Â° offset while scaling up from 75%, settles flat.
                         if (tOut < animDur) {
                             const eased = easeOutBackOvershoot(Math.max(0, tOut / animDur));
                             rotateAmt = -(1 - eased) * (Math.PI / 3);
@@ -7008,7 +7040,7 @@ document.addEventListener('DOMContentLoaded', () => {
                             if (cycleIndex === 0) alpha = Math.max(0, eased);
                         }
                     } else if (style === 'typewriter') {
-                        // No box-level fade-in — the character-by-character reveal drawn
+                        // No box-level fade-in â€” the character-by-character reveal drawn
                         // in the text block below sells the "typing in" effect on its own.
                         // Exit still fades out normally like everything else.
                         if (tOut < animDur) alpha = Math.max(0, tOut / animDur);
@@ -7043,14 +7075,14 @@ document.addEventListener('DOMContentLoaded', () => {
                     }
                 }
 
-                // User-set static rotation (Phase 5D+, manual rotate handle) — composites
+                // User-set static rotation (Phase 5D+, manual rotate handle) â€” composites
                 // on top of any animation-driven rotateAmt set above, so a manually
                 // rotated B-roll box still plays its entry/exit rotation animations
                 // (e.g. 'rotate-in') around its own tilted angle.
                 if (item.rotation) rotateAmt += item.rotation * Math.PI / 180;
                 // Keyframe v2 (Phase 11): user/keyframe-driven scale & opacity compose
                 // multiplicatively on top of whatever the entry/exit animation set,
-                // exactly like rotation composes additively above — so a keyframed
+                // exactly like rotation composes additively above â€” so a keyframed
                 // B-roll box still plays its entry/exit animations, just scaled/faded
                 // relative to its own animated baseline.
                 if (item.scale != null && item.scale !== 1) scaleAmt *= item.scale;
@@ -7067,7 +7099,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
                 // "Blank page" background (v2.7): when enabled on a fullscreen Text
                 // B-roll, paint a full-canvas solid fill BEFORE the text/box itself so
-                // the underlying video is completely hidden — good for point-by-point
+                // the underlying video is completely hidden â€” good for point-by-point
                 // explanations where the person wants a clean slide instead of text
                 // floating over their footage. Fades in/out with the same alpha as the
                 // text so it never pops on/off abruptly. PiP text ignores this (a small
@@ -7210,7 +7242,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 // Frame Scale (Visual Template panel): grows/shrinks the frame/mockup
                 // drawn by drawBrollVisualTemplate around the box's own center, while
                 // the actual content (text or image, drawn separately using the
-                // unscaled drawBoxX/drawBoxY/boxW/boxH above) stays put — so the phone
+                // unscaled drawBoxX/drawBoxY/boxW/boxH above) stays put â€” so the phone
                 // bezel, laptop shell, or 3D/border frame can be resized independent
                 // of what's inside it.
                 const _tplFrameScale = (item.templateFrameScale !== undefined) ? item.templateFrameScale : 1;
@@ -7226,7 +7258,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 // Glass/Chrome/Holo) on a PHOTO or VIDEO B-roll: paint just the
                 // depth/extrusion "slices" now, before the image itself is drawn,
                 // so they sit behind it like real card thickness. The matching
-                // front-edge pass is drawn after the image further below — see
+                // front-edge pass is drawn after the image further below â€” see
                 // the 'frameOnly' call near the end of this item's render block.
                 // (Text B-roll doesn't need this split: the text is drawn in a
                 // separate step after the full single-pass call below, so a
@@ -7432,7 +7464,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         state.ctx.lineWidth = bw * 1.5;
                         state.ctx.lineCap = 'round';
 
-                        // Build perimeter points (clockwise: top → right → bottom ← left ↑)
+                        // Build perimeter points (clockwise: top â†’ right â†’ bottom â† left â†‘)
                         const step = 5;
                         const pts = [];
                         for (let d = 0; d < perim; d += step) {
@@ -7476,7 +7508,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     }
                     // "Normal" mode (transparentBg explicitly off) paints a solid dark
                     // scrim/pill behind the text so it reads clearly over busy video.
-                    // Default is transparent — text sits directly on the footage with
+                    // Default is transparent â€” text sits directly on the footage with
                     // no backdrop at all.
                     if (item.transparentBg === false && style !== 'comic-speed-rays' && style !== 'badge-pop-dot' && style !== 'cta-button-arrow' && style !== 'torn-paper-marker') {
                         if (item.mode === 'fullscreen') {
@@ -7494,7 +7526,7 @@ document.addEventListener('DOMContentLoaded', () => {
                             }
                         }
                     }
-                    // Marker-style solid highlight — a tight-fit color band behind the
+                    // Marker-style solid highlight â€” a tight-fit color band behind the
                     // text, independent of the dark scrim above (both can combine, though
                     // in practice you'd normally use one or the other).
                     if (item.solidHighlight) {
@@ -7523,7 +7555,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     const isLetterBounceStyle = (style === 'letter-bounce-wiggle') && item.type === 'text';
 
                     if (item.lineRevealMode && numLines > 1) {
-                        // Independent line-by-line reveal feature — see drawLineRevealText
+                        // Independent line-by-line reveal feature â€” see drawLineRevealText
                         // above. Completely bypasses the animDur/stagger/kinetic machinery
                         // used by every other style so its timing is simple and predictable.
                         drawLineRevealText(state.ctx, item, sublines, isBulletPage, drawBoxX, drawBoxY, boxW, boxH, cx, cy, lineHeight, currentTime, style);
@@ -7543,7 +7575,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         // stayed on screen), each line gets its own slot spread evenly across
                         // the item's full visible duration (endSec - startSec). Line k doesn't
                         // start entering until the previous lines have each had their turn, and
-                        // once revealed it just stays on screen — only the real exit (right at
+                        // once revealed it just stays on screen â€” only the real exit (right at
                         // item.endSec) animates lines away, and it does so all together so the
                         // whole block leaves cleanly.
                         // Typewriter must always finish line 1 before line 2
@@ -7655,7 +7687,7 @@ document.addEventListener('DOMContentLoaded', () => {
                                 const kineticLineX = isBulletPage ? (drawLineX + lineTextW / 2) : drawLineX;
                                 // Reuse this line's own isEntry/lineP (already computed above from
                                 // either the sequential per-line slot or the legacy short-window
-                                // stagger) instead of a separate, item-level kinetic clock — that's
+                                // stagger) instead of a separate, item-level kinetic clock â€” that's
                                 // what previously made every line's kinetic entrance burst in at
                                 // once regardless of the sequential-reveal setting.
                                 if (isEntry) {
@@ -7731,7 +7763,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
                                     state.ctx.restore();
                                 } else if (style === 'particle-glow-text') {
-                                    // Luxurious golden star sparkles (✦/✨) & drifting gold sparkle dust driven by item.particleIntensity
+                                    // Luxurious golden star sparkles (âœ¦/âœ¨) & drifting gold sparkle dust driven by item.particleIntensity
                                     const glowW = state.ctx.measureText(textToDraw).width;
                                     const glowCx = isBulletPage ? (drawLineX + glowW / 2) : drawLineX;
                                     const particleCount = item.particleIntensity !== undefined ? item.particleIntensity : 25;
@@ -7869,7 +7901,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     // so the user can actually see the whole image in the smaller frame.
                     // Exception 2: the user explicitly picked "Contain" fit mode for a
                     // fullscreen image whose aspect ratio doesn't match the canvas, so
-                    // nothing gets cropped off — letterbox bars fill the rest instead.
+                    // nothing gets cropped off â€” letterbox bars fill the rest instead.
                     const isContainFitMode = item.fitMode === 'contain' || item.fitMode === 'contain-color' || item.fitMode === 'contain-frame';
                     const fsSmall = item.mode === 'fullscreen' && (((item.size !== undefined ? item.size : 100) < 99.9) || isContainFitMode);
                     const imgDrawable = getItemImageDrawable(item, currentTime) || item.imageImg;
@@ -7878,7 +7910,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     const boxAspect = boxW / boxH;
                     let sx, sy, sw, sh;
                     if (fsSmall) {
-                        // Contain mode — show the whole image, adjust destination rect
+                        // Contain mode â€” show the whole image, adjust destination rect
                         sx = 0; sy = 0; sw = imgDims.width; sh = imgDims.height;
                     } else if (imgAspect > boxAspect) {
                         sh = imgDims.height;
@@ -7936,7 +7968,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     }
                     // "Normal" mode (transparentBg explicitly turned off) keeps the old
                     // translucent black backdrop behind PiP images so they stand out
-                    // against busy footage. Default is transparent — no backdrop — so
+                    // against busy footage. Default is transparent â€” no backdrop â€” so
                     // background-removed PNGs stay fully see-through.
                     if (item.mode === 'pip' && item.transparentBg === false) {
                         state.ctx.fillStyle = 'rgba(0,0,0,0.25)';
@@ -8004,10 +8036,10 @@ document.addEventListener('DOMContentLoaded', () => {
                             // "contain" variants at 100% size) so the gap reads as an
                             // intentional backdrop instead of showing whatever was drawn
                             // behind it. Three looks are available:
-                            //   'contain'       — flat black bar (original default)
-                            //   'contain-color' — Smart Color Extend: solid color sampled
+                            //   'contain'       â€” flat black bar (original default)
+                            //   'contain-color' â€” Smart Color Extend: solid color sampled
                             //                     from the image's own edge pixels
-                            //   'contain-frame' — Design Frame Template: a designed gradient
+                            //   'contain-frame' â€” Design Frame Template: a designed gradient
                             //                     panel, consistent across every B-roll item
                             if (item.mode === 'fullscreen' && (item.fitMode === 'contain' || item.fitMode === 'contain-color' || item.fitMode === 'contain-frame')) {
                                 const useColorFill = item.fitMode === 'contain-color';
@@ -8043,13 +8075,13 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
 
                 // Pop the wipe-reveal clip (pushed above with its own save()) before any
-                // annotation drawing — annotations like the flying plane are positioned
+                // annotation drawing â€” annotations like the flying plane are positioned
                 // above/outside the box rect and must not be clipped away by it.
                 if (hasImageShapeClip) state.ctx.restore();
                 if (hasPhoneScreenClip) state.ctx.restore();
                 if (wipeFrac < 0.999) state.ctx.restore();
 
-                // Hand-drawn-style annotation markers (v2.5) — layered on top of the
+                // Hand-drawn-style annotation markers (v2.5) â€” layered on top of the
                 // content after it's painted, growing in sync with the entry (and
                 // shrinking back out on exit) so they feel "drawn on" rather than
                 // just appearing instantly.
@@ -8063,7 +8095,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         const markColor = (item.type === 'text') ? item.color : '#fbbf24';
                         if (style === 'plane-banner-trail') {
                             // A little paper plane flies across the top of the box, towing a
-                            // dashed trail behind it — the box content underneath reveals via
+                            // dashed trail behind it â€” the box content underneath reveals via
                             // the shared wipeFrac clip (set above), so it looks like the text/
                             // image is being "written"/towed into view by the plane, sky-writing
                             // style. Only drawn during entry/exit (annoInEntry/annoInExit); it
@@ -8100,7 +8132,7 @@ document.addEventListener('DOMContentLoaded', () => {
                                 state.ctx.font = `${planeSize}px "Segoe UI Emoji", sans-serif`;
                                 state.ctx.textAlign = 'center';
                                 state.ctx.textBaseline = 'middle';
-                                state.ctx.fillText('✈️', 0, 0);
+                                state.ctx.fillText('âœˆï¸', 0, 0);
                                 state.ctx.restore();
                             }
                         } else if (style === 'circle-highlight') {
@@ -8113,7 +8145,7 @@ document.addEventListener('DOMContentLoaded', () => {
                             state.ctx.lineCap = 'round';
                             state.ctx.beginPath();
                             const startAngle = -Math.PI / 2 - 0.25;
-                            // Goes slightly past a full loop (2π + a bit) at full progress so the
+                            // Goes slightly past a full loop (2Ï€ + a bit) at full progress so the
                             // stroke visibly overlaps its own start, like a real marker circle.
                             state.ctx.ellipse(ecx, ecy, Math.max(1, rx), Math.max(1, ry), 0, startAngle, startAngle + annoP * (Math.PI * 2 + 0.5));
                             state.ctx.stroke();
@@ -8147,8 +8179,8 @@ document.addEventListener('DOMContentLoaded', () => {
                             state.ctx.stroke();
                         } else if (style === 'thinking-character') {
                             // A small "thinking" bubble that pops into the top-right corner
-                            // with a 🤔 face and two trailing dots, like a thought bubble,
-                            // then pops back out — a lightweight "hmm, let's see..." beat.
+                            // with a ðŸ¤” face and two trailing dots, like a thought bubble,
+                            // then pops back out â€” a lightweight "hmm, let's see..." beat.
                             const bubbleR = Math.max(16, Math.min(boxW, boxH) * 0.16) * easeOutBackOvershoot(annoP);
                             const bcx = drawBoxX + boxW - bubbleR * 0.4;
                             const bcy = drawBoxY - bubbleR * 0.4;
@@ -8170,11 +8202,11 @@ document.addEventListener('DOMContentLoaded', () => {
                             state.ctx.font = `${Math.max(10, Math.round(bubbleR * 1.15))}px sans-serif`;
                             state.ctx.textAlign = 'center';
                             state.ctx.textBaseline = 'middle';
-                            state.ctx.fillText('🤔', bcx, bcy - bubbleR * 0.04);
+                            state.ctx.fillText('ðŸ¤”', bcx, bcy - bubbleR * 0.04);
                         } else if (style === 'arrow-point') {
                             // A hand-drawn-style arrow that flies in from the chosen entry
                             // direction and points at the box, then retracts the same way
-                            // on exit — good for calling attention to a specific B-roll.
+                            // on exit â€” good for calling attention to a specific B-roll.
                             const dir = item.entryDirection || 'bottom';
                             const ecx2 = drawBoxX + boxW / 2, ecy2 = drawBoxY + boxH / 2;
                             const reach = Math.max(boxW, boxH) * 0.55;
@@ -8210,7 +8242,7 @@ document.addEventListener('DOMContentLoaded', () => {
                             state.ctx.closePath();
                             state.ctx.fill();
                         } else if (style === 'magnifier-zoom') {
-                            // A 🔍 badge pops into the bottom-right corner with a bouncy
+                            // A ðŸ” badge pops into the bottom-right corner with a bouncy
                             // overshoot, like someone circled the B-roll and said "look here".
                             const msize = Math.max(16, Math.min(boxW, boxH) * 0.45) * easeOutBackOvershoot(annoP);
                             const mcx = drawBoxX + boxW - msize * 0.4;
@@ -8218,9 +8250,9 @@ document.addEventListener('DOMContentLoaded', () => {
                             state.ctx.font = `${Math.max(10, Math.round(msize))}px sans-serif`;
                             state.ctx.textAlign = 'center';
                             state.ctx.textBaseline = 'middle';
-                            state.ctx.fillText('🔍', mcx, mcy);
+                            state.ctx.fillText('ðŸ”', mcx, mcy);
                         } else if (style === 'question-bounce') {
-                            // A ❓ badge bounces into the top-left corner — pairs well with
+                            // A â“ badge bounces into the top-left corner â€” pairs well with
                             // "wait, what?" or confusion beats in a script.
                             const qsize = Math.max(16, Math.min(boxW, boxH) * 0.45) * easeOutBackOvershoot(annoP);
                             const qcx = drawBoxX + qsize * 0.4;
@@ -8228,10 +8260,10 @@ document.addEventListener('DOMContentLoaded', () => {
                             state.ctx.font = `${Math.max(10, Math.round(qsize))}px sans-serif`;
                             state.ctx.textAlign = 'center';
                             state.ctx.textBaseline = 'middle';
-                            state.ctx.fillText('❓', qcx, qcy);
+                            state.ctx.fillText('â“', qcx, qcy);
                         } else if (style === 'confetti-pop') {
                             // One-shot celebratory particle burst timed to the entry pop
-                            // handled in the transform section above. Entry-only by design —
+                            // handled in the transform section above. Entry-only by design â€”
                             // exit just uses the normal pop-out, no second burst.
                             if (tIn < animDur) {
                                 const burstP = Math.max(0, Math.min(1, tIn / animDur));
@@ -8264,9 +8296,9 @@ document.addEventListener('DOMContentLoaded', () => {
                                 }
                             }
                         } else if (style === 'heart-burst') {
-                            // Same one-shot entry burst as confetti-pop, but floating ❤️ hearts
-                            // drifting upward instead of falling confetti squares — for
-                            // "ভালোবাসা" / affection beats in the script.
+                            // Same one-shot entry burst as confetti-pop, but floating â¤ï¸ hearts
+                            // drifting upward instead of falling confetti squares â€” for
+                            // "à¦­à¦¾à¦²à§‹à¦¬à¦¾à¦¸à¦¾" / affection beats in the script.
                             if (tIn < animDur) {
                                 const burstP = Math.max(0, Math.min(1, tIn / animDur));
                                 const particleAlpha = 1 - Math.pow(burstP, 2.2);
@@ -8287,7 +8319,7 @@ document.addEventListener('DOMContentLoaded', () => {
                                         const py = pcy + Math.sin(seedAngle) * seedDist - (burstP * 20);
                                         const hsize = Math.max(10, Math.min(boxW, boxH) * (0.12 + (i % 3) * 0.03));
                                         state.ctx.font = `${Math.round(hsize)}px sans-serif`;
-                                        state.ctx.fillText('❤️', px, py);
+                                        state.ctx.fillText('â¤ï¸', px, py);
                                     }
                                     state.ctx.restore();
                                 }
@@ -8401,7 +8433,7 @@ document.addEventListener('DOMContentLoaded', () => {
                             state.ctx.font = `${Math.round(curSize)}px "Segoe UI Emoji", "Apple Color Emoji", sans-serif`;
                             state.ctx.textAlign = 'center';
                             state.ctx.textBaseline = 'middle';
-                            state.ctx.fillText('👆', 0, 0);
+                            state.ctx.fillText('ðŸ‘†', 0, 0);
                             state.ctx.restore();
                         } else if (style === 'cta-button-arrow') {
                             // Hand-drawn curved arrow swooping in from above/side and pointing straight into CTA button
@@ -8493,7 +8525,7 @@ document.addEventListener('DOMContentLoaded', () => {
                             }
                             state.ctx.restore();
                         } else if (style === 'cursor-line-draw') {
-                            // Cursor Line Underline: Hand 👆 glides across under text over a smooth, readable 1.5 - 2.5s duration
+                            // Cursor Line Underline: Hand ðŸ‘† glides across under text over a smooth, readable 1.5 - 2.5s duration
                             const lineX1 = drawBoxX - 12;
                             const lineX2 = drawBoxX + boxW + 12;
                             const lineY = drawBoxY + boxH + 8;
@@ -8537,12 +8569,12 @@ document.addEventListener('DOMContentLoaded', () => {
                             state.ctx.font = `${Math.round(curSize)}px "Segoe UI Emoji", "Apple Color Emoji", sans-serif`;
                             state.ctx.textAlign = 'center';
                             state.ctx.textBaseline = 'middle';
-                            state.ctx.fillText('👆', 0, 0);
+                            state.ctx.fillText('ðŸ‘†', 0, 0);
 
                             // Ink sparkle dot at drawing tip while moving
                             if (drawProgress < 0.98) {
                                 state.ctx.font = `${Math.round(curSize * 0.5)}px sans-serif`;
-                                state.ctx.fillText('✨', -curSize * 0.4, -curSize * 0.4);
+                                state.ctx.fillText('âœ¨', -curSize * 0.4, -curSize * 0.4);
                             }
                             state.ctx.restore();
 
@@ -8624,7 +8656,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
                 state.ctx.restore();
 
-                // Comparison Slide (Before/After) divider handle — drawn unclipped
+                // Comparison Slide (Before/After) divider handle â€” drawn unclipped
                 // (after the box's own restore above) so the handle circle isn't cut
                 // off by the wipe-reveal clip. Reuses the same wipeFrac reveal as
                 // 'wipe'/'highlight-sweep': since a B-roll item is a single image,
@@ -8879,7 +8911,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 const isEditingStill = (state.currentStep === 3 && !state.isPlaying);
                 const textAnimStyle = isEditingStill ? 'none' : (item.textAnimStyle || item.animStyle || 'none');
                 // Legacy overlays (saved before Text/Box animation were split) never
-                // had boxAnimStyle set at all — for those, fall back to the old
+                // had boxAnimStyle set at all â€” for those, fall back to the old
                 // shared animStyle so previously-saved projects still look the same
                 // by default. Once the user explicitly picks a Box Animation (even
                 // "None"), that field exists and wins from then on.
@@ -8977,7 +9009,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         (state.isDrawingTextCurve && state.textCurvePoints && state.textCurvePoints.length >= 2);
 
                     if (_hasCurveSimple || _hasCurveCustom) {
-                        // ── CURVE MODE ─────────────────────────────────────────────────
+                        // â”€â”€ CURVE MODE â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
                         // Build custom charDrawFn for specific reveal animation styles
                         // so they animate character-by-character along the curved path.
                         const _isEditingStillLocal = (state.currentStep === 3 && !state.isPlaying);
@@ -9185,7 +9217,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         return;
                     }
 
-                    // ── STRAIGHT TEXT MODE (existing animation branches) ───────────────
+                    // â”€â”€ STRAIGHT TEXT MODE (existing animation branches) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
                     if (textAnimStyle === 'letter-cascade' && textRevealAnim.phase !== 'settled') {
                         drawTextOverlayStaggered(ctx2, textToDraw, 'letter', textRevealAnim.p, outlineColor, outlineWidth, item.fontSize);
                     } else if (textAnimStyle === 'word-stagger' && textRevealAnim.phase !== 'settled') {
@@ -9200,6 +9232,83 @@ document.addEventListener('DOMContentLoaded', () => {
                         drawTextOverlayBlurFade(ctx2, textToDraw, textRevealAnim.p, textRevealAnim.phase, item.fontSize, outlineColor, outlineWidth);
                     } else if (textAnimStyle === 'smoke-vapor') {
                         drawTextOverlaySmokeVapor(ctx2, textToDraw, textRevealAnim.p, textRevealAnim.phase, item.fontSize, outlineColor, outlineWidth, item.color, currentTime);
+                    } else if (textAnimStyle === 'neon-blur-in') {
+                        // Neon Glow Blur-In: text emerges from a wide cyan/purple blur
+                        // into sharp focus â€” similar to the reels video title cards.
+                        const p = Math.max(0, Math.min(1, textRevealAnim.phase === 'settled' ? 1 :
+                                            easeOutCubicTO(textRevealAnim.p)));
+                        const blurR = (1 - p) * item.fontSize * 0.6;
+                        ctx2.save();
+                        ctx2.shadowColor = (currentTime % 2 < 1) ? '#22d3ee' : '#a855f7';
+                        ctx2.shadowBlur = Math.max(0, blurR * 2.2);
+                        ctx2.globalAlpha *= Math.max(0.05, p);
+                        const linesToDrawNeon = textToDraw.split('\n');
+                        const lHN = item.fontSize * 1.25;
+                        const sYN = linesToDrawNeon.length <= 1 ? 0 : -((linesToDrawNeon.length - 1) * lHN) / 2;
+                        linesToDrawNeon.forEach((lText, lIdx) => {
+                            renderTextWith3DAndColor(ctx2, lText, 0, sYN + lIdx * lHN, item, item.fontSize, 'center', outlineColor, outlineWidth);
+                        });
+                        ctx2.restore();
+                    } else if (textAnimStyle === 'word-3d-stagger') {
+                        // Word-by-Word 3D Tilt Stagger: each word enters with a 3D-tilt
+                        // pop (scaleY collapse â†’ spring back) staggered 80ms per word.
+                        const words = textToDraw.split(/\s+/);
+                        const totalW = words.length;
+                        const lhWS = item.fontSize * 1.25;
+                        ctx2.save();
+                        ctx2.font = ctx2.font; // ensure font set
+                        let curX = 0;
+                        const spW = ctx2.measureText(' ').width;
+                        words.forEach((word, wi) => {
+                            const wDelay = wi / Math.max(1, totalW) * 0.7;
+                            const rawP = Math.max(0, Math.min(1,
+                                textRevealAnim.phase === 'settled' ? 1 :
+                                textRevealAnim.phase === 'in' ? (textRevealAnim.p - wDelay) / (1 - wDelay) : 0
+                            ));
+                            const springP = Math.max(0.01, easeOutBackOvershoot(rawP));
+                            const wW = ctx2.measureText(word).width;
+                            ctx2.save();
+                            ctx2.translate(curX + wW / 2, 0);
+                            ctx2.scale(1, 0.12 + 0.88 * springP);
+                            ctx2.globalAlpha *= Math.min(1, rawP * 2);
+                            ctx2.translate(-wW / 2, 0);
+                            if (outlineColor) { ctx2.lineWidth = outlineWidth; ctx2.strokeStyle = outlineColor; ctx2.strokeText(word, 0, 0); }
+                            ctx2.fillText(word, 0, 0);
+                            ctx2.restore();
+                            curX += wW + spW;
+                        });
+                        ctx2.restore();
+                    } else if (textAnimStyle === 'letter-track-expand') {
+                        // Letter Tracking Expand: letters start compressed together
+                        // (negative letterSpacing feel via manual x-offset) and
+                        // expand to normal while fading in â€” the classic "tracking"
+                        // motion-graphics opening effect.
+                        const p = Math.max(0, Math.min(1, textRevealAnim.phase === 'settled' ? 1 :
+                                            easeOutCubicTO(textRevealAnim.p)));
+                        const trackFactor = 1 - p; // 1=compressed, 0=normal
+                        const linesToDrawTr = textToDraw.split('\n');
+                        const lHTr = item.fontSize * 1.25;
+                        const sYTr = linesToDrawTr.length <= 1 ? 0 : -((linesToDrawTr.length - 1) * lHTr) / 2;
+                        ctx2.save();
+                        ctx2.globalAlpha *= Math.max(0.05, p);
+                        linesToDrawTr.forEach((lineText, lIdx) => {
+                            const chars = lineText.split('');
+                            const charWidths = chars.map(c => ctx2.measureText(c).width);
+                            const totalW2 = charWidths.reduce((a, b) => a + b, 0);
+                            const gap = -item.fontSize * 0.28 * trackFactor; // negative gap = compressed
+                            const totalWithGap = totalW2 + gap * Math.max(0, chars.length - 1);
+                            let cx2 = -totalWithGap / 2;
+                            const yTr = sYTr + lIdx * lHTr;
+                            chars.forEach((ch, ci) => {
+                                ctx2.save();
+                                ctx2.translate(cx2 + charWidths[ci] / 2, yTr);
+                                if (outlineColor) { ctx2.lineWidth = outlineWidth; ctx2.strokeStyle = outlineColor; ctx2.strokeText(ch, 0, 0); }
+                                ctx2.fillText(ch, 0, 0);
+                                ctx2.restore();
+                                cx2 += charWidths[ci] + gap;
+                            });
+                        });
+                        ctx2.restore();
                     } else if (textAnimStyle === 'shine-sweep') {
                         drawTextOverlayShineSweep(ctx2, textToDraw, currentTime, item.fontSize, item.color, outlineColor, outlineWidth);
                     } else if (textAnimStyle === 'rainbow-flow') {
@@ -9497,7 +9606,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
             state.ctx.fillStyle = '#ffffff';
             state.ctx.font = 'bold 14px "Hind Siliguri", sans-serif';
-            state.ctx.fillText(`Text Box (${Math.round(rw)}px × ${Math.round(rh)}px)`, rx + 8, Math.max(20, ry - 6));
+            state.ctx.fillText(`Text Box (${Math.round(rw)}px Ã— ${Math.round(rh)}px)`, rx + 8, Math.max(20, ry - 6));
             state.ctx.restore();
         }
 
@@ -9640,7 +9749,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     state.ctx.stroke();
                 }
 
-                // Editing guides — preview-only, not exported.
+                // Editing guides â€” preview-only, not exported.
                 if (state.currentStep === 3 && state.isAddingHighlight && item.id === state.selectedHighlightId) {
                     state.ctx.shadowBlur = 0;
                     state.ctx.setLineDash([6, 4]);
@@ -9761,7 +9870,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
                     // Marker-style highlight: a solid, tight-fit color band behind this
                     // whole line (not the padded bgPill, not a word-by-word text-color
-                    // swap) — like a highlighter pen drawn across just this line.
+                    // swap) â€” like a highlighter pen drawn across just this line.
                     if (activeSub.lineHighlight) {
                         const markerPadX = fontSize * 0.18;
                         const markerH = fontSize * 1.08;
@@ -9859,6 +9968,11 @@ document.addEventListener('DOMContentLoaded', () => {
             ? state.customExportTime
             : (state.isPlaying ? effectiveTime : (performance.now() / 1000));
         renderParticleOverlays(activeClip, effectiveTime, particleTime);
+
+        // Phase Reels: Glassmorphism Card Stack Overlay
+        if (typeof window.renderGlassCardsOverlay === 'function') {
+            window.renderGlassCardsOverlay(state.ctx, effectiveTime, state.canvas.width, state.canvas.height);
+        }
 
         // Draw Meta Ads & Reels Boost Safe Zone Overlay (preview-only, not exported)
         if (state.safeZonePreset && state.safeZonePreset !== 'none' && !state.isExportingVideo && !state.customExportTime) {
@@ -10047,7 +10161,7 @@ document.addEventListener('DOMContentLoaded', () => {
         ctx.beginPath(); ctx.moveTo(xMax - bLen, yMax); ctx.lineTo(xMax, yMax); ctx.lineTo(xMax, yMax - bLen); ctx.stroke();
 
         // 4. Safe Zone Pill Header Label
-        const labelText = "🛡️ রিলস বুস্ট সেফ জোন ( Safe Zone: লেখা ও লোগো এখানে রাখুন )";
+        const labelText = "ðŸ›¡ï¸ à¦°à¦¿à¦²à¦¸ à¦¬à§à¦¸à§à¦Ÿ à¦¸à§‡à¦« à¦œà§‹à¦¨ ( Safe Zone: à¦²à§‡à¦–à¦¾ à¦“ à¦²à§‹à¦—à§‹ à¦à¦–à¦¾à¦¨à§‡ à¦°à¦¾à¦–à§à¦¨ )";
         const fontSize = Math.max(11, Math.round(canvasH * 0.016));
         ctx.font = `600 ${fontSize}px "Hind Siliguri", sans-serif`;
         const tw = ctx.measureText(labelText).width;
@@ -10110,7 +10224,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         ctx.fillStyle = 'rgba(255, 255, 255, 0.8)';
         ctx.font = `500 ${Math.max(8, Math.round(canvasH * 0.012))}px sans-serif`;
-        ctx.fillText('Sponsored · স্পন্সরড 🌐', textX, avatarY + 7);
+        ctx.fillText('Sponsored Â· à¦¸à§à¦ªà¦¨à§à¦¸à¦°à¦¡ ðŸŒ', textX, avatarY + 7);
 
         // --- Bottom CTA & Caption UI ---
         const bottomH = canvasH - yMax;
@@ -10131,13 +10245,13 @@ document.addEventListener('DOMContentLoaded', () => {
         ctx.font = `700 ${Math.max(11, Math.round(ctaH * 0.4))}px "Hind Siliguri", sans-serif`;
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
-        ctx.fillText('🛍️ Shop Now / বিস্তারিত দেখুন  ›', ctaX + ctaW / 2, ctaY + ctaH / 2);
+        ctx.fillText('ðŸ›ï¸ Shop Now / à¦¬à¦¿à¦¸à§à¦¤à¦¾à¦°à¦¿à¦¤ à¦¦à§‡à¦–à§à¦¨  â€º', ctaX + ctaW / 2, ctaY + ctaH / 2);
 
         // Dummy caption line below CTA
         ctx.fillStyle = 'rgba(255, 255, 255, 0.85)';
         ctx.textAlign = 'left';
         ctx.font = `400 ${Math.max(9, Math.round(canvasH * 0.013))}px "Hind Siliguri", sans-serif`;
-        ctx.fillText('অফারে থ্রি-পিস অর্ডার করতে Shop Now বাটনে ক্লিক করুন...', 14, ctaY + ctaH + 15);
+        ctx.fillText('à¦…à¦«à¦¾à¦°à§‡ à¦¥à§à¦°à¦¿-à¦ªà¦¿à¦¸ à¦…à¦°à§à¦¡à¦¾à¦° à¦•à¦°à¦¤à§‡ Shop Now à¦¬à¦¾à¦Ÿà¦¨à§‡ à¦•à§à¦²à¦¿à¦• à¦•à¦°à§à¦¨...', 14, ctaY + ctaH + 15);
 
         // --- Right Action Buttons Stack (Like, Comment, Share) ---
         const iconCenterX = canvasW - (canvasW * 0.08);
@@ -10145,10 +10259,10 @@ document.addEventListener('DOMContentLoaded', () => {
         const gapY = Math.max(36, canvasH * 0.075);
 
         const actionIcons = [
-            { icon: '❤️', label: '2.4K' },
-            { icon: '💬', label: '180' },
-            { icon: '↗️', label: 'Share' },
-            { icon: '⋮', label: '' }
+            { icon: 'â¤ï¸', label: '2.4K' },
+            { icon: 'ðŸ’¬', label: '180' },
+            { icon: 'â†—ï¸', label: 'Share' },
+            { icon: 'â‹®', label: '' }
         ];
 
         actionIcons.forEach((item, index) => {
@@ -10227,7 +10341,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     ctx.shadowBlur = 6;
                     ctx.strokeRect(left - 4, top - 4, itemW + 8, itemH + 8);
                     
-                    const tagText = "⚠️ বুস্ট বাটন/সাইড আইকনে ঢাকা পড়বে!";
+                    const tagText = "âš ï¸ à¦¬à§à¦¸à§à¦Ÿ à¦¬à¦¾à¦Ÿà¦¨/à¦¸à¦¾à¦‡à¦¡ à¦†à¦‡à¦•à¦¨à§‡ à¦¢à¦¾à¦•à¦¾ à¦ªà§œà¦¬à§‡!";
                     ctx.font = `700 10px "Hind Siliguri", sans-serif`;
                     ctx.fillStyle = '#dc2626';
                     ctx.shadowBlur = 0;
@@ -10264,7 +10378,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 statusBanner.style.background = 'rgba(239, 68, 68, 0.12)';
                 statusBanner.style.borderColor = 'rgba(239, 68, 68, 0.4)';
                 statusText.style.color = '#ef4444';
-                statusText.innerHTML = `⚠️ <b>সতর্কতা:</b> ${collidingItems.length}টি লেখা/লোগো রিলস বাটন বা সাইড আইকন জোনে পড়ছে! বুস্ট দিলে কেটে যাবে।`;
+                statusText.innerHTML = `âš ï¸ <b>à¦¸à¦¤à¦°à§à¦•à¦¤à¦¾:</b> ${collidingItems.length}à¦Ÿà¦¿ à¦²à§‡à¦–à¦¾/à¦²à§‹à¦—à§‹ à¦°à¦¿à¦²à¦¸ à¦¬à¦¾à¦Ÿà¦¨ à¦¬à¦¾ à¦¸à¦¾à¦‡à¦¡ à¦†à¦‡à¦•à¦¨ à¦œà§‹à¦¨à§‡ à¦ªà§œà¦›à§‡! à¦¬à§à¦¸à§à¦Ÿ à¦¦à¦¿à¦²à§‡ à¦•à§‡à¦Ÿà§‡ à¦¯à¦¾à¦¬à§‡à¥¤`;
                 statusIcon.className = 'fa-solid fa-triangle-exclamation';
                 statusIcon.style.color = '#ef4444';
                 if (autofitBtn) autofitBtn.style.display = 'inline-flex';
@@ -10272,7 +10386,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 statusBanner.style.background = 'rgba(16, 185, 129, 0.1)';
                 statusBanner.style.borderColor = 'rgba(16, 185, 129, 0.3)';
                 statusText.style.color = '#10b981';
-                statusText.innerHTML = `সব লেখা ও লোগো বুস্ট সেফ জোনে সম্পূর্ণ নিরাপদ আছে`;
+                statusText.innerHTML = `à¦¸à¦¬ à¦²à§‡à¦–à¦¾ à¦“ à¦²à§‹à¦—à§‹ à¦¬à§à¦¸à§à¦Ÿ à¦¸à§‡à¦« à¦œà§‹à¦¨à§‡ à¦¸à¦®à§à¦ªà§‚à¦°à§à¦£ à¦¨à¦¿à¦°à¦¾à¦ªà¦¦ à¦†à¦›à§‡`;
                 statusIcon.className = 'fa-solid fa-shield-check';
                 statusIcon.style.color = '#10b981';
                 if (autofitBtn) autofitBtn.style.display = 'none';
@@ -10384,7 +10498,7 @@ document.addEventListener('DOMContentLoaded', () => {
         drawFrame();
         if (window.triggerAutoSave) window.triggerAutoSave();
 
-        const msg = adjustedCount > 0 ? `✨ ${adjustedCount}টি লেখা/লোগো সেফ জোনে স্বয়ংক্রিয়ভাবে ফিট করা হয়েছে!` : 'সব লেখা ইতিমধ্যে সেফ জোনে আছে!';
+        const msg = adjustedCount > 0 ? `âœ¨ ${adjustedCount}à¦Ÿà¦¿ à¦²à§‡à¦–à¦¾/à¦²à§‹à¦—à§‹ à¦¸à§‡à¦« à¦œà§‹à¦¨à§‡ à¦¸à§à¦¬à§Ÿà¦‚à¦•à§à¦°à¦¿à§Ÿà¦­à¦¾à¦¬à§‡ à¦«à¦¿à¦Ÿ à¦•à¦°à¦¾ à¦¹à§Ÿà§‡à¦›à§‡!` : 'à¦¸à¦¬ à¦²à§‡à¦–à¦¾ à¦‡à¦¤à¦¿à¦®à¦§à§à¦¯à§‡ à¦¸à§‡à¦« à¦œà§‹à¦¨à§‡ à¦†à¦›à§‡!';
         if (window.showToast) { window.showToast(msg); } else { alert(msg); }
     }
     window.autoFitElementsToSafeZone = autoFitElementsToSafeZone;
@@ -10648,7 +10762,7 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
 
-        // Background Fill tool — drag a rectangle anywhere on the canvas to paint a solid colour block.
+        // Background Fill tool â€” drag a rectangle anywhere on the canvas to paint a solid colour block.
         if (state.isAddingFill) {
             const coords = getCanvasCoords(e);
             const now = Math.max(0, state.currentTime || 0);
@@ -10706,7 +10820,7 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
 
-        // Video Highlight tool — drag across the live preview to make a callout.
+        // Video Highlight tool â€” drag across the live preview to make a callout.
         if (state.isAddingHighlight) {
 
             const coords = getCanvasCoords(e);
@@ -10715,7 +10829,7 @@ document.addEventListener('DOMContentLoaded', () => {
             // Clamp into bounds instead of rejecting the click outright. A B-roll
             // overlay (fullscreen at a custom size/offset, or a PiP dragged to
             // cover most of the frame) can visually fill more of the canvas than
-            // getRenderedVideoBounds() reports for the underlying clip — without
+            // getRenderedVideoBounds() reports for the underlying clip â€” without
             // this clamp, a drag that starts anywhere in that "extra" visible area
             // silently did nothing. Clamping matches the behaviour the drag-move
             // handler already uses for freehand points (see below).
@@ -10894,7 +11008,7 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         }
 
-        // Custom text curve drawing mode — place points on canvas to define a path
+        // Custom text curve drawing mode â€” place points on canvas to define a path
         if (state.isDrawingTextCurve) {
             const coords = getCanvasCoords(e);
             const nx = coords.x / canvasW;
@@ -10932,12 +11046,12 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         }
 
-        // Text overlay drag/select (Phase 2C) — checked last so logo/crop take priority
+        // Text overlay drag/select (Phase 2C) â€” checked last so logo/crop take priority
         if (state.textOverlays && state.textOverlays.length > 0) {
             const hit = findTextOverlayAt(coords);
             if (hit) {
                 state.selectedTextOverlayId = hit.id;
-                // অন্য সব সিলেকশন clear করো — না হলে দুটো আলাদা overlay একসাথে সিলেক্টেড দেখায়
+                // à¦…à¦¨à§à¦¯ à¦¸à¦¬ à¦¸à¦¿à¦²à§‡à¦•à¦¶à¦¨ clear à¦•à¦°à§‹ â€” à¦¨à¦¾ à¦¹à¦²à§‡ à¦¦à§à¦Ÿà§‹ à¦†à¦²à¦¾à¦¦à¦¾ overlay à¦à¦•à¦¸à¦¾à¦¥à§‡ à¦¸à¦¿à¦²à§‡à¦•à§à¦Ÿà§‡à¦¡ à¦¦à§‡à¦–à¦¾à¦¯à¦¼
                 state.selectedShapeOverlayId = null;
                 state.selectedSymbolId = null;
                 state.selectedStickerId = null;
@@ -11011,7 +11125,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const shapeHit = findShapeOverlayAt(coords);
             if (shapeHit) {
                 state.selectedShapeOverlayId = shapeHit.id;
-                // অন্য সব সিলেকশন clear করো
+                // à¦…à¦¨à§à¦¯ à¦¸à¦¬ à¦¸à¦¿à¦²à§‡à¦•à¦¶à¦¨ clear à¦•à¦°à§‹
                 state.selectedTextOverlayId = null;
                 state.selectedSymbolId = null;
                 state.selectedStickerId = null;
@@ -11054,13 +11168,13 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         }
 
-        // Symbol/Shape drag/select — symbols render on top of everything else,
+        // Symbol/Shape drag/select â€” symbols render on top of everything else,
         // so they're checked before stickers/text overlays.
         if (state.symbolOverlays && state.symbolOverlays.length > 0) {
             const symbolHit = findSymbolAt(coords);
             if (symbolHit) {
                 state.selectedSymbolId = symbolHit.id;
-                // অন্য সব সিলেকশন clear করো
+                // à¦…à¦¨à§à¦¯ à¦¸à¦¬ à¦¸à¦¿à¦²à§‡à¦•à¦¶à¦¨ clear à¦•à¦°à§‹
                 state.selectedTextOverlayId = null;
                 state.selectedShapeOverlayId = null;
                 state.selectedStickerId = null;
@@ -11074,7 +11188,7 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         }
 
-        // Sticker/Emoji resize handle check (Phase 4A) — must come before drag check
+        // Sticker/Emoji resize handle check (Phase 4A) â€” must come before drag check
         if (state.currentStep === 3 && state.selectedStickerId !== null) {
             if (findStickerResizeHandle(coords)) {
                 const item = state.stickers.find(s => s.id === state.selectedStickerId);
@@ -11088,13 +11202,13 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         }
 
-        // Sticker/Emoji drag/select (Phase 4A) — stickers render on top of B-roll/banners,
+        // Sticker/Emoji drag/select (Phase 4A) â€” stickers render on top of B-roll/banners,
         // so they're checked before text overlays but after logo/B-roll.
         if (state.stickers && state.stickers.length > 0) {
             const stickerHit = findStickerAt(coords);
             if (stickerHit) {
                 state.selectedStickerId = stickerHit.id;
-                // অন্য সব সিলেকশন clear করো
+                // à¦…à¦¨à§à¦¯ à¦¸à¦¬ à¦¸à¦¿à¦²à§‡à¦•à¦¶à¦¨ clear à¦•à¦°à§‹
                 state.selectedTextOverlayId = null;
                 state.selectedShapeOverlayId = null;
                 state.selectedSymbolId = null;
@@ -11147,13 +11261,13 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         }
 
-        // B-roll drag/select (Phase 5D) — checked before text overlay
+        // B-roll drag/select (Phase 5D) â€” checked before text overlay
         if (state.brollOverlays && state.brollOverlays.length > 0) {
             const brollHit = findBrollPipAt(coords);
             if (brollHit) {
                 if (window.captureUndoCheckpoint) window.captureUndoCheckpoint();
                 state.selectedBrollId = brollHit.id;
-                // অন্য সব সিলেকশন clear করো
+                // à¦…à¦¨à§à¦¯ à¦¸à¦¬ à¦¸à¦¿à¦²à§‡à¦•à¦¶à¦¨ clear à¦•à¦°à§‹
                 state.selectedTextOverlayId = null;
                 state.selectedShapeOverlayId = null;
                 state.selectedSymbolId = null;
@@ -11161,7 +11275,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 state.isDraggingBroll = true;
 
                 if (brollHit.mode === 'fullscreen' && (brollHit.size === undefined || brollHit.size >= 100)) {
-                    // Fullscreen at 100% — clicking starts a drag but keeps fullscreen mode.
+                    // Fullscreen at 100% â€” clicking starts a drag but keeps fullscreen mode.
                     // Mark that the user has set a custom position so scaling uses item.x/y.
                     brollHit._fsPosSet = true;
                     brollHit.x = coords.x / canvasW;
@@ -11178,7 +11292,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     state.dragBrollOffsetX = coords.x - (brollHit.x * canvasW);
                     state.dragBrollOffsetY = coords.y - (brollHit.y * canvasH);
                 } else if (brollHit.mode === 'fullscreen' && brollHit._fsPosSet) {
-                    // Dragging a fullscreen item with custom position — keep in fullscreen
+                    // Dragging a fullscreen item with custom position â€” keep in fullscreen
                     state.dragBrollOffsetX = coords.x - (brollHit.x * canvasW);
                     state.dragBrollOffsetY = coords.y - (brollHit.y * canvasH);
                 } else if (brollHit.mode === 'fullscreen') {
@@ -11210,7 +11324,7 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         }
 
-        // Image clip resize handle check — active on Steps 1-3 (see drawFrame() above).
+        // Image clip resize handle check â€” active on Steps 1-3 (see drawFrame() above).
         if (state.currentStep >= 1 && state.currentStep <= 3 && isImageClip && activeClip.id === state.activeClipId) {
             const resizeHandle = findImageClipResizeHandle(coords);
             if (resizeHandle) {
@@ -11223,7 +11337,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 e.preventDefault();
                 return;
             }
-            // Not on a handle — if the click is inside the image itself, start
+            // Not on a handle â€” if the click is inside the image itself, start
             // a drag-to-move instead so the user can reposition it.
             if (isInsideImageClipBox(activeClip, coords)) {
                 if (window.captureUndoCheckpoint) window.captureUndoCheckpoint();
@@ -11276,7 +11390,7 @@ document.addEventListener('DOMContentLoaded', () => {
         return { x: cx + dx * cosA - dy * sinA, y: cy + dx * sinA + dy * cosA };
     }
 
-    // Computes the current (un-animated, un-rotated) box rect for a B-roll item —
+    // Computes the current (un-animated, un-rotated) box rect for a B-roll item â€”
     // matches the box math in the main draw loop and in findBrollPipAt, just
     // pulled out so hit-testing helpers (resize handle, rotate handle) can share it.
     function getBrollBoxRect(item, canvasW, canvasH) {
@@ -11438,7 +11552,7 @@ document.addEventListener('DOMContentLoaded', () => {
         return { drawX, drawY, drawW, drawH };
     }
 
-    // Independent X/Y scale (free resize — no forced aspect lock). Falls back
+    // Independent X/Y scale (free resize â€” no forced aspect lock). Falls back
     // to the legacy uniform `imageClipDisplayScale` field for older projects
     // that only ever used the old center-scale resize.
     function getImageClipScale(clip) {
@@ -11609,7 +11723,7 @@ document.addEventListener('DOMContentLoaded', () => {
         return Math.hypot(coords.x - world.x, coords.y - world.y) < hr;
     }
 
-    // Draws a star polygon path (not stroked/filled itself — caller fills/strokes).
+    // Draws a star polygon path (not stroked/filled itself â€” caller fills/strokes).
     function drawStarPath(ctx, cx, cy, outerR, innerR, points) {
         ctx.beginPath();
         for (let i = 0; i < points * 2; i++) {
@@ -11880,7 +11994,7 @@ document.addEventListener('DOMContentLoaded', () => {
             let angle = Math.atan2(dy, dx) * 180 / Math.PI;
             let facing = 'right';
             if (angle > 90 || angle < -90) {
-                // Traveling generally leftward — mirror the plane instead of
+                // Traveling generally leftward â€” mirror the plane instead of
                 // rotating past vertical, and re-base the angle to that side.
                 facing = 'left';
                 angle = angle > 90 ? angle - 180 : angle + 180;
@@ -11889,7 +12003,7 @@ document.addEventListener('DOMContentLoaded', () => {
             angle = Math.max(-maxBank, Math.min(maxBank, angle));
             return { x, y, angleDeg: angle, facing };
         }
-        // 'static' (or unknown) — no movement, just sits at its placed spot.
+        // 'static' (or unknown) â€” no movement, just sits at its placed spot.
         return { x: item.x, y: item.y, angleDeg: 0, facing: 'right' };
     }
 
@@ -12243,7 +12357,7 @@ document.addEventListener('DOMContentLoaded', () => {
         let maxWidth = w * 0.7;
         let textX = 0;
         if (item.shapeType === 'plane') {
-            // Text sits inside the banner, which trails opposite the nose —
+            // Text sits inside the banner, which trails opposite the nose â€”
             // so shift it away from the plane silhouette (roughly a third of
             // the box width in from the tail end).
             const dir = (facing === 'left') ? -1 : 1;
@@ -12696,7 +12810,7 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
 
-        // Background Fill tool — handle draw / drag / resize during mousemove
+        // Background Fill tool â€” handle draw / drag / resize during mousemove
         if (state.isAddingFill && (state.isDrawingNewFill || state.isDraggingFill || state.isResizingFill)) {
             const coords = getCanvasCoords(e);
             const canvasW = state.canvas.width;
@@ -12819,7 +12933,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         // B-roll rotate drag: pointer angle around box center sets item.rotation.
-        // Snaps to 15° increments when close (hold Shift to rotate freely).
+        // Snaps to 15Â° increments when close (hold Shift to rotate freely).
         if (state.isRotatingBroll && state.selectedBrollId !== null) {
             const coords = getCanvasCoords(e);
             const canvasW = state.canvas.width;
@@ -12839,7 +12953,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     let rot = item.rotation;
                     if (rot > 180) rot -= 360;
                     brollTemplateRotationSlider.value = rot;
-                    if (brollTemplateRotationVal) brollTemplateRotationVal.innerText = Math.round(rot) + '°';
+                    if (brollTemplateRotationVal) brollTemplateRotationVal.innerText = Math.round(rot) + 'Â°';
                 }
                 drawFrame();
             }
@@ -13064,7 +13178,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         // Symbol/Shape rotate drag: pointer angle around box center sets item.rotation.
-        // Snaps to 15° increments when close (hold Shift to rotate freely).
+        // Snaps to 15Â° increments when close (hold Shift to rotate freely).
         if (state.isRotatingSymbol && state.selectedSymbolId !== null) {
             const coords = getCanvasCoords(e);
             const canvasW = state.canvas.width;
@@ -13251,7 +13365,7 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
 
-        // Idle cursor feedback over logo / B-roll PiP box / text overlay — shows a
+        // Idle cursor feedback over logo / B-roll PiP box / text overlay â€” shows a
         // "move" hand the instant the pointer is over something draggable, so the
         // drag-anywhere behavior is obvious without needing to read any help text.
         const idleCoords = getCanvasCoords(e);
@@ -13372,7 +13486,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     // No item selected: check input field or default to standard text
                     let initialText = textOverlayInput ? textOverlayInput.value.trim() : '';
                     if (!initialText) {
-                        initialText = "আপনার টেক্সট লিখুন";
+                        initialText = "à¦†à¦ªà¦¨à¦¾à¦° à¦Ÿà§‡à¦•à§à¦¸à¦Ÿ à¦²à¦¿à¦–à§à¦¨";
                     }
                     const newItem = {
                         id: typeof textOverlayIdCounter !== 'undefined' ? textOverlayIdCounter++ : Date.now(),
@@ -13414,7 +13528,7 @@ document.addEventListener('DOMContentLoaded', () => {
             state.canvas.style.cursor = 'default';
             const drawTextBoxBtn = document.getElementById('draw-textbox-btn');
             if (drawTextBoxBtn) {
-                drawTextBoxBtn.innerHTML = '<i class="fa-solid fa-pen-ruler"></i> Draw Text Box (বক্স ড্র করুন)';
+                drawTextBoxBtn.innerHTML = '<i class="fa-solid fa-pen-ruler"></i> Draw Text Box (à¦¬à¦•à§à¦¸ à¦¡à§à¦° à¦•à¦°à§à¦¨)';
                 drawTextBoxBtn.classList.remove('active');
             }
             drawFrame();
@@ -13510,7 +13624,7 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
 
-        // Background Fill tool — finalise draw / drag / resize
+        // Background Fill tool â€” finalise draw / drag / resize
         if (state.isDrawingNewFill || state.isDraggingFill || state.isResizingFill) {
             const wasDrawing = state.isDrawingNewFill;
             state.isDrawingNewFill = false;
@@ -13629,7 +13743,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (applyCropAllClipsBtn) {
         applyCropAllClipsBtn.addEventListener('click', () => {
             if (!state.clips || !state.clips.length) {
-                if (window.showToast) window.showToast('কোনো ক্লিপ পাওয়া যায়নি', 'warning');
+                if (window.showToast) window.showToast('à¦•à§‹à¦¨à§‹ à¦•à§à¦²à¦¿à¦ª à¦ªà¦¾à¦“à¦¯à¦¼à¦¾ à¦¯à¦¾à¦¯à¦¼à¦¨à¦¿', 'warning');
                 return;
             }
             syncCropToActiveClip();
@@ -13640,9 +13754,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 c.cropH = state.cropH;
             });
             if (window.showToast) {
-                window.showToast(`সবগুলো ক্লিপে (${state.clips.length}টি) বর্তমান ক্রপ সফলভাবে প্রয়োগ করা হয়েছে!`, 'success');
+                window.showToast(`à¦¸à¦¬à¦—à§à¦²à§‹ à¦•à§à¦²à¦¿à¦ªà§‡ (${state.clips.length}à¦Ÿà¦¿) à¦¬à¦°à§à¦¤à¦®à¦¾à¦¨ à¦•à§à¦°à¦ª à¦¸à¦«à¦²à¦­à¦¾à¦¬à§‡ à¦ªà§à¦°à¦¯à¦¼à§‹à¦— à¦•à¦°à¦¾ à¦¹à¦¯à¦¼à§‡à¦›à§‡!`, 'success');
             } else {
-                alert(`সবগুলো ক্লিপে (${state.clips.length}টি) বর্তমান ক্রপ প্রয়োগ করা হয়েছে!`);
+                alert(`à¦¸à¦¬à¦—à§à¦²à§‹ à¦•à§à¦²à¦¿à¦ªà§‡ (${state.clips.length}à¦Ÿà¦¿) à¦¬à¦°à§à¦¤à¦®à¦¾à¦¨ à¦•à§à¦°à¦ª à¦ªà§à¦°à¦¯à¦¼à§‹à¦— à¦•à¦°à¦¾ à¦¹à¦¯à¦¼à§‡à¦›à§‡!`);
             }
             if (window.recordEditorHistory) window.recordEditorHistory('Applied crop to all clips');
         });
@@ -13757,15 +13871,15 @@ document.addEventListener('DOMContentLoaded', () => {
         autoReframeBtn.addEventListener('click', () => {
             const activeClip = state.clips.find(c => c.id === state.activeClipId);
             if (!activeClip) {
-                alert("দয়া করে প্রথমে একটি ভিডিও ক্লিপ সিলেক্ট করুন।");
+                alert("à¦¦à§Ÿà¦¾ à¦•à¦°à§‡ à¦ªà§à¦°à¦¥à¦®à§‡ à¦à¦•à¦Ÿà¦¿ à¦­à¦¿à¦¡à¦¿à¦“ à¦•à§à¦²à¦¿à¦ª à¦¸à¦¿à¦²à§‡à¦•à§à¦Ÿ à¦•à¦°à§à¦¨à¥¤");
                 return;
             }
             if (activeClip.type === 'image') {
-                alert("অটো-রিফ্রেম শুধু ভিডিও ক্লিপের জন্য প্রযোজ্য।");
+                alert("à¦…à¦Ÿà§‹-à¦°à¦¿à¦«à§à¦°à§‡à¦® à¦¶à§à¦§à§ à¦­à¦¿à¦¡à¦¿à¦“ à¦•à§à¦²à¦¿à¦ªà§‡à¦° à¦œà¦¨à§à¦¯ à¦ªà§à¦°à¦¯à§‹à¦œà§à¦¯à¥¤");
                 return;
             }
             if (state.aspectRatio === 'original') {
-                alert("অটো-রিফ্রেম করার জন্য প্রথমে একটি ক্যানভাস ফরম্যাট (যেমন ১:১, ৪:৫ বা ৯:১৬) সিলেক্ট করুন।");
+                alert("à¦…à¦Ÿà§‹-à¦°à¦¿à¦«à§à¦°à§‡à¦® à¦•à¦°à¦¾à¦° à¦œà¦¨à§à¦¯ à¦ªà§à¦°à¦¥à¦®à§‡ à¦à¦•à¦Ÿà¦¿ à¦•à§à¦¯à¦¾à¦¨à¦­à¦¾à¦¸ à¦«à¦°à¦®à§à¦¯à¦¾à¦Ÿ (à¦¯à§‡à¦®à¦¨ à§§:à§§, à§ª:à§« à¦¬à¦¾ à§¯:à§§à§¬) à¦¸à¦¿à¦²à§‡à¦•à§à¦Ÿ à¦•à¦°à§à¦¨à¥¤");
                 return;
             }
 
@@ -13781,7 +13895,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 }, 100);
             } catch (err) {
                 console.error("Auto Reframe error:", err);
-                alert("অটো-রিফ্রেম ব্যর্থ হয়েছে।");
+                alert("à¦…à¦Ÿà§‹-à¦°à¦¿à¦«à§à¦°à§‡à¦® à¦¬à§à¦¯à¦°à§à¦¥ à¦¹à§Ÿà§‡à¦›à§‡à¥¤");
                 autoReframeBtn.disabled = false;
                 autoReframeBtn.innerHTML = '<i class="fa-solid fa-wand-magic-sparkles"></i> Auto Reframe (Smart Crop)';
             }
@@ -13791,7 +13905,7 @@ document.addEventListener('DOMContentLoaded', () => {
     function performAutoReframe(activeClip) {
         const video = state.video;
         if (!video.videoWidth || !video.videoHeight) {
-            alert("ভিডিও ফাইলটি পুরোপুরি লোড হয়নি। দয়া করে একটু অপেক্ষা করুন।");
+            alert("à¦­à¦¿à¦¡à¦¿à¦“ à¦«à¦¾à¦‡à¦²à¦Ÿà¦¿ à¦ªà§à¦°à§‹à¦ªà§à¦°à¦¿ à¦²à§‹à¦¡ à¦¹à§Ÿà¦¨à¦¿à¥¤ à¦¦à§Ÿà¦¾ à¦•à¦°à§‡ à¦à¦•à¦Ÿà§ à¦…à¦ªà§‡à¦•à§à¦·à¦¾ à¦•à¦°à§à¦¨à¥¤");
             return;
         }
 
@@ -14000,7 +14114,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const row = document.createElement('div');
             row.className = 'text-overlay-list-item' + (item.id === state.selectedHighlightId ? ' active' : '');
             row.style.cssText = `display:flex;align-items:center;justify-content:space-between;padding:8px 12px;border-radius:6px;margin-bottom:6px;cursor:pointer;background:${item.id === state.selectedHighlightId ? 'rgba(0,229,255,.12)' : 'rgba(255,255,255,.04)'};border:1px solid ${item.id === state.selectedHighlightId ? '#00e5ff' : 'transparent'};`;
-            row.innerHTML = `<span style="font-size:13px"><i class="fa-solid fa-highlighter" style="color:${item.color}"></i> Highlight ${index + 1} · ${item.shape}</span><span style="font-size:11px;opacity:.6">${item.startSec.toFixed(1)}s–${item.endSec.toFixed(1)}s</span>`;
+            row.innerHTML = `<span style="font-size:13px"><i class="fa-solid fa-highlighter" style="color:${item.color}"></i> Highlight ${index + 1} Â· ${item.shape}</span><span style="font-size:11px;opacity:.6">${item.startSec.toFixed(1)}sâ€“${item.endSec.toFixed(1)}s</span>`;
             row.addEventListener('click', () => { state.selectedHighlightId = item.id; showHighlightControls(item.id); renderHighlightList(); drawFrame(); });
             highlightListEl.appendChild(row);
         });
@@ -14062,7 +14176,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const row = document.createElement('div');
             row.className = 'text-overlay-list-item' + (item.id === state.selectedFillId ? ' active' : '');
             row.style.cssText = `display:flex;align-items:center;justify-content:space-between;padding:8px 12px;border-radius:6px;margin-bottom:6px;cursor:pointer;background:${item.id === state.selectedFillId ? 'rgba(255,200,0,.12)' : 'rgba(255,255,255,.04)'};border:1px solid ${item.id === state.selectedFillId ? '#ffc800' : 'transparent'};`;
-            row.innerHTML = `<span style="font-size:13px"><i class="fa-solid fa-fill-drip" style="color:${item.color}"></i> Fill ${index + 1}</span><span style="font-size:11px;opacity:.6">${item.startSec.toFixed(1)}s–${item.endSec.toFixed(1)}s</span>`;
+            row.innerHTML = `<span style="font-size:13px"><i class="fa-solid fa-fill-drip" style="color:${item.color}"></i> Fill ${index + 1}</span><span style="font-size:11px;opacity:.6">${item.startSec.toFixed(1)}sâ€“${item.endSec.toFixed(1)}s</span>`;
             row.addEventListener('click', () => { state.selectedFillId = item.id; showFillControls(item.id); renderFillList(); drawFrame(); });
             fillListEl.appendChild(row);
         });
@@ -14547,7 +14661,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (drawCurveBtn) {
         drawCurveBtn.addEventListener('click', () => {
             if (!state.selectedTextOverlayId) {
-                alert('প্রথমে একটি টেক্সট সিলেক্ট করুন। (Select a text overlay first.)');
+                alert('à¦ªà§à¦°à¦¥à¦®à§‡ à¦à¦•à¦Ÿà¦¿ à¦Ÿà§‡à¦•à§à¦¸à¦Ÿ à¦¸à¦¿à¦²à§‡à¦•à§à¦Ÿ à¦•à¦°à§à¦¨à¥¤ (Select a text overlay first.)');
                 return;
             }
             state.isDrawingTextCurve = !state.isDrawingTextCurve;
@@ -14608,10 +14722,10 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
 
                 drawFrame();
-                alert('ক্যানভাসে মাউস বা টাচ দিয়ে ড্র্যাগ করে টেক্সট বক্সের আকার এবং অবস্থান আঁকুন। (Drag on canvas to position and size your text box.)');
+                alert('à¦•à§à¦¯à¦¾à¦¨à¦­à¦¾à¦¸à§‡ à¦®à¦¾à¦‰à¦¸ à¦¬à¦¾ à¦Ÿà¦¾à¦š à¦¦à¦¿à§Ÿà§‡ à¦¡à§à¦°à§à¦¯à¦¾à¦— à¦•à¦°à§‡ à¦Ÿà§‡à¦•à§à¦¸à¦Ÿ à¦¬à¦•à§à¦¸à§‡à¦° à¦†à¦•à¦¾à¦° à¦à¦¬à¦‚ à¦…à¦¬à¦¸à§à¦¥à¦¾à¦¨ à¦†à¦à¦•à§à¦¨à¥¤ (Drag on canvas to position and size your text box.)');
             } else {
                 state.canvas.style.cursor = 'default';
-                drawTextBoxBtn.innerHTML = '<i class="fa-solid fa-pen-ruler"></i> Draw Text Box (বক্স ড্র করুন)';
+                drawTextBoxBtn.innerHTML = '<i class="fa-solid fa-pen-ruler"></i> Draw Text Box (à¦¬à¦•à§à¦¸ à¦¡à§à¦° à¦•à¦°à§à¦¨)';
                 drawTextBoxBtn.classList.remove('active');
                 drawFrame();
             }
@@ -14622,11 +14736,11 @@ document.addEventListener('DOMContentLoaded', () => {
         const text = textOverlayInput.value.trim();
         if (!text) return;
 
-        // undo checkpoint নতুন item যোগের আগে নাও
+        // undo checkpoint à¦¨à¦¤à§à¦¨ item à¦¯à§‹à¦—à§‡à¦° à¦†à¦—à§‡ à¦¨à¦¾à¦“
         if (window.captureUndoCheckpoint) window.captureUndoCheckpoint();
 
-        // নতুন text যোগ করার আগে পুরনো selection clear করো —
-        // না হলে Draw Text Box সেই পুরনো item-কে move করে নতুন তৈরি করে না
+        // à¦¨à¦¤à§à¦¨ text à¦¯à§‹à¦— à¦•à¦°à¦¾à¦° à¦†à¦—à§‡ à¦ªà§à¦°à¦¨à§‹ selection clear à¦•à¦°à§‹ â€”
+        // à¦¨à¦¾ à¦¹à¦²à§‡ Draw Text Box à¦¸à§‡à¦‡ à¦ªà§à¦°à¦¨à§‹ item-à¦•à§‡ move à¦•à¦°à§‡ à¦¨à¦¤à§à¦¨ à¦¤à§ˆà¦°à¦¿ à¦•à¦°à§‡ à¦¨à¦¾
         state.selectedTextOverlayId = null;
 
         const newItem = {
@@ -14692,11 +14806,11 @@ document.addEventListener('DOMContentLoaded', () => {
             row.style.border = item.id === state.selectedTextOverlayId ? '1px solid var(--primary)' : '1px solid transparent';
 
             const label = document.createElement('span');
-            label.innerText = item.text.length > 28 ? item.text.slice(0, 28) + '…' : item.text;
+            label.innerText = item.text.length > 28 ? item.text.slice(0, 28) + 'â€¦' : item.text;
             label.style.fontSize = '13px';
 
             const timeLabel = document.createElement('span');
-            timeLabel.innerText = `${item.startSec.toFixed(1)}s–${item.endSec.toFixed(1)}s`;
+            timeLabel.innerText = `${item.startSec.toFixed(1)}sâ€“${item.endSec.toFixed(1)}s`;
             timeLabel.style.fontSize = '11px';
             timeLabel.style.opacity = '0.6';
 
@@ -14808,7 +14922,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     deleteTextOverlayBtn.addEventListener('click', () => {
         if (!state.selectedTextOverlayId) return;
-        // undo চেকপয়েন্ট সেভ করো যাতে delete-এর পরে Ctrl+Z কাজ করে
+        // undo à¦šà§‡à¦•à¦ªà¦¯à¦¼à§‡à¦¨à§à¦Ÿ à¦¸à§‡à¦­ à¦•à¦°à§‹ à¦¯à¦¾à¦¤à§‡ delete-à¦à¦° à¦ªà¦°à§‡ Ctrl+Z à¦•à¦¾à¦œ à¦•à¦°à§‡
         if (window.captureUndoCheckpoint) window.captureUndoCheckpoint();
         state.textOverlays = state.textOverlays.filter(t => t.id !== state.selectedTextOverlayId);
         state.selectedTextOverlayId = null;
@@ -14819,7 +14933,7 @@ document.addEventListener('DOMContentLoaded', () => {
         textOverlayTimingContainer.style.display = 'none';
         if (window.updateCurveButtonVisibility) window.updateCurveButtonVisibility();
         drawFrame();
-        // undo history তে record করো
+        // undo history à¦¤à§‡ record à¦•à¦°à§‹
         if (window.recordEditorHistory) window.recordEditorHistory('Text overlay deleted');
     });
 
@@ -15003,7 +15117,7 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    // ── Background Image Upload ─────────────────────────────────────────
+    // â”€â”€ Background Image Upload â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     const brollBgImageInput   = document.getElementById('broll-bg-image-input');
     const brollBgImageBtn     = document.getElementById('broll-bg-image-btn');
     const brollBgImageThumb   = document.getElementById('broll-bg-image-thumb');
@@ -15257,7 +15371,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // Continuous speed slider (1 = slowest, 100 = fastest) <-> animation duration in
     // seconds. Replaces the old 3-option Fast/Normal/Slow dropdown with a YouTube-volume
     // style drag bar so the person can dial in exactly how snappy the entry/exit feels.
-    // Slow end raised from 1.2s to 2.6s (v2.6) — at the old cap, even the slowest setting
+    // Slow end raised from 1.2s to 2.6s (v2.6) â€” at the old cap, even the slowest setting
     // still read as "fast" for entry/exit animations; 2.6s gives a real slow-motion feel.
     const BROLL_SPEED_MIN_SEC = 0.15;
     const BROLL_SPEED_MAX_SEC = 15.0;
@@ -15274,87 +15388,87 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     function brollSpeedLabel(sec) {
         const s = Number(sec).toFixed(1) + 's';
-        if (sec <= 0.3) return `${s} (দ্রুত / Fast)`;
-        if (sec >= 4.0) return `${s} (খুব ধীর / Very Slow)`;
-        if (sec >= 1.5) return `${s} (ধীর / Slow)`;
-        return `${s} (স্বাভাবিক / Normal)`;
+        if (sec <= 0.3) return `${s} (à¦¦à§à¦°à§à¦¤ / Fast)`;
+        if (sec >= 4.0) return `${s} (à¦–à§à¦¬ à¦§à§€à¦° / Very Slow)`;
+        if (sec >= 1.5) return `${s} (à¦§à§€à¦° / Slow)`;
+        return `${s} (à¦¸à§à¦¬à¦¾à¦­à¦¾à¦¬à¦¿à¦• / Normal)`;
     }
 
-    // Unified animation style list (v2.5) — every style works the same way in
+    // Unified animation style list (v2.5) â€” every style works the same way in
     // both Fullscreen and PiP mode now, so there's just one shared list instead
     // of two different ones. A couple of PiP-only Bengali labels ("Zoom Pop",
     // "Bounce Drop") are worded to make it obvious what they'll look like on a
     // small corner box, even though the same style value also works full-screen.
     const BROLL_ANIM_STYLES = [
-        { value: 'none', label: 'কোনো অ্যানিমেশন নেই (সরাসরি দেখাবে)' },
-        { value: 'fade', label: 'Fade (আস্তে আস্তে ভেসে উঠবে)' },
-        { value: 'zoom', label: 'Zoom In (ধীরে ধীরে জুম হবে)' },
-        { value: 'zoom-out', label: 'Zoom Out (জুম আউট হবে)' },
-        { value: 'zoom-pop', label: 'Zoom Pop (হঠাৎ বড় হয়ে পপ করে আসবে)' },
-        { value: 'pan', label: 'Pan (Ken Burns - আস্তে আস্তে সরে যাবে)' },
-        { value: 'slide', label: 'Slide (এক পাশ থেকে সোজা স্লাইড করে আসবে)' },
-        { value: 'slide-pop', label: 'Slide + Pop (কোণা থেকে বাউন্স করে আসবে)' },
-        { value: 'wipe', label: 'Wipe Reveal (মুছে মুছে দেখা যাবে)' },
-        { value: 'rotate-in', label: 'Rotate In (ঘুরে ঘুরে আসবে)' },
-        { value: 'spin-pop', label: 'Spin Pop (ঘুরতে ঘুরতে আসবে)' },
-        { value: 'bounce-in', label: 'Bounce Drop (উপর থেকে লাফিয়ে পড়বে)' },
-        { value: 'blur-pop', label: 'Blur Pop (ঝাপসা থেকে স্পষ্ট হয়ে আসবে)' },
-        { value: 'blur-focus', label: 'Blur Focus (ঝাপসা থেকে স্পষ্ট হবে)' },
-        { value: 'circle-highlight', label: 'Circle Highlight (চারপাশে হাতে-আঁকা গোল দাগ)' },
-        { value: 'underline-draw', label: 'Underline Draw-on (নিচে দাগ আঁка হবে)' },
-        { value: 'checkmark-pop', label: 'Checkmark Pop (✓ চিহ্ন পপ করে আসবে)' },
-        { value: 'thinking-character', label: 'Thinking Character (🤔 চিন্তা করার বাবল)' },
-        { value: 'arrow-point', label: 'Arrow Point-in (তীর চিহ্ন দেখাবে)' },
-        { value: 'highlight-sweep', label: 'Highlight Marker Sweep (মার্কার দিয়ে হাইলাইট)' },
-        { value: 'typewriter', label: 'Typewriter Reveal (টাইপরাইটারের মতো লেখা হবে)', textOnly: true },
-        { value: 'magnifier-zoom', label: 'Magnifying Glass Zoom (🔍 ম্যাগনিফায়ার আইকন)' },
-        { value: 'comparison-slide', label: 'Comparison Slide (Before/After স্লাইডার)' },
-        { value: 'question-bounce', label: 'Question Mark Bounce (❓ লাফিয়ে আসবে)' },
-        { value: 'confetti-pop', label: 'Confetti Pop (রঙিন কনফেত্তি ছড়িয়ে পড়বে)' },
-        { value: 'heart-burst', label: 'Heart Burst (❤️ হার্ট ছড়িয়ে পড়বে)' },
-        { value: 'badge-pop-dot', label: '🔴 Badge Sticker Pop (কাত হয়ে ব্যাজ পপ করে আসবে + লাল ডট)' },
-        { value: 'comic-burst-text', label: '💥 Comic Impact Burst (বড় বাবল টেক্সট + চারপাশে রশ্মি)' },
-        { value: 'cursor-click-point', label: '🖱️ Cursor Click Pointer (হাতের কার্সর ক্লিক করবে)' },
-        { value: 'cta-button-arrow', label: '➡️ CTA Button + Hand Arrow (বাটন থেকে বাঁকা তীর প্রোডাক্টের দিকে)' },
-        { value: 'comic-outline-glow', label: '🎨 Comic Outline Glow Text (মোটা কালো আউটলাইন + রঙিন গ্লো)' },
-        { value: 'comic-speed-rays', label: '💥 Comic Speed Rays (টেক্সটের চারপাশ থেকে স্পিড রশ্মি)', textOnly: true },
-        { value: 'cursor-line-draw', label: '✍️ Cursor Line Underline (কার্সর লাইন টেনে দেখাবে)', textOnly: true },
-        { value: 'torn-paper-marker', label: '📜 Torn Paper Banner (ছেঁড়া হলুদ কাগজ টেক্সট ব্যানার)' },
-        { value: 'letter-bounce-wiggle', label: '🔤 অক্ষর লাফিয়ে লাফিয়ে নড়বে (Letter Bounce Wiggle)', textOnly: true },
-        { value: 'particle-glow-text', label: '✨ সোনালি Glow পার্টিকেল টেক্সট (Golden Particle Glow)', textOnly: true },
-        { value: 'hanging-sign-swing', label: 'Hanging Sign Swing (🔴 পিন থেকে ঝুলে দুলতে দুলতে আসবে)' },
-        { value: 'plane-banner-trail', label: 'Plane Banner Trail (✈️ প্লেন উড়ে গিয়ে লেখা রেখে যাবে)' },
+        { value: 'none', label: 'à¦•à§‹à¦¨à§‹ à¦…à§à¦¯à¦¾à¦¨à¦¿à¦®à§‡à¦¶à¦¨ à¦¨à§‡à¦‡ (à¦¸à¦°à¦¾à¦¸à¦°à¦¿ à¦¦à§‡à¦–à¦¾à¦¬à§‡)' },
+        { value: 'fade', label: 'Fade (à¦†à¦¸à§à¦¤à§‡ à¦†à¦¸à§à¦¤à§‡ à¦­à§‡à¦¸à§‡ à¦‰à¦ à¦¬à§‡)' },
+        { value: 'zoom', label: 'Zoom In (à¦§à§€à¦°à§‡ à¦§à§€à¦°à§‡ à¦œà§à¦® à¦¹à¦¬à§‡)' },
+        { value: 'zoom-out', label: 'Zoom Out (à¦œà§à¦® à¦†à¦‰à¦Ÿ à¦¹à¦¬à§‡)' },
+        { value: 'zoom-pop', label: 'Zoom Pop (à¦¹à¦ à¦¾à§Ž à¦¬à¦¡à¦¼ à¦¹à¦¯à¦¼à§‡ à¦ªà¦ª à¦•à¦°à§‡ à¦†à¦¸à¦¬à§‡)' },
+        { value: 'pan', label: 'Pan (Ken Burns - à¦†à¦¸à§à¦¤à§‡ à¦†à¦¸à§à¦¤à§‡ à¦¸à¦°à§‡ à¦¯à¦¾à¦¬à§‡)' },
+        { value: 'slide', label: 'Slide (à¦à¦• à¦ªà¦¾à¦¶ à¦¥à§‡à¦•à§‡ à¦¸à§‹à¦œà¦¾ à¦¸à§à¦²à¦¾à¦‡à¦¡ à¦•à¦°à§‡ à¦†à¦¸à¦¬à§‡)' },
+        { value: 'slide-pop', label: 'Slide + Pop (à¦•à§‹à¦£à¦¾ à¦¥à§‡à¦•à§‡ à¦¬à¦¾à¦‰à¦¨à§à¦¸ à¦•à¦°à§‡ à¦†à¦¸à¦¬à§‡)' },
+        { value: 'wipe', label: 'Wipe Reveal (à¦®à§à¦›à§‡ à¦®à§à¦›à§‡ à¦¦à§‡à¦–à¦¾ à¦¯à¦¾à¦¬à§‡)' },
+        { value: 'rotate-in', label: 'Rotate In (à¦˜à§à¦°à§‡ à¦˜à§à¦°à§‡ à¦†à¦¸à¦¬à§‡)' },
+        { value: 'spin-pop', label: 'Spin Pop (à¦˜à§à¦°à¦¤à§‡ à¦˜à§à¦°à¦¤à§‡ à¦†à¦¸à¦¬à§‡)' },
+        { value: 'bounce-in', label: 'Bounce Drop (à¦‰à¦ªà¦° à¦¥à§‡à¦•à§‡ à¦²à¦¾à¦«à¦¿à¦¯à¦¼à§‡ à¦ªà¦¡à¦¼à¦¬à§‡)' },
+        { value: 'blur-pop', label: 'Blur Pop (à¦à¦¾à¦ªà¦¸à¦¾ à¦¥à§‡à¦•à§‡ à¦¸à§à¦ªà¦·à§à¦Ÿ à¦¹à¦¯à¦¼à§‡ à¦†à¦¸à¦¬à§‡)' },
+        { value: 'blur-focus', label: 'Blur Focus (à¦à¦¾à¦ªà¦¸à¦¾ à¦¥à§‡à¦•à§‡ à¦¸à§à¦ªà¦·à§à¦Ÿ à¦¹à¦¬à§‡)' },
+        { value: 'circle-highlight', label: 'Circle Highlight (à¦šà¦¾à¦°à¦ªà¦¾à¦¶à§‡ à¦¹à¦¾à¦¤à§‡-à¦†à¦à¦•à¦¾ à¦—à§‹à¦² à¦¦à¦¾à¦—)' },
+        { value: 'underline-draw', label: 'Underline Draw-on (à¦¨à¦¿à¦šà§‡ à¦¦à¦¾à¦— à¦†à¦ÐºÐ° à¦¹à¦¬à§‡)' },
+        { value: 'checkmark-pop', label: 'Checkmark Pop (âœ“ à¦šà¦¿à¦¹à§à¦¨ à¦ªà¦ª à¦•à¦°à§‡ à¦†à¦¸à¦¬à§‡)' },
+        { value: 'thinking-character', label: 'Thinking Character (ðŸ¤” à¦šà¦¿à¦¨à§à¦¤à¦¾ à¦•à¦°à¦¾à¦° à¦¬à¦¾à¦¬à¦²)' },
+        { value: 'arrow-point', label: 'Arrow Point-in (à¦¤à§€à¦° à¦šà¦¿à¦¹à§à¦¨ à¦¦à§‡à¦–à¦¾à¦¬à§‡)' },
+        { value: 'highlight-sweep', label: 'Highlight Marker Sweep (à¦®à¦¾à¦°à§à¦•à¦¾à¦° à¦¦à¦¿à¦¯à¦¼à§‡ à¦¹à¦¾à¦‡à¦²à¦¾à¦‡à¦Ÿ)' },
+        { value: 'typewriter', label: 'Typewriter Reveal (à¦Ÿà¦¾à¦‡à¦ªà¦°à¦¾à¦‡à¦Ÿà¦¾à¦°à§‡à¦° à¦®à¦¤à§‹ à¦²à§‡à¦–à¦¾ à¦¹à¦¬à§‡)', textOnly: true },
+        { value: 'magnifier-zoom', label: 'Magnifying Glass Zoom (ðŸ” à¦®à§à¦¯à¦¾à¦—à¦¨à¦¿à¦«à¦¾à¦¯à¦¼à¦¾à¦° à¦†à¦‡à¦•à¦¨)' },
+        { value: 'comparison-slide', label: 'Comparison Slide (Before/After à¦¸à§à¦²à¦¾à¦‡à¦¡à¦¾à¦°)' },
+        { value: 'question-bounce', label: 'Question Mark Bounce (â“ à¦²à¦¾à¦«à¦¿à¦¯à¦¼à§‡ à¦†à¦¸à¦¬à§‡)' },
+        { value: 'confetti-pop', label: 'Confetti Pop (à¦°à¦™à¦¿à¦¨ à¦•à¦¨à¦«à§‡à¦¤à§à¦¤à¦¿ à¦›à¦¡à¦¼à¦¿à¦¯à¦¼à§‡ à¦ªà¦¡à¦¼à¦¬à§‡)' },
+        { value: 'heart-burst', label: 'Heart Burst (â¤ï¸ à¦¹à¦¾à¦°à§à¦Ÿ à¦›à¦¡à¦¼à¦¿à¦¯à¦¼à§‡ à¦ªà¦¡à¦¼à¦¬à§‡)' },
+        { value: 'badge-pop-dot', label: 'ðŸ”´ Badge Sticker Pop (à¦•à¦¾à¦¤ à¦¹à¦¯à¦¼à§‡ à¦¬à§à¦¯à¦¾à¦œ à¦ªà¦ª à¦•à¦°à§‡ à¦†à¦¸à¦¬à§‡ + à¦²à¦¾à¦² à¦¡à¦Ÿ)' },
+        { value: 'comic-burst-text', label: 'ðŸ’¥ Comic Impact Burst (à¦¬à¦¡à¦¼ à¦¬à¦¾à¦¬à¦² à¦Ÿà§‡à¦•à§à¦¸à¦Ÿ + à¦šà¦¾à¦°à¦ªà¦¾à¦¶à§‡ à¦°à¦¶à§à¦®à¦¿)' },
+        { value: 'cursor-click-point', label: 'ðŸ–±ï¸ Cursor Click Pointer (à¦¹à¦¾à¦¤à§‡à¦° à¦•à¦¾à¦°à§à¦¸à¦° à¦•à§à¦²à¦¿à¦• à¦•à¦°à¦¬à§‡)' },
+        { value: 'cta-button-arrow', label: 'âž¡ï¸ CTA Button + Hand Arrow (à¦¬à¦¾à¦Ÿà¦¨ à¦¥à§‡à¦•à§‡ à¦¬à¦¾à¦à¦•à¦¾ à¦¤à§€à¦° à¦ªà§à¦°à§‹à¦¡à¦¾à¦•à§à¦Ÿà§‡à¦° à¦¦à¦¿à¦•à§‡)' },
+        { value: 'comic-outline-glow', label: 'ðŸŽ¨ Comic Outline Glow Text (à¦®à§‹à¦Ÿà¦¾ à¦•à¦¾à¦²à§‹ à¦†à¦‰à¦Ÿà¦²à¦¾à¦‡à¦¨ + à¦°à¦™à¦¿à¦¨ à¦—à§à¦²à§‹)' },
+        { value: 'comic-speed-rays', label: 'ðŸ’¥ Comic Speed Rays (à¦Ÿà§‡à¦•à§à¦¸à¦Ÿà§‡à¦° à¦šà¦¾à¦°à¦ªà¦¾à¦¶ à¦¥à§‡à¦•à§‡ à¦¸à§à¦ªà¦¿à¦¡ à¦°à¦¶à§à¦®à¦¿)', textOnly: true },
+        { value: 'cursor-line-draw', label: 'âœï¸ Cursor Line Underline (à¦•à¦¾à¦°à§à¦¸à¦° à¦²à¦¾à¦‡à¦¨ à¦Ÿà§‡à¦¨à§‡ à¦¦à§‡à¦–à¦¾à¦¬à§‡)', textOnly: true },
+        { value: 'torn-paper-marker', label: 'ðŸ“œ Torn Paper Banner (à¦›à§‡à¦à¦¡à¦¼à¦¾ à¦¹à¦²à§à¦¦ à¦•à¦¾à¦—à¦œ à¦Ÿà§‡à¦•à§à¦¸à¦Ÿ à¦¬à§à¦¯à¦¾à¦¨à¦¾à¦°)' },
+        { value: 'letter-bounce-wiggle', label: 'ðŸ”¤ à¦…à¦•à§à¦·à¦° à¦²à¦¾à¦«à¦¿à¦¯à¦¼à§‡ à¦²à¦¾à¦«à¦¿à¦¯à¦¼à§‡ à¦¨à¦¡à¦¼à¦¬à§‡ (Letter Bounce Wiggle)', textOnly: true },
+        { value: 'particle-glow-text', label: 'âœ¨ à¦¸à§‹à¦¨à¦¾à¦²à¦¿ Glow à¦ªà¦¾à¦°à§à¦Ÿà¦¿à¦•à§‡à¦² à¦Ÿà§‡à¦•à§à¦¸à¦Ÿ (Golden Particle Glow)', textOnly: true },
+        { value: 'hanging-sign-swing', label: 'Hanging Sign Swing (ðŸ”´ à¦ªà¦¿à¦¨ à¦¥à§‡à¦•à§‡ à¦à§à¦²à§‡ à¦¦à§à¦²à¦¤à§‡ à¦¦à§à¦²à¦¤à§‡ à¦†à¦¸à¦¬à§‡)' },
+        { value: 'plane-banner-trail', label: 'Plane Banner Trail (âœˆï¸ à¦ªà§à¦²à§‡à¦¨ à¦‰à¦¡à¦¼à§‡ à¦—à¦¿à¦¯à¦¼à§‡ à¦²à§‡à¦–à¦¾ à¦°à§‡à¦–à§‡ à¦¯à¦¾à¦¬à§‡)' },
 
-        // Kinetic Typography (v2.8) — per-letter/per-word text entrances. These
+        // Kinetic Typography (v2.8) â€” per-letter/per-word text entrances. These
         // only make sense for Text B-roll (each style animates the individual
         // characters/words instead of the whole box as one rigid unit), so
         // they're flagged textOnly and filtered out of the dropdown for image
         // and video B-roll.
-        { value: 'letter-rotate-settle', label: '✍️ অক্ষর ঘুরে ঘুরে বসবে (Letter Spin & Settle)', textOnly: true },
-        { value: 'letter-converge', label: '🤝 দুই পাশ থেকে এসে মিলবে (Two-Side Converge)', textOnly: true },
-        { value: 'letter-cascade-fade', label: '✨ একটার পর একটা অক্ষর ভেসে উঠবে (Letter Cascade Fade)', textOnly: true },
-        { value: 'word-pop-stagger', label: '🔤 শব্দ ধরে ধরে পপ করে আসবে (Word-by-Word Pop)', textOnly: true },
+        { value: 'letter-rotate-settle', label: 'âœï¸ à¦…à¦•à§à¦·à¦° à¦˜à§à¦°à§‡ à¦˜à§à¦°à§‡ à¦¬à¦¸à¦¬à§‡ (Letter Spin & Settle)', textOnly: true },
+        { value: 'letter-converge', label: 'ðŸ¤ à¦¦à§à¦‡ à¦ªà¦¾à¦¶ à¦¥à§‡à¦•à§‡ à¦à¦¸à§‡ à¦®à¦¿à¦²à¦¬à§‡ (Two-Side Converge)', textOnly: true },
+        { value: 'letter-cascade-fade', label: 'âœ¨ à¦à¦•à¦Ÿà¦¾à¦° à¦ªà¦° à¦à¦•à¦Ÿà¦¾ à¦…à¦•à§à¦·à¦° à¦­à§‡à¦¸à§‡ à¦‰à¦ à¦¬à§‡ (Letter Cascade Fade)', textOnly: true },
+        { value: 'word-pop-stagger', label: 'ðŸ”¤ à¦¶à¦¬à§à¦¦ à¦§à¦°à§‡ à¦§à¦°à§‡ à¦ªà¦ª à¦•à¦°à§‡ à¦†à¦¸à¦¬à§‡ (Word-by-Word Pop)', textOnly: true },
         
         // Wings Fly Custom Presets (Style + Direction + Sound Combinations)
-        { value: 'preset-wings-intro', label: 'Wings Intro Banner (বাম দিক থেকে স্লাইড ও সুইশ শব্দ)' },
-        { value: 'preset-question-pop', label: 'Question Bounce + Pop (❓ নিচ দিক থেকে লাফিয়ে আসা ও পপ শব্দ)' },
-        { value: 'preset-checkmark-chime', label: 'Checkmark Pop + Chime (✓ চিহ্ন পপ ও চমক শব্দ)' },
-        { value: 'preset-typewriter-click', label: 'Typewriter + Click (টাইপরাইটার ও ক্লিক শব্দ)' },
-        { value: 'preset-zoom-chime', label: 'Zoom Pop + Chime (জুম পপ ও চমক শব্দ)' },
-        { value: 'preset-rotate-whoosh', label: 'Rotate In + Whoosh (ঘুরে আসা ও সুইশ শব্দ)' },
-        { value: 'preset-highlight-chime', label: 'Highlight Sweep + Chime (মার্কার হাইলাইট ও চমক শব্দ)' },
-        { value: 'preset-arrow-whoosh', label: 'Arrow Point + Whoosh (তীর চিহ্ন ও সুইশ শব্দ)' },
-        { value: 'preset-phone-app', label: '📱 Phone App Reveal (মোবাইল মকআপে অ্যাপ/ওয়েবসাইট)' },
-        { value: 'preset-laptop-course', label: '💻 Laptop Course Reveal (ল্যাপটপে কোর্স/প্রেজেন্টেশন)' },
-        { value: 'preset-glass-caption', label: '🫧 Glass Caption Pop (কাঁচের টেক্সট ব্যানার)' },
-        { value: 'preset-social-cta', label: '👍 WhatsApp + Like CTA (সোশ্যাল কল-টু-অ্যাকশন)' }
+        { value: 'preset-wings-intro', label: 'Wings Intro Banner (à¦¬à¦¾à¦® à¦¦à¦¿à¦• à¦¥à§‡à¦•à§‡ à¦¸à§à¦²à¦¾à¦‡à¦¡ à¦“ à¦¸à§à¦‡à¦¶ à¦¶à¦¬à§à¦¦)' },
+        { value: 'preset-question-pop', label: 'Question Bounce + Pop (â“ à¦¨à¦¿à¦š à¦¦à¦¿à¦• à¦¥à§‡à¦•à§‡ à¦²à¦¾à¦«à¦¿à§Ÿà§‡ à¦†à¦¸à¦¾ à¦“ à¦ªà¦ª à¦¶à¦¬à§à¦¦)' },
+        { value: 'preset-checkmark-chime', label: 'Checkmark Pop + Chime (âœ“ à¦šà¦¿à¦¹à§à¦¨ à¦ªà¦ª à¦“ à¦šà¦®à¦• à¦¶à¦¬à§à¦¦)' },
+        { value: 'preset-typewriter-click', label: 'Typewriter + Click (à¦Ÿà¦¾à¦‡à¦ªà¦°à¦¾à¦‡à¦Ÿà¦¾à¦° à¦“ à¦•à§à¦²à¦¿à¦• à¦¶à¦¬à§à¦¦)' },
+        { value: 'preset-zoom-chime', label: 'Zoom Pop + Chime (à¦œà§à¦® à¦ªà¦ª à¦“ à¦šà¦®à¦• à¦¶à¦¬à§à¦¦)' },
+        { value: 'preset-rotate-whoosh', label: 'Rotate In + Whoosh (à¦˜à§à¦°à§‡ à¦†à¦¸à¦¾ à¦“ à¦¸à§à¦‡à¦¶ à¦¶à¦¬à§à¦¦)' },
+        { value: 'preset-highlight-chime', label: 'Highlight Sweep + Chime (à¦®à¦¾à¦°à§à¦•à¦¾à¦° à¦¹à¦¾à¦‡à¦²à¦¾à¦‡à¦Ÿ à¦“ à¦šà¦®à¦• à¦¶à¦¬à§à¦¦)' },
+        { value: 'preset-arrow-whoosh', label: 'Arrow Point + Whoosh (à¦¤à§€à¦° à¦šà¦¿à¦¹à§à¦¨ à¦“ à¦¸à§à¦‡à¦¶ à¦¶à¦¬à§à¦¦)' },
+        { value: 'preset-phone-app', label: 'ðŸ“± Phone App Reveal (à¦®à§‹à¦¬à¦¾à¦‡à¦² à¦®à¦•à¦†à¦ªà§‡ à¦…à§à¦¯à¦¾à¦ª/à¦“à§Ÿà§‡à¦¬à¦¸à¦¾à¦‡à¦Ÿ)' },
+        { value: 'preset-laptop-course', label: 'ðŸ’» Laptop Course Reveal (à¦²à§à¦¯à¦¾à¦ªà¦Ÿà¦ªà§‡ à¦•à§‹à¦°à§à¦¸/à¦ªà§à¦°à§‡à¦œà§‡à¦¨à§à¦Ÿà§‡à¦¶à¦¨)' },
+        { value: 'preset-glass-caption', label: 'ðŸ«§ Glass Caption Pop (à¦•à¦¾à¦à¦šà§‡à¦° à¦Ÿà§‡à¦•à§à¦¸à¦Ÿ à¦¬à§à¦¯à¦¾à¦¨à¦¾à¦°)' },
+        { value: 'preset-social-cta', label: 'ðŸ‘ WhatsApp + Like CTA (à¦¸à§‹à¦¶à§à¦¯à¦¾à¦² à¦•à¦²-à¦Ÿà§-à¦…à§à¦¯à¦¾à¦•à¦¶à¦¨)' }
     ];
 
     function populateBrollAnimStyleOptions(itemType) {
         if (!brollAnimStyleSelect) return;
         // 'textOnly' styles (Typewriter + the kinetic per-letter/word entrances)
         // animate actual characters, so they're meaningless for an image/video
-        // box — hide them there instead of leaving a confusing option that
+        // box â€” hide them there instead of leaving a confusing option that
         // silently does nothing when picked.
         const list = (itemType === 'text')
             ? BROLL_ANIM_STYLES
@@ -15752,7 +15866,7 @@ document.addEventListener('DOMContentLoaded', () => {
             item._edgeColorCache = color;
             return color;
         } catch (e) {
-            // Cross-origin / not-yet-decoded image can throw on getImageData —
+            // Cross-origin / not-yet-decoded image can throw on getImageData â€”
             // fall back to plain black rather than breaking the frame.
             return '#000000';
         }
@@ -15822,7 +15936,7 @@ document.addEventListener('DOMContentLoaded', () => {
             console.log("B-roll image loaded successfully. Dimensions:", img.naturalWidth, "x", img.naturalHeight);
             if (img.naturalWidth === 0 || img.naturalHeight === 0) {
                 console.error("Loaded image has zero dimensions.");
-                alert("ত্রুটি: ছবিটির ডাইমেনশন শূন্য (0)। অনুগ্রহ করে অন্য ছবি ব্যবহার করুন।");
+                alert("à¦¤à§à¦°à§à¦Ÿà¦¿: à¦›à¦¬à¦¿à¦Ÿà¦¿à¦° à¦¡à¦¾à¦‡à¦®à§‡à¦¨à¦¶à¦¨ à¦¶à§‚à¦¨à§à¦¯ (0)à¥¤ à¦…à¦¨à§à¦—à§à¦°à¦¹ à¦•à¦°à§‡ à¦…à¦¨à§à¦¯ à¦›à¦¬à¦¿ à¦¬à§à¦¯à¦¬à¦¹à¦¾à¦° à¦•à¦°à§à¦¨à¥¤");
                 return;
             }
             const newItem = {
@@ -15847,7 +15961,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 endSec: Math.min(state.endTime || state.duration || 5, (state.currentTime || 0) + 3),
                 // Each B-roll clip enters from a different side so a sequence
                 // of images doesn't always pop in from the same corner. This is
-                // just the starting default — fully editable from the panel.
+                // just the starting default â€” fully editable from the panel.
                 entryDirection: ['left', 'right', 'top', 'bottom'][Math.floor(Math.random() * 4)],
                 exitDirection: 'same',
                 animationStyle: brollModeSelect && brollModeSelect.value === 'pip' ? 'slide-pop' : 'zoom',
@@ -15895,7 +16009,7 @@ document.addEventListener('DOMContentLoaded', () => {
         
         img.onerror = (err) => {
             console.error("Failed to load B-roll image:", err);
-            alert("ত্রুটি: ছবিটি লোড করা যায়নি। অনুগ্রহ করে নিশ্চিত করুন যে এটি একটি সঠিক ইমেজ ফাইল (যেমন PNG, JPG, WEBP, বা GIF)।");
+            alert("à¦¤à§à¦°à§à¦Ÿà¦¿: à¦›à¦¬à¦¿à¦Ÿà¦¿ à¦²à§‹à¦¡ à¦•à¦°à¦¾ à¦¯à¦¾à§Ÿà¦¨à¦¿à¥¤ à¦…à¦¨à§à¦—à§à¦°à¦¹ à¦•à¦°à§‡ à¦¨à¦¿à¦¶à§à¦šà¦¿à¦¤ à¦•à¦°à§à¦¨ à¦¯à§‡ à¦à¦Ÿà¦¿ à¦à¦•à¦Ÿà¦¿ à¦¸à¦ à¦¿à¦• à¦‡à¦®à§‡à¦œ à¦«à¦¾à¦‡à¦² (à¦¯à§‡à¦®à¦¨ PNG, JPG, WEBP, à¦¬à¦¾ GIF)à¥¤");
             if (brollInput) brollInput.value = '';
         };
         
@@ -15958,7 +16072,7 @@ document.addEventListener('DOMContentLoaded', () => {
         // A hidden <video> element that we manually play/pause/seek in sync with
         // the main timeline. Muted so autoplay isn't blocked by the browser; the
         // clip's own audio is intentionally NOT included in the export (keeps
-        // audio mixing simple/predictable — add music/voiceover separately).
+        // audio mixing simple/predictable â€” add music/voiceover separately).
         const vid = document.createElement('video');
         vid.muted = true;
         vid.playsInline = true;
@@ -15974,7 +16088,7 @@ document.addEventListener('DOMContentLoaded', () => {
             console.log("B-roll video loaded. Dimensions:", vid.videoWidth, "x", vid.videoHeight, "duration:", vid.duration);
             if (vid.videoWidth === 0 || vid.videoHeight === 0) {
                 console.error("Loaded video has zero dimensions.");
-                alert("ত্রুটি: ভিডিওটির ডাইমেনশন শূন্য (0)। অনুগ্রহ করে অন্য ভিডিও ফাইল ব্যবহার করুন।");
+                alert("à¦¤à§à¦°à§à¦Ÿà¦¿: à¦­à¦¿à¦¡à¦¿à¦“à¦Ÿà¦¿à¦° à¦¡à¦¾à¦‡à¦®à§‡à¦¨à¦¶à¦¨ à¦¶à§‚à¦¨à§à¦¯ (0)à¥¤ à¦…à¦¨à§à¦—à§à¦°à¦¹ à¦•à¦°à§‡ à¦…à¦¨à§à¦¯ à¦­à¦¿à¦¡à¦¿à¦“ à¦«à¦¾à¦‡à¦² à¦¬à§à¦¯à¦¬à¦¹à¦¾à¦° à¦•à¦°à§à¦¨à¥¤");
                 vid.remove();
                 return;
             }
@@ -15990,7 +16104,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 // Every existing draw / hit-test / animation code path for B-roll
                 // reads `item.imageImg` and its `.naturalWidth`/`.naturalHeight`. Rather
                 // than touching dozens of call sites, alias a video element to look
-                // like an image here — ctx.drawImage() accepts a <video> exactly like
+                // like an image here â€” ctx.drawImage() accepts a <video> exactly like
                 // an <img>, so this lets a video overlay reuse 100% of the existing
                 // cover/contain, PiP sizing, animation, and click/resize hit-testing
                 // logic unchanged.
@@ -16017,7 +16131,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 animationStyle: brollModeSelect && brollModeSelect.value === 'pip' ? 'slide-pop' : 'zoom',
                 animationSpeedSec: 0.4,
                 soundEffect: 'none',
-                // Same cover/contain fit logic as image B-roll — useful when the
+                // Same cover/contain fit logic as image B-roll â€” useful when the
                 // overlay video's aspect ratio doesn't match the canvas.
                 fitMode: 'cover',
                 // If the display window is longer than the video's own duration,
@@ -16039,7 +16153,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         vid.onerror = (err) => {
             console.error("Failed to load B-roll video:", err);
-            alert("ত্রুটি: ভিডিওটি লোড করা যায়নি। অনুগ্রহ করে নিশ্চিত করুন যে এটি একটি সঠিক ভিডিও ফাইল (যেমন MP4 বা WEBM)।");
+            alert("à¦¤à§à¦°à§à¦Ÿà¦¿: à¦­à¦¿à¦¡à¦¿à¦“à¦Ÿà¦¿ à¦²à§‹à¦¡ à¦•à¦°à¦¾ à¦¯à¦¾à¦¯à¦¼à¦¨à¦¿à¥¤ à¦…à¦¨à§à¦—à§à¦°à¦¹ à¦•à¦°à§‡ à¦¨à¦¿à¦¶à§à¦šà¦¿à¦¤ à¦•à¦°à§à¦¨ à¦¯à§‡ à¦à¦Ÿà¦¿ à¦à¦•à¦Ÿà¦¿ à¦¸à¦ à¦¿à¦• à¦­à¦¿à¦¡à¦¿à¦“ à¦«à¦¾à¦‡à¦² (à¦¯à§‡à¦®à¦¨ MP4 à¦¬à¦¾ WEBM)à¥¤");
             vid.remove();
             if (brollVideoInput) brollVideoInput.value = '';
         };
@@ -16056,7 +16170,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
             // Treat every newline as one list item. The selected bullet is added
             // to each non-empty line so one Blank Background page can carry a
-            // complete 5–7 point list instead of requiring separate overlays.
+            // complete 5â€“7 point list instead of requiring separate overlays.
             const bulletChar = brollBulletSelect && brollBulletSelect.value !== 'none' ? brollBulletSelect.value : '';
             const text = rawText.split(/\r?\n/)
                 .map(line => line.trim())
@@ -16184,6 +16298,21 @@ document.addEventListener('DOMContentLoaded', () => {
     if (addBuiltCrossmarkBtn) addBuiltCrossmarkBtn.addEventListener('click', () => addBuiltInBroll('cross', 'zoom-pop'));
     if (addBuiltMagnifierBtn) addBuiltMagnifierBtn.addEventListener('click', () => addBuiltInBroll('magnifier', 'zoom-pop'));
     if (addWingsBrandBtn) addWingsBrandBtn.addEventListener('click', () => addWingsBrandBroll());
+
+    // Phase Reels: Motion Graphic Stickers
+    const addFloatingCoinsBtn = document.getElementById('add-floating-coins-btn');
+    const addGrowthChartBtn = document.getElementById('add-growth-chart-btn');
+    const addLikeBurstBtn = document.getElementById('add-like-burst-btn');
+    const addSpeedometerBtn = document.getElementById('add-speedometer-btn');
+    const addGlassCardBtn = document.getElementById('add-glass-card-btn');
+    const addFloatingEmojiBtn = document.getElementById('add-floating-emoji-btn');
+
+    if (addFloatingCoinsBtn) addFloatingCoinsBtn.addEventListener('click', () => addBuiltInBroll('floating-coins', 'fade', 'Floating Coins (টাকা)'));
+    if (addGrowthChartBtn) addGrowthChartBtn.addEventListener('click', () => addBuiltInBroll('growth-chart', 'fade', 'Growth Chart (গ্রাফ)'));
+    if (addLikeBurstBtn) addLikeBurstBtn.addEventListener('click', () => addBuiltInBroll('like-burst', 'fade', 'Reaction Burst (লাইক)'));
+    if (addSpeedometerBtn) addSpeedometerBtn.addEventListener('click', () => addBuiltInBroll('speedometer', 'fade', 'Speedometer (মিটার)'));
+    if (addGlassCardBtn) addGlassCardBtn.addEventListener('click', () => addBuiltInBroll('glass-card', 'slide-up', 'Glass Card (গ্লাস কার্ড)'));
+    if (addFloatingEmojiBtn) addFloatingEmojiBtn.addEventListener('click', () => addBuiltInBroll('floating-emoji', 'fade', 'Floating Emojis (ইমোজি)'));
 
     function addWingsBrandBroll() {
         const newItem = {
@@ -16315,7 +16444,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const font = `${item.italic ? 'italic ' : ''}${item.bold === false ? '' : 'bold '}${item.fontSize || 48}px "${item.font || 'Hind Siliguri'}", "Plus Jakarta Sans", sans-serif`;
         ctx.font = font;
 
-        const bulletRegex = /^([•✔➤★▶►➕🔹❤️\*\-—–]|\d+[\.\)])\s*/;
+        const bulletRegex = /^([â€¢âœ”âž¤â˜…â–¶â–ºâž•ðŸ”¹â¤ï¸\*\-â€”â€“]|\d+[\.\)])\s*/;
         const sublines = [];
         let maxLineWidth = 0;
 
@@ -16408,7 +16537,7 @@ document.addEventListener('DOMContentLoaded', () => {
             brollListEl.innerHTML = `
                 <div style="text-align: center; color: #94a3b8; padding: 14px 10px; font-size: 12px; border: 1px dashed rgba(255,255,255,0.12); border-radius: 8px; background: rgba(0,0,0,0.15);">
                     <i class="fa-regular fa-image" style="font-size: 18px; margin-bottom: 4px; display: block; opacity: 0.5;"></i>
-                    কোনো B-roll ইমেজ বা অ্যানিমেশন যোগ করা হয়নি।
+                    à¦•à§‹à¦¨à§‹ B-roll à¦‡à¦®à§‡à¦œ à¦¬à¦¾ à¦…à§à¦¯à¦¾à¦¨à¦¿à¦®à§‡à¦¶à¦¨ à¦¯à§‹à¦— à¦•à¦°à¦¾ à¦¹à§Ÿà¦¨à¦¿à¥¤
                 </div>
             `;
             if (brollTimingContainer) brollTimingContainer.style.display = 'none';
@@ -16453,14 +16582,14 @@ document.addEventListener('DOMContentLoaded', () => {
                 iconSpan.style.fontSize = '16px';
                 iconSpan.style.width = '32px';
                 iconSpan.style.textAlign = 'center';
-                let emoji = '🖼';
-                if (item.type === 'text') emoji = '🔤';
-                else if (item.type === 'video') emoji = '🎬';
-                else if (item.builtInType === 'question') emoji = '❓';
-                else if (item.builtInType === 'checkmark') emoji = '✔️';
-                else if (item.builtInType === 'cross') emoji = '❌';
-                else if (item.builtInType === 'magnifier') emoji = '🔍';
-                else if (item.builtInType === 'cash' || item.type === 'cash') emoji = '💵';
+                let emoji = 'ðŸ–¼';
+                if (item.type === 'text') emoji = 'ðŸ”¤';
+                else if (item.type === 'video') emoji = 'ðŸŽ¬';
+                else if (item.builtInType === 'question') emoji = 'â“';
+                else if (item.builtInType === 'checkmark') emoji = 'âœ”ï¸';
+                else if (item.builtInType === 'cross') emoji = 'âŒ';
+                else if (item.builtInType === 'magnifier') emoji = 'ðŸ”';
+                else if (item.builtInType === 'cash' || item.type === 'cash') emoji = 'ðŸ’µ';
                 iconSpan.innerText = emoji;
                 leftContent.appendChild(iconSpan);
             }
@@ -16479,24 +16608,24 @@ document.addEventListener('DOMContentLoaded', () => {
             title.style.textOverflow = 'ellipsis';
 
             if (item.type === 'text') {
-                const preview = item.text.length > 15 ? item.text.slice(0, 15) + '…' : item.text;
+                const preview = item.text.length > 15 ? item.text.slice(0, 15) + 'â€¦' : item.text;
                 title.innerText = `${modeLabel}: "${preview}"`;
             } else if (item.type === 'video') {
                 title.innerText = `${modeLabel} Video`;
             } else if (item.type === 'cash' || item.type === 'built-in') {
                 let typeName = item.name || 'Cash Animation';
-                if (item.builtInType === 'question') typeName = 'প্রশ্ন চিহ্ন';
-                else if (item.builtInType === 'checkmark') typeName = 'টিক চিহ্ন';
-                else if (item.builtInType === 'cross') typeName = 'ক্রস চিহ্ন';
-                else if (item.builtInType === 'magnifier') typeName = 'ম্যাগনিফায়ার';
-                else if (item.builtInType === 'cash' || item.type === 'cash') typeName = 'টাকা অ্যানিমেশন';
+                if (item.builtInType === 'question') typeName = 'à¦ªà§à¦°à¦¶à§à¦¨ à¦šà¦¿à¦¹à§à¦¨';
+                else if (item.builtInType === 'checkmark') typeName = 'à¦Ÿà¦¿à¦• à¦šà¦¿à¦¹à§à¦¨';
+                else if (item.builtInType === 'cross') typeName = 'à¦•à§à¦°à¦¸ à¦šà¦¿à¦¹à§à¦¨';
+                else if (item.builtInType === 'magnifier') typeName = 'à¦®à§à¦¯à¦¾à¦—à¦¨à¦¿à¦«à¦¾à¦¯à¦¼à¦¾à¦°';
+                else if (item.builtInType === 'cash' || item.type === 'cash') typeName = 'à¦Ÿà¦¾à¦•à¦¾ à¦…à§à¦¯à¦¾à¦¨à¦¿à¦®à§‡à¦¶à¦¨';
                 title.innerText = `${modeLabel}: ${typeName}`;
             } else {
                 title.innerText = `${modeLabel}: ${item.name || 'Image B-roll'}`;
             }
 
             const timeLabel = document.createElement('span');
-            timeLabel.innerText = `${item.startSec.toFixed(1)}s – ${item.endSec.toFixed(1)}s`;
+            timeLabel.innerText = `${item.startSec.toFixed(1)}s â€“ ${item.endSec.toFixed(1)}s`;
             timeLabel.style.fontSize = '10.5px';
             timeLabel.style.color = '#94a3b8';
 
@@ -16517,7 +16646,7 @@ document.addEventListener('DOMContentLoaded', () => {
             deleteBtn.style.color = '#ef4444';
             deleteBtn.style.borderColor = 'rgba(239,68,68,0.3)';
             deleteBtn.style.fontSize = '11px';
-            deleteBtn.title = 'B-roll আইটেমটি মুছুন (Delete B-roll)';
+            deleteBtn.title = 'B-roll à¦†à¦‡à¦Ÿà§‡à¦®à¦Ÿà¦¿ à¦®à§à¦›à§à¦¨ (Delete B-roll)';
             deleteBtn.innerHTML = '<i class="fa-solid fa-trash-can"></i>';
 
             deleteBtn.addEventListener('click', (e) => {
@@ -16563,7 +16692,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         // Older projects did not store a clip id. Once the user opens their
         // timing controls, bind that legacy overlay to the currently selected
-        // clip so its local 1–4s range cannot leak into every other clip.
+        // clip so its local 1â€“4s range cannot leak into every other clip.
         if (!item.clipId && state.activeClipId) item.clipId = state.activeClipId;
         const maxVal = state.endTime || state.duration || 1000;
         if (brollTimingContainer) brollTimingContainer.style.display = 'block';
@@ -16577,7 +16706,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         if (brollModeSelect) brollModeSelect.value = item.mode;
         // Older items saved before this toggle existed have no transparentBg
-        // property at all — treat that as "transparent" (the new default) so
+        // property at all â€” treat that as "transparent" (the new default) so
         // existing PNGs/text immediately lose their black backdrop too.
         if (brollTransparentBg) brollTransparentBg.checked = item.transparentBg !== false;
         if (brollSizeContainer) brollSizeContainer.style.display = 'block'; // always visible
@@ -16669,7 +16798,7 @@ document.addEventListener('DOMContentLoaded', () => {
             let rot = item.rotation || 0;
             if (rot > 180) rot -= 360; // display as -180..180 instead of 0..360
             brollTemplateRotationSlider.value = rot;
-            if (brollTemplateRotationVal) brollTemplateRotationVal.innerText = Math.round(rot) + '°';
+            if (brollTemplateRotationVal) brollTemplateRotationVal.innerText = Math.round(rot) + 'Â°';
         }
         if (brollTemplateColorInput) {
             brollTemplateColorInput.value = item.visualTemplateColor || '#ffffff';
@@ -16707,8 +16836,8 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         if (brollCustomSoundFilename) {
             brollCustomSoundFilename.innerText = item.customSoundName
-                ? `আপলোড করা হয়েছে: ${item.customSoundName}`
-                : 'কোনো ফাইল আপলোড করা হয়নি।';
+                ? `à¦†à¦ªà¦²à§‹à¦¡ à¦•à¦°à¦¾ à¦¹à¦¯à¦¼à§‡à¦›à§‡: ${item.customSoundName}`
+                : 'à¦•à§‹à¦¨à§‹ à¦«à¦¾à¦‡à¦² à¦†à¦ªà¦²à§‹à¦¡ à¦•à¦°à¦¾ à¦¹à¦¯à¦¼à¦¨à¦¿à¥¤';
         }
         updateBrollDirectionRowsVisibility(item.animationStyle || defaultStyle);
         updateBrollAnimParamSlidersVisibility(item);
@@ -16736,10 +16865,10 @@ document.addEventListener('DOMContentLoaded', () => {
             if (item.type === 'image' && (item.animationStyle === 'comparison-slide')) {
                 brollAfterImageContainer.style.display = 'block';
                 if (item.imageUrlAfter) {
-                    brollAfterFilename.innerText = "তুলনার পরের ছবি লোড করা আছে";
+                    brollAfterFilename.innerText = "à¦¤à§à¦²à¦¨à¦¾à¦° à¦ªà¦°à§‡à¦° à¦›à¦¬à¦¿ à¦²à§‹à¦¡ à¦•à¦°à¦¾ à¦†à¦›à§‡";
                     brollAfterFilename.style.color = "#10b981";
                 } else {
-                    brollAfterFilename.innerText = "Upload After Image (তুলনার পরের ছবি)...";
+                    brollAfterFilename.innerText = "Upload After Image (à¦¤à§à¦²à¦¨à¦¾à¦° à¦ªà¦°à§‡à¦° à¦›à¦¬à¦¿)...";
                     brollAfterFilename.style.color = "#cbd5e1";
                 }
             } else {
@@ -16795,10 +16924,10 @@ document.addEventListener('DOMContentLoaded', () => {
                     if (item.type === 'image' && item.animationStyle === 'comparison-slide') {
                         brollAfterImageContainer.style.display = 'block';
                         if (item.imageUrlAfter) {
-                            brollAfterFilename.innerText = "তুলনার পরের ছবি লোড করা আছে";
+                            brollAfterFilename.innerText = "à¦¤à§à¦²à¦¨à¦¾à¦° à¦ªà¦°à§‡à¦° à¦›à¦¬à¦¿ à¦²à§‹à¦¡ à¦•à¦°à¦¾ à¦†à¦›à§‡";
                             brollAfterFilename.style.color = "#10b981";
                         } else {
-                            brollAfterFilename.innerText = "Upload After Image (তুলনার পরের ছবি)...";
+                            brollAfterFilename.innerText = "Upload After Image (à¦¤à§à¦²à¦¨à¦¾à¦° à¦ªà¦°à§‡à¦° à¦›à¦¬à¦¿)...";
                             brollAfterFilename.style.color = "#cbd5e1";
                         }
                     } else {
@@ -16866,7 +16995,7 @@ document.addEventListener('DOMContentLoaded', () => {
             // Reuses the same item.rotation the drag-to-rotate handle sets, so
             // this slider and the on-canvas handle always agree with each other.
             item.rotation = ((rot % 360) + 360) % 360;
-            if (brollTemplateRotationVal) brollTemplateRotationVal.innerText = rot + '°';
+            if (brollTemplateRotationVal) brollTemplateRotationVal.innerText = rot + 'Â°';
             drawFrame();
         });
     }
@@ -16910,7 +17039,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // Content Size: zooms the photo/video crop window shown inside the
-    // frame, without changing the frame/box size itself — the mirror image
+    // frame, without changing the frame/box size itself â€” the mirror image
     // of Frame Scale above.
     if (brollTemplateContentScaleSlider) {
         brollTemplateContentScaleSlider.addEventListener('input', (e) => {
@@ -16964,13 +17093,13 @@ document.addEventListener('DOMContentLoaded', () => {
             item.imageImgAfter = img;
             item.imageUrlAfter = url;
             if (brollAfterFilename) {
-                brollAfterFilename.innerText = "তুলনার পরের ছবি লোড করা আছে";
+                brollAfterFilename.innerText = "à¦¤à§à¦²à¦¨à¦¾à¦° à¦ªà¦°à§‡à¦° à¦›à¦¬à¦¿ à¦²à§‹à¦¡ à¦•à¦°à¦¾ à¦†à¦›à§‡";
                 brollAfterFilename.style.color = "#10b981";
             }
             drawFrame();
         };
         img.onerror = () => {
-            alert("ত্রুটি: ছবিটি লোড করা যায়নি।");
+            alert("à¦¤à§à¦°à§à¦Ÿà¦¿: à¦›à¦¬à¦¿à¦Ÿà¦¿ à¦²à§‹à¦¡ à¦•à¦°à¦¾ à¦¯à¦¾à§Ÿà¦¨à¦¿à¥¤");
         };
         img.src = url;
     }
@@ -17053,14 +17182,14 @@ document.addEventListener('DOMContentLoaded', () => {
             const item = state.brollOverlays.find(b => b.id === state.selectedBrollId);
             const file = e.target.files && e.target.files[0];
             if (!item || !file) return;
-            if (brollCustomSoundFilename) brollCustomSoundFilename.innerText = `লোড হচ্ছে: ${file.name}...`;
+            if (brollCustomSoundFilename) brollCustomSoundFilename.innerText = `à¦²à§‹à¦¡ à¦¹à¦šà§à¦›à§‡: ${file.name}...`;
             item.customSoundFile = file;
             item.customSoundName = file.name;
             item.customSoundBuffer = window.decodeBrollCustomSound ? await window.decodeBrollCustomSound(file) : null;
             if (brollCustomSoundFilename) {
                 brollCustomSoundFilename.innerText = item.customSoundBuffer
-                    ? `আপলোড করা হয়েছে: ${item.customSoundName}`
-                    : `ত্রুটি: "${file.name}" ফাইলটি ডিকোড করা যায়নি। অন্য mp3/wav ফাইল ব্যবহার করুন।`;
+                    ? `à¦†à¦ªà¦²à§‹à¦¡ à¦•à¦°à¦¾ à¦¹à¦¯à¦¼à§‡à¦›à§‡: ${item.customSoundName}`
+                    : `à¦¤à§à¦°à§à¦Ÿà¦¿: "${file.name}" à¦«à¦¾à¦‡à¦²à¦Ÿà¦¿ à¦¡à¦¿à¦•à§‹à¦¡ à¦•à¦°à¦¾ à¦¯à¦¾à¦¯à¦¼à¦¨à¦¿à¥¤ à¦…à¦¨à§à¦¯ mp3/wav à¦«à¦¾à¦‡à¦² à¦¬à§à¦¯à¦¬à¦¹à¦¾à¦° à¦•à¦°à§à¦¨à¥¤`;
             }
             if (item.customSoundBuffer && window.playBrollCustomSound) window.playBrollCustomSound(item.customSoundBuffer);
         });
@@ -17259,7 +17388,7 @@ document.addEventListener('DOMContentLoaded', () => {
             state.isColorPickingBroll = !state.isColorPickingBroll;
             if (state.isColorPickingBroll) {
                 state.canvas.style.cursor = 'crosshair';
-                alert("ক্যানভাসে দেখানো বি-রোল ইমেজের উপর ক্লিক করে ব্যাকগ্রাউন্ডের সঠিক রঙটি সিলেক্ট করুন। (Click on the B-roll image on the canvas to pick its background color.)");
+                alert("à¦•à§à¦¯à¦¾à¦¨à¦­à¦¾à¦¸à§‡ à¦¦à§‡à¦–à¦¾à¦¨à§‹ à¦¬à¦¿-à¦°à§‹à¦² à¦‡à¦®à§‡à¦œà§‡à¦° à¦‰à¦ªà¦° à¦•à§à¦²à¦¿à¦• à¦•à¦°à§‡ à¦¬à§à¦¯à¦¾à¦•à¦—à§à¦°à¦¾à¦‰à¦¨à§à¦¡à§‡à¦° à¦¸à¦ à¦¿à¦• à¦°à¦™à¦Ÿà¦¿ à¦¸à¦¿à¦²à§‡à¦•à§à¦Ÿ à¦•à¦°à§à¦¨à¥¤ (Click on the B-roll image on the canvas to pick its background color.)");
             } else {
                 state.canvas.style.cursor = 'default';
             }
@@ -17461,40 +17590,40 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Small glyph shown per symbol type in the palette + the added-items list.
     const SYMBOL_LABELS = {
-        whatsapp: '💬',
-        location: '📍',
-        house: '🏠',
-        arrow: '→',
-        arrow2: '↔',
+        whatsapp: 'ðŸ’¬',
+        location: 'ðŸ“',
+        house: 'ðŸ ',
+        arrow: 'â†’',
+        arrow2: 'â†”',
         plus: '+',
-        cross: '✕',
-        tick: '✓',
+        cross: 'âœ•',
+        tick: 'âœ“',
         question: '?',
         exclaim: '!',
-        star: '★',
-        circle: '○',
-        triangle: '△',
-        'callout-rect': '💬',
-        'callout-oval': '💬',
-        'scroll-banner': '📜'
+        star: 'â˜…',
+        circle: 'â—‹',
+        triangle: 'â–³',
+        'callout-rect': 'ðŸ’¬',
+        'callout-oval': 'ðŸ’¬',
+        'scroll-banner': 'ðŸ“œ'
     };
     const SYMBOL_NAMES_BN = {
-        whatsapp: 'হোয়াটসঅ্যাপ',
-        location: 'ঠিকানা / লোকেশন',
-        house: 'বাসা / বাড়ি',
-        arrow: 'তীর চিহ্ন',
-        arrow2: 'দুইমুখী তীর',
-        plus: 'প্লাস চিহ্ন',
-        cross: 'ক্রস চিহ্ন',
-        tick: 'টিক চিহ্ন',
-        question: 'কুয়েশ্চন মার্ক',
-        exclaim: 'এক্সক্লামেশন',
-        star: 'তারা',
-        circle: 'বৃত্ত',
-        triangle: 'ত্রিভুজ',
-        'callout-rect': 'স্পিচ বাবল (চারকোণা)',
-        'callout-oval': 'স্পিচ বাবল (ওভাল)',
-        'scroll-banner': 'স্ক্রল ব্যানার'
+        whatsapp: 'à¦¹à§‹à¦¯à¦¼à¦¾à¦Ÿà¦¸à¦…à§à¦¯à¦¾à¦ª',
+        location: 'à¦ à¦¿à¦•à¦¾à¦¨à¦¾ / à¦²à§‹à¦•à§‡à¦¶à¦¨',
+        house: 'à¦¬à¦¾à¦¸à¦¾ / à¦¬à¦¾à¦¡à¦¼à¦¿',
+        arrow: 'à¦¤à§€à¦° à¦šà¦¿à¦¹à§à¦¨',
+        arrow2: 'à¦¦à§à¦‡à¦®à§à¦–à§€ à¦¤à§€à¦°',
+        plus: 'à¦ªà§à¦²à¦¾à¦¸ à¦šà¦¿à¦¹à§à¦¨',
+        cross: 'à¦•à§à¦°à¦¸ à¦šà¦¿à¦¹à§à¦¨',
+        tick: 'à¦Ÿà¦¿à¦• à¦šà¦¿à¦¹à§à¦¨',
+        question: 'à¦•à§à¦¯à¦¼à§‡à¦¶à§à¦šà¦¨ à¦®à¦¾à¦°à§à¦•',
+        exclaim: 'à¦à¦•à§à¦¸à¦•à§à¦²à¦¾à¦®à§‡à¦¶à¦¨',
+        star: 'à¦¤à¦¾à¦°à¦¾',
+        circle: 'à¦¬à§ƒà¦¤à§à¦¤',
+        triangle: 'à¦¤à§à¦°à¦¿à¦­à§à¦œ',
+        'callout-rect': 'à¦¸à§à¦ªà¦¿à¦š à¦¬à¦¾à¦¬à¦² (à¦šà¦¾à¦°à¦•à§‹à¦£à¦¾)',
+        'callout-oval': 'à¦¸à§à¦ªà¦¿à¦š à¦¬à¦¾à¦¬à¦² (à¦“à¦­à¦¾à¦²)',
+        'scroll-banner': 'à¦¸à§à¦•à§à¦°à¦² à¦¬à§à¦¯à¦¾à¦¨à¦¾à¦°'
     };
 
     let symbolIdCounter = 1;
@@ -17547,12 +17676,12 @@ document.addEventListener('DOMContentLoaded', () => {
             row.style.border = item.id === state.selectedSymbolId ? '1px solid var(--primary)' : '1px solid transparent';
 
             const label = document.createElement('span');
-            label.innerText = (SYMBOL_LABELS[item.symbolType] || '●') + '  ' + (SYMBOL_NAMES_BN[item.symbolType] || item.symbolType);
+            label.innerText = (SYMBOL_LABELS[item.symbolType] || 'â—') + '  ' + (SYMBOL_NAMES_BN[item.symbolType] || item.symbolType);
             label.style.fontSize = '13px';
             label.style.color = item.color;
 
             const timeLabel = document.createElement('span');
-            timeLabel.innerText = `${item.startSec.toFixed(1)}s–${item.endSec.toFixed(1)}s`;
+            timeLabel.innerText = `${item.startSec.toFixed(1)}sâ€“${item.endSec.toFixed(1)}s`;
             timeLabel.style.fontSize = '11px';
             timeLabel.style.opacity = '0.6';
 
@@ -17654,7 +17783,7 @@ document.addEventListener('DOMContentLoaded', () => {
     };
 
     // --- Shape + Text Overlay Bindings (ribbon banner, wavy banner, thought
-    // cloud, 6-point star, oval callout — Word-style shapes with editable text) ---
+    // cloud, 6-point star, oval callout â€” Word-style shapes with editable text) ---
     const shapeOverlayGrid = document.getElementById('shape-overlay-grid');
     const shapeOverlayListEl = document.getElementById('shape-overlay-list');
     const shapeOverlayControlsContainer = document.getElementById('shape-overlay-controls-container');
@@ -17681,20 +17810,20 @@ document.addEventListener('DOMContentLoaded', () => {
     const deleteShapeOverlayBtn = document.getElementById('delete-shape-overlay-btn');
 
     const SHAPE_OVERLAY_LABELS = {
-        ribbon: '▤',
-        wave: '≈',
-        cloud: '☁',
-        star6: '✶',
-        oval: '⬭',
-        plane: '✈'
+        ribbon: 'â–¤',
+        wave: 'â‰ˆ',
+        cloud: 'â˜',
+        star6: 'âœ¶',
+        oval: 'â¬­',
+        plane: 'âœˆ'
     };
     const SHAPE_OVERLAY_NAMES_BN = {
-        ribbon: 'রিবন ব্যানার',
-        wave: 'ওয়েভি ব্যানার',
-        cloud: 'থট ক্লাউড',
-        star6: '৬-পয়েন্ট তারা',
-        oval: 'ওভাল ক্যালাউট',
-        plane: 'প্লেন ব্যানার'
+        ribbon: 'à¦°à¦¿à¦¬à¦¨ à¦¬à§à¦¯à¦¾à¦¨à¦¾à¦°',
+        wave: 'à¦“à¦¯à¦¼à§‡à¦­à¦¿ à¦¬à§à¦¯à¦¾à¦¨à¦¾à¦°',
+        cloud: 'à¦¥à¦Ÿ à¦•à§à¦²à¦¾à¦‰à¦¡',
+        star6: 'à§¬-à¦ªà¦¯à¦¼à§‡à¦¨à§à¦Ÿ à¦¤à¦¾à¦°à¦¾',
+        oval: 'à¦“à¦­à¦¾à¦² à¦•à§à¦¯à¦¾à¦²à¦¾à¦‰à¦Ÿ',
+        plane: 'à¦ªà§à¦²à§‡à¦¨ à¦¬à§à¦¯à¦¾à¦¨à¦¾à¦°'
     };
 
     let shapeOverlayIdCounter = 1;
@@ -17708,7 +17837,7 @@ document.addEventListener('DOMContentLoaded', () => {
             id: shapeOverlayIdCounter++,
             clipId: state.activeClipId,
             shapeType: type,
-            text: isPlane ? 'YOUR TEXT HERE' : 'আপনার টেক্সট',
+            text: isPlane ? 'YOUR TEXT HERE' : 'à¦†à¦ªà¦¨à¦¾à¦° à¦Ÿà§‡à¦•à§à¦¸à¦Ÿ',
             x: 0.5,
             y: isPlane ? 0.3 : 0.5,
             size: isPlane ? 46 : 32, // percent of canvas width
@@ -17759,12 +17888,12 @@ document.addEventListener('DOMContentLoaded', () => {
             row.style.border = item.id === state.selectedShapeOverlayId ? '1px solid var(--primary)' : '1px solid transparent';
 
             const label = document.createElement('span');
-            const shortText = (item.text || '').slice(0, 14) + ((item.text || '').length > 14 ? '…' : '');
-            label.innerText = (SHAPE_OVERLAY_LABELS[item.shapeType] || '▭') + '  ' + shortText;
+            const shortText = (item.text || '').slice(0, 14) + ((item.text || '').length > 14 ? 'â€¦' : '');
+            label.innerText = (SHAPE_OVERLAY_LABELS[item.shapeType] || 'â–­') + '  ' + shortText;
             label.style.fontSize = '13px';
 
             const timeLabel = document.createElement('span');
-            timeLabel.innerText = `${item.startSec.toFixed(1)}s–${item.endSec.toFixed(1)}s`;
+            timeLabel.innerText = `${item.startSec.toFixed(1)}sâ€“${item.endSec.toFixed(1)}s`;
             timeLabel.style.fontSize = '11px';
             timeLabel.style.opacity = '0.6';
 
@@ -17797,7 +17926,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (shapeOverlayGradientColor2Input) shapeOverlayGradientColor2Input.value = item.fillGradientColor2 || '#7c3aed';
         if (shapeOverlayGradientColor2Val) shapeOverlayGradientColor2Val.innerText = item.fillGradientColor2 || '#7c3aed';
         if (shapeOverlayGradientAngleSlider) shapeOverlayGradientAngleSlider.value = item.fillGradientAngle ?? 90;
-        if (shapeOverlayGradientAngleVal) shapeOverlayGradientAngleVal.innerText = (item.fillGradientAngle ?? 90) + '°';
+        if (shapeOverlayGradientAngleVal) shapeOverlayGradientAngleVal.innerText = (item.fillGradientAngle ?? 90) + 'Â°';
         if (shapeOverlayTextColorInput) shapeOverlayTextColorInput.value = item.textColor;
         if (shapeOverlayTextColorVal) shapeOverlayTextColorVal.innerText = item.textColor;
         if (shapeOverlayTextAnimationSelect) shapeOverlayTextAnimationSelect.value = item.textAnimation || 'none';
@@ -17883,7 +18012,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const item = state.shapeOverlays.find(s => s.id === state.selectedShapeOverlayId);
             if (item) {
                 item.fillGradientAngle = parseInt(e.target.value, 10);
-                if (shapeOverlayGradientAngleVal) shapeOverlayGradientAngleVal.innerText = item.fillGradientAngle + '°';
+                if (shapeOverlayGradientAngleVal) shapeOverlayGradientAngleVal.innerText = item.fillGradientAngle + 'Â°';
                 drawFrame();
             }
         });
@@ -18008,7 +18137,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (removeCustomThumbnailBtn) removeCustomThumbnailBtn.addEventListener('click', () => {
         state.customThumbnailFile = null;
         customThumbnailInput.value = '';
-        if (customThumbnailLabel) customThumbnailLabel.innerText = 'নিজের Thumbnail Image আপলোড করুন';
+        if (customThumbnailLabel) customThumbnailLabel.innerText = 'à¦¨à¦¿à¦œà§‡à¦° Thumbnail Image à¦†à¦ªà¦²à§‹à¦¡ à¦•à¦°à§à¦¨';
         removeCustomThumbnailBtn.style.display = 'none';
     });
 
@@ -18039,7 +18168,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (aiThumbSaveKeyBtn) {
         aiThumbSaveKeyBtn.addEventListener('click', () => {
             localStorage.setItem('ai_thumb_api_key', aiThumbKey.value.trim());
-            alert('API Key সফলভাবে সেভ করা হয়েছে!');
+            alert('API Key à¦¸à¦«à¦²à¦­à¦¾à¦¬à§‡ à¦¸à§‡à¦­ à¦•à¦°à¦¾ à¦¹à¦¯à¦¼à§‡à¦›à§‡!');
         });
     }
 
@@ -18059,7 +18188,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const prompt = aiThumbPrompt ? aiThumbPrompt.value.trim() : '';
 
             if (!apiKey) {
-                alert('অনুগ্রহ করে API Key প্রদান করুন।');
+                alert('à¦…à¦¨à§à¦—à§à¦°à¦¹ à¦•à¦°à§‡ API Key à¦ªà§à¦°à¦¦à¦¾à¦¨ à¦•à¦°à§à¦¨à¥¤');
                 return;
             }
 
@@ -18068,7 +18197,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
             aiThumbGenerateBtn.disabled = true;
             if (aiThumbPreviewBox) aiThumbPreviewBox.style.display = 'none';
-            setAiThumbStatus('⏳ ফ্রেম আপলোড হচ্ছে ও AI থাম্বনেইল তৈরি হচ্ছে... (একটু সময় লাগতে পারে)');
+            setAiThumbStatus('â³ à¦«à§à¦°à§‡à¦® à¦†à¦ªà¦²à§‹à¦¡ à¦¹à¦šà§à¦›à§‡ à¦“ AI à¦¥à¦¾à¦®à§à¦¬à¦¨à§‡à¦‡à¦² à¦¤à§ˆà¦°à¦¿ à¦¹à¦šà§à¦›à§‡... (à¦à¦•à¦Ÿà§ à¦¸à¦®à¦¯à¦¼ à¦²à¦¾à¦—à¦¤à§‡ à¦ªà¦¾à¦°à§‡)');
 
             try {
                 const response = await fetch('/api/thumbnail-proxy', {
@@ -18091,10 +18220,10 @@ document.addEventListener('DOMContentLoaded', () => {
                     aiThumbDownloadLink.download = `ai-thumbnail-${Date.now()}.png`;
                 }
                 if (aiThumbPreviewBox) aiThumbPreviewBox.style.display = 'block';
-                setAiThumbStatus('✅ AI থাম্বনেইল তৈরি হয়েছে — নিচে প্রিভিউ দেখুন।');
+                setAiThumbStatus('âœ… AI à¦¥à¦¾à¦®à§à¦¬à¦¨à§‡à¦‡à¦² à¦¤à§ˆà¦°à¦¿ à¦¹à¦¯à¦¼à§‡à¦›à§‡ â€” à¦¨à¦¿à¦šà§‡ à¦ªà§à¦°à¦¿à¦­à¦¿à¦‰ à¦¦à§‡à¦–à§à¦¨à¥¤');
             } catch (err) {
                 console.error(err);
-                setAiThumbStatus('⚠️ ভুল হয়েছে: ' + err.message, true);
+                setAiThumbStatus('âš ï¸ à¦­à§à¦² à¦¹à¦¯à¦¼à§‡à¦›à§‡: ' + err.message, true);
             } finally {
                 aiThumbGenerateBtn.disabled = false;
             }
@@ -18107,7 +18236,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const file = new File([aiThumbLastBlob], `ai-thumbnail-${Date.now()}.png`, { type: 'image/png' });
             state.customThumbnailFile = file;
             showThumbnailPreview(URL.createObjectURL(file), file.name, true);
-            setAiThumbStatus('✅ এই AI থাম্বনেইলটি এক্সপোর্টের কভার হিসেবে সেট করা হয়েছে।');
+            setAiThumbStatus('âœ… à¦à¦‡ AI à¦¥à¦¾à¦®à§à¦¬à¦¨à§‡à¦‡à¦²à¦Ÿà¦¿ à¦à¦•à§à¦¸à¦ªà§‹à¦°à§à¦Ÿà§‡à¦° à¦•à¦­à¦¾à¦° à¦¹à¦¿à¦¸à§‡à¦¬à§‡ à¦¸à§‡à¦Ÿ à¦•à¦°à¦¾ à¦¹à¦¯à¦¼à§‡à¦›à§‡à¥¤');
         });
     }
 
@@ -18250,11 +18379,11 @@ document.addEventListener('DOMContentLoaded', () => {
     // onto the same canvas/stream MediaRecorder is capturing (Phase 5C)
     window.drawIntroOutroSegment = drawIntroOutroSegment;
 
-    function makeImageTransparent(img) {
+        function makeImageTransparent(img) {
         try {
             const canvas = document.createElement('canvas');
-            canvas.width = img.naturalWidth;
-            canvas.height = img.naturalHeight;
+            canvas.width = img.naturalWidth || img.width || 300;
+            canvas.height = img.naturalHeight || img.height || 300;
             const tempCtx = canvas.getContext('2d');
             tempCtx.drawImage(img, 0, 0);
             const imgData = tempCtx.getImageData(0, 0, canvas.width, canvas.height);
@@ -18263,7 +18392,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 const r = data[i];
                 const g = data[i+1];
                 const b = data[i+2];
-                // Make near-white background pixels fully transparent
                 if (r > 240 && g > 240 && b > 240) {
                     data[i+3] = 0;
                 }
@@ -18276,6 +18404,275 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
+
+    // ================================================================
+    // NEW MOTION GRAPHIC STICKERS (Reels-inspired, Phase Reels)
+    // ================================================================
+
+    function drawFloatingCoins(ctx, x, y, width, height, elapsed) {
+        const cx = x + width / 2;
+        const baseY = y + height;
+        const count = 12;
+        ctx.save();
+        for (let i = 0; i < count; i++) {
+            const seed = i * 137.508;
+            const phase = (elapsed * 1.2 + seed * 0.04) % 3.5;
+            const alpha = phase < 0.5 ? phase / 0.5 : (phase > 3.0 ? (3.5 - phase) / 0.5 : 1);
+            if (alpha < 0.05) continue;
+            const xOff = (Math.sin(seed) * 0.8 + Math.cos(seed * 0.7)) * width * 0.45;
+            const yOff = -phase / 3.5 * height;
+            const r = Math.max(5, Math.min(18, width * 0.07 + Math.sin(seed) * 4));
+            const wobble = Math.sin(elapsed * 2.5 + seed) * r * 0.15;
+            ctx.globalAlpha = alpha * 0.92;
+            const grad = ctx.createRadialGradient(cx + xOff + wobble - r * 0.3, baseY + yOff - r * 0.3, r * 0.1, cx + xOff + wobble, baseY + yOff, r);
+            grad.addColorStop(0, '#fde68a');
+            grad.addColorStop(0.5, '#f59e0b');
+            grad.addColorStop(1, '#b45309');
+            ctx.fillStyle = grad;
+            ctx.beginPath();
+            ctx.ellipse(cx + xOff + wobble, baseY + yOff, r, r * 0.82, 0, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.fillStyle = 'rgba(120, 60, 0, 0.7)';
+            ctx.font = `bold ${Math.round(r * 0.9)}px sans-serif`;
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText('\u09F3', cx + xOff + wobble, baseY + yOff);
+            ctx.globalAlpha = alpha * 0.25;
+            ctx.fillStyle = '#fbbf24';
+            ctx.beginPath();
+            ctx.ellipse(cx + xOff + wobble, baseY + yOff + r * 1.2, r * 0.3, r * 0.9, 0, 0, Math.PI * 2);
+            ctx.fill();
+        }
+        ctx.textAlign = 'left';
+        ctx.textBaseline = 'alphabetic';
+        ctx.restore();
+    }
+
+    function drawGrowthChart(ctx, x, y, width, height, elapsed) {
+        const pad = width * 0.08;
+        const gx = x + pad;
+        const gy = y + height * 0.15;
+        const gw = width - pad * 2;
+        const gh = height * 0.70;
+        const points = [
+            [0.00, 0.90], [0.15, 0.78], [0.30, 0.65], [0.45, 0.52],
+            [0.60, 0.38], [0.72, 0.28], [0.82, 0.18], [0.90, 0.10], [1.00, 0.02]
+        ];
+        const drawP = Math.max(0.02, Math.min(1, elapsed / 1.8));
+        ctx.save();
+        ctx.strokeStyle = 'rgba(255,255,255,0.25)';
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.moveTo(gx, gy); ctx.lineTo(gx, gy + gh); ctx.lineTo(gx + gw, gy + gh);
+        ctx.stroke();
+        const visiblePts = points.filter(p => p[0] <= drawP);
+        if (visiblePts.length >= 2) {
+            ctx.beginPath();
+            ctx.moveTo(gx, gy + gh);
+            visiblePts.forEach(pt => ctx.lineTo(gx + pt[0] * gw, gy + pt[1] * gh));
+            const lastPt = visiblePts[visiblePts.length - 1];
+            ctx.lineTo(gx + lastPt[0] * gw, gy + gh);
+            ctx.closePath();
+            const grad = ctx.createLinearGradient(gx, gy, gx, gy + gh);
+            grad.addColorStop(0, 'rgba(34, 197, 94, 0.5)');
+            grad.addColorStop(1, 'rgba(34, 197, 94, 0.02)');
+            ctx.fillStyle = grad;
+            ctx.fill();
+            ctx.beginPath();
+            visiblePts.forEach((pt, i) => {
+                if (i === 0) ctx.moveTo(gx + pt[0] * gw, gy + pt[1] * gh);
+                else ctx.lineTo(gx + pt[0] * gw, gy + pt[1] * gh);
+            });
+            ctx.strokeStyle = '#22c55e';
+            ctx.lineWidth = 3;
+            ctx.shadowColor = '#22c55e';
+            ctx.shadowBlur = 8;
+            ctx.stroke();
+            ctx.shadowBlur = 0;
+            const tip = lastPt;
+            const tipX = gx + tip[0] * gw;
+            const tipY = gy + tip[1] * gh;
+            ctx.save();
+            ctx.translate(tipX, tipY - 14);
+            ctx.rotate(-0.45);
+            ctx.font = `${Math.max(16, width * 0.10)}px sans-serif`;
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText('\uD83D\uDE80', 0, 0);
+            ctx.restore();
+        }
+        ctx.fillStyle = '#4ade80';
+        ctx.font = `bold ${Math.max(10, width * 0.07)}px Outfit, sans-serif`;
+        ctx.textAlign = 'right';
+        ctx.textBaseline = 'top';
+        ctx.fillText('\uD83D\uDCC8 Growth', gx + gw, gy);
+        ctx.textAlign = 'left';
+        ctx.textBaseline = 'alphabetic';
+        ctx.restore();
+    }
+
+    function drawLikeBurst(ctx, x, y, width, height, elapsed) {
+        const cx = x + width / 2;
+        const cy = y + height / 2;
+        const emojis = ['\u2764\uFE0F', '\uD83D\uDC4D', '\uD83C\uDF89', '\uD83D\uDD25', '\uD83D\uDCB0', '\u2728', '\uD83D\uDC4F', '\uD83D\uDCA1'];
+        const count = emojis.length;
+        ctx.save();
+        for (let i = 0; i < count; i++) {
+            const angle = (i / count) * Math.PI * 2 + elapsed * 0.4;
+            const phase = (elapsed * 1.3 + i * 0.6) % 2.8;
+            const dist = (0.3 + phase / 2.8 * 0.7) * Math.min(width, height) * 0.45;
+            const alpha = phase < 0.4 ? phase / 0.4 : (phase > 2.2 ? (2.8 - phase) / 0.6 : 1);
+            const scale = phase < 0.4 ? 0.5 + phase / 0.4 * 0.8 : 1.3 - phase / 2.8 * 0.3;
+            const px = cx + Math.cos(angle) * dist;
+            const py = cy + Math.sin(angle) * dist;
+            ctx.save();
+            ctx.globalAlpha = Math.max(0, alpha);
+            ctx.translate(px, py);
+            ctx.scale(scale, scale);
+            ctx.font = `${Math.max(14, width * 0.10)}px sans-serif`;
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText(emojis[i % emojis.length], 0, 0);
+            ctx.restore();
+        }
+        const ring = (elapsed * 1.5) % 1.0;
+        ctx.globalAlpha = 1 - ring;
+        ctx.strokeStyle = '#f59e0b';
+        ctx.lineWidth = 3;
+        ctx.shadowColor = '#f59e0b';
+        ctx.shadowBlur = 12;
+        ctx.beginPath();
+        ctx.arc(cx, cy, ring * Math.min(width, height) * 0.4, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.shadowBlur = 0;
+        ctx.restore();
+    }
+
+    function drawSpeedometer(ctx, x, y, width, height, elapsed) {
+        const cx = x + width / 2;
+        const cy = y + height * 0.58;
+        const r = Math.min(width, height) * 0.42;
+        const startAngle = Math.PI * 0.75;
+        const endAngle = Math.PI * 2.25;
+        const totalArc = endAngle - startAngle;
+        const progress = Math.max(0, Math.min(1, elapsed / 1.6));
+        const targetNeedle = 0.78 * progress;
+        const wobble = Math.sin(elapsed * 12) * 0.01 * progress;
+        const needleAngle = startAngle + totalArc * (targetNeedle + wobble);
+        ctx.save();
+        ctx.lineWidth = r * 0.10;
+        ctx.lineCap = 'round';
+        ctx.strokeStyle = 'rgba(255,255,255,0.12)';
+        ctx.beginPath();
+        ctx.arc(cx, cy, r, startAngle, endAngle);
+        ctx.stroke();
+        const arcGrad = ctx.createLinearGradient(cx - r, cy, cx + r, cy);
+        arcGrad.addColorStop(0, '#22c55e');
+        arcGrad.addColorStop(0.5, '#f59e0b');
+        arcGrad.addColorStop(1, '#ef4444');
+        ctx.strokeStyle = arcGrad;
+        ctx.lineWidth = r * 0.10;
+        ctx.beginPath();
+        ctx.arc(cx, cy, r, startAngle, needleAngle);
+        ctx.stroke();
+        const nx = cx + Math.cos(needleAngle) * r * 0.78;
+        const ny = cy + Math.sin(needleAngle) * r * 0.78;
+        ctx.strokeStyle = '#f87171';
+        ctx.lineWidth = r * 0.045;
+        ctx.shadowColor = '#ef4444';
+        ctx.shadowBlur = 10;
+        ctx.beginPath();
+        ctx.moveTo(cx, cy);
+        ctx.lineTo(nx, ny);
+        ctx.stroke();
+        ctx.shadowBlur = 0;
+        ctx.fillStyle = '#fff';
+        ctx.beginPath();
+        ctx.arc(cx, cy, r * 0.07, 0, Math.PI * 2);
+        ctx.fill();
+        const speedVal = Math.round(targetNeedle * 320);
+        ctx.fillStyle = '#ffffff';
+        ctx.font = `bold ${Math.max(12, r * 0.38)}px Outfit, sans-serif`;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'top';
+        ctx.fillText(speedVal, cx, cy + r * 0.1);
+        ctx.fillStyle = '#94a3b8';
+        ctx.font = `${Math.max(8, r * 0.22)}px Outfit, sans-serif`;
+        ctx.fillText('ROAS', cx, cy + r * 0.45);
+        ctx.textAlign = 'left';
+        ctx.textBaseline = 'alphabetic';
+        ctx.restore();
+    }
+
+    function drawGlassCardSticker(ctx, item, x, y, width, height, elapsed) {
+        const slideP = Math.max(0, Math.min(1, elapsed / 0.6));
+        const eased = 1 - Math.pow(1 - slideP, 3);
+        const offY = (1 - eased) * -height * 0.5;
+        const alpha = Math.min(1, slideP * 2);
+        const r = Math.min(16, height * 0.12);
+        ctx.save();
+        ctx.globalAlpha = alpha;
+        ctx.translate(0, offY);
+        ctx.shadowColor = 'rgba(0,0,0,0.4)';
+        ctx.shadowBlur = 20;
+        ctx.shadowOffsetY = 8;
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.12)';
+        ctx.beginPath();
+        if (ctx.roundRect) ctx.roundRect(x, y, width, height, r); else ctx.rect(x, y, width, height);
+        ctx.fill();
+        ctx.shadowBlur = 0; ctx.shadowOffsetY = 0;
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.38)';
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        if (ctx.roundRect) ctx.roundRect(x, y, width, height, r); else ctx.rect(x, y, width, height);
+        ctx.stroke();
+        ctx.strokeStyle = '#22d3ee';
+        ctx.lineWidth = 4;
+        ctx.lineCap = 'round';
+        ctx.beginPath();
+        ctx.moveTo(x + r, y + height * 0.25);
+        ctx.lineTo(x + r, y + height * 0.75);
+        ctx.stroke();
+        ctx.fillStyle = '#ffffff';
+        ctx.font = `600 ${Math.max(12, height * 0.28)}px Outfit, sans-serif`;
+        ctx.textBaseline = 'middle';
+        ctx.textAlign = 'left';
+        ctx.fillText(item.cardTitle || 'Advantage+ Campaign', x + r * 2.5, y + height * 0.35);
+        ctx.fillStyle = '#94a3b8';
+        ctx.font = `${Math.max(9, height * 0.20)}px Outfit, sans-serif`;
+        ctx.fillText(item.cardSubtitle || 'AI Optimized \u00B7 Active', x + r * 2.5, y + height * 0.68);
+        ctx.textBaseline = 'alphabetic';
+        ctx.restore();
+    }
+
+    function drawFloatingEmoji(ctx, x, y, width, height, elapsed) {
+        const emojis = ['\uD83D\uDC4D', '\u2764\uFE0F', '\uD83D\uDE0D', '\uD83D\uDD25', '\uD83D\uDCAF', '\uD83D\uDE80', '\u2728', '\uD83D\uDCAA'];
+        const count = 14;
+        ctx.save();
+        for (let i = 0; i < count; i++) {
+            const seed = i * 97.3;
+            const period = 2.2 + (seed % 100) / 100;
+            const phase = (elapsed * 0.9 + seed * 0.03) % period;
+            const progress = phase / period;
+            const alpha = progress < 0.15 ? progress / 0.15 : (progress > 0.75 ? (1 - progress) / 0.25 : 1);
+            if (alpha < 0.04) continue;
+            const xOff = x + (Math.sin(seed) * 0.5 + 0.5) * width;
+            const yOff = y + height - progress * height * 1.1;
+            const wobble = Math.sin(elapsed * 3.1 + seed) * width * 0.03;
+            const sz = Math.max(14, Math.min(width * 0.13, 28));
+            ctx.save();
+            ctx.globalAlpha = alpha;
+            ctx.translate(xOff + wobble, yOff);
+            ctx.font = `${sz}px sans-serif`;
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText(emojis[i % emojis.length], 0, 0);
+            ctx.restore();
+        }
+        ctx.textAlign = 'left';
+        ctx.textBaseline = 'alphabetic';
+        ctx.restore();
+    }
     function drawCashBroll(ctx, item, x, y, width, height, elapsed, animDuration) {
         const stackMode = item.animationStyle === 'cash-stack';
         const progress = Math.max(0, Math.min(1, elapsed / Math.max(0.1, animDuration)));
@@ -18377,6 +18774,13 @@ document.addEventListener('DOMContentLoaded', () => {
             drawWingsBrandBroll(ctx, item, x, y, width, height, effectiveElapsed);
             return;
         }
+        // ---- NEW: Reels-inspired motion graphic stickers ----
+        if (item.builtInType === 'floating-coins') { drawFloatingCoins(ctx, x, y, width, height, effectiveElapsed); return; }
+        if (item.builtInType === 'growth-chart') { drawGrowthChart(ctx, x, y, width, height, effectiveElapsed); return; }
+        if (item.builtInType === 'like-burst') { drawLikeBurst(ctx, x, y, width, height, effectiveElapsed); return; }
+        if (item.builtInType === 'speedometer') { drawSpeedometer(ctx, x, y, width, height, effectiveElapsed); return; }
+        if (item.builtInType === 'glass-card') { drawGlassCardSticker(ctx, item, x, y, width, height, effectiveElapsed); return; }
+        if (item.builtInType === 'floating-emoji') { drawFloatingEmoji(ctx, x, y, width, height, effectiveElapsed); return; }
 
         const size = Math.min(width, height);
         const cx = x + width / 2;
@@ -18543,7 +18947,7 @@ document.addEventListener('DOMContentLoaded', () => {
         ctx.restore();
     }
 
-    // Shared list of the "3D card" visual templates — these are the only
+    // Shared list of the "3D card" visual templates â€” these are the only
     // templates whose drawBrollVisualTemplate output needs to be split into a
     // background pass (depth/extrusion slices) and a foreground pass (the
     // front card's border/edge styling). Every other template (Polaroid,
@@ -18557,7 +18961,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // Draws the text (or, for image B-roll, a short label from item.brollLabel)
-    // as a row of individual raised 3D tiles — one tile per character — used by
+    // as a row of individual raised 3D tiles â€” one tile per character â€” used by
     // both 'word-3d-blocks' (bold red-style cube letters, like a PROFIT/LOSS
     // crossword tile graphic) and 'word-hands-hold' (the same tiles in a
     // rotating rainbow palette, each with a simple stylized hand icon reaching
@@ -18989,11 +19393,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // `phase` controls, for the 3D card templates only, which half of the
     // drawing gets painted:
-    //  - 'shadowOnly' → just the stacked depth/extrusion slices (meant to sit
+    //  - 'shadowOnly' â†’ just the stacked depth/extrusion slices (meant to sit
     //    BEHIND the photo/video, like the thickness of a card).
-    //  - 'frameOnly'  → just the front card's border/edge/glow styling (meant
+    //  - 'frameOnly'  â†’ just the front card's border/edge/glow styling (meant
     //    to sit ON TOP of the photo/video, like a picture-frame edge).
-    //  - anything else (default) → both, back to back — used for text B-roll,
+    //  - anything else (default) â†’ both, back to back â€” used for text B-roll,
     //    where the text itself is drawn separately afterwards so a single
     //    combined pass here never ends up covering it.
     // All non-3D templates ignore `phase` entirely and always draw in full,
@@ -19005,7 +19409,7 @@ document.addEventListener('DOMContentLoaded', () => {
         ctx.save();
         ctx.globalAlpha = Math.max(0, Math.min(1, alpha));
         const minSide = Math.max(1, Math.min(width, height));
-        // User-chosen tint from the Template Color picker — null means "use
+        // User-chosen tint from the Template Color picker â€” null means "use
         // each design's own default palette" (e.g. gold for isometric, cyan
         // for neon), so nothing changes unless the person explicitly sets one.
         const overrideColor = item.visualTemplateColor || null;
@@ -19036,7 +19440,7 @@ document.addEventListener('DOMContentLoaded', () => {
             else ctx.rect(x + 1, y + 1, width - 2, height - 2);
             ctx.stroke();
 
-            // Side hardware — power button (right) + two volume buttons (left)
+            // Side hardware â€” power button (right) + two volume buttons (left)
             // are the single strongest visual cue that this is a phone, not
             // just a rounded box.
             const btnW = Math.max(3, bezel * 0.35);
@@ -19051,7 +19455,7 @@ document.addEventListener('DOMContentLoaded', () => {
             if (ctx.roundRect) ctx.roundRect(x - btnW * 0.6, y + height * 0.23, btnW, height * 0.055, btnW / 2);
             ctx.fill();
 
-            // Dynamic island / camera notch — bigger and darker so it stays
+            // Dynamic island / camera notch â€” bigger and darker so it stays
             // legible even on a wide/short box.
             const islandW = Math.min(bw * 0.34, Math.max(width, height) * 0.28);
             const islandH = Math.max(11, bezel * 0.9);
@@ -19061,7 +19465,7 @@ document.addEventListener('DOMContentLoaded', () => {
             else ctx.rect(x + (width - islandW) / 2, by + bezel * 0.28, islandW, islandH);
             ctx.fill();
 
-            // Bottom home-indicator bar — instantly recognisable modern-phone cue
+            // Bottom home-indicator bar â€” instantly recognisable modern-phone cue
             const barW = bw * 0.32;
             const barH = Math.max(3, bezel * 0.14);
             ctx.fillStyle = 'rgba(255,255,255,0.55)';
@@ -19124,8 +19528,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 ctx.textBaseline = 'middle';
                 ctx.fillText(`${icon}  ${label}`, bx + buttonW / 2, by + buttonH / 2 + 1);
             };
-            drawButton(x, '#1877f2', '👍', 'Like');
-            drawButton(x + buttonW + gap, '#25d366', '◔', 'WhatsApp');
+            drawButton(x, '#1877f2', 'ðŸ‘', 'Like');
+            drawButton(x + buttonW + gap, '#25d366', 'â—”', 'WhatsApp');
         } else if (template === 'word-shadow') {
             ctx.strokeStyle = overrideColor || 'rgba(255,255,255,0.88)';
             ctx.lineWidth = Math.max(2, minSide * 0.012);
@@ -19198,7 +19602,7 @@ document.addEventListener('DOMContentLoaded', () => {
             ctx.lineWidth = Math.max(2, minSide * 0.012);
             ctx.strokeRect(x, y, width, height);
         } else if (template === 'word-glossy-badge') {
-            // Glossy round/oval "Best Choice" style badge — a metallic-ringed
+            // Glossy round/oval "Best Choice" style badge â€” a metallic-ringed
             // button with a bright glass highlight across the top, sized to
             // hug the text's own bounding box like word-circle/word-rounded.
             const base = overrideColor || '#0f8a3c';
@@ -19297,7 +19701,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     ctx.fillStyle = overrideColor ? hexToRgba(overrideColor, 0.08 + (1 - i / depthSteps) * 0.12) : `rgba(6, 182, 212, ${0.08 + (1 - i / depthSteps) * 0.12})`;
                     ctx.fillRect(x + offX - frameW / 2, y + offY - frameW / 2, width + frameW, height + frameW);
                 } else if (template === 'word-depth-3d') {
-                    // Deep, dark, almost-black navy slab — long and heavy so
+                    // Deep, dark, almost-black navy slab â€” long and heavy so
                     // the card visibly floats far above the background.
                     const darkVal = Math.round(4 + (i / depthSteps) * 18);
                     ctx.fillStyle = overrideColor ? hexToRgba(shadeColorTO(overrideColor, -65), 0.55) : `rgba(${darkVal}, ${darkVal}, ${Math.round(darkVal * 1.6)}, 0.55)`;
@@ -19416,7 +19820,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 ctx.shadowBlur = 0;
             } else if (template === 'word-depth-3d') {
                 // Deep Depth Card: heavy, far-thrown black shadow and a
-                // near-black frame — reads as "hovering high" rather than a
+                // near-black frame â€” reads as "hovering high" rather than a
                 // subtle bevel.
                 ctx.shadowColor = 'rgba(0, 0, 0, 0.9)';
                 ctx.shadowBlur = Math.max(30, frameW * 3.5);
@@ -19657,7 +20061,7 @@ document.addEventListener('DOMContentLoaded', () => {
             if (videoVolumeValStep2) videoVolumeValStep2.innerText = Math.round(state.videoVolume * 100) + '%';
         }
 
-        // Voice Changer (dropdown + "also apply to original video" checkbox) —
+        // Voice Changer (dropdown + "also apply to original video" checkbox) â€”
         // restore both the UI controls and the live Web Audio effect params
         // after a project load/auto-restore, since these aren't driven by
         // 'change' events firing.
@@ -20086,7 +20490,7 @@ document.addEventListener('DOMContentLoaded', () => {
             }
 
             // Convert Multi-Track Timeline extra tracks to Base64 (conditional based on mode)
-            // (Phase 11 step 4 fix — this used to be missing entirely, so extra
+            // (Phase 11 step 4 fix â€” this used to be missing entirely, so extra
             // tracks silently disappeared on manual JSON export/import even
             // though they were already fully wired into IndexedDB auto-save.)
             data.extraTracks = [];
@@ -20129,7 +20533,7 @@ document.addEventListener('DOMContentLoaded', () => {
             console.log("Project exported successfully.");
         } catch (e) {
             console.error("Export failed:", e);
-            alert("প্রজেক্ট এক্সপোর্ট করতে ব্যর্থ হয়েছে। অনুগ্রহ করে আবার চেষ্টা করুন।");
+            alert("à¦ªà§à¦°à¦œà§‡à¦•à§à¦Ÿ à¦à¦•à§à¦¸à¦ªà§‹à¦°à§à¦Ÿ à¦•à¦°à¦¤à§‡ à¦¬à§à¦¯à¦°à§à¦¥ à¦¹à§Ÿà§‡à¦›à§‡à¥¤ à¦…à¦¨à§à¦—à§à¦°à¦¹ à¦•à¦°à§‡ à¦†à¦¬à¦¾à¦° à¦šà§‡à¦·à§à¦Ÿà¦¾ à¦•à¦°à§à¦¨à¥¤");
             saveModalConfirm.disabled = false;
             saveModalConfirm.innerHTML = prevConfirmText;
         }
@@ -20142,7 +20546,7 @@ document.addEventListener('DOMContentLoaded', () => {
         try {
             const data = JSON.parse(jsonData);
             if (data.appName !== 'Studio Flow' || !data.settings) {
-                alert("ত্রুটি: এটি কোনো বৈধ Studio Flow প্রজেক্ট ফাইল নয়।");
+                alert("à¦¤à§à¦°à§à¦Ÿà¦¿: à¦à¦Ÿà¦¿ à¦•à§‹à¦¨à§‹ à¦¬à§ˆà¦§ Studio Flow à¦ªà§à¦°à¦œà§‡à¦•à§à¦Ÿ à¦«à¦¾à¦‡à¦² à¦¨à§Ÿà¥¤");
                 return;
             }
 
@@ -20162,7 +20566,7 @@ document.addEventListener('DOMContentLoaded', () => {
                             type: 'clip',
                             id: clip.id,
                             name: clip.name,
-                            meta: `ভিডিও ক্লিপ · Duration: ${clip.duration.toFixed(1)}s`
+                            meta: `à¦­à¦¿à¦¡à¦¿à¦“ à¦•à§à¦²à¦¿à¦ª Â· Duration: ${clip.duration.toFixed(1)}s`
                         });
                     }
                 }
@@ -20177,7 +20581,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         track.blob = cachedFile;
                         track.url = URL.createObjectURL(cachedFile);
                     } else if (track.libraryId && window.getLibraryDefById) {
-                        // [9-10] Built-in Free Music Library track — re-render
+                        // [9-10] Built-in Free Music Library track â€” re-render
                         // its synth blob instead of treating it as missing.
                         try {
                             const def = window.getLibraryDefById(track.libraryId);
@@ -20194,7 +20598,7 @@ document.addEventListener('DOMContentLoaded', () => {
                                 type: 'bgmusic',
                                 id: track.id,
                                 name: track.name,
-                                meta: `ব্যাকগ্রাউন্ড মিউজিক ট্র্যাক`
+                                meta: `à¦¬à§à¦¯à¦¾à¦•à¦—à§à¦°à¦¾à¦‰à¦¨à§à¦¡ à¦®à¦¿à¦‰à¦œà¦¿à¦• à¦Ÿà§à¦°à§à¦¯à¦¾à¦•`
                             });
                         }
                     } else {
@@ -20202,7 +20606,7 @@ document.addEventListener('DOMContentLoaded', () => {
                             type: 'bgmusic',
                             id: track.id,
                             name: track.name,
-                            meta: `ব্যাকগ্রাউন্ড মিউজিক ট্র্যাক`
+                            meta: `à¦¬à§à¦¯à¦¾à¦•à¦—à§à¦°à¦¾à¦‰à¦¨à§à¦¡ à¦®à¦¿à¦‰à¦œà¦¿à¦• à¦Ÿà§à¦°à§à¦¯à¦¾à¦•`
                         });
                     }
                 }
@@ -20224,7 +20628,7 @@ document.addEventListener('DOMContentLoaded', () => {
                                 id: eclip.id,
                                 trackId: track.id,
                                 name: eclip.name,
-                                meta: `এক্সট্রা ট্র্যাক ক্লিপ (${track.type === 'audio' ? 'অডিও' : (track.type === 'image' ? 'ছবি' : 'ভিডিও')})`
+                                meta: `à¦à¦•à§à¦¸à¦Ÿà§à¦°à¦¾ à¦Ÿà§à¦°à§à¦¯à¦¾à¦• à¦•à§à¦²à¦¿à¦ª (${track.type === 'audio' ? 'à¦…à¦¡à¦¿à¦“' : (track.type === 'image' ? 'à¦›à¦¬à¦¿' : 'à¦­à¦¿à¦¡à¦¿à¦“')})`
                             });
                         }
                     }
@@ -20238,7 +20642,7 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         } catch (e) {
             console.error("Import failed:", e);
-            alert("প্রজেক্ট ইম্পোর্ট করতে ব্যর্থ হয়েছে। ফাইলটি সঠিক কিনা যাচাই করুন।");
+            alert("à¦ªà§à¦°à¦œà§‡à¦•à§à¦Ÿ à¦‡à¦®à§à¦ªà§‹à¦°à§à¦Ÿ à¦•à¦°à¦¤à§‡ à¦¬à§à¦¯à¦°à§à¦¥ à¦¹à§Ÿà§‡à¦›à§‡à¥¤ à¦«à¦¾à¦‡à¦²à¦Ÿà¦¿ à¦¸à¦ à¦¿à¦• à¦•à¦¿à¦¨à¦¾ à¦¯à¦¾à¦šà¦¾à¦‡ à¦•à¦°à§à¦¨à¥¤");
         }
     }
 
@@ -20514,10 +20918,10 @@ document.addEventListener('DOMContentLoaded', () => {
             state.currentStep = 1;
             updateNavigation();
 
-            alert("প্রজেক্ট সফলভাবে লোড হয়েছে!");
+            alert("à¦ªà§à¦°à¦œà§‡à¦•à§à¦Ÿ à¦¸à¦«à¦²à¦­à¦¾à¦¬à§‡ à¦²à§‹à¦¡ à¦¹à§Ÿà§‡à¦›à§‡!");
         } catch (e) {
             console.error("Apply import failed:", e);
-            alert("প্রজেক্ট ফাইল অ্যাপ্লাই করতে ত্রুটি ঘটেছে: " + (e.message || e));
+            alert("à¦ªà§à¦°à¦œà§‡à¦•à§à¦Ÿ à¦«à¦¾à¦‡à¦² à¦…à§à¦¯à¦¾à¦ªà§à¦²à¦¾à¦‡ à¦•à¦°à¦¤à§‡ à¦¤à§à¦°à§à¦Ÿà¦¿ à¦˜à¦Ÿà§‡à¦›à§‡: " + (e.message || e));
         }
     }
 
@@ -20550,8 +20954,8 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         // De-duplicate B-roll overlay IDs. If two (or more) items share the same
-        // numeric id — which can happen when old projects are migrated or history
-        // snapshots are restored — every one of them will match a filter() and be
+        // numeric id â€” which can happen when old projects are migrated or history
+        // snapshots are restored â€” every one of them will match a filter() and be
         // deleted at once when the user tries to remove just one. Detect duplicates
         // and assign a fresh unique id to any offending item so every B-roll is
         // individually addressable.
@@ -20664,7 +21068,7 @@ document.addEventListener('DOMContentLoaded', () => {
         // Multi-Track Timeline (Phase 11 step 4 fix): without this, extra
         // tracks from a previous project silently carried over into a new
         // project / project switch, since nothing else here touched them.
-        // Stop/release their media FIRST — once the array below is replaced,
+        // Stop/release their media FIRST â€” once the array below is replaced,
         // nothing else can reach a still-playing audio/video element to
         // silence it, and the "Clear All" button looked like it hadn't
         // cleared anything because the multi-track panel was left showing
@@ -20872,7 +21276,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         state.activeProjectId = targetProjId;
                         await saveProjectToBrowserStorage(targetProjId);
                     }
-                    if (typeof showToast === 'function') showToast(`"${file.name}"-এর পূর্বের সংরক্ষিত প্রজেক্ট লোড করা হলো!`, 'success');
+                    if (typeof showToast === 'function') showToast(`"${file.name}"-à¦à¦° à¦ªà§‚à¦°à§à¦¬à§‡à¦° à¦¸à¦‚à¦°à¦•à§à¦·à¦¿à¦¤ à¦ªà§à¦°à¦œà§‡à¦•à§à¦Ÿ à¦²à§‹à¦¡ à¦•à¦°à¦¾ à¦¹à¦²à§‹!`, 'success');
                     return true;
                 }
             }
@@ -20881,7 +21285,7 @@ document.addEventListener('DOMContentLoaded', () => {
             clearWorkspaceState();
             state.activeProjectId = targetProjId;
             state.projectVideoFingerprint = videoFingerprint;
-            if (typeof showToast === 'function') showToast(`"${file.name}"-এর জন্য নতুন ফ্রেশ প্রজেক্ট শুরু করা হলো।`, 'info');
+            if (typeof showToast === 'function') showToast(`"${file.name}"-à¦à¦° à¦œà¦¨à§à¦¯ à¦¨à¦¤à§à¦¨ à¦«à§à¦°à§‡à¦¶ à¦ªà§à¦°à¦œà§‡à¦•à§à¦Ÿ à¦¶à§à¦°à§ à¦•à¦°à¦¾ à¦¹à¦²à§‹à¥¤`, 'info');
             return false;
         } finally {
             isProjectSwitching = false;
@@ -20916,7 +21320,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!projectsListContainer) return;
         const list = getProjectsRegistry();
         if (list.length === 0) {
-            projectsListContainer.innerHTML = '<div style="text-align:center; padding:30px; color:#94a3b8;"><i class="fa-solid fa-folder-open" style="font-size:32px; margin-bottom:8px; opacity:0.5;"></i><p>কোনো সংরক্ষিত প্রজেক্ট পাওয়া যায়নি।</p></div>';
+            projectsListContainer.innerHTML = '<div style="text-align:center; padding:30px; color:#94a3b8;"><i class="fa-solid fa-folder-open" style="font-size:32px; margin-bottom:8px; opacity:0.5;"></i><p>à¦•à§‹à¦¨à§‹ à¦¸à¦‚à¦°à¦•à§à¦·à¦¿à¦¤ à¦ªà§à¦°à¦œà§‡à¦•à§à¦Ÿ à¦ªà¦¾à¦“à§Ÿà¦¾ à¦¯à¦¾à§Ÿà¦¨à¦¿à¥¤</p></div>';
             return;
         }
 
@@ -20931,7 +21335,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         <div class="project-card-title">
                             <i class="fa-solid fa-file-video" style="color:var(--primary);"></i>
                             ${escapeHtml(p.name)}
-                            ${isActive ? '<span class="project-card-badge">বর্তমানে সক্রিয় (Active)</span>' : ''}
+                            ${isActive ? '<span class="project-card-badge">à¦¬à¦°à§à¦¤à¦®à¦¾à¦¨à§‡ à¦¸à¦•à§à¦°à¦¿à§Ÿ (Active)</span>' : ''}
                         </div>
                         <div class="project-card-meta">
                             <span><i class="fa-solid fa-clock"></i> ${dateStr}</span>
@@ -20941,7 +21345,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     </div>
                     <div style="display:flex; align-items:center; gap:6px;">
                         <button type="button" class="btn btn-sm btn-outline open-proj-btn" data-id="${p.id}" ${isActive ? 'disabled' : ''}>
-                            <i class="fa-solid fa-folder-open"></i> খুলুন (Open)
+                            <i class="fa-solid fa-folder-open"></i> à¦–à§à¦²à§à¦¨ (Open)
                         </button>
                         <button type="button" class="btn btn-sm btn-outline delete-proj-btn" data-id="${p.id}" style="color:#ef4444; border-color:rgba(239,68,68,0.3);">
                             <i class="fa-solid fa-trash"></i>
@@ -20959,7 +21363,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 await saveProjectToBrowserStorage(); // auto-save current project before switching
                 const restored = await restoreProjectFromBrowserStorage(id);
                 if (restored && typeof showToast === 'function') {
-                    showToast('প্রজেক্টটি সফলভাবে লোড করা হয়েছে!', 'success');
+                    showToast('à¦ªà§à¦°à¦œà§‡à¦•à§à¦Ÿà¦Ÿà¦¿ à¦¸à¦«à¦²à¦­à¦¾à¦¬à§‡ à¦²à§‹à¦¡ à¦•à¦°à¦¾ à¦¹à§Ÿà§‡à¦›à§‡!', 'success');
                 }
             });
         });
@@ -20968,7 +21372,7 @@ document.addEventListener('DOMContentLoaded', () => {
             btn.addEventListener('click', (e) => {
                 const id = e.currentTarget.dataset.id;
                 if (!id) return;
-                if (confirm("আপনি কি নিশ্চিত যে এই সেভ হওয়া প্রজেক্টটি মুছে ফেলতে চান?")) {
+                if (confirm("à¦†à¦ªà¦¨à¦¿ à¦•à¦¿ à¦¨à¦¿à¦¶à§à¦šà¦¿à¦¤ à¦¯à§‡ à¦à¦‡ à¦¸à§‡à¦­ à¦¹à¦“à§Ÿà¦¾ à¦ªà§à¦°à¦œà§‡à¦•à§à¦Ÿà¦Ÿà¦¿ à¦®à§à¦›à§‡ à¦«à§‡à¦²à¦¤à§‡ à¦šà¦¾à¦¨?")) {
                     deleteProjectFromStorage(id);
                     renderSavedProjectsList();
                 }
@@ -21623,13 +22027,13 @@ document.addEventListener('DOMContentLoaded', () => {
     // --- Clear All Edits for Current Video (Keep Video Loaded, Reset Edits) ---
     async function clearAllEditsForCurrentVideo() {
         if (!state.clips || state.clips.length === 0) {
-            if (typeof showToast === 'function') showToast('বর্তমানে কোনো ভিডিও লোড করা নেই।', 'warning');
+            if (typeof showToast === 'function') showToast('à¦¬à¦°à§à¦¤à¦®à¦¾à¦¨à§‡ à¦•à§‹à¦¨à§‹ à¦­à¦¿à¦¡à¦¿à¦“ à¦²à§‹à¦¡ à¦•à¦°à¦¾ à¦¨à§‡à¦‡à¥¤', 'warning');
             return;
         }
 
         const activeClip = state.clips.find(c => c.id === state.activeClipId) || state.clips[0];
-        const clipName = activeClip ? activeClip.name : 'ভিডিও';
-        const confirmMsg = `আপনি কি নিশ্চিত যে "${clipName}"-এর সমস্ত এডিটিং (সাবটাইটেল, বি-রোল, ওভারলে, ফিল্টার ইত্যাদি) মুছে দিয়ে ভিডিওটি ফ্রেশ করতে চান?\n\nভিডিওটি লোড থাকবে, কিন্তু সব এডিট মুছে নতুন অবস্থা হবে।`;
+        const clipName = activeClip ? activeClip.name : 'à¦­à¦¿à¦¡à¦¿à¦“';
+        const confirmMsg = `à¦†à¦ªà¦¨à¦¿ à¦•à¦¿ à¦¨à¦¿à¦¶à§à¦šà¦¿à¦¤ à¦¯à§‡ "${clipName}"-à¦à¦° à¦¸à¦®à¦¸à§à¦¤ à¦à¦¡à¦¿à¦Ÿà¦¿à¦‚ (à¦¸à¦¾à¦¬à¦Ÿà¦¾à¦‡à¦Ÿà§‡à¦², à¦¬à¦¿-à¦°à§‹à¦², à¦“à¦­à¦¾à¦°à¦²à§‡, à¦«à¦¿à¦²à§à¦Ÿà¦¾à¦° à¦‡à¦¤à§à¦¯à¦¾à¦¦à¦¿) à¦®à§à¦›à§‡ à¦¦à¦¿à§Ÿà§‡ à¦­à¦¿à¦¡à¦¿à¦“à¦Ÿà¦¿ à¦«à§à¦°à§‡à¦¶ à¦•à¦°à¦¤à§‡ à¦šà¦¾à¦¨?\n\nà¦­à¦¿à¦¡à¦¿à¦“à¦Ÿà¦¿ à¦²à§‹à¦¡ à¦¥à¦¾à¦•à¦¬à§‡, à¦•à¦¿à¦¨à§à¦¤à§ à¦¸à¦¬ à¦à¦¡à¦¿à¦Ÿ à¦®à§à¦›à§‡ à¦¨à¦¤à§à¦¨ à¦…à¦¬à¦¸à§à¦¥à¦¾ à¦¹à¦¬à§‡à¥¤`;
 
         if (!confirm(confirmMsg)) return;
 
@@ -21663,7 +22067,7 @@ document.addEventListener('DOMContentLoaded', () => {
             state.aspectRatio = 'original';
             state.layoutMode = 'fit';
             // These live on state (not per-clip), so "Clear All" for the
-            // current video was leaving them on — Chroma Key stayed enabled
+            // current video was leaving them on â€” Chroma Key stayed enabled
             // across a clear because nothing here ever touched it.
             state.chromaKeyEnabled = false;
             state.chromaKeyColor = '#00ff00';
@@ -21778,7 +22182,7 @@ document.addEventListener('DOMContentLoaded', () => {
         await saveProjectToBrowserStorage(preservedProjId);
 
         if (typeof showToast === 'function') {
-            showToast(`"${clipName}"-এর সমস্ত এডিট ক্লিয়ার করা হয়েছে। ফ্রেশ প্রজেক্ট শুরু হলো!`, 'success');
+            showToast(`"${clipName}"-à¦à¦° à¦¸à¦®à¦¸à§à¦¤ à¦à¦¡à¦¿à¦Ÿ à¦•à§à¦²à¦¿à¦¯à¦¼à¦¾à¦° à¦•à¦°à¦¾ à¦¹à¦¯à¦¼à§‡à¦›à§‡à¥¤ à¦«à§à¦°à§‡à¦¶ à¦ªà§à¦°à¦œà§‡à¦•à§à¦Ÿ à¦¶à§à¦°à§ à¦¹à¦²à§‹!`, 'success');
         }
     }
     window.clearAllEditsForCurrentVideo = clearAllEditsForCurrentVideo;
@@ -21791,7 +22195,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const resetEditorBtn = document.getElementById('reset-editor-btn');
     if (resetEditorBtn) {
         resetEditorBtn.addEventListener('click', async () => {
-            const confirmMsg = 'আপনি কি নিশ্চিত যে নতুন প্রজেক্ট শুরু করতে চান?\n\nবর্তমান ভিডিও, ক্লিপ, ওভারলে এবং সব সেটিংস মুছে যাবে এবং এই কাজটি আর ফেরানো যাবে না।';
+            const confirmMsg = 'à¦†à¦ªà¦¨à¦¿ à¦•à¦¿ à¦¨à¦¿à¦¶à§à¦šà¦¿à¦¤ à¦¯à§‡ à¦¨à¦¤à§à¦¨ à¦ªà§à¦°à¦œà§‡à¦•à§à¦Ÿ à¦¶à§à¦°à§ à¦•à¦°à¦¤à§‡ à¦šà¦¾à¦¨?\n\nà¦¬à¦°à§à¦¤à¦®à¦¾à¦¨ à¦­à¦¿à¦¡à¦¿à¦“, à¦•à§à¦²à¦¿à¦ª, à¦“à¦­à¦¾à¦°à¦²à§‡ à¦à¦¬à¦‚ à¦¸à¦¬ à¦¸à§‡à¦Ÿà¦¿à¦‚à¦¸ à¦®à§à¦›à§‡ à¦¯à¦¾à¦¬à§‡ à¦à¦¬à¦‚ à¦à¦‡ à¦•à¦¾à¦œà¦Ÿà¦¿ à¦†à¦° à¦«à§‡à¦°à¦¾à¦¨à§‹ à¦¯à¦¾à¦¬à§‡ à¦¨à¦¾à¥¤';
             if (!confirm(confirmMsg)) return;
 
             resetEditorBtn.disabled = true;
@@ -21827,8 +22231,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // --- Shared Audio Analysis (reused by 7A Silence Trimmer + Subtitle Snap) ---
     // Decodes a clip's audio and runs the exact same RMS/silence-detection loop
-    // used by the Auto Silence Trimmer, but returns the *inverse* — the actual
-    // speech regions (runs of non-silent audio) — so other features (like the
+    // used by the Auto Silence Trimmer, but returns the *inverse* â€” the actual
+    // speech regions (runs of non-silent audio) â€” so other features (like the
     // silence-aware subtitle sync) can snap timings to real spoken moments.
     window.computeSpeechRegions = async function(activeClip, thresholdDb, minDurationSec) {
         const arrayBuffer = await activeClip.file.arrayBuffer();
@@ -21931,11 +22335,11 @@ document.addEventListener('DOMContentLoaded', () => {
         silenceScanBtn.addEventListener('click', async () => {
             const activeClip = state.clips.find(c => c.id === state.activeClipId);
             if (!activeClip) {
-                alert("দয়া করে প্রথমে একটি ভিডিও ক্লিপ সিলেক্ট করুন।");
+                alert("à¦¦à§Ÿà¦¾ à¦•à¦°à§‡ à¦ªà§à¦°à¦¥à¦®à§‡ à¦à¦•à¦Ÿà¦¿ à¦­à¦¿à¦¡à¦¿à¦“ à¦•à§à¦²à¦¿à¦ª à¦¸à¦¿à¦²à§‡à¦•à§à¦Ÿ à¦•à¦°à§à¦¨à¥¤");
                 return;
             }
             if (activeClip.type === 'image') {
-                alert("নীরবতা ছাঁটাই শুধু ভিডিও ক্লিপের জন্য প্রযোজ্য।");
+                alert("à¦¨à§€à¦°à¦¬à¦¤à¦¾ à¦›à¦¾à¦à¦Ÿà¦¾à¦‡ à¦¶à§à¦§à§ à¦­à¦¿à¦¡à¦¿à¦“ à¦•à§à¦²à¦¿à¦ªà§‡à¦° à¦œà¦¨à§à¦¯ à¦ªà§à¦°à¦¯à§‹à¦œà§à¦¯à¥¤");
                 return;
             }
             
@@ -21968,7 +22372,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         // Show scanning state
         statusEl.style.display = 'flex';
-        statusEl.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin"></i> অডিও ফাইল প্রসেস করা হচ্ছে...';
+        statusEl.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin"></i> à¦…à¦¡à¦¿à¦“ à¦«à¦¾à¦‡à¦² à¦ªà§à¦°à¦¸à§‡à¦¸ à¦•à¦°à¦¾ à¦¹à¦šà§à¦›à§‡...';
         statusEl.style.color = 'var(--text-secondary)';
         resultsEl.style.display = 'none';
         listEl.innerHTML = '';
@@ -21977,12 +22381,12 @@ document.addEventListener('DOMContentLoaded', () => {
         try {
             // Read arrayBuffer from activeClip file
             const arrayBuffer = await activeClip.file.arrayBuffer();
-            statusEl.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin"></i> অডিও ডিকোড করা হচ্ছে...';
+            statusEl.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin"></i> à¦…à¦¡à¦¿à¦“ à¦¡à¦¿à¦•à§‹à¦¡ à¦•à¦°à¦¾ à¦¹à¦šà§à¦›à§‡...';
 
             const tempCtx = new (window.AudioContext || window.webkitAudioContext)();
             const audioBuffer = await tempCtx.decodeAudioData(arrayBuffer);
 
-            statusEl.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin"></i> নীরব অংশ খোঁজা হচ্ছে...';
+            statusEl.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin"></i> à¦¨à§€à¦°à¦¬ à¦…à¦‚à¦¶ à¦–à§‹à¦à¦œà¦¾ à¦¹à¦šà§à¦›à§‡...';
 
             const sampleRate = audioBuffer.sampleRate;
             const channelData = audioBuffer.getChannelData(0);
@@ -22057,13 +22461,13 @@ document.addEventListener('DOMContentLoaded', () => {
             });
 
             if (finalSegments.length === 0) {
-                statusEl.innerHTML = '<i class="fa-solid fa-circle-check" style="color: var(--success);"></i> কোনো নীরব অংশ পাওয়া যায়নি।';
+                statusEl.innerHTML = '<i class="fa-solid fa-circle-check" style="color: var(--success);"></i> à¦•à§‹à¦¨à§‹ à¦¨à§€à¦°à¦¬ à¦…à¦‚à¦¶ à¦ªà¦¾à¦“à§Ÿà¦¾ à¦¯à¦¾à§Ÿà¦¨à¦¿à¥¤';
                 statusEl.style.color = 'var(--success)';
                 return;
             }
 
             detectedSilences = finalSegments;
-            statusEl.innerHTML = `<i class="fa-solid fa-circle-check" style="color: var(--success);"></i> স্ক্যান সম্পন্ন: ${finalSegments.length}টি নীরব অংশ পাওয়া গেছে।`;
+            statusEl.innerHTML = `<i class="fa-solid fa-circle-check" style="color: var(--success);"></i> à¦¸à§à¦•à§à¦¯à¦¾à¦¨ à¦¸à¦®à§à¦ªà¦¨à§à¦¨: ${finalSegments.length}à¦Ÿà¦¿ à¦¨à§€à¦°à¦¬ à¦…à¦‚à¦¶ à¦ªà¦¾à¦“à§Ÿà¦¾ à¦—à§‡à¦›à§‡à¥¤`;
             statusEl.style.color = 'var(--success)';
 
             renderSilenceSegmentsList();
@@ -22072,7 +22476,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         } catch (err) {
             console.error("Silence analysis error:", err);
-            statusEl.innerHTML = '<i class="fa-solid fa-circle-exclamation" style="color: var(--danger);"></i> অডিও বিশ্লেষণ ব্যর্থ হয়েছে। ফাইলে অডিও ট্র্যাক নাও থাকতে পারে।';
+            statusEl.innerHTML = '<i class="fa-solid fa-circle-exclamation" style="color: var(--danger);"></i> à¦…à¦¡à¦¿à¦“ à¦¬à¦¿à¦¶à§à¦²à§‡à¦·à¦£ à¦¬à§à¦¯à¦°à§à¦¥ à¦¹à§Ÿà§‡à¦›à§‡à¥¤ à¦«à¦¾à¦‡à¦²à§‡ à¦…à¦¡à¦¿à¦“ à¦Ÿà§à¦°à§à¦¯à¦¾à¦• à¦¨à¦¾à¦“ à¦¥à¦¾à¦•à¦¤à§‡ à¦ªà¦¾à¦°à§‡à¥¤';
             statusEl.style.color = 'var(--danger)';
         }
     }
@@ -22179,7 +22583,7 @@ document.addEventListener('DOMContentLoaded', () => {
             .map(c => parseInt(c.dataset.id));
 
         if (selectedIds.length === 0) {
-            alert("বাদ দেওয়ার জন্য অনুগ্রহ করে কমপক্ষে একটি নীরব অংশ সিলেক্ট করুন।");
+            alert("à¦¬à¦¾à¦¦ à¦¦à§‡à¦“à§Ÿà¦¾à¦° à¦œà¦¨à§à¦¯ à¦…à¦¨à§à¦—à§à¦°à¦¹ à¦•à¦°à§‡ à¦•à¦®à¦ªà¦•à§à¦·à§‡ à¦à¦•à¦Ÿà¦¿ à¦¨à§€à¦°à¦¬ à¦…à¦‚à¦¶ à¦¸à¦¿à¦²à§‡à¦•à§à¦Ÿ à¦•à¦°à§à¦¨à¥¤");
             return;
         }
 
@@ -22195,7 +22599,7 @@ document.addEventListener('DOMContentLoaded', () => {
             .filter(cut => cut.end > cut.start + 0.15);
 
         if (cuts.length === 0) {
-            alert("সেফটি বাফার (Padding) বাদ দেওয়ার পর কোনো উপযুক্ত নীরব অংশ পাওয়া যায়নি। অনুগ্রহ করে প্যাডিং এর মান কমিয়ে দেখুন।");
+            alert("à¦¸à§‡à¦«à¦Ÿà¦¿ à¦¬à¦¾à¦«à¦¾à¦° (Padding) à¦¬à¦¾à¦¦ à¦¦à§‡à¦“à§Ÿà¦¾à¦° à¦ªà¦° à¦•à§‹à¦¨à§‹ à¦‰à¦ªà¦¯à§à¦•à§à¦¤ à¦¨à§€à¦°à¦¬ à¦…à¦‚à¦¶ à¦ªà¦¾à¦“à§Ÿà¦¾ à¦¯à¦¾à§Ÿà¦¨à¦¿à¥¤ à¦…à¦¨à§à¦—à§à¦°à¦¹ à¦•à¦°à§‡ à¦ªà§à¦¯à¦¾à¦¡à¦¿à¦‚ à¦à¦° à¦®à¦¾à¦¨ à¦•à¦®à¦¿à§Ÿà§‡ à¦¦à§‡à¦–à§à¦¨à¥¤");
             return;
         }
 
@@ -22246,7 +22650,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         if (newClips.length === 0) {
-            alert("সবগুলো নীরবতা বাদ দিলে পুরো ভিডিওটিই বাদ পড়ে যায়! অনুগ্রহ করে কিছু নীরবতা আনচেক করুন বা থ্রেশহোল্ড বাড়ান।");
+            alert("à¦¸à¦¬à¦—à§à¦²à§‹ à¦¨à§€à¦°à¦¬à¦¤à¦¾ à¦¬à¦¾à¦¦ à¦¦à¦¿à¦²à§‡ à¦ªà§à¦°à§‹ à¦­à¦¿à¦¡à¦¿à¦“à¦Ÿà¦¿à¦‡ à¦¬à¦¾à¦¦ à¦ªà§œà§‡ à¦¯à¦¾à§Ÿ! à¦…à¦¨à§à¦—à§à¦°à¦¹ à¦•à¦°à§‡ à¦•à¦¿à¦›à§ à¦¨à§€à¦°à¦¬à¦¤à¦¾ à¦†à¦¨à¦šà§‡à¦• à¦•à¦°à§à¦¨ à¦¬à¦¾ à¦¥à§à¦°à§‡à¦¶à¦¹à§‹à¦²à§à¦¡ à¦¬à¦¾à§œà¦¾à¦¨à¥¤");
             return;
         }
 
@@ -22255,7 +22659,7 @@ document.addEventListener('DOMContentLoaded', () => {
         switchActiveClip(newClips[0].id);
         resetSilenceTrimmerUI();
 
-        alert(`সফলভাবে ${cuts.length}টি নীরব অংশ কেটে বাদ দেওয়া হয়েছে। ভিডিওটি এখন ${newClips.length}টি ক্লিপে বিভক্ত করা হয়েছে।`);
+        alert(`à¦¸à¦«à¦²à¦­à¦¾à¦¬à§‡ ${cuts.length}à¦Ÿà¦¿ à¦¨à§€à¦°à¦¬ à¦…à¦‚à¦¶ à¦•à§‡à¦Ÿà§‡ à¦¬à¦¾à¦¦ à¦¦à§‡à¦“à§Ÿà¦¾ à¦¹à§Ÿà§‡à¦›à§‡à¥¤ à¦­à¦¿à¦¡à¦¿à¦“à¦Ÿà¦¿ à¦à¦–à¦¨ ${newClips.length}à¦Ÿà¦¿ à¦•à§à¦²à¦¿à¦ªà§‡ à¦¬à¦¿à¦­à¦•à§à¦¤ à¦•à¦°à¦¾ à¦¹à§Ÿà§‡à¦›à§‡à¥¤`);
         if (typeof triggerAutoSave === 'function') triggerAutoSave();
     }
 
@@ -22282,13 +22686,13 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!activeClip || activeClip.type === 'image') {
             if (silenceScanBtn) {
                 silenceScanBtn.disabled = true;
-                silenceScanBtn.innerHTML = '<i class="fa-solid fa-ban"></i> Video Only (শুধু ভিডিওর জন্য)';
+                silenceScanBtn.innerHTML = '<i class="fa-solid fa-ban"></i> Video Only (à¦¶à§à¦§à§ à¦­à¦¿à¦¡à¦¿à¦“à¦° à¦œà¦¨à§à¦¯)';
             }
             resetSilenceTrimmerUI();
         } else {
             if (silenceScanBtn) {
                 silenceScanBtn.disabled = false;
-                silenceScanBtn.innerHTML = '<i class="fa-solid fa-magnifying-glass-chart"></i> Scan for Silence (নীরবতা স্ক্যান করুন)';
+                silenceScanBtn.innerHTML = '<i class="fa-solid fa-magnifying-glass-chart"></i> Scan for Silence (à¦¨à§€à¦°à¦¬à¦¤à¦¾ à¦¸à§à¦•à§à¦¯à¦¾à¦¨ à¦•à¦°à§à¦¨)';
             }
         }
     }
@@ -22586,9 +22990,9 @@ document.addEventListener('DOMContentLoaded', () => {
             if (rotYSlider) rotYSlider.value = ry;
             if (rotZSlider) rotZSlider.value = rz;
 
-            if (rotXVal) rotXVal.textContent = rx + '°';
-            if (rotYVal) rotYVal.textContent = ry + '°';
-            if (rotZVal) rotZVal.textContent = rz + '°';
+            if (rotXVal) rotXVal.textContent = rx + 'Â°';
+            if (rotYVal) rotYVal.textContent = ry + 'Â°';
+            if (rotZVal) rotZVal.textContent = rz + 'Â°';
         }
 
         if (rot3dToggle) {
@@ -22630,7 +23034,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 const val = parseInt(e.target.value) || 0;
                 const obj = getTargetObj();
                 obj.rotX = val;
-                if (rotXVal) rotXVal.textContent = val + '°';
+                if (rotXVal) rotXVal.textContent = val + 'Â°';
                 drawFrame();
                 if (typeof triggerAutoSave === 'function') triggerAutoSave();
             });
@@ -22640,7 +23044,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 const val = parseInt(e.target.value) || 0;
                 const obj = getTargetObj();
                 obj.rotY = val;
-                if (rotYVal) rotYVal.textContent = val + '°';
+                if (rotYVal) rotYVal.textContent = val + 'Â°';
                 drawFrame();
                 if (typeof triggerAutoSave === 'function') triggerAutoSave();
             });
@@ -22651,7 +23055,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 const obj = getTargetObj();
                 obj.rotZ = val;
                 obj.rotation = val;
-                if (rotZVal) rotZVal.textContent = val + '°';
+                if (rotZVal) rotZVal.textContent = val + 'Â°';
                 drawFrame();
                 if (typeof triggerAutoSave === 'function') triggerAutoSave();
             });
@@ -22715,7 +23119,7 @@ document.addEventListener('DOMContentLoaded', () => {
         function formatTimeBadge(startSec, endSec) {
             const hasStart = startSec != null && !isNaN(startSec);
             const hasEnd = endSec != null && !isNaN(endSec);
-            if (!hasStart && !hasEnd) return 'Full Video (পুরো ভিডিও)';
+            if (!hasStart && !hasEnd) return 'Full Video (à¦ªà§à¦°à§‹ à¦­à¦¿à¦¡à¦¿à¦“)';
             const sStr = hasStart ? parseFloat(startSec).toFixed(1) + 's' : '0.0s';
             const eStr = hasEnd ? parseFloat(endSec).toFixed(1) + 's' : 'End';
             return sStr + ' - ' + eStr;
@@ -22730,14 +23134,14 @@ document.addEventListener('DOMContentLoaded', () => {
             if (layers.length === 0) {
                 const empty = document.createElement('div');
                 empty.className = 'particle-empty-state';
-                empty.innerHTML = '<p><i class="fa-solid fa-smog" style="color:#38bdf8; margin-right:6px;"></i>কোনো ধোঁয়া সেগমেন্ট তৈরি করা হয়নি। নতুন যোগ করতে নিচের বাটনে চাপুন।</p>';
+                empty.innerHTML = '<p><i class="fa-solid fa-smog" style="color:#38bdf8; margin-right:6px;"></i>à¦•à§‹à¦¨à§‹ à¦§à§‹à¦à¦¯à¦¼à¦¾ à¦¸à§‡à¦—à¦®à§‡à¦¨à§à¦Ÿ à¦¤à§ˆà¦°à¦¿ à¦•à¦°à¦¾ à¦¹à¦¯à¦¼à¦¨à¦¿à¥¤ à¦¨à¦¤à§à¦¨ à¦¯à§‹à¦— à¦•à¦°à¦¤à§‡ à¦¨à¦¿à¦šà§‡à¦° à¦¬à¦¾à¦Ÿà¦¨à§‡ à¦šà¦¾à¦ªà§à¦¨à¥¤</p>';
                 listEl.appendChild(empty);
                 return;
             }
 
             layers.forEach((seg, idx) => {
                 if (!seg.id) seg.id = 'smoke_' + Date.now() + '_' + idx;
-                if (!seg.name) seg.name = 'ধোঁয়া সেগমেন্ট ' + (idx + 1);
+                if (!seg.name) seg.name = 'à¦§à§‹à¦à¦¯à¦¼à¦¾ à¦¸à§‡à¦—à¦®à§‡à¦¨à§à¦Ÿ ' + (idx + 1);
 
                 const item = document.createElement('div');
                 item.className = 'particle-segment-item' + (seg.expanded !== false ? ' expanded' : '');
@@ -22748,7 +23152,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 item.innerHTML = `
                     <div class="particle-segment-header">
                         <div class="particle-segment-title-area">
-                            <label class="switch" style="margin:0; transform:scale(0.8); transform-origin:left center;" title="এই সেগমেন্ট অন/অফ করুন" onclick="event.stopPropagation();">
+                            <label class="switch" style="margin:0; transform:scale(0.8); transform-origin:left center;" title="à¦à¦‡ à¦¸à§‡à¦—à¦®à§‡à¦¨à§à¦Ÿ à¦…à¦¨/à¦…à¦« à¦•à¦°à§à¦¨" onclick="event.stopPropagation();">
                                 <input type="checkbox" class="smoke-seg-toggle" ${seg.enabled !== false ? 'checked' : ''}>
                                 <span class="slider round"></span>
                             </label>
@@ -22756,14 +23160,14 @@ document.addEventListener('DOMContentLoaded', () => {
                             <span class="particle-time-badge">${timeBadgeText}</span>
                         </div>
                         <div class="particle-segment-actions">
-                            <button type="button" class="particle-del-btn smoke-seg-del-btn" title="এই সেগমেন্ট মুছে ফেলুন (Delete)" onclick="event.stopPropagation();">
+                            <button type="button" class="particle-del-btn smoke-seg-del-btn" title="à¦à¦‡ à¦¸à§‡à¦—à¦®à§‡à¦¨à§à¦Ÿ à¦®à§à¦›à§‡ à¦«à§‡à¦²à§à¦¨ (Delete)" onclick="event.stopPropagation();">
                                 <i class="fa-solid fa-trash"></i>
                             </button>
                             <i class="fa-solid fa-chevron-down particle-chevron"></i>
                         </div>
                     </div>
                     <div class="particle-segment-body">
-                        <div style="font-weight:600; font-size:11px; margin-bottom:6px; color:#cbd5e1;">Smoke Presets (ধোঁয়ার ধরন):</div>
+                        <div style="font-weight:600; font-size:11px; margin-bottom:6px; color:#cbd5e1;">Smoke Presets (à¦§à§‹à¦à¦¯à¦¼à¦¾à¦° à¦§à¦°à¦¨):</div>
                         <div style="display:grid; grid-template-columns: repeat(3, 1fr); gap:6px; margin-bottom:10px;">
                             <button type="button" class="btn btn-sm btn-outline ${seg.preset === 'smoke' ? 'active' : ''}" data-preset="smoke">Dense Smoke</button>
                             <button type="button" class="btn btn-sm btn-outline ${seg.preset === 'fog' ? 'active' : ''}" data-preset="fog">Mystic Fog</button>
@@ -22774,16 +23178,16 @@ document.addEventListener('DOMContentLoaded', () => {
 
                         <div style="display:grid; grid-template-columns: 1fr 1fr; gap:10px; margin-bottom:10px;">
                             <div class="control-group">
-                                <label>Color (রঙ)</label>
+                                <label>Color (à¦°à¦™)</label>
                                 <div class="color-picker-wrapper">
                                     <input type="color" class="smoke-seg-color" value="${seg.color || '#b8c4d0'}">
                                     <span class="color-value-text smoke-seg-color-val">${seg.color || '#b8c4d0'}</span>
                                 </div>
                             </div>
                             <div class="control-group">
-                                <label>Blend Mode (মোড)</label>
+                                <label>Blend Mode (à¦®à§‹à¦¡)</label>
                                 <select class="form-select smoke-seg-blend">
-                                    <option value="screen" ${seg.blendMode === 'screen' ? 'selected' : ''}>Screen (উজ্জ্বল)</option>
+                                    <option value="screen" ${seg.blendMode === 'screen' ? 'selected' : ''}>Screen (à¦‰à¦œà§à¦œà§à¦¬à¦²)</option>
                                     <option value="lighter" ${seg.blendMode === 'lighter' ? 'selected' : ''}>Additive Glow</option>
                                     <option value="source-over" ${seg.blendMode === 'source-over' ? 'selected' : ''}>Normal Overlay</option>
                                 </select>
@@ -22792,7 +23196,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
                         <div class="control-group">
                             <label style="display:flex; justify-content:space-between;">
-                                <span>Density (ঘনত্ব)</span>
+                                <span>Density (à¦˜à¦¨à¦¤à§à¦¬)</span>
                                 <span class="smoke-seg-density-val">${seg.density || 26}</span>
                             </label>
                             <input type="range" class="smoke-seg-density" min="10" max="100" value="${seg.density || 26}" step="1">
@@ -22800,7 +23204,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
                         <div class="control-group mt-2">
                             <label style="display:flex; justify-content:space-between;">
-                                <span>Speed (গতি)</span>
+                                <span>Speed (à¦—à¦¤à¦¿)</span>
                                 <span class="smoke-seg-speed-val">${seg.speed || 0.7}x</span>
                             </label>
                             <input type="range" class="smoke-seg-speed" min="0.2" max="3.0" value="${seg.speed || 0.7}" step="0.1">
@@ -22808,30 +23212,30 @@ document.addEventListener('DOMContentLoaded', () => {
 
                         <div class="control-group mt-2">
                             <label style="display:flex; justify-content:space-between;">
-                                <span>Direction (বায়ুর দিক)</span>
-                                <span class="smoke-seg-dir-val">${seg.direction !== undefined ? seg.direction : -90}°</span>
+                                <span>Direction (à¦¬à¦¾à¦¯à¦¼à§à¦° à¦¦à¦¿à¦•)</span>
+                                <span class="smoke-seg-dir-val">${seg.direction !== undefined ? seg.direction : -90}Â°</span>
                             </label>
                             <input type="range" class="smoke-seg-dir" min="-180" max="180" value="${seg.direction !== undefined ? seg.direction : -90}" step="5">
                         </div>
 
                         <div class="control-group mt-2">
                             <label style="display:flex; justify-content:space-between;">
-                                <span>Opacity (আবছা ভাব)</span>
+                                <span>Opacity (à¦†à¦¬à¦›à¦¾ à¦­à¦¾à¦¬)</span>
                                 <span class="smoke-seg-opacity-val">${seg.opacity || 55}%</span>
                             </label>
                             <input type="range" class="smoke-seg-opacity" min="10" max="100" value="${seg.opacity || 55}" step="1">
                         </div>
 
                         <div class="mt-3">
-                            <p class="help-text" style="margin-bottom:6px;">ভিডিওর কোন সময় থেকে কোন সময় পর্যন্ত এই ধোঁয়াটি থাকবে:</p>
+                            <p class="help-text" style="margin-bottom:6px;">à¦­à¦¿à¦¡à¦¿à¦“à¦° à¦•à§‹à¦¨ à¦¸à¦®à¦¯à¦¼ à¦¥à§‡à¦•à§‡ à¦•à§‹à¦¨ à¦¸à¦®à¦¯à¦¼ à¦ªà¦°à§à¦¯à¦¨à§à¦¤ à¦à¦‡ à¦§à§‹à¦à¦¯à¦¼à¦¾à¦Ÿà¦¿ à¦¥à¦¾à¦•à¦¬à§‡:</p>
                             <div style="display:grid; grid-template-columns: 1fr 1fr; gap:10px;">
                                 <div class="control-group">
-                                    <label>Show From (সেকেন্ড)</label>
-                                    <input type="number" step="any" min="0" class="form-input smoke-seg-start" placeholder="পুরো ভিডিও (0.0)" value="${(seg.startSec != null && !isNaN(seg.startSec)) ? seg.startSec : ''}">
+                                    <label>Show From (à¦¸à§‡à¦•à§‡à¦¨à§à¦¡)</label>
+                                    <input type="number" step="any" min="0" class="form-input smoke-seg-start" placeholder="à¦ªà§à¦°à§‹ à¦­à¦¿à¦¡à¦¿à¦“ (0.0)" value="${(seg.startSec != null && !isNaN(seg.startSec)) ? seg.startSec : ''}">
                                 </div>
                                 <div class="control-group">
-                                    <label>Show Until (সেকেন্ড)</label>
-                                    <input type="number" step="any" min="0" class="form-input smoke-seg-end" placeholder="পুরো ভিডিও (End)" value="${(seg.endSec != null && !isNaN(seg.endSec)) ? seg.endSec : ''}">
+                                    <label>Show Until (à¦¸à§‡à¦•à§‡à¦¨à§à¦¡)</label>
+                                    <input type="number" step="any" min="0" class="form-input smoke-seg-end" placeholder="à¦ªà§à¦°à§‹ à¦­à¦¿à¦¡à¦¿à¦“ (End)" value="${(seg.endSec != null && !isNaN(seg.endSec)) ? seg.endSec : ''}">
                                 </div>
                             </div>
                         </div>
@@ -22930,7 +23334,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 const dirVal = item.querySelector('.smoke-seg-dir-val');
                 dirSlider.addEventListener('input', (e) => {
                     seg.direction = parseInt(e.target.value) || -90;
-                    dirVal.textContent = seg.direction + '°';
+                    dirVal.textContent = seg.direction + 'Â°';
                     drawFrame();
                     if (typeof window.startParticleOverlayLoop === 'function') window.startParticleOverlayLoop();
                 });
@@ -22985,7 +23389,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 const newId = 'smoke_' + Date.now();
                 const newSeg = {
                     id: newId,
-                    name: 'ধোঁয়া সেগমেন্ট ' + (layers.length + 1),
+                    name: 'à¦§à§‹à¦à¦¯à¦¼à¦¾ à¦¸à§‡à¦—à¦®à§‡à¦¨à§à¦Ÿ ' + (layers.length + 1),
                     enabled: true,
                     preset: 'smoke',
                     color: '#b8c4d0',
@@ -23026,14 +23430,14 @@ document.addEventListener('DOMContentLoaded', () => {
             if (layers.length === 0) {
                 const empty = document.createElement('div');
                 empty.className = 'particle-empty-state';
-                empty.innerHTML = '<p><i class="fa-solid fa-star" style="color:#fbbf24; margin-right:6px;"></i>কোনো গ্লিটার সেগমেন্ট তৈরি করা হয়নি। নতুন যোগ করতে নিচের বাটনে চাপুন।</p>';
+                empty.innerHTML = '<p><i class="fa-solid fa-star" style="color:#fbbf24; margin-right:6px;"></i>à¦•à§‹à¦¨à§‹ à¦—à§à¦²à¦¿à¦Ÿà¦¾à¦° à¦¸à§‡à¦—à¦®à§‡à¦¨à§à¦Ÿ à¦¤à§ˆà¦°à¦¿ à¦•à¦°à¦¾ à¦¹à¦¯à¦¼à¦¨à¦¿à¥¤ à¦¨à¦¤à§à¦¨ à¦¯à§‹à¦— à¦•à¦°à¦¤à§‡ à¦¨à¦¿à¦šà§‡à¦° à¦¬à¦¾à¦Ÿà¦¨à§‡ à¦šà¦¾à¦ªà§à¦¨à¥¤</p>';
                 listEl.appendChild(empty);
                 return;
             }
 
             layers.forEach((seg, idx) => {
                 if (!seg.id) seg.id = 'glitter_' + Date.now() + '_' + idx;
-                if (!seg.name) seg.name = 'গ্লিটার সেগমেন্ট ' + (idx + 1);
+                if (!seg.name) seg.name = 'à¦—à§à¦²à¦¿à¦Ÿà¦¾à¦° à¦¸à§‡à¦—à¦®à§‡à¦¨à§à¦Ÿ ' + (idx + 1);
 
                 const item = document.createElement('div');
                 item.className = 'particle-segment-item' + (seg.expanded !== false ? ' expanded' : '');
@@ -23044,7 +23448,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 item.innerHTML = `
                     <div class="particle-segment-header">
                         <div class="particle-segment-title-area">
-                            <label class="switch" style="margin:0; transform:scale(0.8); transform-origin:left center;" title="এই সেগমেন্ট অন/অফ করুন" onclick="event.stopPropagation();">
+                            <label class="switch" style="margin:0; transform:scale(0.8); transform-origin:left center;" title="à¦à¦‡ à¦¸à§‡à¦—à¦®à§‡à¦¨à§à¦Ÿ à¦…à¦¨/à¦…à¦« à¦•à¦°à§à¦¨" onclick="event.stopPropagation();">
                                 <input type="checkbox" class="glitter-seg-toggle" ${seg.enabled !== false ? 'checked' : ''}>
                                 <span class="slider round"></span>
                             </label>
@@ -23052,14 +23456,14 @@ document.addEventListener('DOMContentLoaded', () => {
                             <span class="particle-time-badge glitter-badge">${timeBadgeText}</span>
                         </div>
                         <div class="particle-segment-actions">
-                            <button type="button" class="particle-del-btn glitter-seg-del-btn" title="এই সেগমেন্ট মুছে ফেলুন (Delete)" onclick="event.stopPropagation();">
+                            <button type="button" class="particle-del-btn glitter-seg-del-btn" title="à¦à¦‡ à¦¸à§‡à¦—à¦®à§‡à¦¨à§à¦Ÿ à¦®à§à¦›à§‡ à¦«à§‡à¦²à§à¦¨ (Delete)" onclick="event.stopPropagation();">
                                 <i class="fa-solid fa-trash"></i>
                             </button>
                             <i class="fa-solid fa-chevron-down particle-chevron"></i>
                         </div>
                     </div>
                     <div class="particle-segment-body">
-                        <div style="font-weight:600; font-size:11px; margin-bottom:6px; color:#cbd5e1;">Glitter Presets (ঝিরিঝিরির ধরন):</div>
+                        <div style="font-weight:600; font-size:11px; margin-bottom:6px; color:#cbd5e1;">Glitter Presets (à¦à¦¿à¦°à¦¿à¦à¦¿à¦°à¦¿à¦° à¦§à¦°à¦¨):</div>
                         <div style="display:grid; grid-template-columns: repeat(2, 1fr); gap:6px; margin-bottom:10px;">
                             <button type="button" class="btn btn-sm btn-outline ${seg.preset === 'golden_rain' ? 'active' : ''}" data-gpreset="golden_rain">Golden Rain</button>
                             <button type="button" class="btn btn-sm btn-outline ${seg.preset === 'sparkle_stars' ? 'active' : ''}" data-gpreset="sparkle_stars">Sparkle Stars</button>
@@ -23069,7 +23473,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
                         <div class="control-group">
                             <label style="display:flex; justify-content:space-between;">
-                                <span>Density (ঘনত্ব)</span>
+                                <span>Density (à¦˜à¦¨à¦¤à§à¦¬)</span>
                                 <span class="glitter-seg-density-val">${seg.density || 65}</span>
                             </label>
                             <input type="range" class="glitter-seg-density" min="10" max="120" value="${seg.density || 65}" step="1">
@@ -23077,7 +23481,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
                         <div class="control-group mt-2">
                             <label style="display:flex; justify-content:space-between;">
-                                <span>Speed (গতি)</span>
+                                <span>Speed (à¦—à¦¤à¦¿)</span>
                                 <span class="glitter-seg-speed-val">${seg.speed || 1.0}x</span>
                             </label>
                             <input type="range" class="glitter-seg-speed" min="0.2" max="3.0" value="${seg.speed || 1.0}" step="0.1">
@@ -23085,7 +23489,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
                         <div class="control-group mt-2">
                             <label style="display:flex; justify-content:space-between;">
-                                <span>Size (আকার)</span>
+                                <span>Size (à¦†à¦•à¦¾à¦°)</span>
                                 <span class="glitter-seg-size-val">${seg.size || 1.1}x</span>
                             </label>
                             <input type="range" class="glitter-seg-size" min="0.3" max="2.5" value="${seg.size || 1.1}" step="0.1">
@@ -23093,22 +23497,22 @@ document.addEventListener('DOMContentLoaded', () => {
 
                         <div class="control-group mt-2">
                             <label style="display:flex; justify-content:space-between;">
-                                <span>Opacity (আবছা ভাব)</span>
+                                <span>Opacity (à¦†à¦¬à¦›à¦¾ à¦­à¦¾à¦¬)</span>
                                 <span class="glitter-seg-opacity-val">${seg.opacity || 85}%</span>
                             </label>
                             <input type="range" class="glitter-seg-opacity" min="10" max="100" value="${seg.opacity || 85}" step="1">
                         </div>
 
                         <div class="mt-3">
-                            <p class="help-text" style="margin-bottom:6px;">ভিডিওর কোন সময় থেকে কোন সময় পর্যন্ত এই গ্লিটারটি থাকবে:</p>
+                            <p class="help-text" style="margin-bottom:6px;">à¦­à¦¿à¦¡à¦¿à¦“à¦° à¦•à§‹à¦¨ à¦¸à¦®à¦¯à¦¼ à¦¥à§‡à¦•à§‡ à¦•à§‹à¦¨ à¦¸à¦®à¦¯à¦¼ à¦ªà¦°à§à¦¯à¦¨à§à¦¤ à¦à¦‡ à¦—à§à¦²à¦¿à¦Ÿà¦¾à¦°à¦Ÿà¦¿ à¦¥à¦¾à¦•à¦¬à§‡:</p>
                             <div style="display:grid; grid-template-columns: 1fr 1fr; gap:10px;">
                                 <div class="control-group">
-                                    <label>Show From (সেকেন্ড)</label>
-                                    <input type="number" step="any" min="0" class="form-input glitter-seg-start" placeholder="পুরো ভিডিও (0.0)" value="${(seg.startSec != null && !isNaN(seg.startSec)) ? seg.startSec : ''}">
+                                    <label>Show From (à¦¸à§‡à¦•à§‡à¦¨à§à¦¡)</label>
+                                    <input type="number" step="any" min="0" class="form-input glitter-seg-start" placeholder="à¦ªà§à¦°à§‹ à¦­à¦¿à¦¡à¦¿à¦“ (0.0)" value="${(seg.startSec != null && !isNaN(seg.startSec)) ? seg.startSec : ''}">
                                 </div>
                                 <div class="control-group">
-                                    <label>Show Until (সেকেন্ড)</label>
-                                    <input type="number" step="any" min="0" class="form-input glitter-seg-end" placeholder="পুরো ভিডিও (End)" value="${(seg.endSec != null && !isNaN(seg.endSec)) ? seg.endSec : ''}">
+                                    <label>Show Until (à¦¸à§‡à¦•à§‡à¦¨à§à¦¡)</label>
+                                    <input type="number" step="any" min="0" class="form-input glitter-seg-end" placeholder="à¦ªà§à¦°à§‹ à¦­à¦¿à¦¡à¦¿à¦“ (End)" value="${(seg.endSec != null && !isNaN(seg.endSec)) ? seg.endSec : ''}">
                                 </div>
                             </div>
                         </div>
@@ -23243,7 +23647,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 const newId = 'glitter_' + Date.now();
                 const newSeg = {
                     id: newId,
-                    name: 'গ্লিটার সেগমেন্ট ' + (layers.length + 1),
+                    name: 'à¦—à§à¦²à¦¿à¦Ÿà¦¾à¦° à¦¸à§‡à¦—à¦®à§‡à¦¨à§à¦Ÿ ' + (layers.length + 1),
                     enabled: true,
                     preset: 'golden_rain',
                     style: 'mixed',
