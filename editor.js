@@ -1806,7 +1806,23 @@ document.addEventListener('DOMContentLoaded', () => {
 
                 // Clear error handler
                 state.video.onerror = null;
-                state.duration = state.video.duration || 10;
+                let validDur = (state.video.duration && isFinite(state.video.duration) && state.video.duration > 0) ? state.video.duration : 0;
+                if (!validDur || validDur <= 0) {
+                    if (state.video.duration === Infinity) {
+                        try {
+                            state.video.currentTime = 1e101;
+                            await new Promise(r => setTimeout(r, 120));
+                            if (state.video.duration && isFinite(state.video.duration) && state.video.duration > 0) {
+                                validDur = state.video.duration;
+                            }
+                            state.video.currentTime = 0;
+                        } catch (e) {}
+                    }
+                }
+                if (!validDur || validDur <= 0) {
+                    validDur = (state.clips && state.clips[0] && state.clips[0].duration > 0) ? state.clips[0].duration : 10;
+                }
+                state.duration = validDur;
                 state.startTime = 0;
                 state.endTime = state.duration;
 
@@ -3074,7 +3090,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const keepSecond = endCut < endBound - 0.15;
 
             if (!keepFirst && !keepSecond) {
-                alert("প� রো ক� লিপটি � কসাথে বাদ দেওয়া যাবে না। ক� লিপ ডিলিট করতে ক� লিপ তালিকার X বাটনে ক� লিক কর� ন।");
+                alert("প রো ক লিপটি  কসাথে বাদ দেওয়া যাবে না। ক লিপ ডিলিট করতে ক লিপ তালিকার X বাটনে ক লিক কর ন।");
                 return;
             }
 
@@ -3135,14 +3151,32 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     
     function playVideo() {
-        if (!state.duration) return;
+        const activeClip = state.clips && state.clips.find(c => c.id === state.activeClipId);
+        
+        // Recover duration if not set or zero
+        if (!state.duration || isNaN(state.duration) || state.duration <= 0) {
+            if (activeClip && activeClip.duration > 0) {
+                state.duration = activeClip.duration;
+            } else if (state.video && state.video.duration > 0) {
+                state.duration = state.video.duration;
+            } else {
+                state.duration = 10;
+            }
+            if (!state.endTime || state.endTime <= 0) {
+                state.endTime = state.duration;
+            }
+        }
         
         // If playhead is outside the trimmed region, loop it
         if (state.currentTime >= state.endTime || state.currentTime < state.startTime) {
             state.currentTime = state.startTime;
         }
         
-        const activeClip = state.clips.find(c => c.id === state.activeClipId);
+        // Resume AudioContext if suspended
+        if (window._audioCtx && window._audioCtx.state === 'suspended') {
+            window._audioCtx.resume().catch(() => {});
+        }
+        
         if (activeClip && activeClip.type === 'image') {
             state.isPlaying = true;
             state.lastImageTickTime = performance.now();
@@ -3151,10 +3185,20 @@ document.addEventListener('DOMContentLoaded', () => {
                 state.video.src = activeClip.url;
                 state.video.load();
             }
-            state.video.play().catch(err => console.warn('Video play interrupted:', err));
+            if (state.video) {
+                if (Math.abs(state.video.currentTime - state.currentTime) > 0.15) {
+                    state.video.currentTime = state.currentTime;
+                }
+                const playPromise = state.video.play();
+                if (playPromise !== undefined) {
+                    playPromise.catch(err => {
+                        console.warn('Video play interrupted or waiting for gesture:', err);
+                    });
+                }
+            }
             state.isPlaying = true;
         }
-        playPauseBtn.innerHTML = '<i class="fa-solid fa-pause"></i>';
+        if (playPauseBtn) playPauseBtn.innerHTML = '<i class="fa-solid fa-pause"></i>';
         
         // Start playback event listeners for voiceover sync
         if (window.onPlaybackStart) {
@@ -4384,18 +4428,20 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         const arcUp = curveAmount > 0;
         const totalAngle = strength * 2.3;
-        const radius = w / totalAngle;
+        // The text's radius is (textWidth / totalAngle). Accounting for horizontal padding:
+        const innerW = Math.max(20, w * 0.85);
+        const radius = innerW / totalAngle;
         const halfH = h / 2;
 
         const centerY = arcUp ? radius : -radius;
         const rTop = arcUp ? (radius + halfH) : (radius - halfH);
         const rBottom = arcUp ? (radius - halfH) : (radius + halfH);
-        const startA = arcUp ? (-Math.PI / 2 - totalAngle / 2) : (Math.PI / 2 - totalAngle / 2);
-        const endA = arcUp ? (-Math.PI / 2 + totalAngle / 2) : (Math.PI / 2 + totalAngle / 2);
+        const startA = arcUp ? (-Math.PI / 2 - totalAngle * 0.58) : (Math.PI / 2 - totalAngle * 0.58);
+        const endA = arcUp ? (-Math.PI / 2 + totalAngle * 0.58) : (Math.PI / 2 + totalAngle * 0.58);
 
         ctx.beginPath();
-        ctx.arc(0, centerY, rTop, startA, endA, false);
-        ctx.arc(0, centerY, rBottom, endA, startA, true);
+        ctx.arc(0, centerY, Math.max(1, rTop), startA, endA, false);
+        ctx.arc(0, centerY, Math.max(1, rBottom), endA, startA, true);
         ctx.closePath();
     }
 
@@ -4487,12 +4533,18 @@ document.addEventListener('DOMContentLoaded', () => {
                     break;
                 case 'shimmer-border': {
                     const t = (currentTime || 0);
-                    ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
+                    ctx.fillStyle = 'rgba(0, 0, 0, 0.55)';
                     drawCurvedBoxPath(ctx, w, h, curveAmount);
                     ctx.fill();
-                    const grad = ctx.createLinearGradient(x + Math.sin(t * 3) * w, y, x + w + Math.cos(t * 3) * w, y + h);
+                    const sweep = (Math.sin(t * 3.5) + 1) / 2;
+                    const grad = ctx.createLinearGradient(x, y, x + w, y + h);
+                    const stop1 = Math.max(0, Math.min(1, sweep - 0.22));
+                    const stop2 = Math.max(0, Math.min(1, sweep));
+                    const stop3 = Math.max(0, Math.min(1, sweep + 0.22));
                     grad.addColorStop(0, color);
-                    grad.addColorStop(0.5, '#ffffff');
+                    if (stop1 > 0) grad.addColorStop(stop1, color);
+                    grad.addColorStop(stop2, '#ffffff');
+                    if (stop3 < 1) grad.addColorStop(stop3, color);
                     grad.addColorStop(1, color);
                     ctx.shadowColor = color;
                     ctx.shadowBlur = 12;
@@ -4651,14 +4703,20 @@ document.addEventListener('DOMContentLoaded', () => {
                 const t = (currentTime || 0);
                 const bw = Math.max(3, h * 0.06);
                 ctx.save();
-                ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
+                ctx.fillStyle = 'rgba(0, 0, 0, 0.55)';
                 ctx.beginPath();
                 ctx.roundRect(x, y, w, h, 10);
                 ctx.fill();
 
-                const grad = ctx.createLinearGradient(x + Math.sin(t * 3) * w, y, x + w + Math.cos(t * 3) * w, y + h);
+                const sweep = (Math.sin(t * 3.5) + 1) / 2;
+                const grad = ctx.createLinearGradient(x, y, x + w, y + h);
+                const stop1 = Math.max(0, Math.min(1, sweep - 0.22));
+                const stop2 = Math.max(0, Math.min(1, sweep));
+                const stop3 = Math.max(0, Math.min(1, sweep + 0.22));
                 grad.addColorStop(0, color);
-                grad.addColorStop(0.5, '#ffffff');
+                if (stop1 > 0) grad.addColorStop(stop1, color);
+                grad.addColorStop(stop2, '#ffffff');
+                if (stop3 < 1) grad.addColorStop(stop3, color);
                 grad.addColorStop(1, color);
 
                 ctx.shadowColor = color;
@@ -8975,7 +9033,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 const boxAnimStyle = isEditingStill ? 'none' : (item.boxAnimStyle !== undefined ? item.boxAnimStyle : (item.animStyle || 'none'));
 
                 const fontFamily = item.font || 'Hind Siliguri';
-                state.ctx.font = `bold ${item.fontSize}px "${fontFamily}", "Plus Jakarta Sans", sans-serif`;
+                const fStyle = (item.italic ? 'italic ' : '') + (item.bold === false ? '' : 'bold ');
+                state.ctx.font = `${fStyle}${item.fontSize}px "${fontFamily}", "Plus Jakarta Sans", sans-serif`;
                 const outlineWidth = Math.max(2, item.fontSize * 0.08);
                 const outlineColor = 'rgba(0,0,0,0.55)';
 
@@ -8986,52 +9045,52 @@ document.addEventListener('DOMContentLoaded', () => {
 
                 // Multiline text & box sizing calculation
                 const textLines = resolvedItemText.split('\n');
-                const lineHeight = item.fontSize * 1.25;
+                const lineHeight = item.fontSize * 1.28;
                 let maxLineWidth = 0;
                 textLines.forEach(line => {
                     const lineW = state.ctx.measureText(line).width;
                     if (lineW > maxLineWidth) maxLineWidth = lineW;
                 });
 
-                const boxPadX = Math.max(16, item.fontSize * 0.45);
-                const boxPadY = Math.max(10, item.fontSize * 0.32);
+                const template = (item && (item.visualTemplate || item.imageDesign)) || 'standard';
+                const is3DText = template && (template.includes('3d') || template.includes('bevel') || template.includes('depth') || template.includes('extruded') || template.includes('isometric') || template.includes('popart') || template.includes('chrome') || template.includes('glass') || template.includes('holo'));
+                const extra3D_W = is3DText ? item.fontSize * 0.35 : 0;
+                const extra3D_H = is3DText ? item.fontSize * 0.35 : 0;
+
+                const boxPadX = Math.max(24, item.fontSize * 0.55 + extra3D_W);
+                const boxPadY = Math.max(14, item.fontSize * 0.38 + extra3D_H);
                 let calculatedBoxW = maxLineWidth + boxPadX * 2;
                 let calculatedBoxH = textLines.length * lineHeight + boxPadY * 2;
 
                 if (curveAmount) {
                     const strength = Math.min(1, Math.abs(curveAmount) / 100);
                     calculatedBoxH += item.fontSize * strength * 0.9;
-                    calculatedBoxW *= (1 + strength * 0.08);
+                    calculatedBoxW *= (1 + strength * 0.12);
                 }
 
+                // If text length has grown beyond fixedBoxW, auto-expand so text never sticks out
                 let boxW = Math.max(item.fixedBoxW || 0, calculatedBoxW);
                 let boxH = Math.max(item.fixedBoxH || 0, calculatedBoxH);
 
-                // --- Pass 1: Box (its own animation, drawn behind the text) ---
-                if (item.boxStyle && item.boxStyle !== 'none') {
-                    const boxT = computeOverlayAnimTransform(boxAnimStyle, currentTime, item.startSec, item.endSec, boxAnimDur, boxH, undefined, undefined, canvasW, canvasH, tx, ty, boxW, boxH);
-                    state.ctx.save();
-                    state.ctx.globalAlpha = txAlpha * boxT.alpha;
-                    state.ctx.translate(tx + boxT.offX, ty + boxT.offY);
-                    if (txRotationRad || boxT.rot) state.ctx.rotate(txRotationRad + boxT.rot);
-                    const boxScaleX = txScale * boxT.scale * boxT.scaleX;
-                    const boxScaleY = txScale * boxT.scale * boxT.scaleY;
-                    if (boxScaleX !== 1 || boxScaleY !== 1) state.ctx.scale(boxScaleX, boxScaleY);
-                    drawTextOverlayBox(state.ctx, item.boxStyle, item.boxColor || '#4f46e5', boxW, boxH, currentTime, curveAmount);
-                    state.ctx.restore();
-                }
-
-                // --- Pass 2: Text (its own animation, drawn on top of the box) ---
-                const textT = computeOverlayAnimTransform(textAnimStyle, currentTime, item.startSec, item.endSec, textAnimDur, item.fontSize, item.textAnimLoop, item.textAnimLoopSec, canvasW, canvasH, tx, ty, maxLineWidth, textLines.length * lineHeight);
+                // Unified Container Transform for Box + Text
+                const hasBox = !!(item.boxStyle && item.boxStyle !== 'none');
+                const animStyleToUse = hasBox ? (boxAnimStyle !== 'none' ? boxAnimStyle : textAnimStyle) : textAnimStyle;
+                const animDurToUse = hasBox ? boxAnimDur : textAnimDur;
+                const containerT = computeOverlayAnimTransform(animStyleToUse, currentTime, item.startSec, item.endSec, animDurToUse, boxH, item.textAnimLoop, item.textAnimLoopSec, canvasW, canvasH, tx, ty, boxW, boxH);
                 const textRevealAnim = getTextOverlayAnimProgress({ animStyle: textAnimStyle, startSec: item.startSec, endSec: item.endSec, animLoop: item.textAnimLoop, animLoopSec: item.textAnimLoopSec }, currentTime, textAnimDur);
 
                 state.ctx.save();
-                state.ctx.globalAlpha = txAlpha * textT.alpha;
-                state.ctx.translate(tx + textT.offX, ty + textT.offY);
-                if (txRotationRad || textT.rot) state.ctx.rotate(txRotationRad + textT.rot);
-                const textScaleX = txScale * textT.scale * textT.scaleX;
-                const textScaleY = txScale * textT.scale * textT.scaleY;
-                if (textScaleX !== 1 || textScaleY !== 1) state.ctx.scale(textScaleX, textScaleY);
+                state.ctx.globalAlpha = txAlpha * containerT.alpha;
+                state.ctx.translate(tx + containerT.offX, ty + containerT.offY);
+                if (txRotationRad || containerT.rot) state.ctx.rotate(txRotationRad + containerT.rot);
+                const containerScaleX = txScale * containerT.scale * containerT.scaleX;
+                const containerScaleY = txScale * containerT.scale * containerT.scaleY;
+                if (containerScaleX !== 1 || containerScaleY !== 1) state.ctx.scale(containerScaleX, containerScaleY);
+
+                // Draw Box behind text in unified coordinate space
+                if (hasBox) {
+                    drawTextOverlayBox(state.ctx, item.boxStyle, item.boxColor || '#4f46e5', boxW, boxH, currentTime, curveAmount);
+                }
 
                 state.ctx.font = `bold ${item.fontSize}px "${fontFamily}", "Plus Jakarta Sans", sans-serif`;
                 state.ctx.fillStyle = item.color;

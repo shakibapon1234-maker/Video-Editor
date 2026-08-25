@@ -512,14 +512,7 @@ function compileVideo(ws, tempDir, filename, totalFrames) {
                 ws.send(JSON.stringify({ type: 'complete', downloadUrl, filename: path.basename(compiledPath) }));
                 setTimeout(() => cleanupDir(tempDir), 5000);
             };
-            if (!fs.existsSync(customThumbnailPath)) return finish();
-            const coveredPath = compiledPath + '.cover.mp4';
-            ffmpeg(compiledPath).input(customThumbnailPath)
-                .outputOptions(['-map 0', '-map 1:v:0', '-c copy', '-c:v:1 mjpeg', '-disposition:v:1 attached_pic'])
-                .output(coveredPath)
-                .on('end', () => fs.rename(coveredPath, compiledPath, (error) => error ? finish() : finish()))
-                .on('error', (error) => { console.warn('Could not attach MP4 cover:', error.message); finish(); })
-                .run();
+            finish();
         })
         .on('error', (err, stdout, stderr) => {
             console.error('FFmpeg compile error:', err);

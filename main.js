@@ -6,6 +6,8 @@ try {
     app.setAppUserModelId('com.shakib.videoeditor');
 } catch (_) {}
 
+app.commandLine.appendSwitch('autoplay-policy', 'no-user-gesture-required');
+
 const gotLock = app.requestSingleInstanceLock();
 if (!gotLock) {
     app.quit();
