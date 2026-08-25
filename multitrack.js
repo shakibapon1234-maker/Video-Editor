@@ -858,11 +858,12 @@
                     var relativeAudio = Math.max(0, (globalT - activeAudio.timelineOffset) + activeAudio.sourceStart);
                     var audioEl = ensureMediaEl(activeAudio, 'audio');
                     if (!audioEl || typeof audioEl.pause !== 'function' || typeof audioEl.play !== 'function') return;
-                    audioEl.muted = !!track.muted;
-                    audioEl.volume = Math.max(0, Math.min(1, track.volume !== undefined ? track.volume : 1));
+                    audioEl.muted = !!(track.muted || window.speakerMutedState);
+                    var speakerVol = (window.currentSpeakerVolume !== undefined ? window.currentSpeakerVolume : 1);
+                    audioEl.volume = Math.max(0, Math.min(1, (track.volume !== undefined ? track.volume : 1) * speakerVol));
                     if (state.isPlaying) {
                         if (Math.abs(audioEl.currentTime - relativeAudio) > 0.35) audioEl.currentTime = relativeAudio;
-                        if (audioEl.paused) audioEl.play().catch(function () {});
+                        if (audioEl.paused && !window.speakerMutedState) audioEl.play().catch(function () {});
                     } else {
                         if (!audioEl.paused) audioEl.pause();
                         if (Math.abs(audioEl.currentTime - relativeAudio) > 0.05) audioEl.currentTime = relativeAudio;
@@ -902,8 +903,9 @@
 
             var relative = Math.max(0, (globalT - active.timelineOffset) + active.sourceStart);
             var el = ensureMediaEl(active, track.type);
-            el.muted = !!track.muted;
-            el.volume = Math.max(0, Math.min(1, track.volume !== undefined ? track.volume : 1));
+            el.muted = !!(track.muted || window.speakerMutedState);
+            var spVol = (window.currentSpeakerVolume !== undefined ? window.currentSpeakerVolume : 1);
+            el.volume = Math.max(0, Math.min(1, (track.volume !== undefined ? track.volume : 1) * spVol));
 
             if (state.isPlaying) {
                 // Loosely synced during free-running playback; hard-correct

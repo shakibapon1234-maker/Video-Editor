@@ -1264,7 +1264,12 @@ document.addEventListener('DOMContentLoaded', () => {
 
         if (active) {
             const el = getBgMusicTrackAudioEl(active);
-            el.volume = getBgMusicTrackVolume(active);
+            const speakerVol = (typeof speakerMutedState !== 'undefined' && speakerMutedState)
+                ? 0
+                : (typeof currentSpeakerVolume !== 'undefined' ? currentSpeakerVolume : 1);
+            const baseVol = getBgMusicTrackVolume(active);
+            el.volume = Math.max(0, Math.min(1, baseVol * speakerVol));
+            el.muted = !!(typeof speakerMutedState !== 'undefined' && speakerMutedState);
             const localElapsed = elapsed - active.startSec;
             const dur = el.duration || active.duration || 0;
 
@@ -1274,7 +1279,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     // Already played through once inside this window — stay silent
                     // for the rest of it, exactly like the "Play Once" label promises.
                     if (!el.paused) el.pause();
-                } else if (el.paused || active.id !== lastActiveBgMusicTrackId) {
+                } else if (!speakerMutedState && (el.paused || active.id !== lastActiveBgMusicTrackId)) {
                     el.currentTime = Math.max(0, localElapsed);
                     el.play().catch(() => {});
                 }
@@ -1286,7 +1291,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         el.currentTime = target;
                     }
                 }
-                if (el.paused) el.play().catch(() => {});
+                if (!speakerMutedState && el.paused) el.play().catch(() => {});
             }
         }
 

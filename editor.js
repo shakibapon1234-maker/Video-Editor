@@ -193,10 +193,10 @@ function drawWingsBrandBroll(ctx, item, x, y, width, height, elapsed) {
 // ============================================================
 // Blank Page Animated Background Engine (v1.0)
 // Themes extracted from Wings Fly projects by the same author:
-//   "space"       â€” Wings Fly Public Site (stars + glowing planets)
-//   "holographic" â€” Wings Fly Academy Dashboard (tech grid + orbs)
-//   "aurora"      â€” Bonus: sweeping aurora borealis gradients
-//   "water"       â€” Wings Fly Lagoon: sunlit water + floating logo
+//   "space"       — Wings Fly Public Site (stars + glowing planets)
+//   "holographic" — Wings Fly Academy Dashboard (tech grid + orbs)
+//   "aurora"      — Bonus: sweeping aurora borealis gradients
+//   "water"       — Wings Fly Lagoon: sunlit water + floating logo
 // ============================================================
 
 // Lazily-loaded, cached logo used by the "water" theme's floating
@@ -212,7 +212,7 @@ function getWaterLogoImg() {
 }
 
 // Draws a wavy, fading reflection of `img` directly beneath a
-// floating object â€” sliced into thin horizontal bands, each nudged
+// floating object — sliced into thin horizontal bands, each nudged
 // sideways by a slow sine wave so the reflection ripples like real
 // water, then faded out with depth.
 function drawWaterReflection(ctx, img, cx, topY, size, t, seed) {
@@ -302,7 +302,7 @@ function drawBlankPageAnimation(ctx, W, H, item, timeSec) {
     ctx.save();
 
     if (theme === 'space') {
-        // â”€â”€ THEME 1: Wings Fly Public Site â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+        // ── THEME 1: Wings Fly Public Site ──────────────────────
         // Deep space: purple/red shifting gradient + twinkling
         // stars + two glowing floating planets
 
@@ -427,7 +427,7 @@ function drawBlankPageAnimation(ctx, W, H, item, timeSec) {
         }
 
     } else if (theme === 'holographic') {
-        // â”€â”€ THEME 2: Wings Fly Academy Dashboard â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+        // ── THEME 2: Wings Fly Academy Dashboard ────────────────
         // Dark base + animated grid + glowing growing bubbles/orbs
 
         // 1) Dark base
@@ -450,12 +450,12 @@ function drawBlankPageAnimation(ctx, W, H, item, timeSec) {
             ctx.fillRect(0, 0, W, H);
         });
 
-        // 3) Animated tech grid â€” faster movement, clearly visible
+        // 3) Animated tech grid — faster movement, clearly visible
         const gridSize = Math.min(W, H) * 0.10;
-        const gridOffset = (t % 4) / 4 * gridSize; // 4s cycle â€” very visible
+        const gridOffset = (t % 4) / 4 * gridSize; // 4s cycle — very visible
         ctx.save();
         ctx.translate(gridOffset, gridOffset);
-        // Major grid lines â€” teal, clearly visible
+        // Major grid lines — teal, clearly visible
         ctx.strokeStyle = `rgba(0,217,255,${0.12 + 0.06 * Math.sin(t * 0.8)})`;
         ctx.lineWidth = 1;
         for (let x = -gridSize * 2; x < W + gridSize; x += gridSize) {
@@ -506,7 +506,7 @@ function drawBlankPageAnimation(ctx, W, H, item, timeSec) {
             ctx.restore();
         });
 
-        // 5) Floating particles (small dots orbiting) â€” reduced count for performance
+        // 5) Floating particles (small dots orbiting) — reduced count for performance
         const rngH = (seed) => { const x = Math.sin(seed * 9301 + 49297) * 23357; return x - Math.floor(x); };
         const particleCount = isExporting ? 6 : 12;
         for (let i = 0; i < particleCount; i++) {
@@ -536,7 +536,7 @@ function drawBlankPageAnimation(ctx, W, H, item, timeSec) {
         ctx.fillRect(0, scanY - 60, W, 120);
 
     } else if (theme === 'aurora') {
-        // â”€â”€ THEME 3: Aurora Borealis (Bonus) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+        // ── THEME 3: Aurora Borealis (Bonus) ────────────────────
         // Dark navy base + sweeping curtains of green/teal/purple
 
         ctx.fillStyle = '#020c1b';
@@ -585,7 +585,7 @@ function drawBlankPageAnimation(ctx, W, H, item, timeSec) {
         ctx.restore();
 
     } else if (theme === 'skyflight') {
-        // â”€â”€ THEME 4: Sky Flight â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+        // ── THEME 4: Sky Flight ──────────────────────────────────
         // Bright daytime sky, drifting clouds, sun glow and an
         // airplane cruising across the frame trailing a soft contrail.
 
@@ -709,7 +709,7 @@ function drawBlankPageAnimation(ctx, W, H, item, timeSec) {
         }
 
     } else if (theme === 'nightflight') {
-        // â”€â”€ THEME 5: Night Flight â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+        // ── THEME 5: Night Flight ────────────────────────────────
         // Deep night sky with stars, a city skyline glittering below,
         // and a plane crossing with blinking navigation lights.
 
@@ -836,7 +836,7 @@ function drawBlankPageAnimation(ctx, W, H, item, timeSec) {
         }
 
     } else if (theme === 'cloudsunset') {
-        // â”€â”€ THEME 6: Cloud Sunset â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+        // ── THEME 6: Cloud Sunset ────────────────────────────────
         // Warm dusk gradient over layered clouds with a plane
         // silhouette gliding past the sun.
 
@@ -931,7 +931,7 @@ function drawBlankPageAnimation(ctx, W, H, item, timeSec) {
             ctx.restore();
         }
     } else if (theme === 'water') {
-        // â”€â”€ THEME 7: Wings Fly Lagoon â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+        // ── THEME 7: Wings Fly Lagoon ────────────────────────────
         // Sunlit water body with drifting caustic light, rippling
         // surface texture, rising bubbles, and the academy emblem
         // floating on the surface with a rippled reflection below.
@@ -1119,7 +1119,7 @@ window.VideoEditor = {
     duotoneEnabled: false,
     duotoneShadowColor: '#1a1a4d',
     duotoneHighlightColor: '#ffcc00',
-    // Advanced Color Grading â€” custom per-channel RGB curves (Phase 4C)
+    // Advanced Color Grading — custom per-channel RGB curves (Phase 4C)
     colorGradeEnabled: false,
     gradeRShadow: 0, gradeRMid: 0, gradeRHigh: 0,
     gradeGShadow: 0, gradeGMid: 0, gradeGHigh: 0,
@@ -1189,7 +1189,7 @@ window.VideoEditor = {
     symbolRotateStartRotation: 0,
 
     // Shape + Text Overlays (Word-style shapes: ribbon banner, wavy banner,
-    // thought cloud, 6-point star, oval callout) â€” user types text on top.
+    // thought cloud, 6-point star, oval callout) — user types text on top.
     shapeOverlays: [],
     selectedShapeOverlayId: null,
     isDraggingShapeOverlay: false,
@@ -1250,7 +1250,7 @@ window.VideoEditor = {
     blurDrawStartX: 0,
     blurDrawStartY: 0,
 
-    // Video highlights / callouts â€” normalized to the rendered video rectangle
+    // Video highlights / callouts — normalized to the rendered video rectangle
     highlights: [],
     selectedHighlightId: null,
     isAddingHighlight: false,
@@ -1264,7 +1264,7 @@ window.VideoEditor = {
     highlightFreehandSegmentStart: null,
     highlightPreviewPoint: null,
 
-    // Background Fill Regions â€” solid colour rectangles drawn on top of everything
+    // Background Fill Regions — solid colour rectangles drawn on top of everything
     fillRegions: [],
     selectedFillId: null,
     isAddingFill: false,
@@ -1322,14 +1322,14 @@ window.VideoEditor = {
     clips: [],
     activeClipId: null,
 
-    // Multi-Track Timeline (Phase 11, step 1 â€” data model + UI only).
+    // Multi-Track Timeline (Phase 11, step 1 — data model + UI only).
     // Extra layered tracks that sit alongside the main `clips` timeline above.
     // Each track: { id, name, type: 'video'|'image'|'audio', muted, volume, clips: [...] }
     // Each track clip: { id, type, url, file, name, duration (full source length),
     //   sourceStart, sourceEnd (trim window within the source),
     //   timelineOffset (seconds, position on the shared timeline) }
     // NOTE: rendering these into the live canvas preview/export is a later step
-    // (see PHASE11_ADVANCED_EDITING_PLAN.txt) â€” this step only stores and lets
+    // (see PHASE11_ADVANCED_EDITING_PLAN.txt) — this step only stores and lets
     // the user arrange the data safely without affecting today's single-track render.
     extraTracks: [],
 
@@ -1559,7 +1559,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const videoVolumeVal = document.getElementById('video-volume-val');
 
     // Step 2 "Quick Volume" mirror control, kept in sync with the Step 3 slider above.
-    // (The old Background Music quick-volume mirror here was removed in v2.3 â€” with
+    // (The old Background Music quick-volume mirror here was removed in v2.3 — with
     // multiple music tracks now possible, a single "quick" slider no longer maps to
     // one clear value. Each track's volume is set in its own row in Step 3 instead.)
     const videoVolumeSliderStep2 = document.getElementById('video-volume-slider-step2');
@@ -2434,7 +2434,7 @@ document.addEventListener('DOMContentLoaded', () => {
         drawFrame();
     });
 
-    // Vignette (Phase 13) â€” independent of filterPreset, so it's guarded with
+    // Vignette (Phase 13) — independent of filterPreset, so it's guarded with
     // if() rather than assumed present, and doesn't touch the preset switch.
     const vignetteSlider = document.getElementById('vignette-slider');
     const vignetteVal = document.getElementById('vignette-val');
@@ -2446,7 +2446,7 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    // Duotone (Phase 13) â€” independent toggle, combines with any filterPreset.
+    // Duotone (Phase 13) — independent toggle, combines with any filterPreset.
     const duotoneToggle = document.getElementById('duotone-toggle');
     const duotoneContainer = document.getElementById('duotone-container');
     const duotoneShadowInput = document.getElementById('duotone-shadow-color');
@@ -2471,7 +2471,7 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    // Film Grain (Phase 13) â€” independent slider, combines with any preset.
+    // Film Grain (Phase 13) — independent slider, combines with any preset.
     const filmGrainSlider = document.getElementById('film-grain-slider');
     const filmGrainVal = document.getElementById('film-grain-val');
     if (filmGrainSlider) {
@@ -2555,7 +2555,7 @@ document.addEventListener('DOMContentLoaded', () => {
     });
     
     // --- Mirror / Flip (Phase 13) ---
-    // Deliberately NOT using the .layout-mode-btn class/selector above â€” these
+    // Deliberately NOT using the .layout-mode-btn class/selector above — these
     // buttons toggle a per-clip flag on activeClip, not state.layoutMode.
     const flipHBtn = document.getElementById('flip-h-btn');
     const flipVBtn = document.getElementById('flip-v-btn');
@@ -2951,7 +2951,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // Freeze Frame insert (v2.7): grabs the currently visible frame at the
     // playhead and holds it as a still image for a chosen duration, splitting
     // the active clip around it. The video pauses on that frame while the
-    // audio track keeps playing underneath â€” a simple, reliable way to fix a
+    // audio track keeps playing underneath — a simple, reliable way to fix a
     // video that's running a second or two ahead of its audio without needing
     // full time-stretching/speed-ramping support.
     if (freezeFrameBtn) {
@@ -3175,7 +3175,7 @@ document.addEventListener('DOMContentLoaded', () => {
         // Extra-track audio/video (multitrack.js) is normally paused inside
         // the per-frame updateLoop -> drawFrame -> drawExtraTracksMidFrame
         // chain, but that loop bails out (`if (!state.isPlaying) return;`)
-        // the instant isPlaying goes false, before drawFrame() runs again â€”
+        // the instant isPlaying goes false, before drawFrame() runs again —
         // so without this call, an extra audio track just kept playing with
         // no way to stop it.
         if (window.pauseAllExtraTracksMedia) window.pauseAllExtraTracksMedia();
@@ -3241,7 +3241,7 @@ document.addEventListener('DOMContentLoaded', () => {
     window.redrawPausedFrame = redrawPausedFrame;
     window.redrawPausedFrameGlobal = redrawPausedFrame;
 
-    // â”€â”€ Background Animation Loop â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // ── Background Animation Loop ────────────────────────────────────────────
     // Drives animated blank-page backgrounds (space/holographic/aurora) via
     // real wall-clock time so they animate even when the video is paused.
     let _bgAnimLoopId = null;
@@ -3257,7 +3257,7 @@ document.addEventListener('DOMContentLoaded', () => {
     function startBgAnimLoop() {
         if (_bgAnimLoopId) return;
         function _loop() {
-            // STOP during export â€” export pipeline calls drawFrame() itself;
+            // STOP during export — export pipeline calls drawFrame() itself;
             // running alongside it causes a race condition and kills performance.
             if (state.customExportTime !== undefined) {
                 _bgAnimLoopId = null;
@@ -3284,13 +3284,13 @@ document.addEventListener('DOMContentLoaded', () => {
     let gifPreviewRefreshActive = false;
 
     // B-roll timing is local to the clip being edited. Without this link an
-    // overlay set to 1â€“4 seconds on an image clip also appears at 1â€“4 seconds
+    // overlay set to 1–4 seconds on an image clip also appears at 1–4 seconds
     // of every other clip, because each clip has its own local playhead.
     function brollBelongsToActiveClip(item) {
         return !item.clipId || item.clipId === state.activeClipId;
     }
 
-    // Text overlays must be local to the clip they were created on too â€”
+    // Text overlays must be local to the clip they were created on too —
     // otherwise a text set on image 1 leaks into every other clip's preview
     // and export, since they all share the same currentTime range.
     function textOverlayBelongsToActiveClip(item) {
@@ -3298,7 +3298,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     window.textOverlayBelongsToActiveClip = textOverlayBelongsToActiveClip;
 
-    // Stickers/Emoji must be local to the clip they were added on â€” otherwise
+    // Stickers/Emoji must be local to the clip they were added on — otherwise
     // a sticker placed on one video/image shows up on every clip and blocks
     // clicks meant for that other clip's own content.
     function stickerBelongsToActiveClip(item) {
@@ -3671,7 +3671,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
             const label = document.createElement('span');
             const trimmedDuration = (clip.end - clip.start).toFixed(1);
-            label.innerText = `${idx + 1}. ${clip.name.length > 22 ? clip.name.slice(0, 22) + 'â€¦' : clip.name} (${trimmedDuration}s)`;
+            label.innerText = `${idx + 1}. ${clip.name.length > 22 ? clip.name.slice(0, 22) + '…' : clip.name} (${trimmedDuration}s)`;
             label.style.fontSize = '13px';
             label.style.flex = '1';
             label.style.overflow = 'hidden';
@@ -3740,7 +3740,7 @@ document.addEventListener('DOMContentLoaded', () => {
             state.startTime = val;
         }
         startVal.value = formatTime(state.startTime);
-        state.currentTime = state.startTime; // triggers 'seeked' event â†’ redraws canvas
+        state.currentTime = state.startTime; // triggers 'seeked' event → redraws canvas
         updatePlayhead();
         syncActiveClipTrim();
     });
@@ -3754,14 +3754,14 @@ document.addEventListener('DOMContentLoaded', () => {
             state.endTime = val;
         }
         endVal.value = formatTime(state.endTime);
-        state.currentTime = state.endTime; // triggers 'seeked' event â†’ redraws canvas
+        state.currentTime = state.endTime; // triggers 'seeked' event → redraws canvas
         updatePlayhead();
         syncActiveClipTrim();
     });
 
-    // Dedicated seek/scrub bar â€” freely move the playhead without touching the trim range.
+    // Dedicated seek/scrub bar — freely move the playhead without touching the trim range.
     // Pauses playback while actively dragging (so scrubbing feels responsive), and does NOT
-    // resume automatically on release â€” matches how most video players' scrub bars behave.
+    // resume automatically on release — matches how most video players' scrub bars behave.
     let wasPlayingBeforeSeek = false;
     if (seekSlider) {
         seekSlider.addEventListener('mousedown', () => {
@@ -4112,7 +4112,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // (as opposed to the entry/exit-only styles above them in the dropdown).
     const TEXT_OVERLAY_CONTINUOUS_ANIM_STYLES = new Set(['pulse', 'wiggle', 'float', 'glow-pulse', 'breathe', 'rainbow-flow', 'neon-flash', 'shine-sweep', 'heartbeat', 'drift', 'dvd-bounce']);
     // Styles that only make sense for the *text glyphs themselves* (progressive
-    // reveal of characters/words/particles) â€” never offered on the Box Animation dropdown,
+    // reveal of characters/words/particles) — never offered on the Box Animation dropdown,
     // and handled separately at draw time rather than through the transform below.
     const TEXT_OVERLAY_REVEAL_ANIM_STYLES = new Set(['typewriter', 'letter-cascade', 'word-stagger', 'word-3d-stagger', 'letter-track-expand', 'particle-dust', 'glitch', 'wave-reveal', 'blur-fade', 'smoke-vapor', 'neon-blur-in']);
 
@@ -4131,7 +4131,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // Shared entry/exit + continuous animation engine used for BOTH the text
     // glyphs and the background box, called separately for each with its own
     // style/speed/reference-size so they can move fully independently (or be
-    // combined â€” e.g. box fades in while text pops in).
+    // combined — e.g. box fades in while text pops in).
     // The trailing bounds* params are only used by 'dvd-bounce' so it knows
     // how far it's allowed to travel: the canvas size, the overlay's own
     // "home" position (its anchor before this transform is applied), and its
@@ -4153,7 +4153,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 case 'glow-pulse':
                     result.alpha = 0.82 + Math.sin(t * 3.6) * 0.18; break;
                 case 'heartbeat': {
-                    // Two quick, subtle beats followed by a rest â€” useful for CTA badges.
+                    // Two quick, subtle beats followed by a rest — useful for CTA badges.
                     const beat = Math.pow(Math.max(0, Math.sin(t * 5.4)), 8);
                     result.scale = 1 + beat * 0.09;
                     result.alpha = 0.94 + beat * 0.06;
@@ -4175,7 +4175,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 case 'dvd-bounce': {
                     // Classic "DVD screensaver" bounce: travels in a straight
                     // line and reflects off each screen edge, wandering to a
-                    // new spot every time it hits a wall â€” continues for as
+                    // new spot every time it hits a wall — continues for as
                     // long as the overlay is on screen.
                     if (boundsCanvasW && boundsCanvasH) {
                         const halfW = Math.max(1, (boundsObjW || refSize * 3) / 2);
@@ -4271,7 +4271,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 result.alpha = eased;
                 break;
             // ============================================================
-            // NEW â€” Reels-inspired animation styles (Phase Reels)
+            // NEW — Reels-inspired animation styles (Phase Reels)
             // ============================================================
             case '3d-pop-tilt': {
                 // Mimics the "Facebook Ads-এর গেমটা" 3D perspective entry:
@@ -4286,7 +4286,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 break;
             }
             case 'shockwave-pop': {
-                // Expands from nothing â†’ 1.30x â†’ 1.0x with a ripple overshoot,
+                // Expands from nothing → 1.30x → 1.0x with a ripple overshoot,
                 // creating the feel of a shockwave/explosion burst from centre.
                 const sw = Math.max(0.01, easeOutBackOvershoot(p));
                 result.scale = 0.05 + 1.25 * sw;
@@ -4309,11 +4309,11 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // (reuses the existing hexToRgba(hex, alpha) helper defined below for
-    // shadow color conversion â€” no need to duplicate it here.)
+    // shadow color conversion — no need to duplicate it here.)
 
     // Applies a Text Overlay's drop-shadow/glow settings around a draw callback.
     // `drawFn(ctx)` should perform the actual fillText/strokeText (or curved/
-    // staggered) drawing at the current origin â€” it may be called once (single
+    // staggered) drawing at the current origin — it may be called once (single
     // shadow) or twice (double-layer: a soft light "highlight" pass underneath,
     // then the main dark shadow pass on top, whose opaque text fill hides the
     // first pass's fill while both shadows remain visible).
@@ -4834,7 +4834,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
                 // Now draw the glowing running dot on the border path using compositing.
                 // We draw a thick, short arc-segment of glowing color that sweeps.
-                // Convert perimeter position â†’ border segment (top/right/bottom/left)
+                // Convert perimeter position → border segment (top/right/bottom/left)
                 const segLen = 80; // length of the glowing segment in px
                 ctx.save();
                 ctx.shadowColor = runGlow;
@@ -4844,14 +4844,14 @@ document.addEventListener('DOMContentLoaded', () => {
                 ctx.lineCap = 'round';
 
                 // Helper: draw a segment of the border rect path between px positions a and b
-                // along the perimeter (topâ†’rightâ†’bottomâ†’left, clockwise).
+                // along the perimeter (top→right→bottom→left, clockwise).
                 // We use the canvas path and clip to just the visible stroke.
                 const drawBorderSegment = (fromPx, toPx) => {
                     // Clamp and wrap
                     const frac = (p) => (((p % perim) + perim) % perim);
                     let a = frac(fromPx), b = frac(toPx);
                     // Collect corner points of the rect path (clockwise, starting top-left)
-                    // [top-left â†’ top-right â†’ bottom-right â†’ bottom-left â†’ top-left]
+                    // [top-left → top-right → bottom-right → bottom-left → top-left]
                     const corners = [
                         { cumLen: 0,       draw: (pxLocal, ctx2) => {
                             // Top edge: left to right
@@ -4933,7 +4933,7 @@ document.addEventListener('DOMContentLoaded', () => {
         ocean: ['#0284c7', '#06b6d4', '#14b8a6', '#10b981', '#3b82f6', '#6366f1']
     };
 
-    function getTextOverlayFillStyle(ctx, item, charIndex = 0, totalChars = 1, boxW = 300, boxH = 80) {
+    function getTextOverlayFillStyle(ctx, item, charIndex = 0, totalChars = 1, boxW = 300, boxH = 80, text = '', x = 0, y = 0, fontSize = 48) {
         if (!item) return '#ffffff';
         const mode = item.colorMode || 'solid';
         if (mode === 'per-letter') {
@@ -4945,12 +4945,23 @@ document.addEventListener('DOMContentLoaded', () => {
             const c1 = item.gradientColor1 || '#22d3ee';
             const c2 = item.gradientColor2 || '#a855f7';
             const dir = item.gradientDirection || 'horizontal';
-            const w = Math.max(50, boxW || 200);
-            const h = Math.max(30, boxH || 60);
+            const fontPx = fontSize || item.fontSize || 48;
+            let textW = boxW;
+            if (text && ctx && typeof ctx.measureText === 'function') {
+                try {
+                    textW = Math.max(40, ctx.measureText(text).width);
+                } catch(e){}
+            }
+            textW = Math.max(textW || 50, 40);
+            const half = textW / 2;
             let g;
-            if (dir === 'vertical') g = ctx.createLinearGradient(0, -h / 2, 0, h / 2);
-            else if (dir === 'diagonal') g = ctx.createLinearGradient(-w / 2, -h / 2, w / 2, h / 2);
-            else g = ctx.createLinearGradient(-w / 2, 0, w / 2, 0);
+            if (dir === 'vertical') {
+                g = ctx.createLinearGradient(x, y - fontPx * 0.6, x, y + fontPx * 0.6);
+            } else if (dir === 'diagonal') {
+                g = ctx.createLinearGradient(x - half, y - fontPx * 0.5, x + half, y + fontPx * 0.5);
+            } else {
+                g = ctx.createLinearGradient(x - half, y, x + half, y);
+            }
             g.addColorStop(0, c1);
             g.addColorStop(1, c2);
             return g;
@@ -5059,7 +5070,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     ctx.fillStyle = overrideColor ? hexToRgba(overrideColor, 0.15 + (1 - i / depthSteps) * 0.2) : `rgba(6, 182, 212, ${0.15 + (1 - i / depthSteps) * 0.2})`;
                     ctx.fillText(text, x, y);
                 } else if (template.includes('depth')) {
-                    // Long, dark, sharply-directional shadow slab â€” reads as a
+                    // Long, dark, sharply-directional shadow slab — reads as a
                     // card floating well above the background, not a bevel edge.
                     const darkVal = Math.round(6 + (i / depthSteps) * 22);
                     ctx.fillStyle = overrideColor ? hexToRgba(shadeColorTO(overrideColor, -65), 0.6) : `rgba(${darkVal}, ${darkVal}, ${Math.round(darkVal * 1.4)}, 0.6)`;
@@ -5168,7 +5179,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 ctx.fillStyle = getFrontFill(0) === '#ffffff' ? '#e8edff' : getFrontFill(0);
                 ctx.fillText(text, x, y);
             } else if (template.includes('glass')) {
-                // Frosted, semi-translucent face with a bright rim-light â€”
+                // Frosted, semi-translucent face with a bright rim-light —
                 // visibly cooler and airier than the solid bevel look.
                 ctx.shadowColor = 'rgba(160, 220, 255, 0.7)';
                 ctx.shadowBlur = Math.max(14, fontPx * 0.3);
@@ -5266,7 +5277,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // Positive values arch upward in the middle (rainbow/badge look), negative
     // values dip down in the middle (smile/cup look). ctx.font/fillStyle/
     // textAlign/textBaseline must already be set by the caller.
-    function drawCurvedTextOverlay(ctx, text, curveAmount, strokeColor, strokeWidth, charDrawFn) {
+    function drawCurvedTextOverlay(ctx, text, curveAmount, strokeColor, strokeWidth, charDrawFn, item) {
         const strength = Math.min(1, Math.abs(curveAmount) / 100);
         if (strength <= 0.001 || !text) {
             if (charDrawFn) {
@@ -5306,7 +5317,7 @@ document.addEventListener('DOMContentLoaded', () => {
         ctx.restore();
     }
 
-    // Catmull-Rom spline sampler â€” returns a dense array of {x,y} points
+    // Catmull-Rom spline sampler — returns a dense array of {x,y} points
     // smoothly passing through all input `points`.
     function sampleCatmullRom(points, segmentsPerSpan) {
         if (!points || points.length < 2) return points ? points.slice() : [];
@@ -5425,8 +5436,8 @@ document.addEventListener('DOMContentLoaded', () => {
     // animation progress `progress` (0..1). Used for the letter-cascade and
     // word-stagger Text Overlay animation presets.
     // Shared multi-line dispatcher for the per-character/per-word Text Overlay
-    // animations below. Canvas fillText() has no concept of "\n" â€” it draws the
-    // whole string on a single row â€” so any of these effects, given multi-line
+    // animations below. Canvas fillText() has no concept of "\n" — it draws the
+    // whole string on a single row — so any of these effects, given multi-line
     // text, previously rendered every line concatenated onto one long row that
     // overflowed the background box. This splits on "\n", vertically centers
     // the stack of lines exactly like the default (non-animated) renderer does,
@@ -5450,7 +5461,7 @@ document.addEventListener('DOMContentLoaded', () => {
         drawTextOverlayAnimatedLines(ctx, text, fontSize || 40, (line) => drawTextOverlayStaggeredLine(ctx, line, mode, progress, strokeColor, strokeWidth));
     }
 
-    function drawTextOverlayStaggeredLine(ctx, text, mode, progress, strokeColor, strokeWidth) {
+    function drawTextOverlayStaggeredLine(ctx, text, mode, progress, strokeColor, strokeWidth, item, fontSize) {
         const units = mode === 'word' ? text.split(/(\s+)/) : splitGraphemes(text);
         const meaningfulCount = units.filter(u => u.trim().length > 0).length || 1;
         const widths = units.map(u => ctx.measureText(u).width);
@@ -5486,7 +5497,7 @@ document.addEventListener('DOMContentLoaded', () => {
         drawTextOverlayAnimatedLines(ctx, text, fontSize, (line) => drawTextOverlayParticleDustLine(ctx, line, progress, phase, fontSize, textColor, strokeColor, strokeWidth, currentTime));
     }
 
-    function drawTextOverlayParticleDustLine(ctx, text, progress, phase, fontSize, textColor, strokeColor, strokeWidth, currentTime) {
+    function drawTextOverlayParticleDustLine(ctx, text, progress, phase, fontSize, item, strokeColor, strokeWidth, currentTime) {
         const isEditingStill = (state.currentStep === 3 && !state.isPlaying);
         const effectivePhase = isEditingStill ? 'settled' : phase;
         
@@ -5574,7 +5585,7 @@ document.addEventListener('DOMContentLoaded', () => {
         drawTextOverlayAnimatedLines(ctx, text, fontSize || 40, (line) => drawTextOverlayGlitchLine(ctx, line, currentTime, textColor, strokeColor, strokeWidth));
     }
 
-    function drawTextOverlayGlitchLine(ctx, text, currentTime, textColor, strokeColor, strokeWidth) {
+    function drawTextOverlayGlitchLine(ctx, text, currentTime, item, strokeColor, strokeWidth, fontSize) {
         const t = currentTime * 18;
         const isGlitchBeat = (Math.sin(t * 1.3) > 0.55) || (Math.cos(t * 2.7) > 0.65);
         const shiftX = isGlitchBeat ? (Math.sin(t * 7) * 7) : 0;
@@ -5612,10 +5623,10 @@ document.addEventListener('DOMContentLoaded', () => {
         drawTextOverlayAnimatedLines(ctx, text, fontSize, (line) => drawTextOverlayWaveLine(ctx, line, progress, phase, fontSize, currentTime, strokeColor, strokeWidth));
     }
 
-    function drawTextOverlayWaveLine(ctx, text, progress, phase, fontSize, currentTime, strokeColor, strokeWidth) {
+    function drawTextOverlayWaveLine(ctx, text, progress, phase, fontSize, currentTime, strokeColor, strokeWidth, item) {
         const isEditingStill = (state.currentStep === 3 && !state.isPlaying);
         const effectivePhase = isEditingStill ? 'settled' : phase;
-        // settled phase: 0.45 gives waveAmp â‰ˆ fontSize*0.196 â€” always visible
+        // settled phase: 0.45 gives waveAmp ≈ fontSize*0.196 — always visible
         const pWave = (effectivePhase === 'in') ? (1 - progress) :
                       (effectivePhase === 'out') ? (1 - progress) : 0.45;
         const waveAmp = fontSize * 0.35 * (0.2 + pWave * 0.8);
@@ -5651,7 +5662,7 @@ document.addEventListener('DOMContentLoaded', () => {
         drawTextOverlayAnimatedLines(ctx, text, fontSize, (line) => drawTextOverlayBlurFadeLine(ctx, line, progress, phase, fontSize, strokeColor, strokeWidth));
     }
 
-    function drawTextOverlayBlurFadeLine(ctx, text, progress, phase, fontSize, strokeColor, strokeWidth) {
+    function drawTextOverlayBlurFadeLine(ctx, text, progress, phase, fontSize, strokeColor, strokeWidth, item) {
         const isEditingStill = (state.currentStep === 3 && !state.isPlaying);
         const effectivePhase = isEditingStill ? 'settled' : phase;
 
@@ -5688,7 +5699,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Smoke Vapor text animation: glowing dust/smoke particles drift in from
     // scattered positions and converge to form the solid letters (and the
-    // reverse on exit) â€” matches the reference look of floating embers/dust
+    // reverse on exit) — matches the reference look of floating embers/dust
     // gathering into shape, not just a blur/opacity fade of the whole word.
     function drawTextOverlaySmokeVapor(ctx, text, progress, phase, fontSize, strokeColor, strokeWidth, textColor, currentTime) {
         if (!text) return;
@@ -5836,7 +5847,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Builds a 256-entry per-channel lookup table from Shadows/Midtones/Highlights
     // control points (Phase 4C - Advanced Color Grading). Piecewise-linear between
-    // (0, shadowAdj), (128, midAdj), (255, highAdj) â€” simple and predictable, no
+    // (0, shadowAdj), (128, midAdj), (255, highAdj) — simple and predictable, no
     // overshoot/ringing like a spline could introduce.
     function buildChannelLUT(shadowAdj, midAdj, highAdj) {
         const lut = new Uint8ClampedArray(256);
@@ -5932,7 +5943,7 @@ document.addEventListener('DOMContentLoaded', () => {
         state.ctx.restore();
     }
 
-    // Radial-gradient vignette â€” darkens the frame edges. `intensity` is 0-100.
+    // Radial-gradient vignette — darkens the frame edges. `intensity` is 0-100.
     // Kept as a small standalone helper (Phase 13) so it can be called from
     // drawFrame without touching the existing filterPreset switch/CSS-filter
     // logic above it.
@@ -6196,7 +6207,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 cVal = cVal * 1.25;
                 break;
             case 'noir':
-                // High-contrast, slightly darker B&W â€” more dramatic than 'bw'.
+                // High-contrast, slightly darker B&W — more dramatic than 'bw'.
                 grayscaleVal = 100;
                 cVal = cVal * 1.4;
                 bVal = bVal * 0.9;
@@ -6211,7 +6222,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 cVal = cVal * 1.15;
                 break;
             case 'dreamy':
-                // Soft, slightly hazy romantic look â€” brightness up, contrast and
+                // Soft, slightly hazy romantic look — brightness up, contrast and
                 // saturation down a touch, a hint of warmth.
                 bVal = bVal * 1.1;
                 cVal = cVal * 0.85;
@@ -6222,7 +6233,7 @@ document.addEventListener('DOMContentLoaded', () => {
         
         if (state.duotoneEnabled) {
             // Duotone needs a monochrome luminosity base to re-color via the
-            // 'color' composite operation below â€” force grayscale regardless
+            // 'color' composite operation below — force grayscale regardless
             // of which filterPreset (if any) is active.
             grayscaleVal = 100;
         }
@@ -6256,7 +6267,7 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         }
 
-        // Duotone â€” remaps the grayscale base (forced above) onto a two-color
+        // Duotone — remaps the grayscale base (forced above) onto a two-color
         // gradient using the canvas 'color' composite operation, which takes
         // the hue/saturation of what's drawn next (the gradient) and keeps the
         // luminosity of what's already on the canvas (the grayscale frame).
@@ -6279,7 +6290,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         state.ctx.restore();
 
-        // Vignette overlay â€” a radial gradient darkening the edges. Drawn as a
+        // Vignette overlay — a radial gradient darkening the edges. Drawn as a
         // plain composite operation (no per-pixel read/write), so it's cheap on
         // low-spec hardware and combines with any filterPreset since it's a
         // separate draw call rather than part of the CSS filter string above.
@@ -6287,7 +6298,7 @@ document.addEventListener('DOMContentLoaded', () => {
             drawVignetteOverlay(state.ctx, canvasW, canvasH, state.vignetteIntensity);
         }
 
-        // Film grain â€” drawn after vignette so the grain sits on top of the
+        // Film grain — drawn after vignette so the grain sits on top of the
         // darkened edges too. Delegated to film-grain.js (separate file, see
         // its header comment for the perf reasoning).
         if (state.filmGrainIntensity > 0 && typeof window.drawFilmGrainOverlay === 'function') {
@@ -6298,7 +6309,7 @@ document.addEventListener('DOMContentLoaded', () => {
         // NOTE: Smoke/Glitter are rendered at the END of drawFrame (before safe zone)
         // so they appear on top of video and are not covered by later overlay passes.
 
-        // Image clip resize handles â€” shown on Steps 1-3 (Media Import, Trim & Layout,
+        // Image clip resize handles — shown on Steps 1-3 (Media Import, Trim & Layout,
         // Overlays) so the user can drag/resize the image right where they added it,
         // not only after clicking through to the Overlays step.
         if (state.currentStep >= 1 && state.currentStep <= 3 && isImageClip && activeClip.id === state.activeClipId) {
@@ -6461,11 +6472,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
 
         // Multi-Track Timeline (multitrack.js, Phase 11): extra video/image
-        // tracks are drawn here â€” above the main video/blur regions, but
+        // tracks are drawn here — above the main video/blur regions, but
         // BELOW every caption/overlay type drawn from this point onward
         // (B-roll, banners, ticker, watermark, progress bar, text, stickers,
         // symbols, shapes, highlights, captions). This is a single, narrow
-        // hook â€” multitrack.js owns 100% of what it draws and how; this line
+        // hook — multitrack.js owns 100% of what it draws and how; this line
         // only fixes WHERE in the stacking order it draws.
         if (window.drawExtraTracksMidFrame) window.drawExtraTracksMidFrame();
 
@@ -6476,13 +6487,13 @@ document.addEventListener('DOMContentLoaded', () => {
         // separate dropdown option lists (e.g. "Wipe Reveal" only existed for
         // Fullscreen, "Spin Pop" only for PiP). They're unified here: every style
         // in the Animation Style dropdown now works the same way regardless of
-        // Display Mode â€” the only thing that changes between modes is the size/
+        // Display Mode — the only thing that changes between modes is the size/
         // position of the box being animated (full video frame vs. a small
         // floating corner box), not which effects are available.
         if (state.brollOverlays && state.brollOverlays.length > 0) {
             const currentTime = state.currentTime;
             const brollEaseOut = (p) => 1 - Math.pow(1 - Math.max(0, Math.min(1, p)), 3);
-            // Distance (in px) to slide a box fully off-canvas in a given direction â€”
+            // Distance (in px) to slide a box fully off-canvas in a given direction —
             // used by both 'slide' and 'slide-pop'. Works for any box size/position:
             // for a Fullscreen box (~ the whole frame) it slides the whole picture off
             // the edge; for a small PiP box it slides just that corner box off.
@@ -6511,7 +6522,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 return Array.from(text);
             };
 
-            // Kinetic Typography (v2.8) â€” per-letter / per-word text entrance & exit
+            // Kinetic Typography (v2.8) — per-letter / per-word text entrance & exit
             // styles, layered in addition to the existing whole-box styles (zoom,
             // slide, rotate-in, etc. still work on text too, they just move the
             // whole text box as one rigid unit). These instead animate the
@@ -6520,15 +6531,15 @@ document.addEventListener('DOMContentLoaded', () => {
             // the caller falls back to a normal single centered fillText draw, same
             // as every other style.
             //
-            //   letter-rotate-settle â€” each letter spins in (alternating left/right)
+            //   letter-rotate-settle — each letter spins in (alternating left/right)
             //     and scales up, staggered left-to-right, landing flat.
-            //   letter-converge      â€” splits the caption into a left/right half at
+            //   letter-converge      — splits the caption into a left/right half at
             //     the nearest word boundary (or, for a single word, at the middle
             //     grapheme so a conjunct is never cut) and slides both halves in
             //     from off-canvas on opposite sides so they arrive together.
-            //   letter-cascade-fade  â€” each letter fades in and settles down from
-            //     slightly above, staggered â€” a soft "rising captions" look.
-            //   word-pop-stagger     â€” each whole word pops in from 0 scale with a
+            //   letter-cascade-fade  — each letter fades in and settles down from
+            //     slightly above, staggered — a soft "rising captions" look.
+            //   word-pop-stagger     — each whole word pops in from 0 scale with a
             //     bouncy overshoot, one word after another.
             //
             // Exit plays the same stagger in reverse order (last unit in is first
@@ -6627,7 +6638,7 @@ document.addEventListener('DOMContentLoaded', () => {
             // exits together right at item.endSec.
             // The per-line ENTRANCE LOOK, though, still respects whichever
             // Animation Style the person picked for this item (typewriter,
-            // letter-cascade, slide, zoom, etc.) â€” each line just plays that same
+            // letter-cascade, slide, zoom, etc.) — each line just plays that same
             // style on its own, at its own turn, instead of all lines playing it
             // at once.
             const drawLineRevealUnderline = (ctx, item, text, x, y, align) => {
@@ -6663,7 +6674,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 sublines.forEach((lineObj, k) => {
                     const revealAt = k * secondsPerLine;
                     const localT = tSinceStart - revealAt;
-                    if (localT < 0) return; // this line's turn hasn't come yet â€” draw nothing
+                    if (localT < 0) return; // this line's turn hasn't come yet — draw nothing
 
                     const lineY = firstLineY + k * lineHeight;
                     const lineX = isBulletPage ? (textX + lineObj.bulletWidth) : textX;
@@ -6764,7 +6775,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 // While paused in Step 3 we always show the overlay being EDITED (the
                 // currently selected one) so it can be positioned/sized regardless of
                 // where the playhead sits. Other, non-selected overlays still respect
-                // their real start/end timing â€” otherwise every B-roll item you've ever
+                // their real start/end timing — otherwise every B-roll item you've ever
                 // added stacks up on screen at once while you're editing a new one,
                 // which is both visually confusing and breaks click-to-select (an old,
                 // already-exported item's box can sit on top of the one you're trying
@@ -6776,7 +6787,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (!inRange) {
                     // Pause an overlay video the moment it's no longer on screen so it
                     // doesn't keep decoding/playing in the background. Skipped during
-                    // export â€” the exporter takes full manual control of seeking there.
+                    // export — the exporter takes full manual control of seeking there.
                     if (item.type === 'video' && item.videoEl && state.customExportTime === undefined && !item.videoEl.paused) {
                         item.videoEl.pause();
                     }
@@ -6801,7 +6812,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
                 // Keep an overlay video's own playback in sync with the main timeline
                 // during LIVE preview. During export (customExportTime is set) this is
-                // skipped entirely â€” the exporter seeks each active video overlay to the
+                // skipped entirely — the exporter seeks each active video overlay to the
                 // exact frame itself, synchronously, before capturing the canvas, since
                 // free-running playback can't guarantee the right frame lands on the
                 // right captured tick.
@@ -6824,18 +6835,18 @@ document.addEventListener('DOMContentLoaded', () => {
                 // Whether animations/sounds should actively play right now. They're only
                 // suppressed when the user is parked in Step 3 WITHOUT playback (so the
                 // overlay sits still and full-opacity for easy positioning/sizing). The
-                // moment playback starts â€” even while still on Step 3 previewing the
-                // B-roll they just added â€” animations and sound must run for real,
+                // moment playback starts — even while still on Step 3 previewing the
+                // B-roll they just added — animations and sound must run for real,
                 // otherwise "testing" the effect right where you configure it looks broken.
                 const brollAnimActive = !(state.currentStep === 3 && !state.isPlaying);
 
-                // Fire entry/exit sound effects (Web Audio, synthesized â€” see audio.js)
+                // Fire entry/exit sound effects (Web Audio, synthesized — see audio.js)
                 // in real time during actual playback/export, timed to line up with
                 // the visual animation (exit sound starts right as the exit anim begins).
                 if (state.isPlaying && item.soundEffect && item.soundEffect !== 'none') {
                     const currentCycle = (repeatSec > 0) ? Math.floor(tIn / repeatSec) : 0;
                     if (item.soundEffect === 'custom') {
-                        // A real uploaded clip plays once at entry only â€” replaying a
+                        // A real uploaded clip plays once at entry only — replaying a
                         // longer voice clip again on exit would usually overlap badly.
                         if (!item._sfxEnterPlayed && currentTime >= item.startSec) {
                             item._sfxEnterPlayed = true;
@@ -6896,7 +6907,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     if (item.mode === 'fullscreen') {
                         const scale = ((item.size !== undefined ? item.size : 100)) / 100;
                         if (scale >= 0.999) {
-                            // Full coverage (default) â€” identical to the old behaviour
+                            // Full coverage (default) — identical to the old behaviour
                             boxX = drawX; boxY = drawY; boxW = drawW; boxH = drawH;
                         } else {
                             // Custom size: scale from the center of the video draw rect.
@@ -7043,7 +7054,7 @@ document.addEventListener('DOMContentLoaded', () => {
                             if (cycleIndex === 0) alpha = Math.max(0.15, eased);
                         }
                     } else if (style === 'spin-pop') {
-                        // Spins in from a 60Â° offset while scaling up from 75%, settles flat.
+                        // Spins in from a 60° offset while scaling up from 75%, settles flat.
                         if (tOut < animDur) {
                             const eased = easeOutBackOvershoot(Math.max(0, tOut / animDur));
                             rotateAmt = -(1 - eased) * (Math.PI / 3);
@@ -7086,7 +7097,7 @@ document.addEventListener('DOMContentLoaded', () => {
                             if (cycleIndex === 0) alpha = Math.max(0, eased);
                         }
                     } else if (style === 'typewriter') {
-                        // No box-level fade-in â€” the character-by-character reveal drawn
+                        // No box-level fade-in — the character-by-character reveal drawn
                         // in the text block below sells the "typing in" effect on its own.
                         // Exit still fades out normally like everything else.
                         if (tOut < animDur) alpha = Math.max(0, tOut / animDur);
@@ -7121,14 +7132,14 @@ document.addEventListener('DOMContentLoaded', () => {
                     }
                 }
 
-                // User-set static rotation (Phase 5D+, manual rotate handle) â€” composites
+                // User-set static rotation (Phase 5D+, manual rotate handle) — composites
                 // on top of any animation-driven rotateAmt set above, so a manually
                 // rotated B-roll box still plays its entry/exit rotation animations
                 // (e.g. 'rotate-in') around its own tilted angle.
                 if (item.rotation) rotateAmt += item.rotation * Math.PI / 180;
                 // Keyframe v2 (Phase 11): user/keyframe-driven scale & opacity compose
                 // multiplicatively on top of whatever the entry/exit animation set,
-                // exactly like rotation composes additively above â€” so a keyframed
+                // exactly like rotation composes additively above — so a keyframed
                 // B-roll box still plays its entry/exit animations, just scaled/faded
                 // relative to its own animated baseline.
                 if (item.scale != null && item.scale !== 1) scaleAmt *= item.scale;
@@ -7145,7 +7156,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
                 // "Blank page" background (v2.7): when enabled on a fullscreen Text
                 // B-roll, paint a full-canvas solid fill BEFORE the text/box itself so
-                // the underlying video is completely hidden â€” good for point-by-point
+                // the underlying video is completely hidden — good for point-by-point
                 // explanations where the person wants a clean slide instead of text
                 // floating over their footage. Fades in/out with the same alpha as the
                 // text so it never pops on/off abruptly. PiP text ignores this (a small
@@ -7288,7 +7299,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 // Frame Scale (Visual Template panel): grows/shrinks the frame/mockup
                 // drawn by drawBrollVisualTemplate around the box's own center, while
                 // the actual content (text or image, drawn separately using the
-                // unscaled drawBoxX/drawBoxY/boxW/boxH above) stays put â€” so the phone
+                // unscaled drawBoxX/drawBoxY/boxW/boxH above) stays put — so the phone
                 // bezel, laptop shell, or 3D/border frame can be resized independent
                 // of what's inside it.
                 const _tplFrameScale = (item.templateFrameScale !== undefined) ? item.templateFrameScale : 1;
@@ -7304,7 +7315,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 // Glass/Chrome/Holo) on a PHOTO or VIDEO B-roll: paint just the
                 // depth/extrusion "slices" now, before the image itself is drawn,
                 // so they sit behind it like real card thickness. The matching
-                // front-edge pass is drawn after the image further below â€” see
+                // front-edge pass is drawn after the image further below — see
                 // the 'frameOnly' call near the end of this item's render block.
                 // (Text B-roll doesn't need this split: the text is drawn in a
                 // separate step after the full single-pass call below, so a
@@ -7510,7 +7521,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         state.ctx.lineWidth = bw * 1.5;
                         state.ctx.lineCap = 'round';
 
-                        // Build perimeter points (clockwise: top â†’ right â†’ bottom â† left â†‘)
+                        // Build perimeter points (clockwise: top → right → bottom ← left ↑)
                         const step = 5;
                         const pts = [];
                         for (let d = 0; d < perim; d += step) {
@@ -7554,7 +7565,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     }
                     // "Normal" mode (transparentBg explicitly off) paints a solid dark
                     // scrim/pill behind the text so it reads clearly over busy video.
-                    // Default is transparent â€” text sits directly on the footage with
+                    // Default is transparent — text sits directly on the footage with
                     // no backdrop at all.
                     if (item.transparentBg === false && style !== 'comic-speed-rays' && style !== 'badge-pop-dot' && style !== 'cta-button-arrow' && style !== 'torn-paper-marker') {
                         if (item.mode === 'fullscreen') {
@@ -7572,7 +7583,7 @@ document.addEventListener('DOMContentLoaded', () => {
                             }
                         }
                     }
-                    // Marker-style solid highlight â€” a tight-fit color band behind the
+                    // Marker-style solid highlight — a tight-fit color band behind the
                     // text, independent of the dark scrim above (both can combine, though
                     // in practice you'd normally use one or the other).
                     if (item.solidHighlight) {
@@ -7601,7 +7612,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     const isLetterBounceStyle = (style === 'letter-bounce-wiggle') && item.type === 'text';
 
                     if (item.lineRevealMode && numLines > 1) {
-                        // Independent line-by-line reveal feature â€” see drawLineRevealText
+                        // Independent line-by-line reveal feature — see drawLineRevealText
                         // above. Completely bypasses the animDur/stagger/kinetic machinery
                         // used by every other style so its timing is simple and predictable.
                         drawLineRevealText(state.ctx, item, sublines, isBulletPage, drawBoxX, drawBoxY, boxW, boxH, cx, cy, lineHeight, currentTime, style);
@@ -7621,7 +7632,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         // stayed on screen), each line gets its own slot spread evenly across
                         // the item's full visible duration (endSec - startSec). Line k doesn't
                         // start entering until the previous lines have each had their turn, and
-                        // once revealed it just stays on screen â€” only the real exit (right at
+                        // once revealed it just stays on screen — only the real exit (right at
                         // item.endSec) animates lines away, and it does so all together so the
                         // whole block leaves cleanly.
                         // Typewriter must always finish line 1 before line 2
@@ -7733,7 +7744,7 @@ document.addEventListener('DOMContentLoaded', () => {
                                 const kineticLineX = isBulletPage ? (drawLineX + lineTextW / 2) : drawLineX;
                                 // Reuse this line's own isEntry/lineP (already computed above from
                                 // either the sequential per-line slot or the legacy short-window
-                                // stagger) instead of a separate, item-level kinetic clock â€” that's
+                                // stagger) instead of a separate, item-level kinetic clock — that's
                                 // what previously made every line's kinetic entrance burst in at
                                 // once regardless of the sequential-reveal setting.
                                 if (isEntry) {
@@ -7809,7 +7820,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
                                     state.ctx.restore();
                                 } else if (style === 'particle-glow-text') {
-                                    // Luxurious golden star sparkles (âœ¦/âœ¨) & drifting gold sparkle dust driven by item.particleIntensity
+                                    // Luxurious golden star sparkles (✦/✨) & drifting gold sparkle dust driven by item.particleIntensity
                                     const glowW = state.ctx.measureText(textToDraw).width;
                                     const glowCx = isBulletPage ? (drawLineX + glowW / 2) : drawLineX;
                                     const particleCount = item.particleIntensity !== undefined ? item.particleIntensity : 25;
@@ -7947,7 +7958,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     // so the user can actually see the whole image in the smaller frame.
                     // Exception 2: the user explicitly picked "Contain" fit mode for a
                     // fullscreen image whose aspect ratio doesn't match the canvas, so
-                    // nothing gets cropped off â€” letterbox bars fill the rest instead.
+                    // nothing gets cropped off — letterbox bars fill the rest instead.
                     const isContainFitMode = item.fitMode === 'contain' || item.fitMode === 'contain-color' || item.fitMode === 'contain-frame';
                     const fsSmall = item.mode === 'fullscreen' && (((item.size !== undefined ? item.size : 100) < 99.9) || isContainFitMode);
                     const imgDrawable = getItemImageDrawable(item, currentTime) || item.imageImg;
@@ -7956,7 +7967,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     const boxAspect = boxW / boxH;
                     let sx, sy, sw, sh;
                     if (fsSmall) {
-                        // Contain mode â€” show the whole image, adjust destination rect
+                        // Contain mode — show the whole image, adjust destination rect
                         sx = 0; sy = 0; sw = imgDims.width; sh = imgDims.height;
                     } else if (imgAspect > boxAspect) {
                         sh = imgDims.height;
@@ -8014,7 +8025,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     }
                     // "Normal" mode (transparentBg explicitly turned off) keeps the old
                     // translucent black backdrop behind PiP images so they stand out
-                    // against busy footage. Default is transparent â€” no backdrop â€” so
+                    // against busy footage. Default is transparent — no backdrop — so
                     // background-removed PNGs stay fully see-through.
                     if (item.mode === 'pip' && item.transparentBg === false) {
                         state.ctx.fillStyle = 'rgba(0,0,0,0.25)';
@@ -8082,10 +8093,10 @@ document.addEventListener('DOMContentLoaded', () => {
                             // "contain" variants at 100% size) so the gap reads as an
                             // intentional backdrop instead of showing whatever was drawn
                             // behind it. Three looks are available:
-                            //   'contain'       â€” flat black bar (original default)
-                            //   'contain-color' â€” Smart Color Extend: solid color sampled
+                            //   'contain'       — flat black bar (original default)
+                            //   'contain-color' — Smart Color Extend: solid color sampled
                             //                     from the image's own edge pixels
-                            //   'contain-frame' â€” Design Frame Template: a designed gradient
+                            //   'contain-frame' — Design Frame Template: a designed gradient
                             //                     panel, consistent across every B-roll item
                             if (item.mode === 'fullscreen' && (item.fitMode === 'contain' || item.fitMode === 'contain-color' || item.fitMode === 'contain-frame')) {
                                 const useColorFill = item.fitMode === 'contain-color';
@@ -8121,13 +8132,13 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
 
                 // Pop the wipe-reveal clip (pushed above with its own save()) before any
-                // annotation drawing â€” annotations like the flying plane are positioned
+                // annotation drawing — annotations like the flying plane are positioned
                 // above/outside the box rect and must not be clipped away by it.
                 if (hasImageShapeClip) state.ctx.restore();
                 if (hasPhoneScreenClip) state.ctx.restore();
                 if (wipeFrac < 0.999) state.ctx.restore();
 
-                // Hand-drawn-style annotation markers (v2.5) â€” layered on top of the
+                // Hand-drawn-style annotation markers (v2.5) — layered on top of the
                 // content after it's painted, growing in sync with the entry (and
                 // shrinking back out on exit) so they feel "drawn on" rather than
                 // just appearing instantly.
@@ -8141,7 +8152,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         const markColor = (item.type === 'text') ? item.color : '#fbbf24';
                         if (style === 'plane-banner-trail') {
                             // A little paper plane flies across the top of the box, towing a
-                            // dashed trail behind it â€” the box content underneath reveals via
+                            // dashed trail behind it — the box content underneath reveals via
                             // the shared wipeFrac clip (set above), so it looks like the text/
                             // image is being "written"/towed into view by the plane, sky-writing
                             // style. Only drawn during entry/exit (annoInEntry/annoInExit); it
@@ -8178,7 +8189,7 @@ document.addEventListener('DOMContentLoaded', () => {
                                 state.ctx.font = `${planeSize}px "Segoe UI Emoji", sans-serif`;
                                 state.ctx.textAlign = 'center';
                                 state.ctx.textBaseline = 'middle';
-                                state.ctx.fillText('âœˆï¸', 0, 0);
+                                state.ctx.fillText('✈ï¸', 0, 0);
                                 state.ctx.restore();
                             }
                         } else if (style === 'circle-highlight') {
@@ -8225,8 +8236,8 @@ document.addEventListener('DOMContentLoaded', () => {
                             state.ctx.stroke();
                         } else if (style === 'thinking-character') {
                             // A small "thinking" bubble that pops into the top-right corner
-                            // with a ðŸ¤” face and two trailing dots, like a thought bubble,
-                            // then pops back out â€” a lightweight "hmm, let's see..." beat.
+                            // with a 🤔 face and two trailing dots, like a thought bubble,
+                            // then pops back out — a lightweight "hmm, let's see..." beat.
                             const bubbleR = Math.max(16, Math.min(boxW, boxH) * 0.16) * easeOutBackOvershoot(annoP);
                             const bcx = drawBoxX + boxW - bubbleR * 0.4;
                             const bcy = drawBoxY - bubbleR * 0.4;
@@ -8248,11 +8259,11 @@ document.addEventListener('DOMContentLoaded', () => {
                             state.ctx.font = `${Math.max(10, Math.round(bubbleR * 1.15))}px sans-serif`;
                             state.ctx.textAlign = 'center';
                             state.ctx.textBaseline = 'middle';
-                            state.ctx.fillText('ðŸ¤”', bcx, bcy - bubbleR * 0.04);
+                            state.ctx.fillText('🤔', bcx, bcy - bubbleR * 0.04);
                         } else if (style === 'arrow-point') {
                             // A hand-drawn-style arrow that flies in from the chosen entry
                             // direction and points at the box, then retracts the same way
-                            // on exit â€” good for calling attention to a specific B-roll.
+                            // on exit — good for calling attention to a specific B-roll.
                             const dir = item.entryDirection || 'bottom';
                             const ecx2 = drawBoxX + boxW / 2, ecy2 = drawBoxY + boxH / 2;
                             const reach = Math.max(boxW, boxH) * 0.55;
@@ -8288,7 +8299,7 @@ document.addEventListener('DOMContentLoaded', () => {
                             state.ctx.closePath();
                             state.ctx.fill();
                         } else if (style === 'magnifier-zoom') {
-                            // A ðŸ” badge pops into the bottom-right corner with a bouncy
+                            // A 🔍 badge pops into the bottom-right corner with a bouncy
                             // overshoot, like someone circled the B-roll and said "look here".
                             const msize = Math.max(16, Math.min(boxW, boxH) * 0.45) * easeOutBackOvershoot(annoP);
                             const mcx = drawBoxX + boxW - msize * 0.4;
@@ -8296,9 +8307,9 @@ document.addEventListener('DOMContentLoaded', () => {
                             state.ctx.font = `${Math.max(10, Math.round(msize))}px sans-serif`;
                             state.ctx.textAlign = 'center';
                             state.ctx.textBaseline = 'middle';
-                            state.ctx.fillText('ðŸ”', mcx, mcy);
+                            state.ctx.fillText('🔍', mcx, mcy);
                         } else if (style === 'question-bounce') {
-                            // A â“ badge bounces into the top-left corner â€” pairs well with
+                            // A ❓ badge bounces into the top-left corner — pairs well with
                             // "wait, what?" or confusion beats in a script.
                             const qsize = Math.max(16, Math.min(boxW, boxH) * 0.45) * easeOutBackOvershoot(annoP);
                             const qcx = drawBoxX + qsize * 0.4;
@@ -8306,10 +8317,10 @@ document.addEventListener('DOMContentLoaded', () => {
                             state.ctx.font = `${Math.max(10, Math.round(qsize))}px sans-serif`;
                             state.ctx.textAlign = 'center';
                             state.ctx.textBaseline = 'middle';
-                            state.ctx.fillText('â“', qcx, qcy);
+                            state.ctx.fillText('❓', qcx, qcy);
                         } else if (style === 'confetti-pop') {
                             // One-shot celebratory particle burst timed to the entry pop
-                            // handled in the transform section above. Entry-only by design â€”
+                            // handled in the transform section above. Entry-only by design —
                             // exit just uses the normal pop-out, no second burst.
                             if (tIn < animDur) {
                                 const burstP = Math.max(0, Math.min(1, tIn / animDur));
@@ -8342,8 +8353,8 @@ document.addEventListener('DOMContentLoaded', () => {
                                 }
                             }
                         } else if (style === 'heart-burst') {
-                            // Same one-shot entry burst as confetti-pop, but floating â¤ï¸ hearts
-                            // drifting upward instead of falling confetti squares â€” for
+                            // Same one-shot entry burst as confetti-pop, but floating ❤️ hearts
+                            // drifting upward instead of falling confetti squares — for
                             // "ভালোবাসা" / affection beats in the script.
                             if (tIn < animDur) {
                                 const burstP = Math.max(0, Math.min(1, tIn / animDur));
@@ -8365,7 +8376,7 @@ document.addEventListener('DOMContentLoaded', () => {
                                         const py = pcy + Math.sin(seedAngle) * seedDist - (burstP * 20);
                                         const hsize = Math.max(10, Math.min(boxW, boxH) * (0.12 + (i % 3) * 0.03));
                                         state.ctx.font = `${Math.round(hsize)}px sans-serif`;
-                                        state.ctx.fillText('â¤ï¸', px, py);
+                                        state.ctx.fillText('❤️', px, py);
                                     }
                                     state.ctx.restore();
                                 }
@@ -8479,7 +8490,7 @@ document.addEventListener('DOMContentLoaded', () => {
                             state.ctx.font = `${Math.round(curSize)}px "Segoe UI Emoji", "Apple Color Emoji", sans-serif`;
                             state.ctx.textAlign = 'center';
                             state.ctx.textBaseline = 'middle';
-                            state.ctx.fillText('ðŸ‘†', 0, 0);
+                            state.ctx.fillText('👆', 0, 0);
                             state.ctx.restore();
                         } else if (style === 'cta-button-arrow') {
                             // Hand-drawn curved arrow swooping in from above/side and pointing straight into CTA button
@@ -8571,7 +8582,7 @@ document.addEventListener('DOMContentLoaded', () => {
                             }
                             state.ctx.restore();
                         } else if (style === 'cursor-line-draw') {
-                            // Cursor Line Underline: Hand ðŸ‘† glides across under text over a smooth, readable 1.5 - 2.5s duration
+                            // Cursor Line Underline: Hand 👆 glides across under text over a smooth, readable 1.5 - 2.5s duration
                             const lineX1 = drawBoxX - 12;
                             const lineX2 = drawBoxX + boxW + 12;
                             const lineY = drawBoxY + boxH + 8;
@@ -8615,12 +8626,12 @@ document.addEventListener('DOMContentLoaded', () => {
                             state.ctx.font = `${Math.round(curSize)}px "Segoe UI Emoji", "Apple Color Emoji", sans-serif`;
                             state.ctx.textAlign = 'center';
                             state.ctx.textBaseline = 'middle';
-                            state.ctx.fillText('ðŸ‘†', 0, 0);
+                            state.ctx.fillText('👆', 0, 0);
 
                             // Ink sparkle dot at drawing tip while moving
                             if (drawProgress < 0.98) {
                                 state.ctx.font = `${Math.round(curSize * 0.5)}px sans-serif`;
-                                state.ctx.fillText('âœ¨', -curSize * 0.4, -curSize * 0.4);
+                                state.ctx.fillText('✨', -curSize * 0.4, -curSize * 0.4);
                             }
                             state.ctx.restore();
 
@@ -8702,7 +8713,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
                 state.ctx.restore();
 
-                // Comparison Slide (Before/After) divider handle â€” drawn unclipped
+                // Comparison Slide (Before/After) divider handle — drawn unclipped
                 // (after the box's own restore above) so the handle circle isn't cut
                 // off by the wipe-reveal clip. Reuses the same wipeFrac reveal as
                 // 'wipe'/'highlight-sweep': since a B-roll item is a single image,
@@ -8957,7 +8968,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 const isEditingStill = (state.currentStep === 3 && !state.isPlaying);
                 const textAnimStyle = isEditingStill ? 'none' : (item.textAnimStyle || item.animStyle || 'none');
                 // Legacy overlays (saved before Text/Box animation were split) never
-                // had boxAnimStyle set at all â€” for those, fall back to the old
+                // had boxAnimStyle set at all — for those, fall back to the old
                 // shared animStyle so previously-saved projects still look the same
                 // by default. Once the user explicitly picks a Box Animation (even
                 // "None"), that field exists and wins from then on.
@@ -9055,7 +9066,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         (state.isDrawingTextCurve && state.textCurvePoints && state.textCurvePoints.length >= 2);
 
                     if (_hasCurveSimple || _hasCurveCustom) {
-                        // â”€â”€ CURVE MODE â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+                        // ── CURVE MODE ─────────────────────────────────────────────────
                         // Build custom charDrawFn for specific reveal animation styles
                         // so they animate character-by-character along the curved path.
                         const _isEditingStillLocal = (state.currentStep === 3 && !state.isPlaying);
@@ -9254,7 +9265,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
                         // Draw the curved text with per-character animation logic
                         if (_hasCurveSimple) {
-                            drawCurvedTextOverlay(ctx2, textToDraw, curveAmount, outlineColor, outlineWidth, _charDrawFn);
+                            drawCurvedTextOverlay(ctx2, textToDraw, curveAmount, outlineColor, outlineWidth, _charDrawFn, item);
                         } else {
                             var _activeCurvePoints = (state.isDrawingTextCurve && state.textCurvePoints && state.textCurvePoints.length >= 2)
                                 ? state.textCurvePoints : item.curvePoints;
@@ -9263,7 +9274,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         return;
                     }
 
-                    // â”€â”€ STRAIGHT TEXT MODE (existing animation branches) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+                    // ── STRAIGHT TEXT MODE (existing animation branches) ───────────────
                     if (textAnimStyle === 'letter-cascade' && textRevealAnim.phase !== 'settled') {
                         drawTextOverlayStaggered(ctx2, textToDraw, 'letter', textRevealAnim.p, outlineColor, outlineWidth, item.fontSize);
                     } else if (textAnimStyle === 'word-stagger' && textRevealAnim.phase !== 'settled') {
@@ -9280,7 +9291,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         drawTextOverlaySmokeVapor(ctx2, textToDraw, textRevealAnim.p, textRevealAnim.phase, item.fontSize, outlineColor, outlineWidth, item.color, currentTime);
                     } else if (textAnimStyle === 'neon-blur-in') {
                         // Neon Glow Blur-In: text emerges from a wide cyan/purple blur
-                        // into sharp focus â€” similar to the reels video title cards.
+                        // into sharp focus — similar to the reels video title cards.
                         const p = Math.max(0, Math.min(1, textRevealAnim.phase === 'settled' ? 1 :
                                             easeOutCubicTO(textRevealAnim.p)));
                         const blurR = (1 - p) * item.fontSize * 0.6;
@@ -9297,7 +9308,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         ctx2.restore();
                     } else if (textAnimStyle === 'word-3d-stagger') {
                         // Word-by-Word 3D Tilt Stagger: each word enters with a 3D-tilt
-                        // pop (scaleY collapse â†’ spring back) staggered 80ms per word.
+                        // pop (scaleY collapse → spring back) staggered 80ms per word.
                         const words = textToDraw.split(/\s+/);
                         const totalW = words.length;
                         const lhWS = item.fontSize * 1.25;
@@ -9327,7 +9338,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     } else if (textAnimStyle === 'letter-track-expand') {
                         // Letter Tracking Expand: letters start compressed together
                         // (negative letterSpacing feel via manual x-offset) and
-                        // expand to normal while fading in â€” the classic "tracking"
+                        // expand to normal while fading in — the classic "tracking"
                         // motion-graphics opening effect.
                         const p = Math.max(0, Math.min(1, textRevealAnim.phase === 'settled' ? 1 :
                                             easeOutCubicTO(textRevealAnim.p)));
@@ -9356,7 +9367,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         });
                         ctx2.restore();
                     } else if (textAnimStyle === 'shine-sweep') {
-                        drawTextOverlayShineSweep(ctx2, textToDraw, currentTime, item.fontSize, item.color, outlineColor, outlineWidth);
+                        drawTextOverlayShineSweep(ctx2, textToDraw, currentTime, item.fontSize, item, outlineColor, outlineWidth);
                     } else if (textAnimStyle === 'rainbow-flow') {
                         drawTextOverlayRainbowFlow(ctx2, textToDraw, currentTime, outlineColor, outlineWidth, item.fontSize);
                     } else {
@@ -9652,7 +9663,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
             state.ctx.fillStyle = '#ffffff';
             state.ctx.font = 'bold 14px "Hind Siliguri", sans-serif';
-            state.ctx.fillText(`Text Box (${Math.round(rw)}px Ã— ${Math.round(rh)}px)`, rx + 8, Math.max(20, ry - 6));
+            state.ctx.fillText(`Text Box (${Math.round(rw)}px × ${Math.round(rh)}px)`, rx + 8, Math.max(20, ry - 6));
             state.ctx.restore();
         }
 
@@ -9795,7 +9806,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     state.ctx.stroke();
                 }
 
-                // Editing guides â€” preview-only, not exported.
+                // Editing guides — preview-only, not exported.
                 if (state.currentStep === 3 && state.isAddingHighlight && item.id === state.selectedHighlightId) {
                     state.ctx.shadowBlur = 0;
                     state.ctx.setLineDash([6, 4]);
@@ -9916,7 +9927,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
                     // Marker-style highlight: a solid, tight-fit color band behind this
                     // whole line (not the padded bgPill, not a word-by-word text-color
-                    // swap) â€” like a highlighter pen drawn across just this line.
+                    // swap) — like a highlighter pen drawn across just this line.
                     if (activeSub.lineHighlight) {
                         const markerPadX = fontSize * 0.18;
                         const markerH = fontSize * 1.08;
@@ -10808,7 +10819,7 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
 
-        // Background Fill tool â€” drag a rectangle anywhere on the canvas to paint a solid colour block.
+        // Background Fill tool — drag a rectangle anywhere on the canvas to paint a solid colour block.
         if (state.isAddingFill) {
             const coords = getCanvasCoords(e);
             const now = Math.max(0, state.currentTime || 0);
@@ -10866,7 +10877,7 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
 
-        // Video Highlight tool â€” drag across the live preview to make a callout.
+        // Video Highlight tool — drag across the live preview to make a callout.
         if (state.isAddingHighlight) {
 
             const coords = getCanvasCoords(e);
@@ -10875,7 +10886,7 @@ document.addEventListener('DOMContentLoaded', () => {
             // Clamp into bounds instead of rejecting the click outright. A B-roll
             // overlay (fullscreen at a custom size/offset, or a PiP dragged to
             // cover most of the frame) can visually fill more of the canvas than
-            // getRenderedVideoBounds() reports for the underlying clip â€” without
+            // getRenderedVideoBounds() reports for the underlying clip — without
             // this clamp, a drag that starts anywhere in that "extra" visible area
             // silently did nothing. Clamping matches the behaviour the drag-move
             // handler already uses for freehand points (see below).
@@ -11054,7 +11065,7 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         }
 
-        // Custom text curve drawing mode â€” place points on canvas to define a path
+        // Custom text curve drawing mode — place points on canvas to define a path
         if (state.isDrawingTextCurve) {
             const coords = getCanvasCoords(e);
             const nx = coords.x / canvasW;
@@ -11092,7 +11103,7 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         }
 
-        // Text overlay drag/select (Phase 2C) â€” checked last so logo/crop take priority
+        // Text overlay drag/select (Phase 2C) — checked last so logo/crop take priority
         if (state.textOverlays && state.textOverlays.length > 0) {
             const hit = findTextOverlayAt(coords);
             if (hit) {
@@ -11214,7 +11225,7 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         }
 
-        // Symbol/Shape drag/select â€” symbols render on top of everything else,
+        // Symbol/Shape drag/select — symbols render on top of everything else,
         // so they're checked before stickers/text overlays.
         if (state.symbolOverlays && state.symbolOverlays.length > 0) {
             const symbolHit = findSymbolAt(coords);
@@ -11234,7 +11245,7 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         }
 
-        // Sticker/Emoji resize handle check (Phase 4A) â€” must come before drag check
+        // Sticker/Emoji resize handle check (Phase 4A) — must come before drag check
         if (state.currentStep === 3 && state.selectedStickerId !== null) {
             if (findStickerResizeHandle(coords)) {
                 const item = state.stickers.find(s => s.id === state.selectedStickerId);
@@ -11248,7 +11259,7 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         }
 
-        // Sticker/Emoji drag/select (Phase 4A) â€” stickers render on top of B-roll/banners,
+        // Sticker/Emoji drag/select (Phase 4A) — stickers render on top of B-roll/banners,
         // so they're checked before text overlays but after logo/B-roll.
         if (state.stickers && state.stickers.length > 0) {
             const stickerHit = findStickerAt(coords);
@@ -11307,7 +11318,7 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         }
 
-        // B-roll drag/select (Phase 5D) â€” checked before text overlay
+        // B-roll drag/select (Phase 5D) — checked before text overlay
         if (state.brollOverlays && state.brollOverlays.length > 0) {
             const brollHit = findBrollPipAt(coords);
             if (brollHit) {
@@ -11321,7 +11332,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 state.isDraggingBroll = true;
 
                 if (brollHit.mode === 'fullscreen' && (brollHit.size === undefined || brollHit.size >= 100)) {
-                    // Fullscreen at 100% â€” clicking starts a drag but keeps fullscreen mode.
+                    // Fullscreen at 100% — clicking starts a drag but keeps fullscreen mode.
                     // Mark that the user has set a custom position so scaling uses item.x/y.
                     brollHit._fsPosSet = true;
                     brollHit.x = coords.x / canvasW;
@@ -11338,7 +11349,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     state.dragBrollOffsetX = coords.x - (brollHit.x * canvasW);
                     state.dragBrollOffsetY = coords.y - (brollHit.y * canvasH);
                 } else if (brollHit.mode === 'fullscreen' && brollHit._fsPosSet) {
-                    // Dragging a fullscreen item with custom position â€” keep in fullscreen
+                    // Dragging a fullscreen item with custom position — keep in fullscreen
                     state.dragBrollOffsetX = coords.x - (brollHit.x * canvasW);
                     state.dragBrollOffsetY = coords.y - (brollHit.y * canvasH);
                 } else if (brollHit.mode === 'fullscreen') {
@@ -11370,7 +11381,7 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         }
 
-        // Image clip resize handle check â€” active on Steps 1-3 (see drawFrame() above).
+        // Image clip resize handle check — active on Steps 1-3 (see drawFrame() above).
         if (state.currentStep >= 1 && state.currentStep <= 3 && isImageClip && activeClip.id === state.activeClipId) {
             const resizeHandle = findImageClipResizeHandle(coords);
             if (resizeHandle) {
@@ -11383,7 +11394,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 e.preventDefault();
                 return;
             }
-            // Not on a handle â€” if the click is inside the image itself, start
+            // Not on a handle — if the click is inside the image itself, start
             // a drag-to-move instead so the user can reposition it.
             if (isInsideImageClipBox(activeClip, coords)) {
                 if (window.captureUndoCheckpoint) window.captureUndoCheckpoint();
@@ -11436,7 +11447,7 @@ document.addEventListener('DOMContentLoaded', () => {
         return { x: cx + dx * cosA - dy * sinA, y: cy + dx * sinA + dy * cosA };
     }
 
-    // Computes the current (un-animated, un-rotated) box rect for a B-roll item â€”
+    // Computes the current (un-animated, un-rotated) box rect for a B-roll item —
     // matches the box math in the main draw loop and in findBrollPipAt, just
     // pulled out so hit-testing helpers (resize handle, rotate handle) can share it.
     function getBrollBoxRect(item, canvasW, canvasH) {
@@ -11598,7 +11609,7 @@ document.addEventListener('DOMContentLoaded', () => {
         return { drawX, drawY, drawW, drawH };
     }
 
-    // Independent X/Y scale (free resize â€” no forced aspect lock). Falls back
+    // Independent X/Y scale (free resize — no forced aspect lock). Falls back
     // to the legacy uniform `imageClipDisplayScale` field for older projects
     // that only ever used the old center-scale resize.
     function getImageClipScale(clip) {
@@ -11769,7 +11780,7 @@ document.addEventListener('DOMContentLoaded', () => {
         return Math.hypot(coords.x - world.x, coords.y - world.y) < hr;
     }
 
-    // Draws a star polygon path (not stroked/filled itself â€” caller fills/strokes).
+    // Draws a star polygon path (not stroked/filled itself — caller fills/strokes).
     function drawStarPath(ctx, cx, cy, outerR, innerR, points) {
         ctx.beginPath();
         for (let i = 0; i < points * 2; i++) {
@@ -12040,7 +12051,7 @@ document.addEventListener('DOMContentLoaded', () => {
             let angle = Math.atan2(dy, dx) * 180 / Math.PI;
             let facing = 'right';
             if (angle > 90 || angle < -90) {
-                // Traveling generally leftward â€” mirror the plane instead of
+                // Traveling generally leftward — mirror the plane instead of
                 // rotating past vertical, and re-base the angle to that side.
                 facing = 'left';
                 angle = angle > 90 ? angle - 180 : angle + 180;
@@ -12049,7 +12060,7 @@ document.addEventListener('DOMContentLoaded', () => {
             angle = Math.max(-maxBank, Math.min(maxBank, angle));
             return { x, y, angleDeg: angle, facing };
         }
-        // 'static' (or unknown) â€” no movement, just sits at its placed spot.
+        // 'static' (or unknown) — no movement, just sits at its placed spot.
         return { x: item.x, y: item.y, angleDeg: 0, facing: 'right' };
     }
 
@@ -12403,7 +12414,7 @@ document.addEventListener('DOMContentLoaded', () => {
         let maxWidth = w * 0.7;
         let textX = 0;
         if (item.shapeType === 'plane') {
-            // Text sits inside the banner, which trails opposite the nose â€”
+            // Text sits inside the banner, which trails opposite the nose —
             // so shift it away from the plane silhouette (roughly a third of
             // the box width in from the tail end).
             const dir = (facing === 'left') ? -1 : 1;
@@ -12856,7 +12867,7 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
 
-        // Background Fill tool â€” handle draw / drag / resize during mousemove
+        // Background Fill tool — handle draw / drag / resize during mousemove
         if (state.isAddingFill && (state.isDrawingNewFill || state.isDraggingFill || state.isResizingFill)) {
             const coords = getCanvasCoords(e);
             const canvasW = state.canvas.width;
@@ -12979,7 +12990,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         // B-roll rotate drag: pointer angle around box center sets item.rotation.
-        // Snaps to 15Â° increments when close (hold Shift to rotate freely).
+        // Snaps to 15° increments when close (hold Shift to rotate freely).
         if (state.isRotatingBroll && state.selectedBrollId !== null) {
             const coords = getCanvasCoords(e);
             const canvasW = state.canvas.width;
@@ -12999,7 +13010,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     let rot = item.rotation;
                     if (rot > 180) rot -= 360;
                     brollTemplateRotationSlider.value = rot;
-                    if (brollTemplateRotationVal) brollTemplateRotationVal.innerText = Math.round(rot) + 'Â°';
+                    if (brollTemplateRotationVal) brollTemplateRotationVal.innerText = Math.round(rot) + '°';
                 }
                 drawFrame();
             }
@@ -13224,7 +13235,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         // Symbol/Shape rotate drag: pointer angle around box center sets item.rotation.
-        // Snaps to 15Â° increments when close (hold Shift to rotate freely).
+        // Snaps to 15° increments when close (hold Shift to rotate freely).
         if (state.isRotatingSymbol && state.selectedSymbolId !== null) {
             const coords = getCanvasCoords(e);
             const canvasW = state.canvas.width;
@@ -13411,7 +13422,7 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
 
-        // Idle cursor feedback over logo / B-roll PiP box / text overlay â€” shows a
+        // Idle cursor feedback over logo / B-roll PiP box / text overlay — shows a
         // "move" hand the instant the pointer is over something draggable, so the
         // drag-anywhere behavior is obvious without needing to read any help text.
         const idleCoords = getCanvasCoords(e);
@@ -13544,6 +13555,11 @@ document.addEventListener('DOMContentLoaded', () => {
                         fixedBoxW: w,   // lock box to drawn width
                         fixedBoxH: h,   // lock box to drawn height
                         color: textOverlayColorInput ? textOverlayColorInput.value : '#ffffff',
+                        colorMode: textOverlayColorMode ? textOverlayColorMode.value : 'solid',
+                        perLetterPalette: textOverlayPerLetterPalette ? textOverlayPerLetterPalette.value : 'rainbow',
+                        gradientColor1: textOverlayGradientColor1 ? textOverlayGradientColor1.value : '#22d3ee',
+                        gradientColor2: textOverlayGradientColor2 ? textOverlayGradientColor2.value : '#a855f7',
+                        gradientDirection: textOverlayGradientDirection ? textOverlayGradientDirection.value : 'horizontal',
                         font: textOverlayFontSelect ? textOverlayFontSelect.value : 'Hind Siliguri',
                         boxStyle: activeBoxStyle,
                         boxColor: textOverlayBoxColorInput ? textOverlayBoxColorInput.value : '#4f46e5',
@@ -13670,7 +13686,7 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
 
-        // Background Fill tool â€” finalise draw / drag / resize
+        // Background Fill tool — finalise draw / drag / resize
         if (state.isDrawingNewFill || state.isDraggingFill || state.isResizingFill) {
             const wasDrawing = state.isDrawingNewFill;
             state.isDrawingNewFill = false;
@@ -14160,7 +14176,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const row = document.createElement('div');
             row.className = 'text-overlay-list-item' + (item.id === state.selectedHighlightId ? ' active' : '');
             row.style.cssText = `display:flex;align-items:center;justify-content:space-between;padding:8px 12px;border-radius:6px;margin-bottom:6px;cursor:pointer;background:${item.id === state.selectedHighlightId ? 'rgba(0,229,255,.12)' : 'rgba(255,255,255,.04)'};border:1px solid ${item.id === state.selectedHighlightId ? '#00e5ff' : 'transparent'};`;
-            row.innerHTML = `<span style="font-size:13px"><i class="fa-solid fa-highlighter" style="color:${item.color}"></i> Highlight ${index + 1} Â· ${item.shape}</span><span style="font-size:11px;opacity:.6">${item.startSec.toFixed(1)}sâ€“${item.endSec.toFixed(1)}s</span>`;
+            row.innerHTML = `<span style="font-size:13px"><i class="fa-solid fa-highlighter" style="color:${item.color}"></i> Highlight ${index + 1} · ${item.shape}</span><span style="font-size:11px;opacity:.6">${item.startSec.toFixed(1)}s–${item.endSec.toFixed(1)}s</span>`;
             row.addEventListener('click', () => { state.selectedHighlightId = item.id; showHighlightControls(item.id); renderHighlightList(); drawFrame(); });
             highlightListEl.appendChild(row);
         });
@@ -14222,7 +14238,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const row = document.createElement('div');
             row.className = 'text-overlay-list-item' + (item.id === state.selectedFillId ? ' active' : '');
             row.style.cssText = `display:flex;align-items:center;justify-content:space-between;padding:8px 12px;border-radius:6px;margin-bottom:6px;cursor:pointer;background:${item.id === state.selectedFillId ? 'rgba(255,200,0,.12)' : 'rgba(255,255,255,.04)'};border:1px solid ${item.id === state.selectedFillId ? '#ffc800' : 'transparent'};`;
-            row.innerHTML = `<span style="font-size:13px"><i class="fa-solid fa-fill-drip" style="color:${item.color}"></i> Fill ${index + 1}</span><span style="font-size:11px;opacity:.6">${item.startSec.toFixed(1)}sâ€“${item.endSec.toFixed(1)}s</span>`;
+            row.innerHTML = `<span style="font-size:13px"><i class="fa-solid fa-fill-drip" style="color:${item.color}"></i> Fill ${index + 1}</span><span style="font-size:11px;opacity:.6">${item.startSec.toFixed(1)}s–${item.endSec.toFixed(1)}s</span>`;
             row.addEventListener('click', () => { state.selectedFillId = item.id; showFillControls(item.id); renderFillList(); drawFrame(); });
             fillListEl.appendChild(row);
         });
@@ -14852,11 +14868,11 @@ document.addEventListener('DOMContentLoaded', () => {
             row.style.border = item.id === state.selectedTextOverlayId ? '1px solid var(--primary)' : '1px solid transparent';
 
             const label = document.createElement('span');
-            label.innerText = item.text.length > 28 ? item.text.slice(0, 28) + 'â€¦' : item.text;
+            label.innerText = item.text.length > 28 ? item.text.slice(0, 28) + '…' : item.text;
             label.style.fontSize = '13px';
 
             const timeLabel = document.createElement('span');
-            timeLabel.innerText = `${item.startSec.toFixed(1)}sâ€“${item.endSec.toFixed(1)}s`;
+            timeLabel.innerText = `${item.startSec.toFixed(1)}s–${item.endSec.toFixed(1)}s`;
             timeLabel.style.fontSize = '11px';
             timeLabel.style.opacity = '0.6';
 
@@ -15163,7 +15179,7 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    // â”€â”€ Background Image Upload â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // ── Background Image Upload ─────────────────────────────────────────
     const brollBgImageInput   = document.getElementById('broll-bg-image-input');
     const brollBgImageBtn     = document.getElementById('broll-bg-image-btn');
     const brollBgImageThumb   = document.getElementById('broll-bg-image-thumb');
@@ -15417,7 +15433,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // Continuous speed slider (1 = slowest, 100 = fastest) <-> animation duration in
     // seconds. Replaces the old 3-option Fast/Normal/Slow dropdown with a YouTube-volume
     // style drag bar so the person can dial in exactly how snappy the entry/exit feels.
-    // Slow end raised from 1.2s to 2.6s (v2.6) â€” at the old cap, even the slowest setting
+    // Slow end raised from 1.2s to 2.6s (v2.6) — at the old cap, even the slowest setting
     // still read as "fast" for entry/exit animations; 2.6s gives a real slow-motion feel.
     const BROLL_SPEED_MIN_SEC = 0.15;
     const BROLL_SPEED_MAX_SEC = 15.0;
@@ -15440,7 +15456,7 @@ document.addEventListener('DOMContentLoaded', () => {
         return `${s} (স্বাভাবিক / Normal)`;
     }
 
-    // Unified animation style list (v2.5) â€” every style works the same way in
+    // Unified animation style list (v2.5) — every style works the same way in
     // both Fullscreen and PiP mode now, so there's just one shared list instead
     // of two different ones. A couple of PiP-only Bengali labels ("Zoom Pop",
     // "Bounce Drop") are worded to make it obvious what they'll look like on a
@@ -15485,7 +15501,7 @@ document.addEventListener('DOMContentLoaded', () => {
         { value: 'hanging-sign-swing', label: 'Hanging Sign Swing (🔴 পিন থেকে ঝুলে দুলতে দুলতে আসবে)' },
         { value: 'plane-banner-trail', label: 'Plane Banner Trail (✈️ প্লেন উড়ে গিয়ে লেখা রেখে যাবে)' },
 
-        // Kinetic Typography (v2.8) â€” per-letter/per-word text entrances. These
+        // Kinetic Typography (v2.8) — per-letter/per-word text entrances. These
         // only make sense for Text B-roll (each style animates the individual
         // characters/words instead of the whole box as one rigid unit), so
         // they're flagged textOnly and filtered out of the dropdown for image
@@ -15514,7 +15530,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!brollAnimStyleSelect) return;
         // 'textOnly' styles (Typewriter + the kinetic per-letter/word entrances)
         // animate actual characters, so they're meaningless for an image/video
-        // box â€” hide them there instead of leaving a confusing option that
+        // box — hide them there instead of leaving a confusing option that
         // silently does nothing when picked.
         const list = (itemType === 'text')
             ? BROLL_ANIM_STYLES
@@ -15913,7 +15929,7 @@ document.addEventListener('DOMContentLoaded', () => {
             item._edgeColorCache = color;
             return color;
         } catch (e) {
-            // Cross-origin / not-yet-decoded image can throw on getImageData â€”
+            // Cross-origin / not-yet-decoded image can throw on getImageData —
             // fall back to plain black rather than breaking the frame.
             return '#000000';
         }
@@ -16008,7 +16024,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 endSec: Math.min(state.endTime || state.duration || 5, (state.currentTime || 0) + 3),
                 // Each B-roll clip enters from a different side so a sequence
                 // of images doesn't always pop in from the same corner. This is
-                // just the starting default â€” fully editable from the panel.
+                // just the starting default — fully editable from the panel.
                 gifSpeed: 1.0,
                 entryDirection: ['left', 'right', 'top', 'bottom'][Math.floor(Math.random() * 4)],
                 exitDirection: 'same',
@@ -16120,7 +16136,7 @@ document.addEventListener('DOMContentLoaded', () => {
         // A hidden <video> element that we manually play/pause/seek in sync with
         // the main timeline. Muted so autoplay isn't blocked by the browser; the
         // clip's own audio is intentionally NOT included in the export (keeps
-        // audio mixing simple/predictable â€” add music/voiceover separately).
+        // audio mixing simple/predictable — add music/voiceover separately).
         const vid = document.createElement('video');
         vid.muted = true;
         vid.playsInline = true;
@@ -16152,7 +16168,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 // Every existing draw / hit-test / animation code path for B-roll
                 // reads `item.imageImg` and its `.naturalWidth`/`.naturalHeight`. Rather
                 // than touching dozens of call sites, alias a video element to look
-                // like an image here â€” ctx.drawImage() accepts a <video> exactly like
+                // like an image here — ctx.drawImage() accepts a <video> exactly like
                 // an <img>, so this lets a video overlay reuse 100% of the existing
                 // cover/contain, PiP sizing, animation, and click/resize hit-testing
                 // logic unchanged.
@@ -16179,7 +16195,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 animationStyle: brollModeSelect && brollModeSelect.value === 'pip' ? 'slide-pop' : 'zoom',
                 animationSpeedSec: 0.4,
                 soundEffect: 'none',
-                // Same cover/contain fit logic as image B-roll â€” useful when the
+                // Same cover/contain fit logic as image B-roll — useful when the
                 // overlay video's aspect ratio doesn't match the canvas.
                 fitMode: 'cover',
                 // If the display window is longer than the video's own duration,
@@ -16218,7 +16234,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
             // Treat every newline as one list item. The selected bullet is added
             // to each non-empty line so one Blank Background page can carry a
-            // complete 5â€“7 point list instead of requiring separate overlays.
+            // complete 5–7 point list instead of requiring separate overlays.
             const bulletChar = brollBulletSelect && brollBulletSelect.value !== 'none' ? brollBulletSelect.value : '';
             const text = rawText.split(/\r?\n/)
                 .map(line => line.trim())
@@ -16492,7 +16508,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const font = `${item.italic ? 'italic ' : ''}${item.bold === false ? '' : 'bold '}${item.fontSize || 48}px "${item.font || 'Hind Siliguri'}", "Plus Jakarta Sans", sans-serif`;
         ctx.font = font;
 
-        const bulletRegex = /^([â€¢âœ”âž¤â˜…â–¶â–ºâž•ðŸ”¹â¤ï¸\*\-â€”â€“]|\d+[\.\)])\s*/;
+        const bulletRegex = /^([•✔➤★▶►➕🔺❤️\*\-—–]|\d+[\.\)])\s*/;
         const sublines = [];
         let maxLineWidth = 0;
 
@@ -16630,14 +16646,14 @@ document.addEventListener('DOMContentLoaded', () => {
                 iconSpan.style.fontSize = '16px';
                 iconSpan.style.width = '32px';
                 iconSpan.style.textAlign = 'center';
-                let emoji = 'ðŸ–¼';
-                if (item.type === 'text') emoji = 'ðŸ”¤';
-                else if (item.type === 'video') emoji = 'ðŸŽ¬';
-                else if (item.builtInType === 'question') emoji = 'â“';
-                else if (item.builtInType === 'checkmark') emoji = 'âœ”ï¸';
-                else if (item.builtInType === 'cross') emoji = 'âŒ';
-                else if (item.builtInType === 'magnifier') emoji = 'ðŸ”';
-                else if (item.builtInType === 'cash' || item.type === 'cash') emoji = 'ðŸ’µ';
+                let emoji = '🖼️';
+                if (item.type === 'text') emoji = '🔤';
+                else if (item.type === 'video') emoji = '🎬';
+                else if (item.builtInType === 'question') emoji = '❓';
+                else if (item.builtInType === 'checkmark') emoji = '✔ï¸';
+                else if (item.builtInType === 'cross') emoji = '❌';
+                else if (item.builtInType === 'magnifier') emoji = '🔍';
+                else if (item.builtInType === 'cash' || item.type === 'cash') emoji = '💵';
                 iconSpan.innerText = emoji;
                 leftContent.appendChild(iconSpan);
             }
@@ -16656,7 +16672,7 @@ document.addEventListener('DOMContentLoaded', () => {
             title.style.textOverflow = 'ellipsis';
 
             if (item.type === 'text') {
-                const preview = item.text.length > 15 ? item.text.slice(0, 15) + 'â€¦' : item.text;
+                const preview = item.text.length > 15 ? item.text.slice(0, 15) + '…' : item.text;
                 title.innerText = `${modeLabel}: "${preview}"`;
             } else if (item.type === 'video') {
                 title.innerText = `${modeLabel} Video`;
@@ -16673,7 +16689,7 @@ document.addEventListener('DOMContentLoaded', () => {
             }
 
             const timeLabel = document.createElement('span');
-            timeLabel.innerText = `${item.startSec.toFixed(1)}s â€“ ${item.endSec.toFixed(1)}s`;
+            timeLabel.innerText = `${item.startSec.toFixed(1)}s – ${item.endSec.toFixed(1)}s`;
             timeLabel.style.fontSize = '10.5px';
             timeLabel.style.color = '#94a3b8';
 
@@ -16740,7 +16756,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         // Older projects did not store a clip id. Once the user opens their
         // timing controls, bind that legacy overlay to the currently selected
-        // clip so its local 1â€“4s range cannot leak into every other clip.
+        // clip so its local 1–4s range cannot leak into every other clip.
         if (!item.clipId && state.activeClipId) item.clipId = state.activeClipId;
         const maxVal = state.endTime || state.duration || 1000;
         if (brollTimingContainer) brollTimingContainer.style.display = 'block';
@@ -16754,7 +16770,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         if (brollModeSelect) brollModeSelect.value = item.mode;
         // Older items saved before this toggle existed have no transparentBg
-        // property at all â€” treat that as "transparent" (the new default) so
+        // property at all — treat that as "transparent" (the new default) so
         // existing PNGs/text immediately lose their black backdrop too.
         if (brollTransparentBg) brollTransparentBg.checked = item.transparentBg !== false;
         if (brollSizeContainer) brollSizeContainer.style.display = 'block'; // always visible
@@ -16860,7 +16876,7 @@ document.addEventListener('DOMContentLoaded', () => {
             let rot = item.rotation || 0;
             if (rot > 180) rot -= 360; // display as -180..180 instead of 0..360
             brollTemplateRotationSlider.value = rot;
-            if (brollTemplateRotationVal) brollTemplateRotationVal.innerText = Math.round(rot) + 'Â°';
+            if (brollTemplateRotationVal) brollTemplateRotationVal.innerText = Math.round(rot) + '°';
         }
         if (brollTemplateColorInput) {
             brollTemplateColorInput.value = item.visualTemplateColor || '#ffffff';
@@ -17057,7 +17073,7 @@ document.addEventListener('DOMContentLoaded', () => {
             // Reuses the same item.rotation the drag-to-rotate handle sets, so
             // this slider and the on-canvas handle always agree with each other.
             item.rotation = ((rot % 360) + 360) % 360;
-            if (brollTemplateRotationVal) brollTemplateRotationVal.innerText = rot + 'Â°';
+            if (brollTemplateRotationVal) brollTemplateRotationVal.innerText = rot + '°';
             drawFrame();
         });
     }
@@ -17101,7 +17117,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // Content Size: zooms the photo/video crop window shown inside the
-    // frame, without changing the frame/box size itself â€” the mirror image
+    // frame, without changing the frame/box size itself — the mirror image
     // of Frame Scale above.
     if (brollTemplateContentScaleSlider) {
         brollTemplateContentScaleSlider.addEventListener('input', (e) => {
@@ -17652,22 +17668,22 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Small glyph shown per symbol type in the palette + the added-items list.
     const SYMBOL_LABELS = {
-        whatsapp: 'ðŸ’¬',
-        location: 'ðŸ“',
-        house: 'ðŸ ',
-        arrow: 'â†’',
-        arrow2: 'â†”',
+        whatsapp: '💬',
+        location: '📍',
+        house: '🏠',
+        arrow: '→',
+        arrow2: '↔',
         plus: '+',
-        cross: 'âœ•',
-        tick: 'âœ“',
+        cross: '✕',
+        tick: '✓',
         question: '?',
         exclaim: '!',
-        star: 'â˜…',
-        circle: 'â—‹',
-        triangle: 'â–³',
-        'callout-rect': 'ðŸ’¬',
-        'callout-oval': 'ðŸ’¬',
-        'scroll-banner': 'ðŸ“œ'
+        star: '★',
+        circle: '○',
+        triangle: '△',
+        'callout-rect': '💬',
+        'callout-oval': '💬',
+        'scroll-banner': '📜'
     };
     const SYMBOL_NAMES_BN = {
         whatsapp: 'হোয়াটসঅ্যাপ',
@@ -17738,12 +17754,12 @@ document.addEventListener('DOMContentLoaded', () => {
             row.style.border = item.id === state.selectedSymbolId ? '1px solid var(--primary)' : '1px solid transparent';
 
             const label = document.createElement('span');
-            label.innerText = (SYMBOL_LABELS[item.symbolType] || 'â—') + '  ' + (SYMBOL_NAMES_BN[item.symbolType] || item.symbolType);
+            label.innerText = (SYMBOL_LABELS[item.symbolType] || '●') + '  ' + (SYMBOL_NAMES_BN[item.symbolType] || item.symbolType);
             label.style.fontSize = '13px';
             label.style.color = item.color;
 
             const timeLabel = document.createElement('span');
-            timeLabel.innerText = `${item.startSec.toFixed(1)}sâ€“${item.endSec.toFixed(1)}s`;
+            timeLabel.innerText = `${item.startSec.toFixed(1)}s–${item.endSec.toFixed(1)}s`;
             timeLabel.style.fontSize = '11px';
             timeLabel.style.opacity = '0.6';
 
@@ -17845,7 +17861,7 @@ document.addEventListener('DOMContentLoaded', () => {
     };
 
     // --- Shape + Text Overlay Bindings (ribbon banner, wavy banner, thought
-    // cloud, 6-point star, oval callout â€” Word-style shapes with editable text) ---
+    // cloud, 6-point star, oval callout — Word-style shapes with editable text) ---
     const shapeOverlayGrid = document.getElementById('shape-overlay-grid');
     const shapeOverlayListEl = document.getElementById('shape-overlay-list');
     const shapeOverlayControlsContainer = document.getElementById('shape-overlay-controls-container');
@@ -17872,12 +17888,12 @@ document.addEventListener('DOMContentLoaded', () => {
     const deleteShapeOverlayBtn = document.getElementById('delete-shape-overlay-btn');
 
     const SHAPE_OVERLAY_LABELS = {
-        ribbon: 'â–¤',
-        wave: 'â‰ˆ',
-        cloud: 'â˜',
-        star6: 'âœ¶',
-        oval: 'â¬­',
-        plane: 'âœˆ'
+        ribbon: '▤',
+        wave: '≈',
+        cloud: '☁',
+        star6: '✶',
+        oval: '⬭',
+        plane: '✈'
     };
     const SHAPE_OVERLAY_NAMES_BN = {
         ribbon: 'রিবন ব্যানার',
@@ -17950,12 +17966,12 @@ document.addEventListener('DOMContentLoaded', () => {
             row.style.border = item.id === state.selectedShapeOverlayId ? '1px solid var(--primary)' : '1px solid transparent';
 
             const label = document.createElement('span');
-            const shortText = (item.text || '').slice(0, 14) + ((item.text || '').length > 14 ? 'â€¦' : '');
-            label.innerText = (SHAPE_OVERLAY_LABELS[item.shapeType] || 'â–­') + '  ' + shortText;
+            const shortText = (item.text || '').slice(0, 14) + ((item.text || '').length > 14 ? '…' : '');
+            label.innerText = (SHAPE_OVERLAY_LABELS[item.shapeType] || '▭') + '  ' + shortText;
             label.style.fontSize = '13px';
 
             const timeLabel = document.createElement('span');
-            timeLabel.innerText = `${item.startSec.toFixed(1)}sâ€“${item.endSec.toFixed(1)}s`;
+            timeLabel.innerText = `${item.startSec.toFixed(1)}s–${item.endSec.toFixed(1)}s`;
             timeLabel.style.fontSize = '11px';
             timeLabel.style.opacity = '0.6';
 
@@ -17988,7 +18004,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (shapeOverlayGradientColor2Input) shapeOverlayGradientColor2Input.value = item.fillGradientColor2 || '#7c3aed';
         if (shapeOverlayGradientColor2Val) shapeOverlayGradientColor2Val.innerText = item.fillGradientColor2 || '#7c3aed';
         if (shapeOverlayGradientAngleSlider) shapeOverlayGradientAngleSlider.value = item.fillGradientAngle ?? 90;
-        if (shapeOverlayGradientAngleVal) shapeOverlayGradientAngleVal.innerText = (item.fillGradientAngle ?? 90) + 'Â°';
+        if (shapeOverlayGradientAngleVal) shapeOverlayGradientAngleVal.innerText = (item.fillGradientAngle ?? 90) + '°';
         if (shapeOverlayTextColorInput) shapeOverlayTextColorInput.value = item.textColor;
         if (shapeOverlayTextColorVal) shapeOverlayTextColorVal.innerText = item.textColor;
         if (shapeOverlayTextAnimationSelect) shapeOverlayTextAnimationSelect.value = item.textAnimation || 'none';
@@ -18074,7 +18090,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const item = state.shapeOverlays.find(s => s.id === state.selectedShapeOverlayId);
             if (item) {
                 item.fillGradientAngle = parseInt(e.target.value, 10);
-                if (shapeOverlayGradientAngleVal) shapeOverlayGradientAngleVal.innerText = item.fillGradientAngle + 'Â°';
+                if (shapeOverlayGradientAngleVal) shapeOverlayGradientAngleVal.innerText = item.fillGradientAngle + '°';
                 drawFrame();
             }
         });
@@ -19009,7 +19025,7 @@ document.addEventListener('DOMContentLoaded', () => {
         ctx.restore();
     }
 
-    // Shared list of the "3D card" visual templates â€” these are the only
+    // Shared list of the "3D card" visual templates — these are the only
     // templates whose drawBrollVisualTemplate output needs to be split into a
     // background pass (depth/extrusion slices) and a foreground pass (the
     // front card's border/edge styling). Every other template (Polaroid,
@@ -19023,7 +19039,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // Draws the text (or, for image B-roll, a short label from item.brollLabel)
-    // as a row of individual raised 3D tiles â€” one tile per character â€” used by
+    // as a row of individual raised 3D tiles — one tile per character — used by
     // both 'word-3d-blocks' (bold red-style cube letters, like a PROFIT/LOSS
     // crossword tile graphic) and 'word-hands-hold' (the same tiles in a
     // rotating rainbow palette, each with a simple stylized hand icon reaching
@@ -19455,11 +19471,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // `phase` controls, for the 3D card templates only, which half of the
     // drawing gets painted:
-    //  - 'shadowOnly' â†’ just the stacked depth/extrusion slices (meant to sit
+    //  - 'shadowOnly' → just the stacked depth/extrusion slices (meant to sit
     //    BEHIND the photo/video, like the thickness of a card).
-    //  - 'frameOnly'  â†’ just the front card's border/edge/glow styling (meant
+    //  - 'frameOnly'  → just the front card's border/edge/glow styling (meant
     //    to sit ON TOP of the photo/video, like a picture-frame edge).
-    //  - anything else (default) â†’ both, back to back â€” used for text B-roll,
+    //  - anything else (default) → both, back to back — used for text B-roll,
     //    where the text itself is drawn separately afterwards so a single
     //    combined pass here never ends up covering it.
     // All non-3D templates ignore `phase` entirely and always draw in full,
@@ -19471,7 +19487,7 @@ document.addEventListener('DOMContentLoaded', () => {
         ctx.save();
         ctx.globalAlpha = Math.max(0, Math.min(1, alpha));
         const minSide = Math.max(1, Math.min(width, height));
-        // User-chosen tint from the Template Color picker â€” null means "use
+        // User-chosen tint from the Template Color picker — null means "use
         // each design's own default palette" (e.g. gold for isometric, cyan
         // for neon), so nothing changes unless the person explicitly sets one.
         const overrideColor = item.visualTemplateColor || null;
@@ -19502,7 +19518,7 @@ document.addEventListener('DOMContentLoaded', () => {
             else ctx.rect(x + 1, y + 1, width - 2, height - 2);
             ctx.stroke();
 
-            // Side hardware â€” power button (right) + two volume buttons (left)
+            // Side hardware — power button (right) + two volume buttons (left)
             // are the single strongest visual cue that this is a phone, not
             // just a rounded box.
             const btnW = Math.max(3, bezel * 0.35);
@@ -19517,7 +19533,7 @@ document.addEventListener('DOMContentLoaded', () => {
             if (ctx.roundRect) ctx.roundRect(x - btnW * 0.6, y + height * 0.23, btnW, height * 0.055, btnW / 2);
             ctx.fill();
 
-            // Dynamic island / camera notch â€” bigger and darker so it stays
+            // Dynamic island / camera notch — bigger and darker so it stays
             // legible even on a wide/short box.
             const islandW = Math.min(bw * 0.34, Math.max(width, height) * 0.28);
             const islandH = Math.max(11, bezel * 0.9);
@@ -19527,7 +19543,7 @@ document.addEventListener('DOMContentLoaded', () => {
             else ctx.rect(x + (width - islandW) / 2, by + bezel * 0.28, islandW, islandH);
             ctx.fill();
 
-            // Bottom home-indicator bar â€” instantly recognisable modern-phone cue
+            // Bottom home-indicator bar — instantly recognisable modern-phone cue
             const barW = bw * 0.32;
             const barH = Math.max(3, bezel * 0.14);
             ctx.fillStyle = 'rgba(255,255,255,0.55)';
@@ -19590,8 +19606,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 ctx.textBaseline = 'middle';
                 ctx.fillText(`${icon}  ${label}`, bx + buttonW / 2, by + buttonH / 2 + 1);
             };
-            drawButton(x, '#1877f2', 'ðŸ‘', 'Like');
-            drawButton(x + buttonW + gap, '#25d366', 'â—”', 'WhatsApp');
+            drawButton(x, '#1877f2', '👍', 'Like');
+            drawButton(x + buttonW + gap, '#25d366', '●”', 'WhatsApp');
         } else if (template === 'word-shadow') {
             ctx.strokeStyle = overrideColor || 'rgba(255,255,255,0.88)';
             ctx.lineWidth = Math.max(2, minSide * 0.012);
@@ -19664,7 +19680,7 @@ document.addEventListener('DOMContentLoaded', () => {
             ctx.lineWidth = Math.max(2, minSide * 0.012);
             ctx.strokeRect(x, y, width, height);
         } else if (template === 'word-glossy-badge') {
-            // Glossy round/oval "Best Choice" style badge â€” a metallic-ringed
+            // Glossy round/oval "Best Choice" style badge — a metallic-ringed
             // button with a bright glass highlight across the top, sized to
             // hug the text's own bounding box like word-circle/word-rounded.
             const base = overrideColor || '#0f8a3c';
@@ -19763,7 +19779,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     ctx.fillStyle = overrideColor ? hexToRgba(overrideColor, 0.08 + (1 - i / depthSteps) * 0.12) : `rgba(6, 182, 212, ${0.08 + (1 - i / depthSteps) * 0.12})`;
                     ctx.fillRect(x + offX - frameW / 2, y + offY - frameW / 2, width + frameW, height + frameW);
                 } else if (template === 'word-depth-3d') {
-                    // Deep, dark, almost-black navy slab â€” long and heavy so
+                    // Deep, dark, almost-black navy slab — long and heavy so
                     // the card visibly floats far above the background.
                     const darkVal = Math.round(4 + (i / depthSteps) * 18);
                     ctx.fillStyle = overrideColor ? hexToRgba(shadeColorTO(overrideColor, -65), 0.55) : `rgba(${darkVal}, ${darkVal}, ${Math.round(darkVal * 1.6)}, 0.55)`;
@@ -19882,7 +19898,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 ctx.shadowBlur = 0;
             } else if (template === 'word-depth-3d') {
                 // Deep Depth Card: heavy, far-thrown black shadow and a
-                // near-black frame â€” reads as "hovering high" rather than a
+                // near-black frame — reads as "hovering high" rather than a
                 // subtle bevel.
                 ctx.shadowColor = 'rgba(0, 0, 0, 0.9)';
                 ctx.shadowBlur = Math.max(30, frameW * 3.5);
@@ -20123,7 +20139,7 @@ document.addEventListener('DOMContentLoaded', () => {
             if (videoVolumeValStep2) videoVolumeValStep2.innerText = Math.round(state.videoVolume * 100) + '%';
         }
 
-        // Voice Changer (dropdown + "also apply to original video" checkbox) â€”
+        // Voice Changer (dropdown + "also apply to original video" checkbox) —
         // restore both the UI controls and the live Web Audio effect params
         // after a project load/auto-restore, since these aren't driven by
         // 'change' events firing.
@@ -20552,7 +20568,7 @@ document.addEventListener('DOMContentLoaded', () => {
             }
 
             // Convert Multi-Track Timeline extra tracks to Base64 (conditional based on mode)
-            // (Phase 11 step 4 fix â€” this used to be missing entirely, so extra
+            // (Phase 11 step 4 fix — this used to be missing entirely, so extra
             // tracks silently disappeared on manual JSON export/import even
             // though they were already fully wired into IndexedDB auto-save.)
             data.extraTracks = [];
@@ -20643,7 +20659,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         track.blob = cachedFile;
                         track.url = URL.createObjectURL(cachedFile);
                     } else if (track.libraryId && window.getLibraryDefById) {
-                        // [9-10] Built-in Free Music Library track â€” re-render
+                        // [9-10] Built-in Free Music Library track — re-render
                         // its synth blob instead of treating it as missing.
                         try {
                             const def = window.getLibraryDefById(track.libraryId);
@@ -21016,8 +21032,8 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         // De-duplicate B-roll overlay IDs. If two (or more) items share the same
-        // numeric id â€” which can happen when old projects are migrated or history
-        // snapshots are restored â€” every one of them will match a filter() and be
+        // numeric id — which can happen when old projects are migrated or history
+        // snapshots are restored — every one of them will match a filter() and be
         // deleted at once when the user tries to remove just one. Detect duplicates
         // and assign a fresh unique id to any offending item so every B-roll is
         // individually addressable.
@@ -21130,7 +21146,7 @@ document.addEventListener('DOMContentLoaded', () => {
         // Multi-Track Timeline (Phase 11 step 4 fix): without this, extra
         // tracks from a previous project silently carried over into a new
         // project / project switch, since nothing else here touched them.
-        // Stop/release their media FIRST â€” once the array below is replaced,
+        // Stop/release their media FIRST — once the array below is replaced,
         // nothing else can reach a still-playing audio/video element to
         // silence it, and the "Clear All" button looked like it hadn't
         // cleared anything because the multi-track panel was left showing
@@ -22129,7 +22145,7 @@ document.addEventListener('DOMContentLoaded', () => {
             state.aspectRatio = 'original';
             state.layoutMode = 'fit';
             // These live on state (not per-clip), so "Clear All" for the
-            // current video was leaving them on â€” Chroma Key stayed enabled
+            // current video was leaving them on — Chroma Key stayed enabled
             // across a clear because nothing here ever touched it.
             state.chromaKeyEnabled = false;
             state.chromaKeyColor = '#00ff00';
@@ -22293,8 +22309,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // --- Shared Audio Analysis (reused by 7A Silence Trimmer + Subtitle Snap) ---
     // Decodes a clip's audio and runs the exact same RMS/silence-detection loop
-    // used by the Auto Silence Trimmer, but returns the *inverse* â€” the actual
-    // speech regions (runs of non-silent audio) â€” so other features (like the
+    // used by the Auto Silence Trimmer, but returns the *inverse* — the actual
+    // speech regions (runs of non-silent audio) — so other features (like the
     // silence-aware subtitle sync) can snap timings to real spoken moments.
     window.computeSpeechRegions = async function(activeClip, thresholdDb, minDurationSec) {
         const arrayBuffer = await activeClip.file.arrayBuffer();
@@ -23052,9 +23068,9 @@ document.addEventListener('DOMContentLoaded', () => {
             if (rotYSlider) rotYSlider.value = ry;
             if (rotZSlider) rotZSlider.value = rz;
 
-            if (rotXVal) rotXVal.textContent = rx + 'Â°';
-            if (rotYVal) rotYVal.textContent = ry + 'Â°';
-            if (rotZVal) rotZVal.textContent = rz + 'Â°';
+            if (rotXVal) rotXVal.textContent = rx + '°';
+            if (rotYVal) rotYVal.textContent = ry + '°';
+            if (rotZVal) rotZVal.textContent = rz + '°';
         }
 
         if (rot3dToggle) {
@@ -23096,7 +23112,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 const val = parseInt(e.target.value) || 0;
                 const obj = getTargetObj();
                 obj.rotX = val;
-                if (rotXVal) rotXVal.textContent = val + 'Â°';
+                if (rotXVal) rotXVal.textContent = val + '°';
                 drawFrame();
                 if (typeof triggerAutoSave === 'function') triggerAutoSave();
             });
@@ -23106,7 +23122,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 const val = parseInt(e.target.value) || 0;
                 const obj = getTargetObj();
                 obj.rotY = val;
-                if (rotYVal) rotYVal.textContent = val + 'Â°';
+                if (rotYVal) rotYVal.textContent = val + '°';
                 drawFrame();
                 if (typeof triggerAutoSave === 'function') triggerAutoSave();
             });
@@ -23117,7 +23133,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 const obj = getTargetObj();
                 obj.rotZ = val;
                 obj.rotation = val;
-                if (rotZVal) rotZVal.textContent = val + 'Â°';
+                if (rotZVal) rotZVal.textContent = val + '°';
                 drawFrame();
                 if (typeof triggerAutoSave === 'function') triggerAutoSave();
             });
@@ -23275,7 +23291,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         <div class="control-group mt-2">
                             <label style="display:flex; justify-content:space-between;">
                                 <span>Direction (বায়ুর দিক)</span>
-                                <span class="smoke-seg-dir-val">${seg.direction !== undefined ? seg.direction : -90}Â°</span>
+                                <span class="smoke-seg-dir-val">${seg.direction !== undefined ? seg.direction : -90}°</span>
                             </label>
                             <input type="range" class="smoke-seg-dir" min="-180" max="180" value="${seg.direction !== undefined ? seg.direction : -90}" step="5">
                         </div>
@@ -23396,7 +23412,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 const dirVal = item.querySelector('.smoke-seg-dir-val');
                 dirSlider.addEventListener('input', (e) => {
                     seg.direction = parseInt(e.target.value) || -90;
-                    dirVal.textContent = seg.direction + 'Â°';
+                    dirVal.textContent = seg.direction + '°';
                     drawFrame();
                     if (typeof window.startParticleOverlayLoop === 'function') window.startParticleOverlayLoop();
                 });
