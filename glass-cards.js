@@ -1,16 +1,13 @@
 /* ==========================================================================
-   Studio Flow — Glassmorphism Card Stack Module (Phase Reels)
-   
-   Renders staggered floating glassmorphic information cards on top of video,
-   inspired by top-tier motion graphics and Reels ad templates (e.g. Advantage+
-   Campaign, AI Audience, Budget ROAS cards).
+   Studio Flow — Glassmorphism Card Stack Module (Phase Reels Pro)
    
    Features:
-   - Frosted glass canvas rendering with subtle reflection, blur illusion, and border glow
-   - Staggered entrance timing (each card slides and pops in with smooth easing)
-   - Interactive item management: Add, edit, remove, and reorder cards
-   - Position & scale controls (Left, Right, Bottom-Center, Custom)
-   - Full export compatibility: Renders directly onto Canvas2D context
+   - Authentic Reels Glassmorphism: Multi-layered frosted glass with specular shine
+   - Intense Neon Border Glow & Left Accent Glow Bar
+   - Background Color & Opacity customization (Dark Glass, Light Glass, Custom)
+   - Razor-sharp Vector Icon rendering (No blurry emojis!) with icon presets
+   - Larger, high-contrast typography with Bengali & English font support
+   - Modern Animations: Spring pop, Light Sweep Shimmer, Slide-in, Floating wave
    ========================================================================== */
 
 (function () {
@@ -23,13 +20,17 @@
     // Default configuration for a card stack
     const DEFAULT_CONFIG = {
         enabled: false,
-        position: 'bottom-right', // 'bottom-right', 'bottom-left', 'center', 'custom'
-        x: 0.62,
-        y: 0.55,
-        width: 320,
-        cardHeight: 64,
+        position: 'bottom-right', // 'bottom-right', 'bottom-left', 'bottom-center', 'top-right', 'top-left', 'top-center', 'center'
+        animation: 'spring-shimmer', // 'spring-shimmer', 'slide-in', 'floating', 'fade-pop'
+        scale: 100, // 50% to 220%
+        textScale: 115, // 80% to 160%
+        bgColor: '#0f172a',
+        bgOpacity: 85, // 20% to 100%
+        glowIntensity: 80, // 0% to 100%
+        width: 390,
+        cardHeight: 74,
         spacing: 12,
-        staggerDelay: 0.25, // seconds between each card appearing
+        staggerDelay: 0.25, // seconds between cards
         startSec: 0,
         durationSec: 5,
         themeColor: '#38bdf8', // Cyan/Sky glow
@@ -37,35 +38,116 @@
             {
                 id: 'gc_1',
                 icon: '⚡',
-                title: 'Advantage+ Campaign',
-                subtitle: 'AI Auto-Targeting · 4.8x ROAS',
-                badge: 'ACTIVE',
+                iconType: 'bolt',
+                title: 'স্পেশাল অফার (৫০% ছাড়)',
+                subtitle: '১০০% প্রিমিয়াম ও অরিজিনাল কোয়ালিটি',
+                badge: 'SPECIAL',
                 color: '#38bdf8'
             },
             {
                 id: 'gc_2',
-                icon: '📈',
-                title: 'High Intent Audience',
-                subtitle: 'Lookalike 1% · 92% Match',
-                badge: 'OPTIMIZED',
+                icon: '🚚',
+                iconType: 'truck',
+                title: 'ক্যাশ অন ডেলিভারি',
+                subtitle: 'সারা দেশে ফ্রি হোম ডেলিভারি সুবিধা',
+                badge: 'FREE COD',
                 color: '#22c55e'
             },
             {
                 id: 'gc_3',
-                icon: '💰',
-                title: 'Cost per Acquisition',
-                subtitle: 'Reduced by -38.4%',
-                badge: 'WINNING',
+                icon: '⭐',
+                iconType: 'star',
+                title: '৪.৯ স্টার কাস্টমার রেটিং',
+                subtitle: '৫,০০০+ হ্যাপি কাস্টমারের বিশ্বস্ত পছন্দ',
+                badge: 'TOP RATED',
                 color: '#f59e0b'
             }
         ]
     };
 
-    // Easing helper
+    // Vector Icon Glyphs for razor-sharp canvas drawing
+    const ICON_GLYPH_MAP = {
+        'truck': '\uf48b',       // truck-fast
+        'bag': '\uf290',         // bag-shopping
+        'bolt': '\uf0e7',        // bolt
+        'star': '\uf005',        // star
+        'fire': '\uf06d',        // fire
+        'gift': '\uf06b',        // gift
+        'cash': '\uf0d6',        // money-bill-wave
+        'shield': '\uf3ed',      // shield-halved
+        'tag': '\uf02c',         // tags
+        'diamond': '\uf219',     // diamond
+        'rocket': '\uf135',      // rocket
+        'heart': '\uf004',       // heart
+        'check': '\uf058',       // circle-check
+        'clock': '\uf017',       // clock
+        'phone': '\uf095'        // phone
+    };
+
+    // Easing helpers
     function easeOutBack(x) {
         const c1 = 1.70158;
         const c3 = c1 + 1;
         return 1 + c3 * Math.pow(x - 1, 3) + c1 * Math.pow(x - 1, 2);
+    }
+
+    function easeOutCubic(x) {
+        return 1 - Math.pow(1 - x, 3);
+    }
+
+    // Helper: Hex color to RGBA
+    function hexToRgba(hex, alpha) {
+        if (!hex) return `rgba(15, 23, 42, ${alpha})`;
+        let c = hex.replace('#', '');
+        if (c.length === 3) c = c.split('').map(x => x + x).join('');
+        const num = parseInt(c, 16);
+        const r = (num >> 16) & 255;
+        const g = (num >> 8) & 255;
+        const b = num & 255;
+        return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+    }
+
+    // Draw high-resolution vector icon on Canvas
+    function drawVectorIcon(ctx, iconKey, iconText, x, y, size, accentColor) {
+        ctx.save();
+        
+        // Find matching vector glyph
+        let glyph = null;
+        if (iconKey && ICON_GLYPH_MAP[iconKey]) {
+            glyph = ICON_GLYPH_MAP[iconKey];
+        } else if (iconText) {
+            // Auto match common emojis/strings
+            if (iconText.includes('🚚') || iconText.includes('car') || iconText.includes('truck')) glyph = ICON_GLYPH_MAP['truck'];
+            else if (iconText.includes('🛍️') || iconText.includes('bag') || iconText.includes('shop')) glyph = ICON_GLYPH_MAP['bag'];
+            else if (iconText.includes('⚡') || iconText.includes('bolt') || iconText.includes('flash')) glyph = ICON_GLYPH_MAP['bolt'];
+            else if (iconText.includes('⭐') || iconText.includes('star')) glyph = ICON_GLYPH_MAP['star'];
+            else if (iconText.includes('🔥') || iconText.includes('fire') || iconText.includes('hot')) glyph = ICON_GLYPH_MAP['fire'];
+            else if (iconText.includes('🎁') || iconText.includes('gift')) glyph = ICON_GLYPH_MAP['gift'];
+            else if (iconText.includes('💰') || iconText.includes('cash') || iconText.includes('money')) glyph = ICON_GLYPH_MAP['cash'];
+            else if (iconText.includes('🛡️') || iconText.includes('shield') || iconText.includes('quality')) glyph = ICON_GLYPH_MAP['shield'];
+            else if (iconText.includes('🏷️') || iconText.includes('tag') || iconText.includes('discount')) glyph = ICON_GLYPH_MAP['tag'];
+            else if (iconText.includes('💎') || iconText.includes('diamond')) glyph = ICON_GLYPH_MAP['diamond'];
+            else if (iconText.includes('🚀') || iconText.includes('rocket')) glyph = ICON_GLYPH_MAP['rocket'];
+        }
+
+        if (glyph) {
+            // Draw crisp FontAwesome solid vector icon
+            ctx.fillStyle = '#ffffff';
+            ctx.shadowColor = accentColor;
+            ctx.shadowBlur = 8;
+            ctx.font = `900 ${Math.round(size * 0.56)}px "Font Awesome 6 Free", "FontAwesome", sans-serif`;
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText(glyph, x, y + 1);
+        } else {
+            // Fallback to emoji with crisp rendering
+            ctx.font = `${Math.round(size * 0.56)}px "Segoe UI Emoji", "Apple Color Emoji", "Noto Color Emoji", sans-serif`;
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText(iconText || '✨', x, y + 1);
+        }
+
+        ctx.restore();
     }
 
     // Main Draw Function called inside canvas frame loop
@@ -85,25 +167,62 @@
             exitAlpha = Math.max(0, (dur - elapsed) / 0.4);
         }
 
-        // Compute responsive dimensions based on canvas
-        const scaleFactor = Math.min(canvasW / 1280, canvasH / 720);
-        const cardW = (cfg.width || 320) * scaleFactor;
-        const cardH = (cfg.cardHeight || 64) * scaleFactor;
+        // Smart responsive dimension calculation:
+        const isPortrait = canvasH > canvasW;
+        const baseRef = isPortrait ? (canvasW / 500) : (canvasW / 1050);
+        const userScale = Math.max(0.4, (cfg.scale != null ? cfg.scale : 100) / 100);
+        const scaleFactor = Math.max(0.35, baseRef) * userScale;
+
+        const textScaleFactor = ((cfg.textScale != null ? cfg.textScale : 115) / 100);
+
+        const cardW = Math.min(canvasW * 0.94, (cfg.width || 390) * scaleFactor);
+        const cardH = (cfg.cardHeight || 74) * scaleFactor;
         const spacing = (cfg.spacing || 12) * scaleFactor;
+        const totalStackH = (cardH + spacing) * cfg.cards.length - spacing;
 
-        let originX = (cfg.x != null ? cfg.x : 0.62) * canvasW;
-        let originY = (cfg.y != null ? cfg.y : 0.55) * canvasH;
+        const marginX = 24 * scaleFactor;
+        const marginY = 32 * scaleFactor;
 
-        if (cfg.position === 'bottom-right') {
-            originX = canvasW - cardW - 32 * scaleFactor;
-            originY = canvasH - (cardH + spacing) * cfg.cards.length - 40 * scaleFactor;
-        } else if (cfg.position === 'bottom-left') {
-            originX = 32 * scaleFactor;
-            originY = canvasH - (cardH + spacing) * cfg.cards.length - 40 * scaleFactor;
-        } else if (cfg.position === 'center') {
-            originX = (canvasW - cardW) / 2;
-            originY = (canvasH - (cardH + spacing) * cfg.cards.length) / 2;
+        let originX = marginX;
+        let originY = canvasH - totalStackH - marginY;
+
+        switch (cfg.position) {
+            case 'bottom-left':
+                originX = marginX;
+                originY = canvasH - totalStackH - marginY;
+                break;
+            case 'bottom-center':
+                originX = (canvasW - cardW) / 2;
+                originY = canvasH - totalStackH - marginY;
+                break;
+            case 'top-right':
+                originX = canvasW - cardW - marginX;
+                originY = marginY;
+                break;
+            case 'top-left':
+                originX = marginX;
+                originY = marginY;
+                break;
+            case 'top-center':
+                originX = (canvasW - cardW) / 2;
+                originY = marginY;
+                break;
+            case 'center':
+                originX = (canvasW - cardW) / 2;
+                originY = (canvasH - totalStackH) / 2;
+                break;
+            case 'bottom-right':
+            default:
+                originX = canvasW - cardW - marginX;
+                originY = canvasH - totalStackH - marginY;
+                break;
         }
+
+        // Background styling properties
+        const bgOpacityVal = ((cfg.bgOpacity != null ? cfg.bgOpacity : 85) / 100);
+        const baseBgRgba = hexToRgba(cfg.bgColor || '#0f172a', bgOpacityVal);
+        const glowFactor = ((cfg.glowIntensity != null ? cfg.glowIntensity : 80) / 100);
+        const animType = cfg.animation || 'spring-shimmer';
 
         ctx.save();
         ctx.globalAlpha = exitAlpha;
@@ -113,136 +232,274 @@
             const cardElapsed = elapsed - cardStart;
             if (cardElapsed < 0) return; // Not yet appeared
 
-            const enterProgress = Math.min(1, Math.max(0, cardElapsed / 0.55));
-            const easedProgress = easeOutBack(enterProgress);
-            const easedAlpha = Math.min(1, cardElapsed / 0.3);
+            // Animation timing calculation
+            let cardAlpha = 1;
+            let cardScale = 1;
+            let offsetX = 0;
+            let offsetY = 0;
+            let shimmerProgress = -1; // -0.5 to 1.5 sweep
 
-            // Stagger animation: Slide up + scale in + 3D tilt
-            const offsetY = (1 - easedProgress) * 45 * scaleFactor;
+            if (animType === 'slide-in') {
+                const enterProg = Math.min(1, Math.max(0, cardElapsed / 0.45));
+                const eased = easeOutCubic(enterProg);
+                cardAlpha = Math.min(1, cardElapsed / 0.25);
+                offsetX = (1 - eased) * (cfg.position.includes('left') ? -80 : 80) * scaleFactor;
+                cardScale = 0.95 + 0.05 * eased;
+            } else if (animType === 'floating') {
+                const enterProg = Math.min(1, Math.max(0, cardElapsed / 0.45));
+                const eased = easeOutBack(enterProg);
+                cardAlpha = Math.min(1, cardElapsed / 0.25);
+                cardScale = 0.9 + 0.1 * eased;
+                // Subtle organic floating wave motion
+                offsetY = (1 - eased) * 35 * scaleFactor + Math.sin(currentTime * 2.5 + idx * 0.8) * 4 * scaleFactor;
+            } else if (animType === 'fade-pop') {
+                const enterProg = Math.min(1, Math.max(0, cardElapsed / 0.4));
+                const eased = easeOutCubic(enterProg);
+                cardAlpha = Math.min(1, cardElapsed / 0.3);
+                cardScale = 0.85 + 0.15 * eased;
+            } else {
+                // Default: 'spring-shimmer' (Smooth pop + light sweep shimmer)
+                const enterProg = Math.min(1, Math.max(0, cardElapsed / 0.5));
+                const eased = easeOutBack(enterProg);
+                cardAlpha = Math.min(1, cardElapsed / 0.25);
+                offsetY = (1 - eased) * 45 * scaleFactor;
+                cardScale = 0.85 + 0.15 * eased;
+
+                // Trigger shimmer light sweep after card lands
+                if (cardElapsed > 0.3 && cardElapsed < 1.4) {
+                    shimmerProgress = (cardElapsed - 0.3) / 0.9; // 0 to 1
+                }
+            }
+
+            const currentX = originX + offsetX;
             const currentY = originY + idx * (cardH + spacing) + offsetY;
-            const currentX = originX;
-
-            const cardScale = 0.85 + 0.15 * easedProgress;
 
             ctx.save();
-            ctx.globalAlpha = exitAlpha * easedAlpha;
+            ctx.globalAlpha = exitAlpha * cardAlpha;
 
-            // Center transform for scale pop
+            // Center transform for pop scale
             ctx.translate(currentX + cardW / 2, currentY + cardH / 2);
             ctx.scale(cardScale, cardScale);
             ctx.translate(-cardW / 2, -cardH / 2);
 
-            const r = Math.min(14 * scaleFactor, cardH * 0.22);
-
-            // 1. Drop Shadow
-            ctx.shadowColor = 'rgba(0, 0, 0, 0.45)';
-            ctx.shadowBlur = 18 * scaleFactor;
-            ctx.shadowOffsetY = 8 * scaleFactor;
-
-            // 2. Glass Background (Frosted translucent plate)
-            const bgGrad = ctx.createLinearGradient(0, 0, cardW, cardH);
-            bgGrad.addColorStop(0, 'rgba(255, 255, 255, 0.16)');
-            bgGrad.addColorStop(1, 'rgba(255, 255, 255, 0.05)');
-            ctx.fillStyle = bgGrad;
-
-            ctx.beginPath();
-            if (ctx.roundRect) ctx.roundRect(0, 0, cardW, cardH, r);
-            else ctx.rect(0, 0, cardW, cardH);
-            ctx.fill();
-
-            // Darker base for high contrast readability
-            ctx.shadowColor = 'transparent';
-            ctx.fillStyle = 'rgba(15, 23, 42, 0.65)';
-            ctx.beginPath();
-            if (ctx.roundRect) ctx.roundRect(0, 0, cardW, cardH, r);
-            else ctx.rect(0, 0, cardW, cardH);
-            ctx.fill();
-
-            // 3. Glowing Border
+            const r = Math.min(16 * scaleFactor, cardH * 0.24);
             const accentColor = card.color || cfg.themeColor || '#38bdf8';
+
+            // 1. Multi-layered Ambient Shadow & Neon Glow
+            if (glowFactor > 0.05) {
+                ctx.save();
+                ctx.shadowColor = accentColor;
+                ctx.shadowBlur = 24 * scaleFactor * glowFactor;
+                ctx.shadowOffsetY = 4 * scaleFactor;
+                ctx.fillStyle = 'rgba(0, 0, 0, 0.4)';
+                ctx.beginPath();
+                if (ctx.roundRect) ctx.roundRect(0, 0, cardW, cardH, r);
+                else ctx.rect(0, 0, cardW, cardH);
+                ctx.fill();
+                ctx.restore();
+            }
+
+            // 2. Base Frosted Glass Body with User Tint
+            ctx.fillStyle = baseBgRgba;
+            ctx.beginPath();
+            if (ctx.roundRect) ctx.roundRect(0, 0, cardW, cardH, r);
+            else ctx.rect(0, 0, cardW, cardH);
+            ctx.fill();
+
+            // 3. Diagonal Frosted Glass Sheen
+            const sheenGrad = ctx.createLinearGradient(0, 0, cardW, cardH);
+            sheenGrad.addColorStop(0, 'rgba(255, 255, 255, 0.22)');
+            sheenGrad.addColorStop(0.35, 'rgba(255, 255, 255, 0.08)');
+            sheenGrad.addColorStop(0.7, 'rgba(255, 255, 255, 0.02)');
+            sheenGrad.addColorStop(1, 'rgba(0, 0, 0, 0.25)');
+            ctx.fillStyle = sheenGrad;
+            ctx.beginPath();
+            if (ctx.roundRect) ctx.roundRect(0, 0, cardW, cardH, r);
+            else ctx.rect(0, 0, cardW, cardH);
+            ctx.fill();
+
+            // 4. Glowing Gradient Border
             const borderGrad = ctx.createLinearGradient(0, 0, cardW, cardH);
-            borderGrad.addColorStop(0, 'rgba(255, 255, 255, 0.55)');
-            borderGrad.addColorStop(0.5, accentColor);
+            borderGrad.addColorStop(0, 'rgba(255, 255, 255, 0.85)');
+            borderGrad.addColorStop(0.3, accentColor);
+            borderGrad.addColorStop(0.8, hexToRgba(accentColor, 0.4));
             borderGrad.addColorStop(1, 'rgba(255, 255, 255, 0.15)');
 
             ctx.strokeStyle = borderGrad;
-            ctx.lineWidth = Math.max(1.5, 1.8 * scaleFactor);
+            ctx.lineWidth = Math.max(1.5, 2.2 * scaleFactor);
             ctx.beginPath();
             if (ctx.roundRect) ctx.roundRect(0, 0, cardW, cardH, r);
             else ctx.rect(0, 0, cardW, cardH);
             ctx.stroke();
 
-            // 4. Accent vertical bar on the left
+            // 5. Specular Top Highlight Hairline
             ctx.save();
-            ctx.strokeStyle = accentColor;
-            ctx.shadowColor = accentColor;
-            ctx.shadowBlur = 8 * scaleFactor;
-            ctx.lineWidth = Math.max(3, 4 * scaleFactor);
-            ctx.lineCap = 'round';
+            const topGrad = ctx.createLinearGradient(0, 0, cardW, 0);
+            topGrad.addColorStop(0, 'rgba(255, 255, 255, 0)');
+            topGrad.addColorStop(0.2, 'rgba(255, 255, 255, 0.7)');
+            topGrad.addColorStop(0.6, 'rgba(255, 255, 255, 0.3)');
+            topGrad.addColorStop(1, 'rgba(255, 255, 255, 0)');
+            ctx.strokeStyle = topGrad;
+            ctx.lineWidth = 1.2 * scaleFactor;
             ctx.beginPath();
-            ctx.moveTo(r * 0.8, cardH * 0.22);
-            ctx.lineTo(r * 0.8, cardH * 0.78);
+            ctx.moveTo(r, 1);
+            ctx.lineTo(cardW - r, 1);
             ctx.stroke();
             ctx.restore();
 
-            // 5. Icon / Emoji Box
-            const iconSize = cardH * 0.58;
-            const iconX = r * 1.6;
-            const iconY = (cardH - iconSize) / 2;
-
+            // 6. Accent vertical neon bar on the left
             ctx.save();
-            ctx.fillStyle = 'rgba(255, 255, 255, 0.12)';
+            ctx.strokeStyle = accentColor;
+            ctx.shadowColor = accentColor;
+            ctx.shadowBlur = 12 * scaleFactor * glowFactor;
+            ctx.lineWidth = Math.max(3.5, 5 * scaleFactor);
+            ctx.lineCap = 'round';
             ctx.beginPath();
-            if (ctx.roundRect) ctx.roundRect(iconX, iconY, iconSize, iconSize, 8 * scaleFactor);
-            else ctx.rect(iconX, iconY, iconSize, iconSize);
-            ctx.fill();
-
-            ctx.font = `${Math.round(iconSize * 0.62)}px sans-serif`;
-            ctx.textAlign = 'center';
-            ctx.textBaseline = 'middle';
-            ctx.fillText(card.icon || '✨', iconX + iconSize / 2, iconY + iconSize / 2 + 1);
+            ctx.moveTo(r * 0.85, cardH * 0.18);
+            ctx.lineTo(r * 0.85, cardH * 0.82);
+            ctx.stroke();
             ctx.restore();
 
-            // 6. Title Text
-            const textLeft = iconX + iconSize + 12 * scaleFactor;
+            // 7. Icon Squircle Plate & Vector Icon Drawing
+            const iconBoxSize = cardH * 0.64;
+            const iconX = r * 1.4;
+            const iconY = (cardH - iconBoxSize) / 2;
+
+            // Icon Background Squircle Plate
+            ctx.save();
+            const iconPlateGrad = ctx.createLinearGradient(iconX, iconY, iconX + iconBoxSize, iconY + iconBoxSize);
+            iconPlateGrad.addColorStop(0, hexToRgba(accentColor, 0.35));
+            iconPlateGrad.addColorStop(1, 'rgba(255, 255, 255, 0.08)');
+            ctx.fillStyle = iconPlateGrad;
+            ctx.beginPath();
+            if (ctx.roundRect) ctx.roundRect(iconX, iconY, iconBoxSize, iconBoxSize, 10 * scaleFactor);
+            else ctx.rect(iconX, iconY, iconBoxSize, iconBoxSize);
+            ctx.fill();
+
+            // Icon Plate Border
+            ctx.strokeStyle = hexToRgba(accentColor, 0.6);
+            ctx.lineWidth = Math.max(1, 1.2 * scaleFactor);
+            ctx.beginPath();
+            if (ctx.roundRect) ctx.roundRect(iconX, iconY, iconBoxSize, iconBoxSize, 10 * scaleFactor);
+            else ctx.rect(iconX, iconY, iconBoxSize, iconBoxSize);
+            ctx.stroke();
+
+            // Vector Icon Rendering
+            drawVectorIcon(
+                ctx,
+                card.iconType || '',
+                card.icon || '',
+                iconX + iconBoxSize / 2,
+                iconY + iconBoxSize / 2,
+                iconBoxSize,
+                accentColor
+            );
+            ctx.restore();
+
+            // 8. Badge Pill Calculation
+            let badgeWidth = 0;
+            const hasBadge = !!(card.badge && card.badge.trim());
+            const badgeFontSize = Math.round(11 * scaleFactor * textScaleFactor);
+            const badgeFont = `700 ${badgeFontSize}px 'Outfit', 'Hind Siliguri', sans-serif`;
+
+            if (hasBadge) {
+                ctx.font = badgeFont;
+                badgeWidth = ctx.measureText(card.badge).width + 16 * scaleFactor;
+            }
+
+            // 9. Typography (Title & Subtitle with Crisp Contrast & Shadow)
+            const fontStack = `'Hind Siliguri', 'Outfit', 'Kalpurush', 'Noto Sans Bengali', -apple-system, sans-serif`;
+            const textLeft = iconX + iconBoxSize + 14 * scaleFactor;
+            const maxTextWidth = cardW - textLeft - (hasBadge ? badgeWidth + 16 * scaleFactor : 14 * scaleFactor);
+
+            // Title
+            ctx.save();
+            ctx.shadowColor = 'rgba(0, 0, 0, 0.8)';
+            ctx.shadowBlur = 4 * scaleFactor;
+            ctx.shadowOffsetY = 1.5 * scaleFactor;
             ctx.fillStyle = '#ffffff';
-            ctx.font = `600 ${Math.round(15 * scaleFactor)}px Outfit, -apple-system, sans-serif`;
+            const titleFontSize = Math.round(16.5 * scaleFactor * textScaleFactor);
+            ctx.font = `700 ${titleFontSize}px ${fontStack}`;
             ctx.textAlign = 'left';
             ctx.textBaseline = 'middle';
-            ctx.fillText(card.title || 'Card Title', textLeft, cardH * 0.36);
 
-            // 7. Subtitle Text
-            ctx.fillStyle = '#94a3b8';
-            ctx.font = `400 ${Math.round(12 * scaleFactor)}px Outfit, -apple-system, sans-serif`;
-            ctx.fillText(card.subtitle || 'Card Subtitle', textLeft, cardH * 0.68);
+            let titleText = card.title || '';
+            if (ctx.measureText(titleText).width > maxTextWidth && maxTextWidth > 30) {
+                while (titleText.length > 3 && ctx.measureText(titleText + '…').width > maxTextWidth) {
+                    titleText = titleText.slice(0, -1);
+                }
+                titleText += '…';
+            }
+            ctx.fillText(titleText, textLeft, cardH * 0.35);
+            ctx.restore();
 
-            // 8. Badge pill on right
-            if (card.badge) {
-                const badgeText = card.badge;
-                ctx.font = `bold ${Math.round(9 * scaleFactor)}px Outfit, sans-serif`;
-                const bW = ctx.measureText(badgeText).width + 12 * scaleFactor;
-                const bH = 18 * scaleFactor;
+            // Subtitle
+            ctx.save();
+            ctx.shadowColor = 'rgba(0, 0, 0, 0.7)';
+            ctx.shadowBlur = 3 * scaleFactor;
+            ctx.shadowOffsetY = 1 * scaleFactor;
+            ctx.fillStyle = '#cbd5e1';
+            const subFontSize = Math.round(13 * scaleFactor * textScaleFactor);
+            ctx.font = `500 ${subFontSize}px ${fontStack}`;
+            ctx.textAlign = 'left';
+            ctx.textBaseline = 'middle';
+
+            let subText = card.subtitle || '';
+            if (ctx.measureText(subText).width > maxTextWidth && maxTextWidth > 30) {
+                while (subText.length > 3 && ctx.measureText(subText + '…').width > maxTextWidth) {
+                    subText = subText.slice(0, -1);
+                }
+                subText += '…';
+            }
+            ctx.fillText(subText, textLeft, cardH * 0.69);
+            ctx.restore();
+
+            // 10. Badge pill on the right
+            if (hasBadge) {
+                const bH = 22 * scaleFactor * textScaleFactor;
+                const bW = badgeWidth;
                 const bX = cardW - bW - 12 * scaleFactor;
                 const bY = (cardH - bH) / 2;
 
                 ctx.save();
                 ctx.fillStyle = accentColor;
-                ctx.globalAlpha = 0.22;
+                ctx.globalAlpha = 0.28;
                 ctx.beginPath();
                 if (ctx.roundRect) ctx.roundRect(bX, bY, bW, bH, bH / 2);
                 else ctx.rect(bX, bY, bW, bH);
                 ctx.fill();
 
                 ctx.strokeStyle = accentColor;
-                ctx.globalAlpha = 0.8;
-                ctx.lineWidth = 1;
+                ctx.globalAlpha = 0.9;
+                ctx.lineWidth = Math.max(1, 1.4 * scaleFactor);
                 ctx.stroke();
 
                 ctx.globalAlpha = 1;
                 ctx.fillStyle = '#ffffff';
+                ctx.font = badgeFont;
                 ctx.textAlign = 'center';
                 ctx.textBaseline = 'middle';
-                ctx.fillText(badgeText, bX + bW / 2, bY + bH / 2 + 0.5);
+                ctx.fillText(card.badge, bX + bW / 2, bY + bH / 2 + 0.5);
+                ctx.restore();
+            }
+
+            // 11. Light Sweep Shimmer Effect
+            if (shimmerProgress >= 0 && shimmerProgress <= 1) {
+                ctx.save();
+                // Clip inside rounded card
+                ctx.beginPath();
+                if (ctx.roundRect) ctx.roundRect(0, 0, cardW, cardH, r);
+                else ctx.rect(0, 0, cardW, cardH);
+                ctx.clip();
+
+                const shimmerX = shimmerProgress * (cardW + 120 * scaleFactor) - 60 * scaleFactor;
+                const shimmerGrad = ctx.createLinearGradient(shimmerX - 40 * scaleFactor, 0, shimmerX + 40 * scaleFactor, cardH);
+                shimmerGrad.addColorStop(0, 'rgba(255, 255, 255, 0)');
+                shimmerGrad.addColorStop(0.5, 'rgba(255, 255, 255, 0.35)');
+                shimmerGrad.addColorStop(1, 'rgba(255, 255, 255, 0)');
+
+                ctx.fillStyle = shimmerGrad;
+                ctx.fillRect(0, 0, cardW, cardH);
                 ctx.restore();
             }
 
@@ -264,9 +521,19 @@
 
         const enableToggle = document.getElementById('glass-cards-enable');
         const posSelect = document.getElementById('glass-cards-pos');
+        const animSelect = document.getElementById('glass-cards-anim');
+        const scaleInput = document.getElementById('glass-cards-scale');
+        const scaleVal = document.getElementById('glass-cards-scale-val');
+        const textScaleInput = document.getElementById('glass-cards-text-scale');
+        const textScaleVal = document.getElementById('glass-cards-text-scale-val');
+        const bgColorInput = document.getElementById('glass-cards-bg-color');
+        const bgOpacityInput = document.getElementById('glass-cards-bg-opacity');
+        const bgOpacityVal = document.getElementById('glass-cards-bg-opacity-val');
+        const glowInput = document.getElementById('glass-cards-glow');
+        const glowVal = document.getElementById('glass-cards-glow-val');
+        const themeColorInput = document.getElementById('glass-cards-color');
         const startInput = document.getElementById('glass-cards-start');
         const durInput = document.getElementById('glass-cards-dur');
-        const themeColorInput = document.getElementById('glass-cards-color');
         const cardsListEl = document.getElementById('glass-cards-items-list');
         const addCardBtn = document.getElementById('add-glass-card-item-btn');
 
@@ -274,12 +541,45 @@
             const cfg = state.glassCardStack || DEFAULT_CONFIG;
             if (enableToggle) enableToggle.checked = !!cfg.enabled;
             if (posSelect) posSelect.value = cfg.position || 'bottom-right';
+            if (animSelect) animSelect.value = cfg.animation || 'spring-shimmer';
+            
+            if (scaleInput) {
+                scaleInput.value = cfg.scale != null ? cfg.scale : 100;
+                if (scaleVal) scaleVal.textContent = (cfg.scale != null ? cfg.scale : 100) + '%';
+            }
+            if (textScaleInput) {
+                textScaleInput.value = cfg.textScale != null ? cfg.textScale : 115;
+                if (textScaleVal) textScaleVal.textContent = (cfg.textScale != null ? cfg.textScale : 115) + '%';
+            }
+            if (bgColorInput) bgColorInput.value = cfg.bgColor || '#0f172a';
+            if (bgOpacityInput) {
+                bgOpacityInput.value = cfg.bgOpacity != null ? cfg.bgOpacity : 85;
+                if (bgOpacityVal) bgOpacityVal.textContent = (cfg.bgOpacity != null ? cfg.bgOpacity : 85) + '%';
+            }
+            if (glowInput) {
+                glowInput.value = cfg.glowIntensity != null ? cfg.glowIntensity : 80;
+                if (glowVal) glowVal.textContent = (cfg.glowIntensity != null ? cfg.glowIntensity : 80) + '%';
+            }
+            if (themeColorInput) themeColorInput.value = cfg.themeColor || '#38bdf8';
             if (startInput) startInput.value = cfg.startSec != null ? cfg.startSec : 0;
             if (durInput) durInput.value = cfg.durationSec != null ? cfg.durationSec : 5;
-            if (themeColorInput) themeColorInput.value = cfg.themeColor || '#38bdf8';
 
             renderCardsListUI();
         }
+
+        // Icon Preset Options for quick selection
+        const ICON_PRESETS = [
+            { label: '⚡ অফার', type: 'bolt', emoji: '⚡' },
+            { label: '🚚 ডেলিভারি', type: 'truck', emoji: '🚚' },
+            { label: '🛍️ শপিং', type: 'bag', emoji: '🛍️' },
+            { label: '⭐ রেটিং', type: 'star', emoji: '⭐' },
+            { label: '🔥 ট্রেন্ড', type: 'fire', emoji: '🔥' },
+            { label: '🎁 গিফট', type: 'gift', emoji: '🎁' },
+            { label: '💰 ক্যাশ', type: 'cash', emoji: '💰' },
+            { label: '🛡️ কোয়ালিটি', type: 'shield', emoji: '🛡️' },
+            { label: '🏷️ ডিসকাউন্ট', type: 'tag', emoji: '🏷️' },
+            { label: '💎 লাক্সারি', type: 'diamond', emoji: '💎' }
+        ];
 
         function renderCardsListUI() {
             if (!cardsListEl) return;
@@ -290,42 +590,79 @@
             cfg.cards.forEach((c, idx) => {
                 const itemEl = document.createElement('div');
                 itemEl.className = 'glass-card-editor-row';
-                itemEl.style.cssText = 'background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.1); border-radius: 8px; padding: 10px; margin-bottom: 8px; display: flex; flex-direction: column; gap: 6px;';
+                itemEl.style.cssText = 'background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.1); border-radius: 10px; padding: 12px; margin-bottom: 10px; display: flex; flex-direction: column; gap: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.2);';
+                
+                const presetOptionsHtml = ICON_PRESETS.map(p => `
+                    <option value="${p.type}" ${c.iconType === p.type ? 'selected' : ''}>${p.label}</option>
+                `).join('');
+
                 itemEl.innerHTML = `
-                    <div style="display: flex; align-items: center; justify-content: space-between;">
-                        <span style="font-weight: 600; font-size: 13px; color: ${c.color || '#38bdf8'};"><i class="fa-solid fa-layer-group"></i> Card #${idx + 1}</span>
-                        <button type="button" class="btn btn-outline gc-del-btn" style="padding: 2px 8px; font-size: 11px; color: #ef4444;"><i class="fa-solid fa-trash"></i></button>
+                    <div style="display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid rgba(255,255,255,0.07); padding-bottom: 6px;">
+                        <span style="font-weight: 600; font-size: 13px; color: ${c.color || '#38bdf8'}; display: flex; align-items: center; gap: 6px;">
+                            <i class="fa-solid fa-layer-group"></i> Card #${idx + 1}
+                        </span>
+                        <div style="display:flex; align-items:center; gap:6px;">
+                            <label style="font-size:11px; margin:0; color:#94a3b8;">কালার:</label>
+                            <input type="color" class="gc-color-inp" value="${c.color || cfg.themeColor || '#38bdf8'}" title="Card Accent Color" style="width:24px; height:24px; border-radius:4px; border:none; cursor:pointer; padding:0; background:transparent;">
+                            <button type="button" class="btn btn-outline gc-del-btn" title="Delete Card" style="padding: 2px 8px; font-size: 11px; color: #ef4444; border-color: rgba(239,68,68,0.3);"><i class="fa-solid fa-trash"></i></button>
+                        </div>
                     </div>
-                    <div style="display: grid; grid-template-columns: 48px 1fr; gap: 6px;">
-                        <input type="text" class="form-input gc-icon-inp" value="${c.icon || '⚡'}" title="Icon / Emoji" style="text-align: center; font-size: 16px;">
-                        <input type="text" class="form-input gc-title-inp" value="${c.title || ''}" placeholder="Card Title">
+
+                    <!-- Icon Preset & Title Text Boxes -->
+                    <div>
+                        <div style="display: grid; grid-template-columns: 110px 1fr; gap: 8px;">
+                            <div>
+                                <label style="font-size: 11px; color: #94a3b8; display: block; margin-bottom: 3px;">আইকন (Icon):</label>
+                                <select class="form-select gc-icon-type-sel" style="font-size:12px; padding: 6px 8px;">
+                                    ${presetOptionsHtml}
+                                    <option value="custom" ${c.iconType === 'custom' ? 'selected' : ''}>✍️ Custom</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label style="font-size: 11px; color: #94a3b8; display: block; margin-bottom: 3px;">Title (শিরোনাম / মূল লেখা):</label>
+                                <input type="text" class="form-input gc-title-inp" value="${c.title || ''}" placeholder="যেমন: স্পেশাল ৫০% অফার">
+                            </div>
+                        </div>
                     </div>
-                    <div style="display: grid; grid-template-columns: 1fr 80px; gap: 6px;">
-                        <input type="text" class="form-input gc-sub-inp" value="${c.subtitle || ''}" placeholder="Subtitle / Stats">
-                        <input type="text" class="form-input gc-badge-inp" value="${c.badge || ''}" placeholder="Badge">
+
+                    <!-- Subtitle & Badge Text Boxes -->
+                    <div style="display: grid; grid-template-columns: 1fr 100px; gap: 8px;">
+                        <div>
+                            <label style="font-size: 11px; color: #94a3b8; display: block; margin-bottom: 3px;">Subtitle (ছোট বিবরণ):</label>
+                            <input type="text" class="form-input gc-sub-inp" value="${c.subtitle || ''}" placeholder="যেমন: সারা দেশে ক্যাশ অন ডেলিভারি">
+                        </div>
+                        <div>
+                            <label style="font-size: 11px; color: #94a3b8; display: block; margin-bottom: 3px;">Badge (ট্যাগ):</label>
+                            <input type="text" class="form-input gc-badge-inp" value="${c.badge || ''}" placeholder="FREE COD">
+                        </div>
                     </div>
                 `;
 
                 // Bind events
-                const iconInp = itemEl.querySelector('.gc-icon-inp');
+                const iconTypeSel = itemEl.querySelector('.gc-icon-type-sel');
                 const titleInp = itemEl.querySelector('.gc-title-inp');
                 const subInp = itemEl.querySelector('.gc-sub-inp');
                 const badgeInp = itemEl.querySelector('.gc-badge-inp');
+                const colorInp = itemEl.querySelector('.gc-color-inp');
                 const delBtn = itemEl.querySelector('.gc-del-btn');
 
                 const updateCard = () => {
-                    c.icon = iconInp.value;
+                    c.iconType = iconTypeSel.value;
+                    const preset = ICON_PRESETS.find(p => p.type === c.iconType);
+                    if (preset) c.icon = preset.emoji;
                     c.title = titleInp.value;
                     c.subtitle = subInp.value;
                     c.badge = badgeInp.value;
+                    c.color = colorInp.value;
                     if (window.triggerCanvasRedraw) window.triggerCanvasRedraw();
                     if (window.triggerAutoSave) window.triggerAutoSave();
                 };
 
-                iconInp.addEventListener('input', updateCard);
+                iconTypeSel.addEventListener('change', updateCard);
                 titleInp.addEventListener('input', updateCard);
                 subInp.addEventListener('input', updateCard);
                 badgeInp.addEventListener('input', updateCard);
+                colorInp.addEventListener('input', updateCard);
 
                 delBtn.addEventListener('click', () => {
                     cfg.cards.splice(idx, 1);
@@ -348,10 +685,83 @@
             });
         }
 
-        // Position
+        // Position & Animation
         if (posSelect) {
             posSelect.addEventListener('change', (e) => {
                 if (state.glassCardStack) state.glassCardStack.position = e.target.value;
+                if (window.triggerCanvasRedraw) window.triggerCanvasRedraw();
+                if (window.triggerAutoSave) window.triggerAutoSave();
+            });
+        }
+
+        if (animSelect) {
+            animSelect.addEventListener('change', (e) => {
+                if (state.glassCardStack) state.glassCardStack.animation = e.target.value;
+                if (window.triggerCanvasRedraw) window.triggerCanvasRedraw();
+                if (window.triggerAutoSave) window.triggerAutoSave();
+            });
+        }
+
+        // Card Size / Scale Slider
+        if (scaleInput) {
+            scaleInput.addEventListener('input', (e) => {
+                const val = parseInt(e.target.value, 10) || 100;
+                if (scaleVal) scaleVal.textContent = val + '%';
+                if (!state.glassCardStack) state.glassCardStack = JSON.parse(JSON.stringify(DEFAULT_CONFIG));
+                state.glassCardStack.scale = val;
+                if (window.triggerCanvasRedraw) window.triggerCanvasRedraw();
+                if (window.triggerAutoSave) window.triggerAutoSave();
+            });
+        }
+
+        // Text Size Slider
+        if (textScaleInput) {
+            textScaleInput.addEventListener('input', (e) => {
+                const val = parseInt(e.target.value, 10) || 115;
+                if (textScaleVal) textScaleVal.textContent = val + '%';
+                if (!state.glassCardStack) state.glassCardStack = JSON.parse(JSON.stringify(DEFAULT_CONFIG));
+                state.glassCardStack.textScale = val;
+                if (window.triggerCanvasRedraw) window.triggerCanvasRedraw();
+                if (window.triggerAutoSave) window.triggerAutoSave();
+            });
+        }
+
+        // Background Color & Opacity
+        if (bgColorInput) {
+            bgColorInput.addEventListener('input', (e) => {
+                if (state.glassCardStack) state.glassCardStack.bgColor = e.target.value;
+                if (window.triggerCanvasRedraw) window.triggerCanvasRedraw();
+                if (window.triggerAutoSave) window.triggerAutoSave();
+            });
+        }
+
+        if (bgOpacityInput) {
+            bgOpacityInput.addEventListener('input', (e) => {
+                const val = parseInt(e.target.value, 10) || 85;
+                if (bgOpacityVal) bgOpacityVal.textContent = val + '%';
+                if (!state.glassCardStack) state.glassCardStack = JSON.parse(JSON.stringify(DEFAULT_CONFIG));
+                state.glassCardStack.bgOpacity = val;
+                if (window.triggerCanvasRedraw) window.triggerCanvasRedraw();
+                if (window.triggerAutoSave) window.triggerAutoSave();
+            });
+        }
+
+        // Glow Intensity
+        if (glowInput) {
+            glowInput.addEventListener('input', (e) => {
+                const val = parseInt(e.target.value, 10) || 80;
+                if (glowVal) glowVal.textContent = val + '%';
+                if (!state.glassCardStack) state.glassCardStack = JSON.parse(JSON.stringify(DEFAULT_CONFIG));
+                state.glassCardStack.glowIntensity = val;
+                if (window.triggerCanvasRedraw) window.triggerCanvasRedraw();
+                if (window.triggerAutoSave) window.triggerAutoSave();
+            });
+        }
+
+        // Theme color
+        if (themeColorInput) {
+            themeColorInput.addEventListener('input', (e) => {
+                if (state.glassCardStack) state.glassCardStack.themeColor = e.target.value;
                 if (window.triggerCanvasRedraw) window.triggerCanvasRedraw();
                 if (window.triggerAutoSave) window.triggerAutoSave();
             });
@@ -374,24 +784,16 @@
             });
         }
 
-        // Theme color
-        if (themeColorInput) {
-            themeColorInput.addEventListener('input', (e) => {
-                if (state.glassCardStack) state.glassCardStack.themeColor = e.target.value;
-                if (window.triggerCanvasRedraw) window.triggerCanvasRedraw();
-                if (window.triggerAutoSave) window.triggerAutoSave();
-            });
-        }
-
         // Add Card Button
         if (addCardBtn) {
             addCardBtn.addEventListener('click', () => {
                 if (!state.glassCardStack) state.glassCardStack = JSON.parse(JSON.stringify(DEFAULT_CONFIG));
                 state.glassCardStack.cards.push({
                     id: 'gc_' + Date.now(),
-                    icon: '🚀',
-                    title: 'New Metric Card',
-                    subtitle: 'AI Optimized · Active',
+                    icon: '🛍️',
+                    iconType: 'bag',
+                    title: 'নতুন অফার বা প্রোডাক্ট',
+                    subtitle: 'বিস্তারিত তথ্য এখানে লিখুন',
                     badge: 'NEW',
                     color: state.glassCardStack.themeColor || '#38bdf8'
                 });

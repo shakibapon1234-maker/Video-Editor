@@ -1,4 +1,4 @@
-﻿// ============================================================
+// ============================================================
 // Wings Fly Brand Reveal -- embedded logo assets (v1.0)
 // Combines the Wings Fly gold badge, the Wings Fly wordmark, and the
 // NSDA (National Skills Development Authority) recognition seal into
@@ -43,7 +43,7 @@ function getWingsBrandNsdaImg() {
 //   0.35s - firework burst #2 (staggered, slightly wider)
 //   0.42s - blue wordmark slides up and settles under the badge
 //   0.78s - NSDA seal pops in bottom-right with a pulsing focus-glow ring
-//           and a small "NSDA à¦…à¦¨à§à¦®à§‹à¦¦à¦¿à¦¤" caption -- this pulse continues
+//           and a small "NSDA অনুমোদিত" caption -- this pulse continues
 //           for as long as the B-roll stays on screen, so the NSDA
 //           authorization stays visually in focus, not just a quick flash.
 function drawWingsBrandBroll(ctx, item, x, y, width, height, elapsed) {
@@ -170,7 +170,7 @@ function drawWingsBrandBroll(ctx, item, x, y, width, height, elapsed) {
             ctx.textBaseline = 'middle';
             const labelX = nsdaCx + nsdaD / 2 * 0.85;
             const labelY = nsdaCy;
-            const label = 'NSDA à¦…à¦¨à§à¦®à§‹à¦¦à¦¿à¦¤';
+            const label = 'NSDA অনুমোদিত';
             const labelW = ctx.measureText(label).width + labelSize * 0.9;
             const labelH = labelSize * 1.5;
             const rx = labelSize * 0.4;
@@ -1407,7 +1407,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const imageDurationApplyAllBtn = document.getElementById('image-duration-apply-all-btn');
     const quickApplyDurationAllBtn = document.getElementById('quick-apply-duration-all-btn');
 
-    // Shows/hides the "à¦›à¦¬à¦¿à¦° à¦¸à¦®à¦¯à¦¼à¦•à¦¾à¦² (Image Duration)" control based on whether
+    // Shows/hides the "ছবির সময়কাল (Image Duration)" control based on whether
     // the currently active clip or any clip is a still image, and fills it with that
     // clip's current length.
     function syncImageDurationUI() {
@@ -1430,7 +1430,7 @@ document.addEventListener('DOMContentLoaded', () => {
             quickApplyDurationAllBtn.style.display = (imageCount > 1 && clip && clip.type === 'image') ? 'inline-block' : 'none';
             if (clip && clip.type === 'image') {
                 const dur = (clip.end - clip.start || clip.duration || 5.0).toFixed(1);
-                quickApplyDurationAllBtn.innerText = `â±ï¸ à¦¸à¦¬ à¦›à¦¬à¦¿à¦¤à§‡ ${dur}s à¦ªà§à¦°à¦¯à¦¼à§‹à¦— à¦•à¦°à§à¦¨`;
+                quickApplyDurationAllBtn.innerText = `⏱️ সব ছবিতে ${dur}s প্রয়োগ করুন`;
             }
         }
     }
@@ -1440,13 +1440,13 @@ document.addEventListener('DOMContentLoaded', () => {
         imageDurationApplyBtn.addEventListener('click', () => {
             const clip = state.clips && state.clips.find(c => c.id === state.activeClipId);
             if (!clip || clip.type !== 'image') {
-                if (window.showToast) window.showToast('à¦¦à§Ÿà¦¾ à¦•à¦°à§‡ à¦ªà§à¦°à¦¥à¦®à§‡ à¦Ÿà¦¾à¦‡à¦®à¦²à¦¾à¦‡à¦¨à§‡ à¦à¦•à¦Ÿà¦¿ à¦›à¦¬à¦¿ à¦¸à¦¿à¦²à§‡à¦•à§à¦Ÿ à¦•à¦°à§à¦¨à¥¤', 'warning');
+                if (window.showToast) window.showToast('দয়া করে প্রথমে টাইমলাইনে একটি ছবি সিলেক্ট করুন।', 'warning');
                 return;
             }
 
             let newDuration = parseFloat(imageDurationInput.value);
             if (!newDuration || isNaN(newDuration) || newDuration <= 0) {
-                alert('à¦¸à¦ à¦¿à¦• à¦à¦•à¦Ÿà¦¿ à¦¸à¦®à¦¯à¦¼ (à¦¸à§‡à¦•à§‡à¦¨à§à¦¡à§‡) à¦¦à¦¿à¦¨à¥¤');
+                alert('সঠিক একটি সময় (সেকেন্ডে) দিন।');
                 return;
             }
             newDuration = Math.min(600, Math.max(0.5, newDuration));
@@ -1475,21 +1475,21 @@ document.addEventListener('DOMContentLoaded', () => {
             } else if (window.triggerAutoSave) {
                 window.triggerAutoSave();
             }
-            if (window.showToast) window.showToast(`à¦à¦‡ à¦›à¦¬à¦¿à¦° à¦¸à¦®à§Ÿà¦•à¦¾à¦² ${newDuration.toFixed(1)}s à¦•à¦°à¦¾ à¦¹à§Ÿà§‡à¦›à§‡`, 'success');
+            if (window.showToast) window.showToast(`এই ছবির সময়কাল ${newDuration.toFixed(1)}s করা হয়েছে`, 'success');
         });
     }
 
     function applyDurationToAllImages(durationToApply) {
         let newDuration = parseFloat(durationToApply);
         if (!newDuration || isNaN(newDuration) || newDuration <= 0) {
-            alert('à¦¸à¦ à¦¿à¦• à¦à¦•à¦Ÿà¦¿ à¦¸à¦®à¦¯à¦¼ (à¦¸à§‡à¦•à§‡à¦¨à§à¦¡à§‡) à¦¦à¦¿à¦¨à¥¤');
+            alert('সঠিক একটি সময় (সেকেন্ডে) দিন।');
             return;
         }
         newDuration = Math.min(600, Math.max(0.5, newDuration));
 
         const imageClips = (state.clips || []).filter(clip => clip.type === 'image');
         if (!imageClips.length) {
-            alert('à¦à¦•à¦¸à¦¾à¦¥à§‡ à¦ªà§à¦°à¦¯à¦¼à§‹à¦— à¦•à¦°à¦¾à¦° à¦œà¦¨à§à¦¯ à¦•à§‹à¦¨à§‹ à¦›à¦¬à¦¿ à¦¨à§‡à¦‡à¥¤');
+            alert('একসাথে প্রয়োগ করার জন্য কোনো ছবি নেই।');
             return;
         }
 
@@ -1520,9 +1520,9 @@ document.addEventListener('DOMContentLoaded', () => {
             window.triggerAutoSave();
         }
         if (window.showToast) {
-            window.showToast(`à¦¸à¦¬à¦—à§à¦²à§‹ (${imageClips.length}à¦Ÿà¦¿) à¦›à¦¬à¦¿à¦° à¦¸à¦®à§Ÿà¦•à¦¾à¦² ${newDuration.toFixed(1)}s à¦•à¦°à¦¾ à¦¹à§Ÿà§‡à¦›à§‡!`, 'success');
+            window.showToast(`সবগুলো (${imageClips.length}টি) ছবির সময়কাল ${newDuration.toFixed(1)}s করা হয়েছে!`, 'success');
         } else {
-            alert(`à¦¸à¦¬à¦—à§à¦²à§‹ (${imageClips.length}à¦Ÿà¦¿) à¦›à¦¬à¦¿à¦° à¦¸à¦®à§Ÿà¦•à¦¾à¦² ${newDuration.toFixed(1)}s à¦•à¦°à¦¾ à¦¹à§Ÿà§‡à¦›à§‡!`);
+            alert(`সবগুলো (${imageClips.length}টি) ছবির সময়কাল ${newDuration.toFixed(1)}s করা হয়েছে!`);
         }
     }
     window.applyDurationToAllImages = applyDurationToAllImages;
@@ -1751,16 +1751,25 @@ document.addEventListener('DOMContentLoaded', () => {
                 const msg = state.video.error ? state.video.error.message : '';
                 videoDropzone.querySelector('h3').innerText = originalText;
                 isVideoLoading = false;
-                alert(`à¦­à¦¿à¦¡à¦¿à¦“ à¦²à§‹à¦¡ à¦¹à¦¤à§‡ à¦ªà¦¾à¦°à§‡à¦¨à¦¿ (Error Code: ${code}, Message: ${msg})à¥¤ à¦…à¦¨à§à¦—à§à¦°à¦¹ à¦•à¦°à§‡ MP4 à¦«à¦°à¦®à§à¦¯à¦¾à¦Ÿà§‡à¦° à¦«à¦¾à¦‡à¦² à¦¬à§à¦¯à¦¬à¦¹à¦¾à¦° à¦•à¦°à§à¦¨à¥¤`);
+                alert(`ভিডিও লোড হতে পারেনি (Error Code: ${code}, Message: ${msg})। অন� গ� রহ করে MP4 ফরম� যাটের ফাইল ব� যবহার কর� ন।`);
             };
 
             const setupVideoAndMetadata = async (urlToLoad) => {
                 state.video.src = urlToLoad;
                 state.video.load();
                 
-                // Wait for video metadata AND valid videoWidth & videoHeight
+                // Wait for video metadata AND valid dimensions & duration
                 await new Promise((resolve) => {
-                    if (state.video.readyState >= 1 && state.video.videoWidth > 0 && state.video.videoHeight > 0) {
+                    const isMetadataReady = () => {
+                        return state.video.readyState >= 1 &&
+                            state.video.videoWidth > 0 &&
+                            state.video.videoHeight > 0 &&
+                            !isNaN(state.video.duration) &&
+                            isFinite(state.video.duration) &&
+                            state.video.duration > 0;
+                    };
+
+                    if (isMetadataReady()) {
                         return resolve();
                     }
                     let settled = false;
@@ -1770,11 +1779,12 @@ document.addEventListener('DOMContentLoaded', () => {
                             state.video.removeEventListener('loadedmetadata', check);
                             state.video.removeEventListener('loadeddata', check);
                             state.video.removeEventListener('canplay', check);
+                            state.video.removeEventListener('durationchange', check);
                             resolve();
                         }
                     };
                     const check = () => {
-                        if (state.video.videoWidth > 0 && state.video.videoHeight > 0) {
+                        if (isMetadataReady()) {
                             finish();
                         }
                     };
@@ -1872,7 +1882,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 reader.onerror = (err) => {
                     console.error("FileReader error: ", err);
                     videoDropzone.querySelector('h3').innerText = originalText;
-                    alert("à¦«à¦¾à¦‡à¦²à¦Ÿà¦¿ à¦ªà§œà¦¤à§‡ à¦¸à¦®à¦¸à§à¦¯à¦¾ à¦¹à§Ÿà§‡à¦›à§‡à¥¤");
+                    alert("ফাইলটি পড়তে সমস্যা হয়েছে।");
                 };
                 reader.readAsDataURL(file);
             } else {
@@ -2026,35 +2036,35 @@ document.addEventListener('DOMContentLoaded', () => {
             ratio: '4-5',
             layoutMode: 'fill',
             maxDuration: 240,
-            warning: 'Facebook Feed à¦­à¦¿à¦¡à¦¿à¦“à¦° à¦¸à¦°à§à¦¬à§‹à¦šà§à¦š à¦¦à§ˆà¦°à§à¦˜à§à¦¯ à§¨à§ªà§¦ à¦¸à§‡à¦•à§‡à¦¨à§à¦¡ (à§ª à¦®à¦¿à¦¨à¦¿à¦Ÿ)à¥¤ à¦•à§à¦¯à¦¾à¦ªà¦¶à¦¨à§‡à¦° à¦œà¦¨à§à¦¯ à¦¨à¦¿à¦šà§‡ à¦“ à¦‰à¦ªà¦°à§‡ à¦¬à§à¦¯à¦¾à¦¨à¦¾à¦° à¦¬à§à¦¯à¦¬à¦¹à¦¾à¦° à¦•à¦°à§à¦¨à¥¤'
+            warning: 'Facebook Feed ভিডিওর সর্বোচ্চ দৈর্ঘ্য ২৪০ সেকেন্ড (৪ মিনিট)। ক্যাপশনের জন্য নিচে ও উপরে ব্যানার ব্যবহার করুন।'
         },
         'fb-reels': {
             name: 'Facebook Reels',
             ratio: '9-16',
             layoutMode: 'fill',
             maxDuration: 90,
-            warning: 'Facebook Reels-à¦à¦° à¦¸à¦°à§à¦¬à§‹à¦šà§à¦š à¦¸à¦®à¦¯à¦¼à¦¸à§€à¦®à¦¾ à§¯à§¦ à¦¸à§‡à¦•à§‡à¦¨à§à¦¡à¥¤ à¦­à¦¿à¦¡à¦¿à¦“à¦Ÿà¦¿ à¦¸à§‡ à¦…à¦¨à§à¦¯à¦¾à¦¯à¦¼à§€ Trim à¦•à¦°à§à¦¨à¥¤'
+            warning: 'Facebook Reels-এর সর্বোচ্চ সময়সীমা ৯০ সেকেন্ড। ভিডিওটি সে অনুযায়ী Trim করুন।'
         },
         'ig-reels': {
             name: 'Instagram Reels',
             ratio: '9-16',
             layoutMode: 'fill',
             maxDuration: 90,
-            warning: 'Instagram Reels à¦¸à¦°à§à¦¬à§‹à¦šà§à¦š à§¯à§¦ à¦¸à§‡à¦•à§‡à¦¨à§à¦¡ à¦ªà¦°à§à¦¯à¦¨à§à¦¤ à¦¸à¦¾à¦ªà§‹à¦°à§à¦Ÿ à¦•à¦°à§‡à¥¤ à¦¨à¦¿à¦¶à§à¦šà¦¿à¦¤ à¦•à¦°à§à¦¨ à¦­à¦¿à¦¡à¦¿à¦“à¦Ÿà¦¿à¦° à¦¦à§ˆà¦°à§à¦˜à§à¦¯ à¦¸à§€à¦®à¦¾à¦° à¦®à¦§à§à¦¯à§‡ à¦†à¦›à§‡à¥¤'
+            warning: 'Instagram Reels সর্বোচ্চ ৯০ সেকেন্ড পর্যন্ত সাপোর্ট করে। নিশ্চিত করুন ভিডিওটির দৈর্ঘ্য সীমার মধ্যে আছে।'
         },
         'ig-story': {
             name: 'Instagram Story',
             ratio: '9-16',
             layoutMode: 'fill',
             maxDuration: 60,
-            warning: 'Instagram Story à¦¸à¦°à§à¦¬à§‹à¦šà§à¦š à§¬à§¦ à¦¸à§‡à¦•à§‡à¦¨à§à¦¡à¥¤ à¦¦à§€à¦°à§à¦˜ à¦­à¦¿à¦¡à¦¿à¦“ à¦¸à§à¦¬à¦¯à¦¼à¦‚à¦•à§à¦°à¦¿à¦¯à¦¼à¦­à¦¾à¦¬à§‡ à¦•à§‡à¦Ÿà§‡ à¦¯à¦¾à¦¯à¦¼à¥¤'
+            warning: 'Instagram Story সর্বোচ্চ ৬০ সেকেন্ড। দীর্ঘ ভিডিও স্বয়ংক্রিয়ভাবে কেটে যায়।'
         },
         'yt-shorts': {
             name: 'YouTube Shorts',
             ratio: '9-16',
             layoutMode: 'fill',
             maxDuration: 60,
-            warning: 'YouTube Shorts à¦¸à¦°à§à¦¬à§‹à¦šà§à¦š à§¬à§¦ à¦¸à§‡à¦•à§‡à¦¨à§à¦¡à¥¤ à¦­à¦¿à¦¡à¦¿à¦“ à¦Ÿà§à¦°à¦¿à¦® à¦•à¦°à§‡ à¦¸à§€à¦®à¦¾à¦° à¦®à¦§à§à¦¯à§‡ à¦°à¦¾à¦–à§à¦¨à¥¤'
+            warning: 'YouTube Shorts সর্বোচ্চ ৬০ সেকেন্ড। ভিডিও ট্রিম করে সীমার মধ্যে রাখুন।'
         },
         'yt-long': {
             name: 'YouTube Landscape',
@@ -2100,7 +2110,7 @@ document.addEventListener('DOMContentLoaded', () => {
             if (preset.warning || exceedsDuration) {
                 let warningMsg = preset.warning || '';
                 if (exceedsDuration) {
-                    warningMsg += ` âš ï¸ à¦¬à¦°à§à¦¤à¦®à¦¾à¦¨ à¦­à¦¿à¦¡à¦¿à¦“à¦° à¦¦à§ˆà¦°à§à¦˜à§à¦¯ ${totalDuration.toFixed(0)}s, à¦¯à¦¾ à¦¸à§€à¦®à¦¾à¦° (${preset.maxDuration}s) à¦¬à§‡à¦¶à¦¿à¥¤`;
+                    warningMsg += ` ⚠️ বর্তমান ভিডিওর দৈর্ঘ্য ${totalDuration.toFixed(0)}s, যা সীমার (${preset.maxDuration}s) বেশি।`;
                 }
                 platformPresetWarningText.textContent = warningMsg;
                 platformPresetWarning.style.display = 'flex';
@@ -2816,13 +2826,13 @@ document.addEventListener('DOMContentLoaded', () => {
                 previewMuteBtn.style.background = 'rgba(248, 113, 113, 0.15)';
                 previewMuteBtn.style.borderColor = '#f87171';
                 previewMuteBtn.style.color = '#f87171';
-                previewMuteBtn.title = 'à¦ªà§à¦°à¦¿à¦­à¦¿à¦‰ à¦¸à¦¾à¦‰à¦¨à§à¦¡ à¦…à¦¨ à¦•à¦°à§à¦¨ (Unmute preview)';
+                previewMuteBtn.title = 'প্রিভিউ সাউন্ড অন করুন (Unmute preview)';
             } else {
                 previewMuteBtn.innerHTML = '<i class="fa-solid fa-volume-high"></i>';
                 previewMuteBtn.style.background = 'rgba(148, 163, 184, 0.15)';
                 previewMuteBtn.style.borderColor = '#94a3b8';
                 previewMuteBtn.style.color = '#94a3b8';
-                previewMuteBtn.title = 'à¦ªà§à¦°à¦¿à¦­à¦¿à¦‰ à¦¸à¦¾à¦‰à¦¨à§à¦¡ à¦…à¦« à¦•à¦°à§à¦¨ â€” à¦¶à§à¦§à§ à¦†à¦ªà¦¨à¦¾à¦° à¦¸à§à¦ªà¦¿à¦•à¦¾à¦°à§‡à¦° à¦œà¦¨à§à¦¯, à¦à¦•à§à¦¸à¦ªà§‹à¦°à§à¦Ÿ à¦•à¦°à¦¾ à¦­à¦¿à¦¡à¦¿à¦“à¦° à¦…à¦¡à¦¿à¦“à¦¤à§‡ à¦•à§‹à¦¨à§‹ à¦ªà§à¦°à¦­à¦¾à¦¬ à¦ªà¦¡à¦¼à¦¬à§‡ à¦¨à¦¾ (Mute preview only)';
+                previewMuteBtn.title = 'প্রিভিউ সাউন্ড অফ করুন — শুধুমাত্র আপনার স্পিকারের জন্য, এক্সপোর্ট করা ভিডিওর অডিওতে কোনো প্রভাব পড়বে না (Mute preview only)';
             }
         });
     }
@@ -2850,7 +2860,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
             const currentTime = state.currentTime || 0;
             if (currentTime <= activeClip.start + 0.15 || currentTime >= activeClip.end - 0.15) {
-                alert("à¦•à§à¦²à¦¿à¦ªà¦Ÿà¦¿ à¦ªà§à¦²à§‡à¦¹à§‡à¦¡ à¦ªà¦œà¦¿à¦¶à¦¨à§‡ à¦¬à¦¿à¦­à¦•à§à¦¤ à¦•à¦°à¦¾ à¦¸à¦®à§à¦­à¦¬ à¦¨à§Ÿ (à¦à¦•à§‡à¦¬à¦¾à¦°à§‡ à¦¶à§à¦°à§à¦¤à§‡ à¦¬à¦¾ à¦¶à§‡à¦·à§‡ à¦¬à¦¿à¦­à¦•à§à¦¤ à¦•à¦°à¦¾ à¦¯à¦¾à§Ÿ à¦¨à¦¾)à¥¤");
+                alert("ক্লিপটি প্লেহেড পজিশনে বিভক্ত করা সম্ভব নয় (একেবারে শুরুতে বা শেষে বিভক্ত করা যায় না)।");
                 return;
             }
 
@@ -2915,7 +2925,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
             const currentTime = state.currentTime || 0;
             if (currentTime <= activeClip.start + 0.15 || currentTime >= activeClip.end - 0.15) {
-                alert("à¦à¦‡ à¦ªà¦œà¦¿à¦¶à¦¨à§‡ à¦«à§à¦°à¦¿à¦œ à¦«à§à¦°à§‡à¦® à¦¯à§‹à¦— à¦•à¦°à¦¾ à¦¸à¦®à§à¦­à¦¬ à¦¨à¦¯à¦¼ (à¦•à§à¦²à¦¿à¦ªà§‡à¦° à¦à¦•à§‡à¦¬à¦¾à¦°à§‡ à¦¶à§à¦°à§à¦¤à§‡ à¦¬à¦¾ à¦¶à§‡à¦·à§‡ à¦¯à§‹à¦— à¦•à¦°à¦¾ à¦¯à¦¾à¦¯à¦¼ à¦¨à¦¾)à¥¤ à¦ªà§à¦²à§‡à¦¹à§‡à¦¡ à¦à¦•à¦Ÿà§ à¦¸à¦°à¦¿à¦¯à¦¼à§‡ à¦†à¦¬à¦¾à¦° à¦šà§‡à¦·à§à¦Ÿà¦¾ à¦•à¦°à§à¦¨à¥¤");
+                alert("এই পজিশনে ফ্রিজ ফ্রেম যোগ করা সম্ভব নয় (ক্লিপের একেবারে শুরুতে বা শেষে যোগ করা যায় না)। প্লেহেড একটু সরিয়ে আবার চেষ্টা করুন।");
                 return;
             }
 
@@ -2932,7 +2942,7 @@ document.addEventListener('DOMContentLoaded', () => {
             // viewer was just seeing.
             state.canvas.toBlob((blob) => {
                 if (!blob) {
-                    alert("à¦«à§à¦°à§‡à¦® à¦•à§à¦¯à¦¾à¦ªà¦šà¦¾à¦° à¦•à¦°à¦¾ à¦¯à¦¾à¦¯à¦¼à¦¨à¦¿, à¦†à¦¬à¦¾à¦° à¦šà§‡à¦·à§à¦Ÿà¦¾ à¦•à¦°à§à¦¨à¥¤");
+                    alert("ফ্রেম ক্যাপচার করা যায়নি, আবার চেষ্টা করুন।");
                     return;
                 }
                 const freezeFile = new File([blob], `freeze_frame_${Date.now()}.jpg`, { type: 'image/jpeg' });
@@ -3004,11 +3014,11 @@ document.addEventListener('DOMContentLoaded', () => {
             const endCut = parseFloat(trimEnd.value) || 0;
 
             if (endCut <= startCut + 0.1) {
-                alert("à¦¬à¦¾à¦¦ à¦¦à§‡à¦“à§Ÿà¦¾à¦° à¦œà¦¨à§à¦¯ à¦¸à¦ à¦¿à¦• à¦¸à¦®à§Ÿà¦¸à§€à¦®à¦¾ à¦¸à¦¿à¦²à§‡à¦•à§à¦Ÿ à¦•à¦°à§à¦¨à¥¤");
+                alert("বাদ দেওয়ার জন� য সঠিক সময়সীমা সিলেক� ট কর� ন।");
                 return;
             }
 
-            const confirmMsg = `à¦†à¦ªà¦¨à¦¿ à¦•à¦¿ à¦¨à¦¿à¦¶à§à¦šà¦¿à¦¤ à¦¯à§‡ à¦•à§à¦²à¦¿à¦ªà¦Ÿà¦¿à¦° ${startCut.toFixed(1)}s à¦¥à§‡à¦•à§‡ ${endCut.toFixed(1)}s à¦…à¦‚à¦¶à¦Ÿà¦¿ à¦•à§‡à¦Ÿà§‡ à¦¬à¦¾à¦¦ à¦¦à¦¿à¦¤à§‡ à¦šà¦¾à¦¨?`;
+            const confirmMsg = `আপনি কি নিশ� চিত যে ক� লিপটির ${startCut.toFixed(1)}s থেকে ${endCut.toFixed(1)}s অংশটি কেটে বাদ দিতে চান?`;
             if (!confirm(confirmMsg)) return;
 
             const clipIndex = state.clips.indexOf(activeClip);
@@ -3028,7 +3038,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const keepSecond = endCut < endBound - 0.15;
 
             if (!keepFirst && !keepSecond) {
-                alert("à¦ªà§à¦°à§‹ à¦•à§à¦²à¦¿à¦ªà¦Ÿà¦¿ à¦à¦•à¦¸à¦¾à¦¥à§‡ à¦¬à¦¾à¦¦ à¦¦à§‡à¦“à§Ÿà¦¾ à¦¯à¦¾à¦¬à§‡ à¦¨à¦¾à¥¤ à¦•à§à¦²à¦¿à¦ª à¦¡à¦¿à¦²à¦¿à¦Ÿ à¦•à¦°à¦¤à§‡ à¦•à§à¦²à¦¿à¦ª à¦¤à¦¾à¦²à¦¿à¦•à¦¾à¦° X à¦¬à¦¾à¦Ÿà¦¨à§‡ à¦•à§à¦²à¦¿à¦• à¦•à¦°à§à¦¨à¥¤");
+                alert("প� রো ক� লিপটি � কসাথে বাদ দেওয়া যাবে না। ক� লিপ ডিলিট করতে ক� লিপ তালিকার X বাটনে ক� লিক কর� ন।");
                 return;
             }
 
@@ -3605,7 +3615,7 @@ document.addEventListener('DOMContentLoaded', () => {
         // Update total duration display
         const totalDurationEl = document.getElementById('clip-timeline-total-duration');
         if (totalDurationEl) {
-            totalDurationEl.textContent = `à¦®à§‹à¦Ÿ à¦¸à¦®à¦¯à¦¼ (Total): ${formatTime(totalDuration)} (${totalDuration.toFixed(1)}s)`;
+            totalDurationEl.textContent = `মোট সময় (Total): ${formatTime(totalDuration)} (${totalDuration.toFixed(1)}s)`;
         }
 
         state.clips.forEach((clip, idx) => {
@@ -3987,7 +3997,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // via drawFrame() once the preview finishes).
     function runIntroOutroPreview(config) {
         if (!state.duration) {
-            alert('à¦ªà§à¦°à¦¿à¦­à¦¿à¦‰ à¦¦à§‡à¦–à¦¤à§‡ à¦†à¦—à§‡ à¦à¦•à¦Ÿà¦¿ à¦­à¦¿à¦¡à¦¿à¦“/à¦›à¦¬à¦¿ à¦²à§‹à¦¡ à¦•à¦°à§à¦¨à¥¤');
+            alert('প্রিভিউ দেখতে আগে একটি ভিডিও/ছবি লোড করুন।');
             return;
         }
         const canvas = state.canvas;
@@ -4228,7 +4238,7 @@ document.addEventListener('DOMContentLoaded', () => {
             // NEW â€” Reels-inspired animation styles (Phase Reels)
             // ============================================================
             case '3d-pop-tilt': {
-                // Mimics the "Facebook Ads-à¦à¦° à¦—à§‡à¦®à¦Ÿà¦¾" 3D perspective entry:
+                // Mimics the "Facebook Ads-এর গেমটা" 3D perspective entry:
                 // scaleY collapses (perspective tilt illusion) then springs back
                 // with overshoot, while a slight x-rotation-feel is added via
                 // combined scaleY + offY.
@@ -4864,7 +4874,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Splits text into visual "grapheme clusters" rather than raw UTF-16 code units.
     // Critical for Bengali (and other complex scripts): prevents breaking base consonants
-    // from their matras (e.g. à§‹, à¦¿, à§), hasanta (à§), or conjuncts (à¦¯à§‡à¦®à¦¨: à¦°à§à¦¸, à¦¨à§à¦¯, à¦•à§à¦¸).
+    // from their matras (e.g. ো, ি, ু), hasanta (্), or conjuncts (যেমন: র্স, ন্য, ক্স).
     function splitGraphemes(text) {
         if (!text) return [];
         try {
@@ -8298,7 +8308,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         } else if (style === 'heart-burst') {
                             // Same one-shot entry burst as confetti-pop, but floating â¤ï¸ hearts
                             // drifting upward instead of falling confetti squares â€” for
-                            // "à¦­à¦¾à¦²à§‹à¦¬à¦¾à¦¸à¦¾" / affection beats in the script.
+                            // "ভালোবাসা" / affection beats in the script.
                             if (tIn < animDur) {
                                 const burstP = Math.max(0, Math.min(1, tIn / animDur));
                                 const particleAlpha = 1 - Math.pow(burstP, 2.2);
@@ -10161,7 +10171,7 @@ document.addEventListener('DOMContentLoaded', () => {
         ctx.beginPath(); ctx.moveTo(xMax - bLen, yMax); ctx.lineTo(xMax, yMax); ctx.lineTo(xMax, yMax - bLen); ctx.stroke();
 
         // 4. Safe Zone Pill Header Label
-        const labelText = "ðŸ›¡ï¸ à¦°à¦¿à¦²à¦¸ à¦¬à§à¦¸à§à¦Ÿ à¦¸à§‡à¦« à¦œà§‹à¦¨ ( Safe Zone: à¦²à§‡à¦–à¦¾ à¦“ à¦²à§‹à¦—à§‹ à¦à¦–à¦¾à¦¨à§‡ à¦°à¦¾à¦–à§à¦¨ )";
+        const labelText = "🛡️ রিলস বুস্ট সেফ জোন ( Safe Zone: লেখা ও লোগো এখানে রাখুন )";
         const fontSize = Math.max(11, Math.round(canvasH * 0.016));
         ctx.font = `600 ${fontSize}px "Hind Siliguri", sans-serif`;
         const tw = ctx.measureText(labelText).width;
@@ -10224,7 +10234,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         ctx.fillStyle = 'rgba(255, 255, 255, 0.8)';
         ctx.font = `500 ${Math.max(8, Math.round(canvasH * 0.012))}px sans-serif`;
-        ctx.fillText('Sponsored Â· à¦¸à§à¦ªà¦¨à§à¦¸à¦°à¦¡ ðŸŒ', textX, avatarY + 7);
+        ctx.fillText('Sponsored · স্পন্সরড 🌐', textX, avatarY + 7);
 
         // --- Bottom CTA & Caption UI ---
         const bottomH = canvasH - yMax;
@@ -10245,13 +10255,13 @@ document.addEventListener('DOMContentLoaded', () => {
         ctx.font = `700 ${Math.max(11, Math.round(ctaH * 0.4))}px "Hind Siliguri", sans-serif`;
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
-        ctx.fillText('ðŸ›ï¸ Shop Now / à¦¬à¦¿à¦¸à§à¦¤à¦¾à¦°à¦¿à¦¤ à¦¦à§‡à¦–à§à¦¨  â€º', ctaX + ctaW / 2, ctaY + ctaH / 2);
+        ctx.fillText('🛒 Shop Now / বিস্তারিত দেখুন  ›', ctaX + ctaW / 2, ctaY + ctaH / 2);
 
         // Dummy caption line below CTA
         ctx.fillStyle = 'rgba(255, 255, 255, 0.85)';
         ctx.textAlign = 'left';
         ctx.font = `400 ${Math.max(9, Math.round(canvasH * 0.013))}px "Hind Siliguri", sans-serif`;
-        ctx.fillText('à¦…à¦«à¦¾à¦°à§‡ à¦¥à§à¦°à¦¿-à¦ªà¦¿à¦¸ à¦…à¦°à§à¦¡à¦¾à¦° à¦•à¦°à¦¤à§‡ Shop Now à¦¬à¦¾à¦Ÿà¦¨à§‡ à¦•à§à¦²à¦¿à¦• à¦•à¦°à§à¦¨...', 14, ctaY + ctaH + 15);
+        ctx.fillText('অফারে থ্রি-পিস অর্ডার করতে Shop Now বাটনে ক্লিক করুন...', 14, ctaY + ctaH + 15);
 
         // --- Right Action Buttons Stack (Like, Comment, Share) ---
         const iconCenterX = canvasW - (canvasW * 0.08);
@@ -10259,10 +10269,10 @@ document.addEventListener('DOMContentLoaded', () => {
         const gapY = Math.max(36, canvasH * 0.075);
 
         const actionIcons = [
-            { icon: 'â¤ï¸', label: '2.4K' },
-            { icon: 'ðŸ’¬', label: '180' },
-            { icon: 'â†—ï¸', label: 'Share' },
-            { icon: 'â‹®', label: '' }
+            { icon: '❤️', label: '2.4K' },
+            { icon: '💬', label: '180' },
+            { icon: '↗️', label: 'Share' },
+            { icon: '⋮', label: '' }
         ];
 
         actionIcons.forEach((item, index) => {
@@ -10341,7 +10351,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     ctx.shadowBlur = 6;
                     ctx.strokeRect(left - 4, top - 4, itemW + 8, itemH + 8);
                     
-                    const tagText = "âš ï¸ à¦¬à§à¦¸à§à¦Ÿ à¦¬à¦¾à¦Ÿà¦¨/à¦¸à¦¾à¦‡à¦¡ à¦†à¦‡à¦•à¦¨à§‡ à¦¢à¦¾à¦•à¦¾ à¦ªà§œà¦¬à§‡!";
+                    const tagText = "⚠️ বুস্ট বাটন/সাইড আইকনে ঢাকা পড়বে!";
                     ctx.font = `700 10px "Hind Siliguri", sans-serif`;
                     ctx.fillStyle = '#dc2626';
                     ctx.shadowBlur = 0;
@@ -10378,7 +10388,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 statusBanner.style.background = 'rgba(239, 68, 68, 0.12)';
                 statusBanner.style.borderColor = 'rgba(239, 68, 68, 0.4)';
                 statusText.style.color = '#ef4444';
-                statusText.innerHTML = `âš ï¸ <b>à¦¸à¦¤à¦°à§à¦•à¦¤à¦¾:</b> ${collidingItems.length}à¦Ÿà¦¿ à¦²à§‡à¦–à¦¾/à¦²à§‹à¦—à§‹ à¦°à¦¿à¦²à¦¸ à¦¬à¦¾à¦Ÿà¦¨ à¦¬à¦¾ à¦¸à¦¾à¦‡à¦¡ à¦†à¦‡à¦•à¦¨ à¦œà§‹à¦¨à§‡ à¦ªà§œà¦›à§‡! à¦¬à§à¦¸à§à¦Ÿ à¦¦à¦¿à¦²à§‡ à¦•à§‡à¦Ÿà§‡ à¦¯à¦¾à¦¬à§‡à¥¤`;
+                statusText.innerHTML = `⚠️ <b>সতর্কতা:</b> ${collidingItems.length}টি লেখা/লোগো রিলস বাটন বা সাইড আইকন জোনে পড়ছে! বুস্ট দিলে কেটে যাবে।`;
                 statusIcon.className = 'fa-solid fa-triangle-exclamation';
                 statusIcon.style.color = '#ef4444';
                 if (autofitBtn) autofitBtn.style.display = 'inline-flex';
@@ -10386,7 +10396,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 statusBanner.style.background = 'rgba(16, 185, 129, 0.1)';
                 statusBanner.style.borderColor = 'rgba(16, 185, 129, 0.3)';
                 statusText.style.color = '#10b981';
-                statusText.innerHTML = `à¦¸à¦¬ à¦²à§‡à¦–à¦¾ à¦“ à¦²à§‹à¦—à§‹ à¦¬à§à¦¸à§à¦Ÿ à¦¸à§‡à¦« à¦œà§‹à¦¨à§‡ à¦¸à¦®à§à¦ªà§‚à¦°à§à¦£ à¦¨à¦¿à¦°à¦¾à¦ªà¦¦ à¦†à¦›à§‡`;
+                statusText.innerHTML = `সব লেখা ও লোগো বুস্ট সেফ জোনে সম্পূর্ণ নিরাপদ আছে`;
                 statusIcon.className = 'fa-solid fa-shield-check';
                 statusIcon.style.color = '#10b981';
                 if (autofitBtn) autofitBtn.style.display = 'none';
@@ -10498,7 +10508,7 @@ document.addEventListener('DOMContentLoaded', () => {
         drawFrame();
         if (window.triggerAutoSave) window.triggerAutoSave();
 
-        const msg = adjustedCount > 0 ? `âœ¨ ${adjustedCount}à¦Ÿà¦¿ à¦²à§‡à¦–à¦¾/à¦²à§‹à¦—à§‹ à¦¸à§‡à¦« à¦œà§‹à¦¨à§‡ à¦¸à§à¦¬à§Ÿà¦‚à¦•à§à¦°à¦¿à§Ÿà¦­à¦¾à¦¬à§‡ à¦«à¦¿à¦Ÿ à¦•à¦°à¦¾ à¦¹à§Ÿà§‡à¦›à§‡!` : 'à¦¸à¦¬ à¦²à§‡à¦–à¦¾ à¦‡à¦¤à¦¿à¦®à¦§à§à¦¯à§‡ à¦¸à§‡à¦« à¦œà§‹à¦¨à§‡ à¦†à¦›à§‡!';
+        const msg = adjustedCount > 0 ? `✨ ${adjustedCount}টি লেখা/লোগো সেফ জোনে স্বয়ংক্রিয়ভাবে ফিট করা হয়েছে!` : 'সব লেখা ইতিমধ্যে সেফ জোনে আছে!';
         if (window.showToast) { window.showToast(msg); } else { alert(msg); }
     }
     window.autoFitElementsToSafeZone = autoFitElementsToSafeZone;
@@ -11051,7 +11061,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const hit = findTextOverlayAt(coords);
             if (hit) {
                 state.selectedTextOverlayId = hit.id;
-                // à¦…à¦¨à§à¦¯ à¦¸à¦¬ à¦¸à¦¿à¦²à§‡à¦•à¦¶à¦¨ clear à¦•à¦°à§‹ â€” à¦¨à¦¾ à¦¹à¦²à§‡ à¦¦à§à¦Ÿà§‹ à¦†à¦²à¦¾à¦¦à¦¾ overlay à¦à¦•à¦¸à¦¾à¦¥à§‡ à¦¸à¦¿à¦²à§‡à¦•à§à¦Ÿà§‡à¦¡ à¦¦à§‡à¦–à¦¾à¦¯à¦¼
+                // অন্য সব সিলেকশন clear করো — না হলে দুটো আলাদা overlay একসাথে সিলেক্টেড দেখায়
                 state.selectedShapeOverlayId = null;
                 state.selectedSymbolId = null;
                 state.selectedStickerId = null;
@@ -11125,7 +11135,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const shapeHit = findShapeOverlayAt(coords);
             if (shapeHit) {
                 state.selectedShapeOverlayId = shapeHit.id;
-                // à¦…à¦¨à§à¦¯ à¦¸à¦¬ à¦¸à¦¿à¦²à§‡à¦•à¦¶à¦¨ clear à¦•à¦°à§‹
+                // অন্য সব সিলেকশন clear করো
                 state.selectedTextOverlayId = null;
                 state.selectedSymbolId = null;
                 state.selectedStickerId = null;
@@ -11174,7 +11184,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const symbolHit = findSymbolAt(coords);
             if (symbolHit) {
                 state.selectedSymbolId = symbolHit.id;
-                // à¦…à¦¨à§à¦¯ à¦¸à¦¬ à¦¸à¦¿à¦²à§‡à¦•à¦¶à¦¨ clear à¦•à¦°à§‹
+                // অন্য সব সিলেকশন clear করো
                 state.selectedTextOverlayId = null;
                 state.selectedShapeOverlayId = null;
                 state.selectedStickerId = null;
@@ -11208,7 +11218,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const stickerHit = findStickerAt(coords);
             if (stickerHit) {
                 state.selectedStickerId = stickerHit.id;
-                // à¦…à¦¨à§à¦¯ à¦¸à¦¬ à¦¸à¦¿à¦²à§‡à¦•à¦¶à¦¨ clear à¦•à¦°à§‹
+                // অন্য সব সিলেকশন clear করো
                 state.selectedTextOverlayId = null;
                 state.selectedShapeOverlayId = null;
                 state.selectedSymbolId = null;
@@ -11267,7 +11277,7 @@ document.addEventListener('DOMContentLoaded', () => {
             if (brollHit) {
                 if (window.captureUndoCheckpoint) window.captureUndoCheckpoint();
                 state.selectedBrollId = brollHit.id;
-                // à¦…à¦¨à§à¦¯ à¦¸à¦¬ à¦¸à¦¿à¦²à§‡à¦•à¦¶à¦¨ clear à¦•à¦°à§‹
+                // অন্য সব সিলেকশন clear করো
                 state.selectedTextOverlayId = null;
                 state.selectedShapeOverlayId = null;
                 state.selectedSymbolId = null;
@@ -13486,7 +13496,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     // No item selected: check input field or default to standard text
                     let initialText = textOverlayInput ? textOverlayInput.value.trim() : '';
                     if (!initialText) {
-                        initialText = "à¦†à¦ªà¦¨à¦¾à¦° à¦Ÿà§‡à¦•à§à¦¸à¦Ÿ à¦²à¦¿à¦–à§à¦¨";
+                        initialText = "আপনার টেক্সট লিখুন";
                     }
                     const newItem = {
                         id: typeof textOverlayIdCounter !== 'undefined' ? textOverlayIdCounter++ : Date.now(),
@@ -13528,7 +13538,7 @@ document.addEventListener('DOMContentLoaded', () => {
             state.canvas.style.cursor = 'default';
             const drawTextBoxBtn = document.getElementById('draw-textbox-btn');
             if (drawTextBoxBtn) {
-                drawTextBoxBtn.innerHTML = '<i class="fa-solid fa-pen-ruler"></i> Draw Text Box (à¦¬à¦•à§à¦¸ à¦¡à§à¦° à¦•à¦°à§à¦¨)';
+                drawTextBoxBtn.innerHTML = '<i class="fa-solid fa-pen-ruler"></i> Draw Text Box (বক্স ড্র করুন)';
                 drawTextBoxBtn.classList.remove('active');
             }
             drawFrame();
@@ -13743,7 +13753,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (applyCropAllClipsBtn) {
         applyCropAllClipsBtn.addEventListener('click', () => {
             if (!state.clips || !state.clips.length) {
-                if (window.showToast) window.showToast('à¦•à§‹à¦¨à§‹ à¦•à§à¦²à¦¿à¦ª à¦ªà¦¾à¦“à¦¯à¦¼à¦¾ à¦¯à¦¾à¦¯à¦¼à¦¨à¦¿', 'warning');
+                if (window.showToast) window.showToast('কোনো ক্লিপ পাওয়া যায়নি', 'warning');
                 return;
             }
             syncCropToActiveClip();
@@ -13754,9 +13764,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 c.cropH = state.cropH;
             });
             if (window.showToast) {
-                window.showToast(`à¦¸à¦¬à¦—à§à¦²à§‹ à¦•à§à¦²à¦¿à¦ªà§‡ (${state.clips.length}à¦Ÿà¦¿) à¦¬à¦°à§à¦¤à¦®à¦¾à¦¨ à¦•à§à¦°à¦ª à¦¸à¦«à¦²à¦­à¦¾à¦¬à§‡ à¦ªà§à¦°à¦¯à¦¼à§‹à¦— à¦•à¦°à¦¾ à¦¹à¦¯à¦¼à§‡à¦›à§‡!`, 'success');
+                window.showToast(`সবগুলো ক্লিপে (${state.clips.length}টি) বর্তমান ক্রপ সফলভাবে প্রয়োগ করা হয়েছে!`, 'success');
             } else {
-                alert(`à¦¸à¦¬à¦—à§à¦²à§‹ à¦•à§à¦²à¦¿à¦ªà§‡ (${state.clips.length}à¦Ÿà¦¿) à¦¬à¦°à§à¦¤à¦®à¦¾à¦¨ à¦•à§à¦°à¦ª à¦ªà§à¦°à¦¯à¦¼à§‹à¦— à¦•à¦°à¦¾ à¦¹à¦¯à¦¼à§‡à¦›à§‡!`);
+                alert(`সবগুলো ক্লিপে (${state.clips.length}টি) বর্তমান ক্রপ প্রয়োগ করা হয়েছে!`);
             }
             if (window.recordEditorHistory) window.recordEditorHistory('Applied crop to all clips');
         });
@@ -13871,15 +13881,15 @@ document.addEventListener('DOMContentLoaded', () => {
         autoReframeBtn.addEventListener('click', () => {
             const activeClip = state.clips.find(c => c.id === state.activeClipId);
             if (!activeClip) {
-                alert("à¦¦à§Ÿà¦¾ à¦•à¦°à§‡ à¦ªà§à¦°à¦¥à¦®à§‡ à¦à¦•à¦Ÿà¦¿ à¦­à¦¿à¦¡à¦¿à¦“ à¦•à§à¦²à¦¿à¦ª à¦¸à¦¿à¦²à§‡à¦•à§à¦Ÿ à¦•à¦°à§à¦¨à¥¤");
+                alert("দয়া করে প্রথমে একটি ভিডিও ক্লিপ সিলেক্ট করুন।");
                 return;
             }
             if (activeClip.type === 'image') {
-                alert("à¦…à¦Ÿà§‹-à¦°à¦¿à¦«à§à¦°à§‡à¦® à¦¶à§à¦§à§ à¦­à¦¿à¦¡à¦¿à¦“ à¦•à§à¦²à¦¿à¦ªà§‡à¦° à¦œà¦¨à§à¦¯ à¦ªà§à¦°à¦¯à§‹à¦œà§à¦¯à¥¤");
+                alert("অটো-রিফ্রেম শুধু ভিডিও ক্লিপের জন্য প্রযোজ্য।");
                 return;
             }
             if (state.aspectRatio === 'original') {
-                alert("à¦…à¦Ÿà§‹-à¦°à¦¿à¦«à§à¦°à§‡à¦® à¦•à¦°à¦¾à¦° à¦œà¦¨à§à¦¯ à¦ªà§à¦°à¦¥à¦®à§‡ à¦à¦•à¦Ÿà¦¿ à¦•à§à¦¯à¦¾à¦¨à¦­à¦¾à¦¸ à¦«à¦°à¦®à§à¦¯à¦¾à¦Ÿ (à¦¯à§‡à¦®à¦¨ à§§:à§§, à§ª:à§« à¦¬à¦¾ à§¯:à§§à§¬) à¦¸à¦¿à¦²à§‡à¦•à§à¦Ÿ à¦•à¦°à§à¦¨à¥¤");
+                alert("অটো-রিফ্রেম করার জন্য প্রথমে একটি ক্যানভাস ফরম্যাট (যেমন ১:১, ৪:৫ বা ৯:১৬) সিলেক্ট করুন।");
                 return;
             }
 
@@ -13895,7 +13905,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 }, 100);
             } catch (err) {
                 console.error("Auto Reframe error:", err);
-                alert("à¦…à¦Ÿà§‹-à¦°à¦¿à¦«à§à¦°à§‡à¦® à¦¬à§à¦¯à¦°à§à¦¥ à¦¹à§Ÿà§‡à¦›à§‡à¥¤");
+                alert("অটো-রিফ্রেম ব্যর্থ হয়েছে।");
                 autoReframeBtn.disabled = false;
                 autoReframeBtn.innerHTML = '<i class="fa-solid fa-wand-magic-sparkles"></i> Auto Reframe (Smart Crop)';
             }
@@ -13905,7 +13915,7 @@ document.addEventListener('DOMContentLoaded', () => {
     function performAutoReframe(activeClip) {
         const video = state.video;
         if (!video.videoWidth || !video.videoHeight) {
-            alert("à¦­à¦¿à¦¡à¦¿à¦“ à¦«à¦¾à¦‡à¦²à¦Ÿà¦¿ à¦ªà§à¦°à§‹à¦ªà§à¦°à¦¿ à¦²à§‹à¦¡ à¦¹à§Ÿà¦¨à¦¿à¥¤ à¦¦à§Ÿà¦¾ à¦•à¦°à§‡ à¦à¦•à¦Ÿà§ à¦…à¦ªà§‡à¦•à§à¦·à¦¾ à¦•à¦°à§à¦¨à¥¤");
+            alert("ভিডিও ফাইলটি পুরোপুরি লোড হয়নি। দয়া করে একটু অপেক্ষা করুন।");
             return;
         }
 
@@ -14661,7 +14671,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (drawCurveBtn) {
         drawCurveBtn.addEventListener('click', () => {
             if (!state.selectedTextOverlayId) {
-                alert('à¦ªà§à¦°à¦¥à¦®à§‡ à¦à¦•à¦Ÿà¦¿ à¦Ÿà§‡à¦•à§à¦¸à¦Ÿ à¦¸à¦¿à¦²à§‡à¦•à§à¦Ÿ à¦•à¦°à§à¦¨à¥¤ (Select a text overlay first.)');
+                alert('প্রথমে একটি টেক্সট সিলেক্ট করুন। (Select a text overlay first.)');
                 return;
             }
             state.isDrawingTextCurve = !state.isDrawingTextCurve;
@@ -14722,10 +14732,10 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
 
                 drawFrame();
-                alert('à¦•à§à¦¯à¦¾à¦¨à¦­à¦¾à¦¸à§‡ à¦®à¦¾à¦‰à¦¸ à¦¬à¦¾ à¦Ÿà¦¾à¦š à¦¦à¦¿à§Ÿà§‡ à¦¡à§à¦°à§à¦¯à¦¾à¦— à¦•à¦°à§‡ à¦Ÿà§‡à¦•à§à¦¸à¦Ÿ à¦¬à¦•à§à¦¸à§‡à¦° à¦†à¦•à¦¾à¦° à¦à¦¬à¦‚ à¦…à¦¬à¦¸à§à¦¥à¦¾à¦¨ à¦†à¦à¦•à§à¦¨à¥¤ (Drag on canvas to position and size your text box.)');
+                alert('ক্যানভাসে মাউস বা টাচ দিয়ে ড্র্যাগ করে টেক্সট বক্সের আকার এবং অবস্থান আঁকুন। (Drag on canvas to position and size your text box.)');
             } else {
                 state.canvas.style.cursor = 'default';
-                drawTextBoxBtn.innerHTML = '<i class="fa-solid fa-pen-ruler"></i> Draw Text Box (à¦¬à¦•à§à¦¸ à¦¡à§à¦° à¦•à¦°à§à¦¨)';
+                drawTextBoxBtn.innerHTML = '<i class="fa-solid fa-pen-ruler"></i> Draw Text Box (বক্স ড্র করুন)';
                 drawTextBoxBtn.classList.remove('active');
                 drawFrame();
             }
@@ -14736,11 +14746,11 @@ document.addEventListener('DOMContentLoaded', () => {
         const text = textOverlayInput.value.trim();
         if (!text) return;
 
-        // undo checkpoint à¦¨à¦¤à§à¦¨ item à¦¯à§‹à¦—à§‡à¦° à¦†à¦—à§‡ à¦¨à¦¾à¦“
+        // undo checkpoint নতুন item যোগের আগে নাও
         if (window.captureUndoCheckpoint) window.captureUndoCheckpoint();
 
-        // à¦¨à¦¤à§à¦¨ text à¦¯à§‹à¦— à¦•à¦°à¦¾à¦° à¦†à¦—à§‡ à¦ªà§à¦°à¦¨à§‹ selection clear à¦•à¦°à§‹ â€”
-        // à¦¨à¦¾ à¦¹à¦²à§‡ Draw Text Box à¦¸à§‡à¦‡ à¦ªà§à¦°à¦¨à§‹ item-à¦•à§‡ move à¦•à¦°à§‡ à¦¨à¦¤à§à¦¨ à¦¤à§ˆà¦°à¦¿ à¦•à¦°à§‡ à¦¨à¦¾
+        // নতুন text যোগ করার আগে পুরনো selection clear করো —
+        // না হলে Draw Text Box সেই পুরনো item-কে move করে নতুন তৈরি করে না
         state.selectedTextOverlayId = null;
 
         const newItem = {
@@ -14922,7 +14932,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     deleteTextOverlayBtn.addEventListener('click', () => {
         if (!state.selectedTextOverlayId) return;
-        // undo à¦šà§‡à¦•à¦ªà¦¯à¦¼à§‡à¦¨à§à¦Ÿ à¦¸à§‡à¦­ à¦•à¦°à§‹ à¦¯à¦¾à¦¤à§‡ delete-à¦à¦° à¦ªà¦°à§‡ Ctrl+Z à¦•à¦¾à¦œ à¦•à¦°à§‡
+        // undo চেকপয়েন্ট সেভ করো যাতে delete-এর পরে Ctrl+Z কাজ করে
         if (window.captureUndoCheckpoint) window.captureUndoCheckpoint();
         state.textOverlays = state.textOverlays.filter(t => t.id !== state.selectedTextOverlayId);
         state.selectedTextOverlayId = null;
@@ -14933,7 +14943,7 @@ document.addEventListener('DOMContentLoaded', () => {
         textOverlayTimingContainer.style.display = 'none';
         if (window.updateCurveButtonVisibility) window.updateCurveButtonVisibility();
         drawFrame();
-        // undo history à¦¤à§‡ record à¦•à¦°à§‹
+        // undo history তে record করো
         if (window.recordEditorHistory) window.recordEditorHistory('Text overlay deleted');
     });
 
@@ -15388,10 +15398,10 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     function brollSpeedLabel(sec) {
         const s = Number(sec).toFixed(1) + 's';
-        if (sec <= 0.3) return `${s} (à¦¦à§à¦°à§à¦¤ / Fast)`;
-        if (sec >= 4.0) return `${s} (à¦–à§à¦¬ à¦§à§€à¦° / Very Slow)`;
-        if (sec >= 1.5) return `${s} (à¦§à§€à¦° / Slow)`;
-        return `${s} (à¦¸à§à¦¬à¦¾à¦­à¦¾à¦¬à¦¿à¦• / Normal)`;
+        if (sec <= 0.3) return `${s} (দ্রুত / Fast)`;
+        if (sec >= 4.0) return `${s} (খুব ধীর / Very Slow)`;
+        if (sec >= 1.5) return `${s} (ধীর / Slow)`;
+        return `${s} (স্বাভাবিক / Normal)`;
     }
 
     // Unified animation style list (v2.5) â€” every style works the same way in
@@ -15400,68 +15410,68 @@ document.addEventListener('DOMContentLoaded', () => {
     // "Bounce Drop") are worded to make it obvious what they'll look like on a
     // small corner box, even though the same style value also works full-screen.
     const BROLL_ANIM_STYLES = [
-        { value: 'none', label: 'à¦•à§‹à¦¨à§‹ à¦…à§à¦¯à¦¾à¦¨à¦¿à¦®à§‡à¦¶à¦¨ à¦¨à§‡à¦‡ (à¦¸à¦°à¦¾à¦¸à¦°à¦¿ à¦¦à§‡à¦–à¦¾à¦¬à§‡)' },
-        { value: 'fade', label: 'Fade (à¦†à¦¸à§à¦¤à§‡ à¦†à¦¸à§à¦¤à§‡ à¦­à§‡à¦¸à§‡ à¦‰à¦ à¦¬à§‡)' },
-        { value: 'zoom', label: 'Zoom In (à¦§à§€à¦°à§‡ à¦§à§€à¦°à§‡ à¦œà§à¦® à¦¹à¦¬à§‡)' },
-        { value: 'zoom-out', label: 'Zoom Out (à¦œà§à¦® à¦†à¦‰à¦Ÿ à¦¹à¦¬à§‡)' },
-        { value: 'zoom-pop', label: 'Zoom Pop (à¦¹à¦ à¦¾à§Ž à¦¬à¦¡à¦¼ à¦¹à¦¯à¦¼à§‡ à¦ªà¦ª à¦•à¦°à§‡ à¦†à¦¸à¦¬à§‡)' },
-        { value: 'pan', label: 'Pan (Ken Burns - à¦†à¦¸à§à¦¤à§‡ à¦†à¦¸à§à¦¤à§‡ à¦¸à¦°à§‡ à¦¯à¦¾à¦¬à§‡)' },
-        { value: 'slide', label: 'Slide (à¦à¦• à¦ªà¦¾à¦¶ à¦¥à§‡à¦•à§‡ à¦¸à§‹à¦œà¦¾ à¦¸à§à¦²à¦¾à¦‡à¦¡ à¦•à¦°à§‡ à¦†à¦¸à¦¬à§‡)' },
-        { value: 'slide-pop', label: 'Slide + Pop (à¦•à§‹à¦£à¦¾ à¦¥à§‡à¦•à§‡ à¦¬à¦¾à¦‰à¦¨à§à¦¸ à¦•à¦°à§‡ à¦†à¦¸à¦¬à§‡)' },
-        { value: 'wipe', label: 'Wipe Reveal (à¦®à§à¦›à§‡ à¦®à§à¦›à§‡ à¦¦à§‡à¦–à¦¾ à¦¯à¦¾à¦¬à§‡)' },
-        { value: 'rotate-in', label: 'Rotate In (à¦˜à§à¦°à§‡ à¦˜à§à¦°à§‡ à¦†à¦¸à¦¬à§‡)' },
-        { value: 'spin-pop', label: 'Spin Pop (à¦˜à§à¦°à¦¤à§‡ à¦˜à§à¦°à¦¤à§‡ à¦†à¦¸à¦¬à§‡)' },
-        { value: 'bounce-in', label: 'Bounce Drop (à¦‰à¦ªà¦° à¦¥à§‡à¦•à§‡ à¦²à¦¾à¦«à¦¿à¦¯à¦¼à§‡ à¦ªà¦¡à¦¼à¦¬à§‡)' },
-        { value: 'blur-pop', label: 'Blur Pop (à¦à¦¾à¦ªà¦¸à¦¾ à¦¥à§‡à¦•à§‡ à¦¸à§à¦ªà¦·à§à¦Ÿ à¦¹à¦¯à¦¼à§‡ à¦†à¦¸à¦¬à§‡)' },
-        { value: 'blur-focus', label: 'Blur Focus (à¦à¦¾à¦ªà¦¸à¦¾ à¦¥à§‡à¦•à§‡ à¦¸à§à¦ªà¦·à§à¦Ÿ à¦¹à¦¬à§‡)' },
-        { value: 'circle-highlight', label: 'Circle Highlight (à¦šà¦¾à¦°à¦ªà¦¾à¦¶à§‡ à¦¹à¦¾à¦¤à§‡-à¦†à¦à¦•à¦¾ à¦—à§‹à¦² à¦¦à¦¾à¦—)' },
-        { value: 'underline-draw', label: 'Underline Draw-on (à¦¨à¦¿à¦šà§‡ à¦¦à¦¾à¦— à¦†à¦ÐºÐ° à¦¹à¦¬à§‡)' },
-        { value: 'checkmark-pop', label: 'Checkmark Pop (âœ“ à¦šà¦¿à¦¹à§à¦¨ à¦ªà¦ª à¦•à¦°à§‡ à¦†à¦¸à¦¬à§‡)' },
-        { value: 'thinking-character', label: 'Thinking Character (ðŸ¤” à¦šà¦¿à¦¨à§à¦¤à¦¾ à¦•à¦°à¦¾à¦° à¦¬à¦¾à¦¬à¦²)' },
-        { value: 'arrow-point', label: 'Arrow Point-in (à¦¤à§€à¦° à¦šà¦¿à¦¹à§à¦¨ à¦¦à§‡à¦–à¦¾à¦¬à§‡)' },
-        { value: 'highlight-sweep', label: 'Highlight Marker Sweep (à¦®à¦¾à¦°à§à¦•à¦¾à¦° à¦¦à¦¿à¦¯à¦¼à§‡ à¦¹à¦¾à¦‡à¦²à¦¾à¦‡à¦Ÿ)' },
-        { value: 'typewriter', label: 'Typewriter Reveal (à¦Ÿà¦¾à¦‡à¦ªà¦°à¦¾à¦‡à¦Ÿà¦¾à¦°à§‡à¦° à¦®à¦¤à§‹ à¦²à§‡à¦–à¦¾ à¦¹à¦¬à§‡)', textOnly: true },
-        { value: 'magnifier-zoom', label: 'Magnifying Glass Zoom (ðŸ” à¦®à§à¦¯à¦¾à¦—à¦¨à¦¿à¦«à¦¾à¦¯à¦¼à¦¾à¦° à¦†à¦‡à¦•à¦¨)' },
-        { value: 'comparison-slide', label: 'Comparison Slide (Before/After à¦¸à§à¦²à¦¾à¦‡à¦¡à¦¾à¦°)' },
-        { value: 'question-bounce', label: 'Question Mark Bounce (â“ à¦²à¦¾à¦«à¦¿à¦¯à¦¼à§‡ à¦†à¦¸à¦¬à§‡)' },
-        { value: 'confetti-pop', label: 'Confetti Pop (à¦°à¦™à¦¿à¦¨ à¦•à¦¨à¦«à§‡à¦¤à§à¦¤à¦¿ à¦›à¦¡à¦¼à¦¿à¦¯à¦¼à§‡ à¦ªà¦¡à¦¼à¦¬à§‡)' },
-        { value: 'heart-burst', label: 'Heart Burst (â¤ï¸ à¦¹à¦¾à¦°à§à¦Ÿ à¦›à¦¡à¦¼à¦¿à¦¯à¦¼à§‡ à¦ªà¦¡à¦¼à¦¬à§‡)' },
-        { value: 'badge-pop-dot', label: 'ðŸ”´ Badge Sticker Pop (à¦•à¦¾à¦¤ à¦¹à¦¯à¦¼à§‡ à¦¬à§à¦¯à¦¾à¦œ à¦ªà¦ª à¦•à¦°à§‡ à¦†à¦¸à¦¬à§‡ + à¦²à¦¾à¦² à¦¡à¦Ÿ)' },
-        { value: 'comic-burst-text', label: 'ðŸ’¥ Comic Impact Burst (à¦¬à¦¡à¦¼ à¦¬à¦¾à¦¬à¦² à¦Ÿà§‡à¦•à§à¦¸à¦Ÿ + à¦šà¦¾à¦°à¦ªà¦¾à¦¶à§‡ à¦°à¦¶à§à¦®à¦¿)' },
-        { value: 'cursor-click-point', label: 'ðŸ–±ï¸ Cursor Click Pointer (à¦¹à¦¾à¦¤à§‡à¦° à¦•à¦¾à¦°à§à¦¸à¦° à¦•à§à¦²à¦¿à¦• à¦•à¦°à¦¬à§‡)' },
-        { value: 'cta-button-arrow', label: 'âž¡ï¸ CTA Button + Hand Arrow (à¦¬à¦¾à¦Ÿà¦¨ à¦¥à§‡à¦•à§‡ à¦¬à¦¾à¦à¦•à¦¾ à¦¤à§€à¦° à¦ªà§à¦°à§‹à¦¡à¦¾à¦•à§à¦Ÿà§‡à¦° à¦¦à¦¿à¦•à§‡)' },
-        { value: 'comic-outline-glow', label: 'ðŸŽ¨ Comic Outline Glow Text (à¦®à§‹à¦Ÿà¦¾ à¦•à¦¾à¦²à§‹ à¦†à¦‰à¦Ÿà¦²à¦¾à¦‡à¦¨ + à¦°à¦™à¦¿à¦¨ à¦—à§à¦²à§‹)' },
-        { value: 'comic-speed-rays', label: 'ðŸ’¥ Comic Speed Rays (à¦Ÿà§‡à¦•à§à¦¸à¦Ÿà§‡à¦° à¦šà¦¾à¦°à¦ªà¦¾à¦¶ à¦¥à§‡à¦•à§‡ à¦¸à§à¦ªà¦¿à¦¡ à¦°à¦¶à§à¦®à¦¿)', textOnly: true },
-        { value: 'cursor-line-draw', label: 'âœï¸ Cursor Line Underline (à¦•à¦¾à¦°à§à¦¸à¦° à¦²à¦¾à¦‡à¦¨ à¦Ÿà§‡à¦¨à§‡ à¦¦à§‡à¦–à¦¾à¦¬à§‡)', textOnly: true },
-        { value: 'torn-paper-marker', label: 'ðŸ“œ Torn Paper Banner (à¦›à§‡à¦à¦¡à¦¼à¦¾ à¦¹à¦²à§à¦¦ à¦•à¦¾à¦—à¦œ à¦Ÿà§‡à¦•à§à¦¸à¦Ÿ à¦¬à§à¦¯à¦¾à¦¨à¦¾à¦°)' },
-        { value: 'letter-bounce-wiggle', label: 'ðŸ”¤ à¦…à¦•à§à¦·à¦° à¦²à¦¾à¦«à¦¿à¦¯à¦¼à§‡ à¦²à¦¾à¦«à¦¿à¦¯à¦¼à§‡ à¦¨à¦¡à¦¼à¦¬à§‡ (Letter Bounce Wiggle)', textOnly: true },
-        { value: 'particle-glow-text', label: 'âœ¨ à¦¸à§‹à¦¨à¦¾à¦²à¦¿ Glow à¦ªà¦¾à¦°à§à¦Ÿà¦¿à¦•à§‡à¦² à¦Ÿà§‡à¦•à§à¦¸à¦Ÿ (Golden Particle Glow)', textOnly: true },
-        { value: 'hanging-sign-swing', label: 'Hanging Sign Swing (ðŸ”´ à¦ªà¦¿à¦¨ à¦¥à§‡à¦•à§‡ à¦à§à¦²à§‡ à¦¦à§à¦²à¦¤à§‡ à¦¦à§à¦²à¦¤à§‡ à¦†à¦¸à¦¬à§‡)' },
-        { value: 'plane-banner-trail', label: 'Plane Banner Trail (âœˆï¸ à¦ªà§à¦²à§‡à¦¨ à¦‰à¦¡à¦¼à§‡ à¦—à¦¿à¦¯à¦¼à§‡ à¦²à§‡à¦–à¦¾ à¦°à§‡à¦–à§‡ à¦¯à¦¾à¦¬à§‡)' },
+        { value: 'none', label: 'কোনো অ্যানিমেশন নেই (সরাসরি দেখাবে)' },
+        { value: 'fade', label: 'Fade (আস্তে আস্তে ভেসে উঠবে)' },
+        { value: 'zoom', label: 'Zoom In (ধীরে ধীরে জুম হবে)' },
+        { value: 'zoom-out', label: 'Zoom Out (জুম আউট হবে)' },
+        { value: 'zoom-pop', label: 'Zoom Pop (হঠাৎ বড় হয়ে পপ করে আসবে)' },
+        { value: 'pan', label: 'Pan (Ken Burns - আস্তে আস্তে সরে যাবে)' },
+        { value: 'slide', label: 'Slide (এক পাশ থেকে সোজা স্লাইড করে আসবে)' },
+        { value: 'slide-pop', label: 'Slide + Pop (কোণা থেকে বাউন্স করে আসবে)' },
+        { value: 'wipe', label: 'Wipe Reveal (মুছে মুছে দেখা যাবে)' },
+        { value: 'rotate-in', label: 'Rotate In (ঘুরে ঘুরে আসবে)' },
+        { value: 'spin-pop', label: 'Spin Pop (ঘুরতে ঘুরতে আসবে)' },
+        { value: 'bounce-in', label: 'Bounce Drop (উপর থেকে লাফিয়ে পড়বে)' },
+        { value: 'blur-pop', label: 'Blur Pop (ঝাপসা থেকে স্পষ্ট হয়ে আসবে)' },
+        { value: 'blur-focus', label: 'Blur Focus (ঝাপসা থেকে স্পষ্ট হবে)' },
+        { value: 'circle-highlight', label: 'Circle Highlight (চারপাশে হাতে-আঁকা গোল দাগ)' },
+        { value: 'underline-draw', label: 'Underline Draw-on (নিচে দাগ আঁка হবে)' },
+        { value: 'checkmark-pop', label: 'Checkmark Pop (✓ চিহ্ন পপ করে আসবে)' },
+        { value: 'thinking-character', label: 'Thinking Character (🤔 চিন্তা করার বাবল)' },
+        { value: 'arrow-point', label: 'Arrow Point-in (তীর চিহ্ন দেখাবে)' },
+        { value: 'highlight-sweep', label: 'Highlight Marker Sweep (মার্কার দিয়ে হাইলাইট)' },
+        { value: 'typewriter', label: 'Typewriter Reveal (টাইপরাইটারের মতো লেখা হবে)', textOnly: true },
+        { value: 'magnifier-zoom', label: 'Magnifying Glass Zoom (🔍 ম্যাগনিফায়ার আইকন)' },
+        { value: 'comparison-slide', label: 'Comparison Slide (Before/After স্লাইডার)' },
+        { value: 'question-bounce', label: 'Question Mark Bounce (❓ লাফিয়ে আসবে)' },
+        { value: 'confetti-pop', label: 'Confetti Pop (রঙিন কনফেত্তি ছড়িয়ে পড়বে)' },
+        { value: 'heart-burst', label: 'Heart Burst (❤️ হার্ট ছড়িয়ে পড়বে)' },
+        { value: 'badge-pop-dot', label: '🔴 Badge Sticker Pop (কাত হয়ে ব্যাজ পপ করে আসবে + লাল ডট)' },
+        { value: 'comic-burst-text', label: '💥 Comic Impact Burst (বড় বাবল টেক্সট + চারপাশে রশ্মি)' },
+        { value: 'cursor-click-point', label: '🖱️ Cursor Click Pointer (হাতের কার্সর ক্লিক করবে)' },
+        { value: 'cta-button-arrow', label: '➡️ CTA Button + Hand Arrow (বাটন থেকে বাঁকা তীর প্রোডাক্টের দিকে)' },
+        { value: 'comic-outline-glow', label: '🎨 Comic Outline Glow Text (মোটা কালো আউটলাইন + রঙিন গ্লো)' },
+        { value: 'comic-speed-rays', label: '💥 Comic Speed Rays (টেক্সটের চারপাশ থেকে স্পিড রশ্মি)', textOnly: true },
+        { value: 'cursor-line-draw', label: '✍️ Cursor Line Underline (কার্সর লাইন টেনে দেখাবে)', textOnly: true },
+        { value: 'torn-paper-marker', label: '📜 Torn Paper Banner (ছেঁড়া হলুদ কাগজ টেক্সট ব্যানার)' },
+        { value: 'letter-bounce-wiggle', label: '🔤 অক্ষর লাফিয়ে লাফিয়ে নড়বে (Letter Bounce Wiggle)', textOnly: true },
+        { value: 'particle-glow-text', label: '✨ সোনালি Glow পার্টিকেল টেক্সট (Golden Particle Glow)', textOnly: true },
+        { value: 'hanging-sign-swing', label: 'Hanging Sign Swing (🔴 পিন থেকে ঝুলে দুলতে দুলতে আসবে)' },
+        { value: 'plane-banner-trail', label: 'Plane Banner Trail (✈️ প্লেন উড়ে গিয়ে লেখা রেখে যাবে)' },
 
         // Kinetic Typography (v2.8) â€” per-letter/per-word text entrances. These
         // only make sense for Text B-roll (each style animates the individual
         // characters/words instead of the whole box as one rigid unit), so
         // they're flagged textOnly and filtered out of the dropdown for image
         // and video B-roll.
-        { value: 'letter-rotate-settle', label: 'âœï¸ à¦…à¦•à§à¦·à¦° à¦˜à§à¦°à§‡ à¦˜à§à¦°à§‡ à¦¬à¦¸à¦¬à§‡ (Letter Spin & Settle)', textOnly: true },
-        { value: 'letter-converge', label: 'ðŸ¤ à¦¦à§à¦‡ à¦ªà¦¾à¦¶ à¦¥à§‡à¦•à§‡ à¦à¦¸à§‡ à¦®à¦¿à¦²à¦¬à§‡ (Two-Side Converge)', textOnly: true },
-        { value: 'letter-cascade-fade', label: 'âœ¨ à¦à¦•à¦Ÿà¦¾à¦° à¦ªà¦° à¦à¦•à¦Ÿà¦¾ à¦…à¦•à§à¦·à¦° à¦­à§‡à¦¸à§‡ à¦‰à¦ à¦¬à§‡ (Letter Cascade Fade)', textOnly: true },
-        { value: 'word-pop-stagger', label: 'ðŸ”¤ à¦¶à¦¬à§à¦¦ à¦§à¦°à§‡ à¦§à¦°à§‡ à¦ªà¦ª à¦•à¦°à§‡ à¦†à¦¸à¦¬à§‡ (Word-by-Word Pop)', textOnly: true },
+        { value: 'letter-rotate-settle', label: '✍️ অক্ষর ঘুরে ঘুরে বসবে (Letter Spin & Settle)', textOnly: true },
+        { value: 'letter-converge', label: '🤝 দুই পাশ থেকে এসে মিলবে (Two-Side Converge)', textOnly: true },
+        { value: 'letter-cascade-fade', label: '✨ একটার পর একটা অক্ষর ভেসে উঠবে (Letter Cascade Fade)', textOnly: true },
+        { value: 'word-pop-stagger', label: '🔤 শব্দ ধরে ধরে পপ করে আসবে (Word-by-Word Pop)', textOnly: true },
         
         // Wings Fly Custom Presets (Style + Direction + Sound Combinations)
-        { value: 'preset-wings-intro', label: 'Wings Intro Banner (à¦¬à¦¾à¦® à¦¦à¦¿à¦• à¦¥à§‡à¦•à§‡ à¦¸à§à¦²à¦¾à¦‡à¦¡ à¦“ à¦¸à§à¦‡à¦¶ à¦¶à¦¬à§à¦¦)' },
-        { value: 'preset-question-pop', label: 'Question Bounce + Pop (â“ à¦¨à¦¿à¦š à¦¦à¦¿à¦• à¦¥à§‡à¦•à§‡ à¦²à¦¾à¦«à¦¿à§Ÿà§‡ à¦†à¦¸à¦¾ à¦“ à¦ªà¦ª à¦¶à¦¬à§à¦¦)' },
-        { value: 'preset-checkmark-chime', label: 'Checkmark Pop + Chime (âœ“ à¦šà¦¿à¦¹à§à¦¨ à¦ªà¦ª à¦“ à¦šà¦®à¦• à¦¶à¦¬à§à¦¦)' },
-        { value: 'preset-typewriter-click', label: 'Typewriter + Click (à¦Ÿà¦¾à¦‡à¦ªà¦°à¦¾à¦‡à¦Ÿà¦¾à¦° à¦“ à¦•à§à¦²à¦¿à¦• à¦¶à¦¬à§à¦¦)' },
-        { value: 'preset-zoom-chime', label: 'Zoom Pop + Chime (à¦œà§à¦® à¦ªà¦ª à¦“ à¦šà¦®à¦• à¦¶à¦¬à§à¦¦)' },
-        { value: 'preset-rotate-whoosh', label: 'Rotate In + Whoosh (à¦˜à§à¦°à§‡ à¦†à¦¸à¦¾ à¦“ à¦¸à§à¦‡à¦¶ à¦¶à¦¬à§à¦¦)' },
-        { value: 'preset-highlight-chime', label: 'Highlight Sweep + Chime (à¦®à¦¾à¦°à§à¦•à¦¾à¦° à¦¹à¦¾à¦‡à¦²à¦¾à¦‡à¦Ÿ à¦“ à¦šà¦®à¦• à¦¶à¦¬à§à¦¦)' },
-        { value: 'preset-arrow-whoosh', label: 'Arrow Point + Whoosh (à¦¤à§€à¦° à¦šà¦¿à¦¹à§à¦¨ à¦“ à¦¸à§à¦‡à¦¶ à¦¶à¦¬à§à¦¦)' },
-        { value: 'preset-phone-app', label: 'ðŸ“± Phone App Reveal (à¦®à§‹à¦¬à¦¾à¦‡à¦² à¦®à¦•à¦†à¦ªà§‡ à¦…à§à¦¯à¦¾à¦ª/à¦“à§Ÿà§‡à¦¬à¦¸à¦¾à¦‡à¦Ÿ)' },
-        { value: 'preset-laptop-course', label: 'ðŸ’» Laptop Course Reveal (à¦²à§à¦¯à¦¾à¦ªà¦Ÿà¦ªà§‡ à¦•à§‹à¦°à§à¦¸/à¦ªà§à¦°à§‡à¦œà§‡à¦¨à§à¦Ÿà§‡à¦¶à¦¨)' },
-        { value: 'preset-glass-caption', label: 'ðŸ«§ Glass Caption Pop (à¦•à¦¾à¦à¦šà§‡à¦° à¦Ÿà§‡à¦•à§à¦¸à¦Ÿ à¦¬à§à¦¯à¦¾à¦¨à¦¾à¦°)' },
-        { value: 'preset-social-cta', label: 'ðŸ‘ WhatsApp + Like CTA (à¦¸à§‹à¦¶à§à¦¯à¦¾à¦² à¦•à¦²-à¦Ÿà§-à¦…à§à¦¯à¦¾à¦•à¦¶à¦¨)' }
+        { value: 'preset-wings-intro', label: 'Wings Intro Banner (বাম দিক থেকে স্লাইড ও সুইশ শব্দ)' },
+        { value: 'preset-question-pop', label: 'Question Bounce + Pop (❓ নিচ দিক থেকে লাফিয়ে আসা ও পপ শব্দ)' },
+        { value: 'preset-checkmark-chime', label: 'Checkmark Pop + Chime (✓ চিহ্ন পপ ও চমক শব্দ)' },
+        { value: 'preset-typewriter-click', label: 'Typewriter + Click (টাইপরাইটার ও ক্লিক শব্দ)' },
+        { value: 'preset-zoom-chime', label: 'Zoom Pop + Chime (জুম পপ ও চমক শব্দ)' },
+        { value: 'preset-rotate-whoosh', label: 'Rotate In + Whoosh (ঘুরে আসা ও সুইশ শব্দ)' },
+        { value: 'preset-highlight-chime', label: 'Highlight Sweep + Chime (মার্কার হাইলাইট ও চমক শব্দ)' },
+        { value: 'preset-arrow-whoosh', label: 'Arrow Point + Whoosh (তীর চিহ্ন ও সুইশ শব্দ)' },
+        { value: 'preset-phone-app', label: '📱 Phone App Reveal (মোবাইল মকআপে অ্যাপ/ওয়েবসাইট)' },
+        { value: 'preset-laptop-course', label: '💻 Laptop Course Reveal (ল্যাপটপে কোর্স/প্রেজেন্টেশন)' },
+        { value: 'preset-glass-caption', label: '🫧 Glass Caption Pop (কাঁচের টেক্সট ব্যানার)' },
+        { value: 'preset-social-cta', label: '👍 WhatsApp + Like CTA (সোশ্যাল কল-টু-অ্যাকশন)' }
     ];
 
     function populateBrollAnimStyleOptions(itemType) {
@@ -15936,7 +15946,7 @@ document.addEventListener('DOMContentLoaded', () => {
             console.log("B-roll image loaded successfully. Dimensions:", img.naturalWidth, "x", img.naturalHeight);
             if (img.naturalWidth === 0 || img.naturalHeight === 0) {
                 console.error("Loaded image has zero dimensions.");
-                alert("à¦¤à§à¦°à§à¦Ÿà¦¿: à¦›à¦¬à¦¿à¦Ÿà¦¿à¦° à¦¡à¦¾à¦‡à¦®à§‡à¦¨à¦¶à¦¨ à¦¶à§‚à¦¨à§à¦¯ (0)à¥¤ à¦…à¦¨à§à¦—à§à¦°à¦¹ à¦•à¦°à§‡ à¦…à¦¨à§à¦¯ à¦›à¦¬à¦¿ à¦¬à§à¦¯à¦¬à¦¹à¦¾à¦° à¦•à¦°à§à¦¨à¥¤");
+                alert("ত্রুটি: ছবিটির ডাইমেনশন শূন্য (0)। অনুগ্রহ করে অন্য ছবি ব্যবহার করুন।");
                 return;
             }
             const newItem = {
@@ -16009,7 +16019,7 @@ document.addEventListener('DOMContentLoaded', () => {
         
         img.onerror = (err) => {
             console.error("Failed to load B-roll image:", err);
-            alert("à¦¤à§à¦°à§à¦Ÿà¦¿: à¦›à¦¬à¦¿à¦Ÿà¦¿ à¦²à§‹à¦¡ à¦•à¦°à¦¾ à¦¯à¦¾à§Ÿà¦¨à¦¿à¥¤ à¦…à¦¨à§à¦—à§à¦°à¦¹ à¦•à¦°à§‡ à¦¨à¦¿à¦¶à§à¦šà¦¿à¦¤ à¦•à¦°à§à¦¨ à¦¯à§‡ à¦à¦Ÿà¦¿ à¦à¦•à¦Ÿà¦¿ à¦¸à¦ à¦¿à¦• à¦‡à¦®à§‡à¦œ à¦«à¦¾à¦‡à¦² (à¦¯à§‡à¦®à¦¨ PNG, JPG, WEBP, à¦¬à¦¾ GIF)à¥¤");
+            alert("ত্রুটি: ছবিটি লোড করা যায়নি। অনুগ্রহ করে নিশ্চিত করুন যে এটি একটি সঠিক ইমেজ ফাইল (যেমন PNG, JPG, WEBP, বা GIF)।");
             if (brollInput) brollInput.value = '';
         };
         
@@ -16088,7 +16098,7 @@ document.addEventListener('DOMContentLoaded', () => {
             console.log("B-roll video loaded. Dimensions:", vid.videoWidth, "x", vid.videoHeight, "duration:", vid.duration);
             if (vid.videoWidth === 0 || vid.videoHeight === 0) {
                 console.error("Loaded video has zero dimensions.");
-                alert("à¦¤à§à¦°à§à¦Ÿà¦¿: à¦­à¦¿à¦¡à¦¿à¦“à¦Ÿà¦¿à¦° à¦¡à¦¾à¦‡à¦®à§‡à¦¨à¦¶à¦¨ à¦¶à§‚à¦¨à§à¦¯ (0)à¥¤ à¦…à¦¨à§à¦—à§à¦°à¦¹ à¦•à¦°à§‡ à¦…à¦¨à§à¦¯ à¦­à¦¿à¦¡à¦¿à¦“ à¦«à¦¾à¦‡à¦² à¦¬à§à¦¯à¦¬à¦¹à¦¾à¦° à¦•à¦°à§à¦¨à¥¤");
+                alert("ত্রুটি: ভিডিওটির ডাইমেনশন শূন্য (0)। অনুগ্রহ করে অন্য ভিডিও ফাইল ব্যবহার করুন।");
                 vid.remove();
                 return;
             }
@@ -16153,7 +16163,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         vid.onerror = (err) => {
             console.error("Failed to load B-roll video:", err);
-            alert("à¦¤à§à¦°à§à¦Ÿà¦¿: à¦­à¦¿à¦¡à¦¿à¦“à¦Ÿà¦¿ à¦²à§‹à¦¡ à¦•à¦°à¦¾ à¦¯à¦¾à¦¯à¦¼à¦¨à¦¿à¥¤ à¦…à¦¨à§à¦—à§à¦°à¦¹ à¦•à¦°à§‡ à¦¨à¦¿à¦¶à§à¦šà¦¿à¦¤ à¦•à¦°à§à¦¨ à¦¯à§‡ à¦à¦Ÿà¦¿ à¦à¦•à¦Ÿà¦¿ à¦¸à¦ à¦¿à¦• à¦­à¦¿à¦¡à¦¿à¦“ à¦«à¦¾à¦‡à¦² (à¦¯à§‡à¦®à¦¨ MP4 à¦¬à¦¾ WEBM)à¥¤");
+            alert("ত্রুটি: ভিডিওটি লোড করা যায়নি। অনুগ্রহ করে নিশ্চিত করুন যে এটি একটি সঠিক ভিডিও ফাইল (যেমন MP4 বা WEBM)।");
             vid.remove();
             if (brollVideoInput) brollVideoInput.value = '';
         };
@@ -16537,7 +16547,7 @@ document.addEventListener('DOMContentLoaded', () => {
             brollListEl.innerHTML = `
                 <div style="text-align: center; color: #94a3b8; padding: 14px 10px; font-size: 12px; border: 1px dashed rgba(255,255,255,0.12); border-radius: 8px; background: rgba(0,0,0,0.15);">
                     <i class="fa-regular fa-image" style="font-size: 18px; margin-bottom: 4px; display: block; opacity: 0.5;"></i>
-                    à¦•à§‹à¦¨à§‹ B-roll à¦‡à¦®à§‡à¦œ à¦¬à¦¾ à¦…à§à¦¯à¦¾à¦¨à¦¿à¦®à§‡à¦¶à¦¨ à¦¯à§‹à¦— à¦•à¦°à¦¾ à¦¹à§Ÿà¦¨à¦¿à¥¤
+                    কোনো B-roll ইমেজ বা অ্যানিমেশন যোগ করা হয়নি।
                 </div>
             `;
             if (brollTimingContainer) brollTimingContainer.style.display = 'none';
@@ -16614,11 +16624,11 @@ document.addEventListener('DOMContentLoaded', () => {
                 title.innerText = `${modeLabel} Video`;
             } else if (item.type === 'cash' || item.type === 'built-in') {
                 let typeName = item.name || 'Cash Animation';
-                if (item.builtInType === 'question') typeName = 'à¦ªà§à¦°à¦¶à§à¦¨ à¦šà¦¿à¦¹à§à¦¨';
-                else if (item.builtInType === 'checkmark') typeName = 'à¦Ÿà¦¿à¦• à¦šà¦¿à¦¹à§à¦¨';
-                else if (item.builtInType === 'cross') typeName = 'à¦•à§à¦°à¦¸ à¦šà¦¿à¦¹à§à¦¨';
-                else if (item.builtInType === 'magnifier') typeName = 'à¦®à§à¦¯à¦¾à¦—à¦¨à¦¿à¦«à¦¾à¦¯à¦¼à¦¾à¦°';
-                else if (item.builtInType === 'cash' || item.type === 'cash') typeName = 'à¦Ÿà¦¾à¦•à¦¾ à¦…à§à¦¯à¦¾à¦¨à¦¿à¦®à§‡à¦¶à¦¨';
+                if (item.builtInType === 'question') typeName = 'প্রশ্ন চিহ্ন';
+                else if (item.builtInType === 'checkmark') typeName = 'টিক চিহ্ন';
+                else if (item.builtInType === 'cross') typeName = 'ক্রস চিহ্ন';
+                else if (item.builtInType === 'magnifier') typeName = 'ম্যাগনিফায়ার';
+                else if (item.builtInType === 'cash' || item.type === 'cash') typeName = 'টাকা অ্যানিমেশন';
                 title.innerText = `${modeLabel}: ${typeName}`;
             } else {
                 title.innerText = `${modeLabel}: ${item.name || 'Image B-roll'}`;
@@ -16646,7 +16656,7 @@ document.addEventListener('DOMContentLoaded', () => {
             deleteBtn.style.color = '#ef4444';
             deleteBtn.style.borderColor = 'rgba(239,68,68,0.3)';
             deleteBtn.style.fontSize = '11px';
-            deleteBtn.title = 'B-roll à¦†à¦‡à¦Ÿà§‡à¦®à¦Ÿà¦¿ à¦®à§à¦›à§à¦¨ (Delete B-roll)';
+            deleteBtn.title = 'B-roll আইটেমটি মুছুন (Delete B-roll)';
             deleteBtn.innerHTML = '<i class="fa-solid fa-trash-can"></i>';
 
             deleteBtn.addEventListener('click', (e) => {
@@ -16836,8 +16846,8 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         if (brollCustomSoundFilename) {
             brollCustomSoundFilename.innerText = item.customSoundName
-                ? `à¦†à¦ªà¦²à§‹à¦¡ à¦•à¦°à¦¾ à¦¹à¦¯à¦¼à§‡à¦›à§‡: ${item.customSoundName}`
-                : 'à¦•à§‹à¦¨à§‹ à¦«à¦¾à¦‡à¦² à¦†à¦ªà¦²à§‹à¦¡ à¦•à¦°à¦¾ à¦¹à¦¯à¦¼à¦¨à¦¿à¥¤';
+                ? `আপলোড করা হয়েছে: ${item.customSoundName}`
+                : 'কোনো ফাইল আপলোড করা হয়নি।';
         }
         updateBrollDirectionRowsVisibility(item.animationStyle || defaultStyle);
         updateBrollAnimParamSlidersVisibility(item);
@@ -16865,10 +16875,10 @@ document.addEventListener('DOMContentLoaded', () => {
             if (item.type === 'image' && (item.animationStyle === 'comparison-slide')) {
                 brollAfterImageContainer.style.display = 'block';
                 if (item.imageUrlAfter) {
-                    brollAfterFilename.innerText = "à¦¤à§à¦²à¦¨à¦¾à¦° à¦ªà¦°à§‡à¦° à¦›à¦¬à¦¿ à¦²à§‹à¦¡ à¦•à¦°à¦¾ à¦†à¦›à§‡";
+                    brollAfterFilename.innerText = "তুলনার পরের ছবি লোড করা আছে";
                     brollAfterFilename.style.color = "#10b981";
                 } else {
-                    brollAfterFilename.innerText = "Upload After Image (à¦¤à§à¦²à¦¨à¦¾à¦° à¦ªà¦°à§‡à¦° à¦›à¦¬à¦¿)...";
+                    brollAfterFilename.innerText = "Upload After Image (তুলনার পরের ছবি)...";
                     brollAfterFilename.style.color = "#cbd5e1";
                 }
             } else {
@@ -16924,10 +16934,10 @@ document.addEventListener('DOMContentLoaded', () => {
                     if (item.type === 'image' && item.animationStyle === 'comparison-slide') {
                         brollAfterImageContainer.style.display = 'block';
                         if (item.imageUrlAfter) {
-                            brollAfterFilename.innerText = "à¦¤à§à¦²à¦¨à¦¾à¦° à¦ªà¦°à§‡à¦° à¦›à¦¬à¦¿ à¦²à§‹à¦¡ à¦•à¦°à¦¾ à¦†à¦›à§‡";
+                            brollAfterFilename.innerText = "তুলনার পরের ছবি লোড করা আছে";
                             brollAfterFilename.style.color = "#10b981";
                         } else {
-                            brollAfterFilename.innerText = "Upload After Image (à¦¤à§à¦²à¦¨à¦¾à¦° à¦ªà¦°à§‡à¦° à¦›à¦¬à¦¿)...";
+                            brollAfterFilename.innerText = "Upload After Image (তুলনার পরের ছবি)...";
                             brollAfterFilename.style.color = "#cbd5e1";
                         }
                     } else {
@@ -17093,13 +17103,13 @@ document.addEventListener('DOMContentLoaded', () => {
             item.imageImgAfter = img;
             item.imageUrlAfter = url;
             if (brollAfterFilename) {
-                brollAfterFilename.innerText = "à¦¤à§à¦²à¦¨à¦¾à¦° à¦ªà¦°à§‡à¦° à¦›à¦¬à¦¿ à¦²à§‹à¦¡ à¦•à¦°à¦¾ à¦†à¦›à§‡";
+                brollAfterFilename.innerText = "তুলনার পরের ছবি লোড করা আছে";
                 brollAfterFilename.style.color = "#10b981";
             }
             drawFrame();
         };
         img.onerror = () => {
-            alert("à¦¤à§à¦°à§à¦Ÿà¦¿: à¦›à¦¬à¦¿à¦Ÿà¦¿ à¦²à§‹à¦¡ à¦•à¦°à¦¾ à¦¯à¦¾à§Ÿà¦¨à¦¿à¥¤");
+            alert("ত্রুটি: ছবিটি লোড করা যায়নি।");
         };
         img.src = url;
     }
@@ -17182,14 +17192,14 @@ document.addEventListener('DOMContentLoaded', () => {
             const item = state.brollOverlays.find(b => b.id === state.selectedBrollId);
             const file = e.target.files && e.target.files[0];
             if (!item || !file) return;
-            if (brollCustomSoundFilename) brollCustomSoundFilename.innerText = `à¦²à§‹à¦¡ à¦¹à¦šà§à¦›à§‡: ${file.name}...`;
+            if (brollCustomSoundFilename) brollCustomSoundFilename.innerText = `লোড হচ্ছে: ${file.name}...`;
             item.customSoundFile = file;
             item.customSoundName = file.name;
             item.customSoundBuffer = window.decodeBrollCustomSound ? await window.decodeBrollCustomSound(file) : null;
             if (brollCustomSoundFilename) {
                 brollCustomSoundFilename.innerText = item.customSoundBuffer
-                    ? `à¦†à¦ªà¦²à§‹à¦¡ à¦•à¦°à¦¾ à¦¹à¦¯à¦¼à§‡à¦›à§‡: ${item.customSoundName}`
-                    : `à¦¤à§à¦°à§à¦Ÿà¦¿: "${file.name}" à¦«à¦¾à¦‡à¦²à¦Ÿà¦¿ à¦¡à¦¿à¦•à§‹à¦¡ à¦•à¦°à¦¾ à¦¯à¦¾à¦¯à¦¼à¦¨à¦¿à¥¤ à¦…à¦¨à§à¦¯ mp3/wav à¦«à¦¾à¦‡à¦² à¦¬à§à¦¯à¦¬à¦¹à¦¾à¦° à¦•à¦°à§à¦¨à¥¤`;
+                    ? `আপলোড করা হয়েছে: ${item.customSoundName}`
+                    : `ত্রুটি: "${file.name}" ফাইলটি ডিকোড করা যায়নি। অন্য mp3/wav ফাইল ব্যবহার করুন।`;
             }
             if (item.customSoundBuffer && window.playBrollCustomSound) window.playBrollCustomSound(item.customSoundBuffer);
         });
@@ -17388,7 +17398,7 @@ document.addEventListener('DOMContentLoaded', () => {
             state.isColorPickingBroll = !state.isColorPickingBroll;
             if (state.isColorPickingBroll) {
                 state.canvas.style.cursor = 'crosshair';
-                alert("à¦•à§à¦¯à¦¾à¦¨à¦­à¦¾à¦¸à§‡ à¦¦à§‡à¦–à¦¾à¦¨à§‹ à¦¬à¦¿-à¦°à§‹à¦² à¦‡à¦®à§‡à¦œà§‡à¦° à¦‰à¦ªà¦° à¦•à§à¦²à¦¿à¦• à¦•à¦°à§‡ à¦¬à§à¦¯à¦¾à¦•à¦—à§à¦°à¦¾à¦‰à¦¨à§à¦¡à§‡à¦° à¦¸à¦ à¦¿à¦• à¦°à¦™à¦Ÿà¦¿ à¦¸à¦¿à¦²à§‡à¦•à§à¦Ÿ à¦•à¦°à§à¦¨à¥¤ (Click on the B-roll image on the canvas to pick its background color.)");
+                alert("ক্যানভাসে দেখানো বি-রোল ইমেজের উপর ক্লিক করে ব্যাকগ্রাউন্ডের সঠিক রঙটি সিলেক্ট করুন। (Click on the B-roll image on the canvas to pick its background color.)");
             } else {
                 state.canvas.style.cursor = 'default';
             }
@@ -17608,22 +17618,22 @@ document.addEventListener('DOMContentLoaded', () => {
         'scroll-banner': 'ðŸ“œ'
     };
     const SYMBOL_NAMES_BN = {
-        whatsapp: 'à¦¹à§‹à¦¯à¦¼à¦¾à¦Ÿà¦¸à¦…à§à¦¯à¦¾à¦ª',
-        location: 'à¦ à¦¿à¦•à¦¾à¦¨à¦¾ / à¦²à§‹à¦•à§‡à¦¶à¦¨',
-        house: 'à¦¬à¦¾à¦¸à¦¾ / à¦¬à¦¾à¦¡à¦¼à¦¿',
-        arrow: 'à¦¤à§€à¦° à¦šà¦¿à¦¹à§à¦¨',
-        arrow2: 'à¦¦à§à¦‡à¦®à§à¦–à§€ à¦¤à§€à¦°',
-        plus: 'à¦ªà§à¦²à¦¾à¦¸ à¦šà¦¿à¦¹à§à¦¨',
-        cross: 'à¦•à§à¦°à¦¸ à¦šà¦¿à¦¹à§à¦¨',
-        tick: 'à¦Ÿà¦¿à¦• à¦šà¦¿à¦¹à§à¦¨',
-        question: 'à¦•à§à¦¯à¦¼à§‡à¦¶à§à¦šà¦¨ à¦®à¦¾à¦°à§à¦•',
-        exclaim: 'à¦à¦•à§à¦¸à¦•à§à¦²à¦¾à¦®à§‡à¦¶à¦¨',
-        star: 'à¦¤à¦¾à¦°à¦¾',
-        circle: 'à¦¬à§ƒà¦¤à§à¦¤',
-        triangle: 'à¦¤à§à¦°à¦¿à¦­à§à¦œ',
-        'callout-rect': 'à¦¸à§à¦ªà¦¿à¦š à¦¬à¦¾à¦¬à¦² (à¦šà¦¾à¦°à¦•à§‹à¦£à¦¾)',
-        'callout-oval': 'à¦¸à§à¦ªà¦¿à¦š à¦¬à¦¾à¦¬à¦² (à¦“à¦­à¦¾à¦²)',
-        'scroll-banner': 'à¦¸à§à¦•à§à¦°à¦² à¦¬à§à¦¯à¦¾à¦¨à¦¾à¦°'
+        whatsapp: 'হোয়াটসঅ্যাপ',
+        location: 'ঠিকানা / লোকেশন',
+        house: 'বাসা / বাড়ি',
+        arrow: 'তীর চিহ্ন',
+        arrow2: 'দুইমুখী তীর',
+        plus: 'প্লাস চিহ্ন',
+        cross: 'ক্রস চিহ্ন',
+        tick: 'টিক চিহ্ন',
+        question: 'কুয়েশ্চন মার্ক',
+        exclaim: 'এক্সক্লামেশন',
+        star: 'তারা',
+        circle: 'বৃত্ত',
+        triangle: 'ত্রিভুজ',
+        'callout-rect': 'স্পিচ বাবল (চারকোণা)',
+        'callout-oval': 'স্পিচ বাবল (ওভাল)',
+        'scroll-banner': 'স্ক্রল ব্যানার'
     };
 
     let symbolIdCounter = 1;
@@ -17818,12 +17828,12 @@ document.addEventListener('DOMContentLoaded', () => {
         plane: 'âœˆ'
     };
     const SHAPE_OVERLAY_NAMES_BN = {
-        ribbon: 'à¦°à¦¿à¦¬à¦¨ à¦¬à§à¦¯à¦¾à¦¨à¦¾à¦°',
-        wave: 'à¦“à¦¯à¦¼à§‡à¦­à¦¿ à¦¬à§à¦¯à¦¾à¦¨à¦¾à¦°',
-        cloud: 'à¦¥à¦Ÿ à¦•à§à¦²à¦¾à¦‰à¦¡',
-        star6: 'à§¬-à¦ªà¦¯à¦¼à§‡à¦¨à§à¦Ÿ à¦¤à¦¾à¦°à¦¾',
-        oval: 'à¦“à¦­à¦¾à¦² à¦•à§à¦¯à¦¾à¦²à¦¾à¦‰à¦Ÿ',
-        plane: 'à¦ªà§à¦²à§‡à¦¨ à¦¬à§à¦¯à¦¾à¦¨à¦¾à¦°'
+        ribbon: 'রিবন ব্যানার',
+        wave: 'ওয়েভি ব্যানার',
+        cloud: 'থট ক্লাউড',
+        star6: '৬-পয়েন্ট তারা',
+        oval: 'ওভাল ক্যালাউট',
+        plane: 'প্লেন ব্যানার'
     };
 
     let shapeOverlayIdCounter = 1;
@@ -17837,7 +17847,7 @@ document.addEventListener('DOMContentLoaded', () => {
             id: shapeOverlayIdCounter++,
             clipId: state.activeClipId,
             shapeType: type,
-            text: isPlane ? 'YOUR TEXT HERE' : 'à¦†à¦ªà¦¨à¦¾à¦° à¦Ÿà§‡à¦•à§à¦¸à¦Ÿ',
+            text: isPlane ? 'YOUR TEXT HERE' : 'আপনার টেক্সট',
             x: 0.5,
             y: isPlane ? 0.3 : 0.5,
             size: isPlane ? 46 : 32, // percent of canvas width
@@ -18137,7 +18147,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (removeCustomThumbnailBtn) removeCustomThumbnailBtn.addEventListener('click', () => {
         state.customThumbnailFile = null;
         customThumbnailInput.value = '';
-        if (customThumbnailLabel) customThumbnailLabel.innerText = 'à¦¨à¦¿à¦œà§‡à¦° Thumbnail Image à¦†à¦ªà¦²à§‹à¦¡ à¦•à¦°à§à¦¨';
+        if (customThumbnailLabel) customThumbnailLabel.innerText = 'নিজের Thumbnail Image আপলোড করুন';
         removeCustomThumbnailBtn.style.display = 'none';
     });
 
@@ -18168,7 +18178,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (aiThumbSaveKeyBtn) {
         aiThumbSaveKeyBtn.addEventListener('click', () => {
             localStorage.setItem('ai_thumb_api_key', aiThumbKey.value.trim());
-            alert('API Key à¦¸à¦«à¦²à¦­à¦¾à¦¬à§‡ à¦¸à§‡à¦­ à¦•à¦°à¦¾ à¦¹à¦¯à¦¼à§‡à¦›à§‡!');
+            alert('API Key সফলভাবে সেভ করা হয়েছে!');
         });
     }
 
@@ -18188,7 +18198,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const prompt = aiThumbPrompt ? aiThumbPrompt.value.trim() : '';
 
             if (!apiKey) {
-                alert('à¦…à¦¨à§à¦—à§à¦°à¦¹ à¦•à¦°à§‡ API Key à¦ªà§à¦°à¦¦à¦¾à¦¨ à¦•à¦°à§à¦¨à¥¤');
+                alert('অনুগ্রহ করে API Key প্রদান করুন।');
                 return;
             }
 
@@ -18197,7 +18207,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
             aiThumbGenerateBtn.disabled = true;
             if (aiThumbPreviewBox) aiThumbPreviewBox.style.display = 'none';
-            setAiThumbStatus('â³ à¦«à§à¦°à§‡à¦® à¦†à¦ªà¦²à§‹à¦¡ à¦¹à¦šà§à¦›à§‡ à¦“ AI à¦¥à¦¾à¦®à§à¦¬à¦¨à§‡à¦‡à¦² à¦¤à§ˆà¦°à¦¿ à¦¹à¦šà§à¦›à§‡... (à¦à¦•à¦Ÿà§ à¦¸à¦®à¦¯à¦¼ à¦²à¦¾à¦—à¦¤à§‡ à¦ªà¦¾à¦°à§‡)');
+            setAiThumbStatus('⏳ ফ্রেম আপলোড হচ্ছে ও AI থাম্বনেইল তৈরি হচ্ছে... (একটু সময় লাগতে পারে)');
 
             try {
                 const response = await fetch('/api/thumbnail-proxy', {
@@ -18220,10 +18230,10 @@ document.addEventListener('DOMContentLoaded', () => {
                     aiThumbDownloadLink.download = `ai-thumbnail-${Date.now()}.png`;
                 }
                 if (aiThumbPreviewBox) aiThumbPreviewBox.style.display = 'block';
-                setAiThumbStatus('âœ… AI à¦¥à¦¾à¦®à§à¦¬à¦¨à§‡à¦‡à¦² à¦¤à§ˆà¦°à¦¿ à¦¹à¦¯à¦¼à§‡à¦›à§‡ â€” à¦¨à¦¿à¦šà§‡ à¦ªà§à¦°à¦¿à¦­à¦¿à¦‰ à¦¦à§‡à¦–à§à¦¨à¥¤');
+                setAiThumbStatus('✅ AI থাম্বনেইল তৈরি হয়েছে — নিচে প্রিভিউ দেখুন।');
             } catch (err) {
                 console.error(err);
-                setAiThumbStatus('âš ï¸ à¦­à§à¦² à¦¹à¦¯à¦¼à§‡à¦›à§‡: ' + err.message, true);
+                setAiThumbStatus('⚠️ ভুল হয়েছে: ' + err.message, true);
             } finally {
                 aiThumbGenerateBtn.disabled = false;
             }
@@ -18236,7 +18246,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const file = new File([aiThumbLastBlob], `ai-thumbnail-${Date.now()}.png`, { type: 'image/png' });
             state.customThumbnailFile = file;
             showThumbnailPreview(URL.createObjectURL(file), file.name, true);
-            setAiThumbStatus('âœ… à¦à¦‡ AI à¦¥à¦¾à¦®à§à¦¬à¦¨à§‡à¦‡à¦²à¦Ÿà¦¿ à¦à¦•à§à¦¸à¦ªà§‹à¦°à§à¦Ÿà§‡à¦° à¦•à¦­à¦¾à¦° à¦¹à¦¿à¦¸à§‡à¦¬à§‡ à¦¸à§‡à¦Ÿ à¦•à¦°à¦¾ à¦¹à¦¯à¦¼à§‡à¦›à§‡à¥¤');
+            setAiThumbStatus('✅ এই AI থাম্বনেইলটি এক্সপোর্টের কভার হিসেবে সেট করা হয়েছে।');
         });
     }
 
@@ -20533,7 +20543,7 @@ document.addEventListener('DOMContentLoaded', () => {
             console.log("Project exported successfully.");
         } catch (e) {
             console.error("Export failed:", e);
-            alert("à¦ªà§à¦°à¦œà§‡à¦•à§à¦Ÿ à¦à¦•à§à¦¸à¦ªà§‹à¦°à§à¦Ÿ à¦•à¦°à¦¤à§‡ à¦¬à§à¦¯à¦°à§à¦¥ à¦¹à§Ÿà§‡à¦›à§‡à¥¤ à¦…à¦¨à§à¦—à§à¦°à¦¹ à¦•à¦°à§‡ à¦†à¦¬à¦¾à¦° à¦šà§‡à¦·à§à¦Ÿà¦¾ à¦•à¦°à§à¦¨à¥¤");
+            alert("প্রজেক্ট এক্সপোর্ট করতে ব্যর্থ হয়েছে। অনুগ্রহ করে আবার চেষ্টা করুন।");
             saveModalConfirm.disabled = false;
             saveModalConfirm.innerHTML = prevConfirmText;
         }
@@ -20546,7 +20556,7 @@ document.addEventListener('DOMContentLoaded', () => {
         try {
             const data = JSON.parse(jsonData);
             if (data.appName !== 'Studio Flow' || !data.settings) {
-                alert("à¦¤à§à¦°à§à¦Ÿà¦¿: à¦à¦Ÿà¦¿ à¦•à§‹à¦¨à§‹ à¦¬à§ˆà¦§ Studio Flow à¦ªà§à¦°à¦œà§‡à¦•à§à¦Ÿ à¦«à¦¾à¦‡à¦² à¦¨à§Ÿà¥¤");
+                alert("ত্রুটি: এটি কোনো বৈধ Studio Flow প্রজেক্ট ফাইল নয়।");
                 return;
             }
 
@@ -20566,7 +20576,7 @@ document.addEventListener('DOMContentLoaded', () => {
                             type: 'clip',
                             id: clip.id,
                             name: clip.name,
-                            meta: `à¦­à¦¿à¦¡à¦¿à¦“ à¦•à§à¦²à¦¿à¦ª Â· Duration: ${clip.duration.toFixed(1)}s`
+                            meta: `ভিডিও ক্লিপ · Duration: ${clip.duration.toFixed(1)}s`
                         });
                     }
                 }
@@ -20598,7 +20608,7 @@ document.addEventListener('DOMContentLoaded', () => {
                                 type: 'bgmusic',
                                 id: track.id,
                                 name: track.name,
-                                meta: `à¦¬à§à¦¯à¦¾à¦•à¦—à§à¦°à¦¾à¦‰à¦¨à§à¦¡ à¦®à¦¿à¦‰à¦œà¦¿à¦• à¦Ÿà§à¦°à§à¦¯à¦¾à¦•`
+                                meta: `ব্যাকগ্রাউন্ড মিউজিক ট্র্যাক`
                             });
                         }
                     } else {
@@ -20606,7 +20616,7 @@ document.addEventListener('DOMContentLoaded', () => {
                             type: 'bgmusic',
                             id: track.id,
                             name: track.name,
-                            meta: `à¦¬à§à¦¯à¦¾à¦•à¦—à§à¦°à¦¾à¦‰à¦¨à§à¦¡ à¦®à¦¿à¦‰à¦œà¦¿à¦• à¦Ÿà§à¦°à§à¦¯à¦¾à¦•`
+                            meta: `ব্যাকগ্রাউন্ড মিউজিক ট্র্যাক`
                         });
                     }
                 }
@@ -20628,7 +20638,7 @@ document.addEventListener('DOMContentLoaded', () => {
                                 id: eclip.id,
                                 trackId: track.id,
                                 name: eclip.name,
-                                meta: `à¦à¦•à§à¦¸à¦Ÿà§à¦°à¦¾ à¦Ÿà§à¦°à§à¦¯à¦¾à¦• à¦•à§à¦²à¦¿à¦ª (${track.type === 'audio' ? 'à¦…à¦¡à¦¿à¦“' : (track.type === 'image' ? 'à¦›à¦¬à¦¿' : 'à¦­à¦¿à¦¡à¦¿à¦“')})`
+                                meta: `এক্সট্রা ট্র্যাক ক্লিপ (${track.type === 'audio' ? 'অডিও' : (track.type === 'image' ? 'ছবি' : 'ভিডিও')})`
                             });
                         }
                     }
@@ -20642,7 +20652,7 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         } catch (e) {
             console.error("Import failed:", e);
-            alert("à¦ªà§à¦°à¦œà§‡à¦•à§à¦Ÿ à¦‡à¦®à§à¦ªà§‹à¦°à§à¦Ÿ à¦•à¦°à¦¤à§‡ à¦¬à§à¦¯à¦°à§à¦¥ à¦¹à§Ÿà§‡à¦›à§‡à¥¤ à¦«à¦¾à¦‡à¦²à¦Ÿà¦¿ à¦¸à¦ à¦¿à¦• à¦•à¦¿à¦¨à¦¾ à¦¯à¦¾à¦šà¦¾à¦‡ à¦•à¦°à§à¦¨à¥¤");
+            alert("প্রজেক্ট ইম্পোর্ট করতে ব্যর্থ হয়েছে। ফাইলটি সঠিক কিনা যাচাই করুন।");
         }
     }
 
@@ -20918,10 +20928,10 @@ document.addEventListener('DOMContentLoaded', () => {
             state.currentStep = 1;
             updateNavigation();
 
-            alert("à¦ªà§à¦°à¦œà§‡à¦•à§à¦Ÿ à¦¸à¦«à¦²à¦­à¦¾à¦¬à§‡ à¦²à§‹à¦¡ à¦¹à§Ÿà§‡à¦›à§‡!");
+            alert("প্রজেক্ট সফলভাবে লোড হয়েছে!");
         } catch (e) {
             console.error("Apply import failed:", e);
-            alert("à¦ªà§à¦°à¦œà§‡à¦•à§à¦Ÿ à¦«à¦¾à¦‡à¦² à¦…à§à¦¯à¦¾à¦ªà§à¦²à¦¾à¦‡ à¦•à¦°à¦¤à§‡ à¦¤à§à¦°à§à¦Ÿà¦¿ à¦˜à¦Ÿà§‡à¦›à§‡: " + (e.message || e));
+            alert("প্রজেক্ট ফাইল অ্যাপ্লাই করতে ত্রুটি ঘটেছে: " + (e.message || e));
         }
     }
 
@@ -21276,7 +21286,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         state.activeProjectId = targetProjId;
                         await saveProjectToBrowserStorage(targetProjId);
                     }
-                    if (typeof showToast === 'function') showToast(`"${file.name}"-à¦à¦° à¦ªà§‚à¦°à§à¦¬à§‡à¦° à¦¸à¦‚à¦°à¦•à§à¦·à¦¿à¦¤ à¦ªà§à¦°à¦œà§‡à¦•à§à¦Ÿ à¦²à§‹à¦¡ à¦•à¦°à¦¾ à¦¹à¦²à§‹!`, 'success');
+                    if (typeof showToast === 'function') showToast(`"${file.name}"-এর পূর্বের সংরক্ষিত প্রজেক্ট লোড করা হলো!`, 'success');
                     return true;
                 }
             }
@@ -21285,7 +21295,7 @@ document.addEventListener('DOMContentLoaded', () => {
             clearWorkspaceState();
             state.activeProjectId = targetProjId;
             state.projectVideoFingerprint = videoFingerprint;
-            if (typeof showToast === 'function') showToast(`"${file.name}"-à¦à¦° à¦œà¦¨à§à¦¯ à¦¨à¦¤à§à¦¨ à¦«à§à¦°à§‡à¦¶ à¦ªà§à¦°à¦œà§‡à¦•à§à¦Ÿ à¦¶à§à¦°à§ à¦•à¦°à¦¾ à¦¹à¦²à§‹à¥¤`, 'info');
+            if (typeof showToast === 'function') showToast(`"${file.name}"-এর জন্য নতুন ফ্রেশ প্রজেক্ট শুরু করা হলো।`, 'info');
             return false;
         } finally {
             isProjectSwitching = false;
@@ -21320,7 +21330,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!projectsListContainer) return;
         const list = getProjectsRegistry();
         if (list.length === 0) {
-            projectsListContainer.innerHTML = '<div style="text-align:center; padding:30px; color:#94a3b8;"><i class="fa-solid fa-folder-open" style="font-size:32px; margin-bottom:8px; opacity:0.5;"></i><p>à¦•à§‹à¦¨à§‹ à¦¸à¦‚à¦°à¦•à§à¦·à¦¿à¦¤ à¦ªà§à¦°à¦œà§‡à¦•à§à¦Ÿ à¦ªà¦¾à¦“à§Ÿà¦¾ à¦¯à¦¾à§Ÿà¦¨à¦¿à¥¤</p></div>';
+            projectsListContainer.innerHTML = '<div style="text-align:center; padding:30px; color:#94a3b8;"><i class="fa-solid fa-folder-open" style="font-size:32px; margin-bottom:8px; opacity:0.5;"></i><p>কোনো সংরক্ষিত প্রজেক্ট পাওয়া যায়নি।</p></div>';
             return;
         }
 
@@ -21335,7 +21345,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         <div class="project-card-title">
                             <i class="fa-solid fa-file-video" style="color:var(--primary);"></i>
                             ${escapeHtml(p.name)}
-                            ${isActive ? '<span class="project-card-badge">à¦¬à¦°à§à¦¤à¦®à¦¾à¦¨à§‡ à¦¸à¦•à§à¦°à¦¿à§Ÿ (Active)</span>' : ''}
+                            ${isActive ? '<span class="project-card-badge">বর্তমানে সক্রিয় (Active)</span>' : ''}
                         </div>
                         <div class="project-card-meta">
                             <span><i class="fa-solid fa-clock"></i> ${dateStr}</span>
@@ -21345,7 +21355,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     </div>
                     <div style="display:flex; align-items:center; gap:6px;">
                         <button type="button" class="btn btn-sm btn-outline open-proj-btn" data-id="${p.id}" ${isActive ? 'disabled' : ''}>
-                            <i class="fa-solid fa-folder-open"></i> à¦–à§à¦²à§à¦¨ (Open)
+                            <i class="fa-solid fa-folder-open"></i> খুলুন (Open)
                         </button>
                         <button type="button" class="btn btn-sm btn-outline delete-proj-btn" data-id="${p.id}" style="color:#ef4444; border-color:rgba(239,68,68,0.3);">
                             <i class="fa-solid fa-trash"></i>
@@ -21363,7 +21373,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 await saveProjectToBrowserStorage(); // auto-save current project before switching
                 const restored = await restoreProjectFromBrowserStorage(id);
                 if (restored && typeof showToast === 'function') {
-                    showToast('à¦ªà§à¦°à¦œà§‡à¦•à§à¦Ÿà¦Ÿà¦¿ à¦¸à¦«à¦²à¦­à¦¾à¦¬à§‡ à¦²à§‹à¦¡ à¦•à¦°à¦¾ à¦¹à§Ÿà§‡à¦›à§‡!', 'success');
+                    showToast('প্রজেক্টটি সফলভাবে লোড করা হয়েছে!', 'success');
                 }
             });
         });
@@ -21372,7 +21382,7 @@ document.addEventListener('DOMContentLoaded', () => {
             btn.addEventListener('click', (e) => {
                 const id = e.currentTarget.dataset.id;
                 if (!id) return;
-                if (confirm("à¦†à¦ªà¦¨à¦¿ à¦•à¦¿ à¦¨à¦¿à¦¶à§à¦šà¦¿à¦¤ à¦¯à§‡ à¦à¦‡ à¦¸à§‡à¦­ à¦¹à¦“à§Ÿà¦¾ à¦ªà§à¦°à¦œà§‡à¦•à§à¦Ÿà¦Ÿà¦¿ à¦®à§à¦›à§‡ à¦«à§‡à¦²à¦¤à§‡ à¦šà¦¾à¦¨?")) {
+                if (confirm("আপনি কি নিশ্চিত যে এই সেভ হওয়া প্রজেক্টটি মুছে ফেলতে চান?")) {
                     deleteProjectFromStorage(id);
                     renderSavedProjectsList();
                 }
@@ -22027,13 +22037,13 @@ document.addEventListener('DOMContentLoaded', () => {
     // --- Clear All Edits for Current Video (Keep Video Loaded, Reset Edits) ---
     async function clearAllEditsForCurrentVideo() {
         if (!state.clips || state.clips.length === 0) {
-            if (typeof showToast === 'function') showToast('à¦¬à¦°à§à¦¤à¦®à¦¾à¦¨à§‡ à¦•à§‹à¦¨à§‹ à¦­à¦¿à¦¡à¦¿à¦“ à¦²à§‹à¦¡ à¦•à¦°à¦¾ à¦¨à§‡à¦‡à¥¤', 'warning');
+            if (typeof showToast === 'function') showToast('বর্তমানে কোনো ভিডিও লোড করা নেই।', 'warning');
             return;
         }
 
         const activeClip = state.clips.find(c => c.id === state.activeClipId) || state.clips[0];
-        const clipName = activeClip ? activeClip.name : 'à¦­à¦¿à¦¡à¦¿à¦“';
-        const confirmMsg = `à¦†à¦ªà¦¨à¦¿ à¦•à¦¿ à¦¨à¦¿à¦¶à§à¦šà¦¿à¦¤ à¦¯à§‡ "${clipName}"-à¦à¦° à¦¸à¦®à¦¸à§à¦¤ à¦à¦¡à¦¿à¦Ÿà¦¿à¦‚ (à¦¸à¦¾à¦¬à¦Ÿà¦¾à¦‡à¦Ÿà§‡à¦², à¦¬à¦¿-à¦°à§‹à¦², à¦“à¦­à¦¾à¦°à¦²à§‡, à¦«à¦¿à¦²à§à¦Ÿà¦¾à¦° à¦‡à¦¤à§à¦¯à¦¾à¦¦à¦¿) à¦®à§à¦›à§‡ à¦¦à¦¿à§Ÿà§‡ à¦­à¦¿à¦¡à¦¿à¦“à¦Ÿà¦¿ à¦«à§à¦°à§‡à¦¶ à¦•à¦°à¦¤à§‡ à¦šà¦¾à¦¨?\n\nà¦­à¦¿à¦¡à¦¿à¦“à¦Ÿà¦¿ à¦²à§‹à¦¡ à¦¥à¦¾à¦•à¦¬à§‡, à¦•à¦¿à¦¨à§à¦¤à§ à¦¸à¦¬ à¦à¦¡à¦¿à¦Ÿ à¦®à§à¦›à§‡ à¦¨à¦¤à§à¦¨ à¦…à¦¬à¦¸à§à¦¥à¦¾ à¦¹à¦¬à§‡à¥¤`;
+        const clipName = activeClip ? activeClip.name : 'ভিডিও';
+        const confirmMsg = `আপনি কি নিশ্চিত যে "${clipName}"-এর সমস্ত এডিটিং (সাবটাইটেল, বি-রোল, ওভারলে, ফিল্টার ইত্যাদি) মুছে দিয়ে ভিডিওটি ফ্রেশ করতে চান?\n\nভিডিওটি লোড থাকবে, কিন্তু সব এডিট মুছে নতুন অবস্থা হবে।`;
 
         if (!confirm(confirmMsg)) return;
 
@@ -22182,7 +22192,7 @@ document.addEventListener('DOMContentLoaded', () => {
         await saveProjectToBrowserStorage(preservedProjId);
 
         if (typeof showToast === 'function') {
-            showToast(`"${clipName}"-à¦à¦° à¦¸à¦®à¦¸à§à¦¤ à¦à¦¡à¦¿à¦Ÿ à¦•à§à¦²à¦¿à¦¯à¦¼à¦¾à¦° à¦•à¦°à¦¾ à¦¹à¦¯à¦¼à§‡à¦›à§‡à¥¤ à¦«à§à¦°à§‡à¦¶ à¦ªà§à¦°à¦œà§‡à¦•à§à¦Ÿ à¦¶à§à¦°à§ à¦¹à¦²à§‹!`, 'success');
+            showToast(`"${clipName}"-এর সমস্ত এডিট ক্লিয়ার করা হয়েছে। ফ্রেশ প্রজেক্ট শুরু হলো!`, 'success');
         }
     }
     window.clearAllEditsForCurrentVideo = clearAllEditsForCurrentVideo;
@@ -22195,7 +22205,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const resetEditorBtn = document.getElementById('reset-editor-btn');
     if (resetEditorBtn) {
         resetEditorBtn.addEventListener('click', async () => {
-            const confirmMsg = 'à¦†à¦ªà¦¨à¦¿ à¦•à¦¿ à¦¨à¦¿à¦¶à§à¦šà¦¿à¦¤ à¦¯à§‡ à¦¨à¦¤à§à¦¨ à¦ªà§à¦°à¦œà§‡à¦•à§à¦Ÿ à¦¶à§à¦°à§ à¦•à¦°à¦¤à§‡ à¦šà¦¾à¦¨?\n\nà¦¬à¦°à§à¦¤à¦®à¦¾à¦¨ à¦­à¦¿à¦¡à¦¿à¦“, à¦•à§à¦²à¦¿à¦ª, à¦“à¦­à¦¾à¦°à¦²à§‡ à¦à¦¬à¦‚ à¦¸à¦¬ à¦¸à§‡à¦Ÿà¦¿à¦‚à¦¸ à¦®à§à¦›à§‡ à¦¯à¦¾à¦¬à§‡ à¦à¦¬à¦‚ à¦à¦‡ à¦•à¦¾à¦œà¦Ÿà¦¿ à¦†à¦° à¦«à§‡à¦°à¦¾à¦¨à§‹ à¦¯à¦¾à¦¬à§‡ à¦¨à¦¾à¥¤';
+            const confirmMsg = 'আপনি কি নিশ্চিত যে নতুন প্রজেক্ট শুরু করতে চান?\n\nবর্তমান ভিডিও, ক্লিপ, ওভারলে এবং সব সেটিংস মুছে যাবে এবং এই কাজটি আর ফেরানো যাবে না।';
             if (!confirm(confirmMsg)) return;
 
             resetEditorBtn.disabled = true;
@@ -22335,11 +22345,11 @@ document.addEventListener('DOMContentLoaded', () => {
         silenceScanBtn.addEventListener('click', async () => {
             const activeClip = state.clips.find(c => c.id === state.activeClipId);
             if (!activeClip) {
-                alert("à¦¦à§Ÿà¦¾ à¦•à¦°à§‡ à¦ªà§à¦°à¦¥à¦®à§‡ à¦à¦•à¦Ÿà¦¿ à¦­à¦¿à¦¡à¦¿à¦“ à¦•à§à¦²à¦¿à¦ª à¦¸à¦¿à¦²à§‡à¦•à§à¦Ÿ à¦•à¦°à§à¦¨à¥¤");
+                alert("দয়া করে প্রথমে একটি ভিডিও ক্লিপ সিলেক্ট করুন।");
                 return;
             }
             if (activeClip.type === 'image') {
-                alert("à¦¨à§€à¦°à¦¬à¦¤à¦¾ à¦›à¦¾à¦à¦Ÿà¦¾à¦‡ à¦¶à§à¦§à§ à¦­à¦¿à¦¡à¦¿à¦“ à¦•à§à¦²à¦¿à¦ªà§‡à¦° à¦œà¦¨à§à¦¯ à¦ªà§à¦°à¦¯à§‹à¦œà§à¦¯à¥¤");
+                alert("নীরবতা ছাঁটাই শুধু ভিডিও ক্লিপের জন্য প্রযোজ্য।");
                 return;
             }
             
@@ -22372,7 +22382,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         // Show scanning state
         statusEl.style.display = 'flex';
-        statusEl.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin"></i> à¦…à¦¡à¦¿à¦“ à¦«à¦¾à¦‡à¦² à¦ªà§à¦°à¦¸à§‡à¦¸ à¦•à¦°à¦¾ à¦¹à¦šà§à¦›à§‡...';
+        statusEl.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin"></i> অডিও ফাইল প্রসেস করা হচ্ছে...';
         statusEl.style.color = 'var(--text-secondary)';
         resultsEl.style.display = 'none';
         listEl.innerHTML = '';
@@ -22381,12 +22391,12 @@ document.addEventListener('DOMContentLoaded', () => {
         try {
             // Read arrayBuffer from activeClip file
             const arrayBuffer = await activeClip.file.arrayBuffer();
-            statusEl.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin"></i> à¦…à¦¡à¦¿à¦“ à¦¡à¦¿à¦•à§‹à¦¡ à¦•à¦°à¦¾ à¦¹à¦šà§à¦›à§‡...';
+            statusEl.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin"></i> অডিও ডিকোড করা হচ্ছে...';
 
             const tempCtx = new (window.AudioContext || window.webkitAudioContext)();
             const audioBuffer = await tempCtx.decodeAudioData(arrayBuffer);
 
-            statusEl.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin"></i> à¦¨à§€à¦°à¦¬ à¦…à¦‚à¦¶ à¦–à§‹à¦à¦œà¦¾ à¦¹à¦šà§à¦›à§‡...';
+            statusEl.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin"></i> নীরব অংশ খোঁজা হচ্ছে...';
 
             const sampleRate = audioBuffer.sampleRate;
             const channelData = audioBuffer.getChannelData(0);
@@ -22461,13 +22471,13 @@ document.addEventListener('DOMContentLoaded', () => {
             });
 
             if (finalSegments.length === 0) {
-                statusEl.innerHTML = '<i class="fa-solid fa-circle-check" style="color: var(--success);"></i> à¦•à§‹à¦¨à§‹ à¦¨à§€à¦°à¦¬ à¦…à¦‚à¦¶ à¦ªà¦¾à¦“à§Ÿà¦¾ à¦¯à¦¾à§Ÿà¦¨à¦¿à¥¤';
+                statusEl.innerHTML = '<i class="fa-solid fa-circle-check" style="color: var(--success);"></i> কোনো নীরব অংশ পাওয়া যায়নি।';
                 statusEl.style.color = 'var(--success)';
                 return;
             }
 
             detectedSilences = finalSegments;
-            statusEl.innerHTML = `<i class="fa-solid fa-circle-check" style="color: var(--success);"></i> à¦¸à§à¦•à§à¦¯à¦¾à¦¨ à¦¸à¦®à§à¦ªà¦¨à§à¦¨: ${finalSegments.length}à¦Ÿà¦¿ à¦¨à§€à¦°à¦¬ à¦…à¦‚à¦¶ à¦ªà¦¾à¦“à§Ÿà¦¾ à¦—à§‡à¦›à§‡à¥¤`;
+            statusEl.innerHTML = `<i class="fa-solid fa-circle-check" style="color: var(--success);"></i> স্ক্যান সম্পন্ন: ${finalSegments.length}টি নীরব অংশ পাওয়া গেছে।`;
             statusEl.style.color = 'var(--success)';
 
             renderSilenceSegmentsList();
@@ -22476,7 +22486,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         } catch (err) {
             console.error("Silence analysis error:", err);
-            statusEl.innerHTML = '<i class="fa-solid fa-circle-exclamation" style="color: var(--danger);"></i> à¦…à¦¡à¦¿à¦“ à¦¬à¦¿à¦¶à§à¦²à§‡à¦·à¦£ à¦¬à§à¦¯à¦°à§à¦¥ à¦¹à§Ÿà§‡à¦›à§‡à¥¤ à¦«à¦¾à¦‡à¦²à§‡ à¦…à¦¡à¦¿à¦“ à¦Ÿà§à¦°à§à¦¯à¦¾à¦• à¦¨à¦¾à¦“ à¦¥à¦¾à¦•à¦¤à§‡ à¦ªà¦¾à¦°à§‡à¥¤';
+            statusEl.innerHTML = '<i class="fa-solid fa-circle-exclamation" style="color: var(--danger);"></i> অডিও বিশ্লেষণ ব্যর্থ হয়েছে। ফাইলে অডিও ট্র্যাক নাও থাকতে পারে।';
             statusEl.style.color = 'var(--danger)';
         }
     }
@@ -22583,7 +22593,7 @@ document.addEventListener('DOMContentLoaded', () => {
             .map(c => parseInt(c.dataset.id));
 
         if (selectedIds.length === 0) {
-            alert("à¦¬à¦¾à¦¦ à¦¦à§‡à¦“à§Ÿà¦¾à¦° à¦œà¦¨à§à¦¯ à¦…à¦¨à§à¦—à§à¦°à¦¹ à¦•à¦°à§‡ à¦•à¦®à¦ªà¦•à§à¦·à§‡ à¦à¦•à¦Ÿà¦¿ à¦¨à§€à¦°à¦¬ à¦…à¦‚à¦¶ à¦¸à¦¿à¦²à§‡à¦•à§à¦Ÿ à¦•à¦°à§à¦¨à¥¤");
+            alert("বাদ দেওয়ার জন্য অনুগ্রহ করে কমপক্ষে একটি নীরব অংশ সিলেক্ট করুন।");
             return;
         }
 
@@ -22599,7 +22609,7 @@ document.addEventListener('DOMContentLoaded', () => {
             .filter(cut => cut.end > cut.start + 0.15);
 
         if (cuts.length === 0) {
-            alert("à¦¸à§‡à¦«à¦Ÿà¦¿ à¦¬à¦¾à¦«à¦¾à¦° (Padding) à¦¬à¦¾à¦¦ à¦¦à§‡à¦“à§Ÿà¦¾à¦° à¦ªà¦° à¦•à§‹à¦¨à§‹ à¦‰à¦ªà¦¯à§à¦•à§à¦¤ à¦¨à§€à¦°à¦¬ à¦…à¦‚à¦¶ à¦ªà¦¾à¦“à§Ÿà¦¾ à¦¯à¦¾à§Ÿà¦¨à¦¿à¥¤ à¦…à¦¨à§à¦—à§à¦°à¦¹ à¦•à¦°à§‡ à¦ªà§à¦¯à¦¾à¦¡à¦¿à¦‚ à¦à¦° à¦®à¦¾à¦¨ à¦•à¦®à¦¿à§Ÿà§‡ à¦¦à§‡à¦–à§à¦¨à¥¤");
+            alert("সেফটি বাফার (Padding) বাদ দেওয়ার পর কোনো উপযুক্ত নীরব অংশ পাওয়া যায়নি। অনুগ্রহ করে প্যাডিং এর মান কমিয়ে দেখুন।");
             return;
         }
 
@@ -22650,7 +22660,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         if (newClips.length === 0) {
-            alert("à¦¸à¦¬à¦—à§à¦²à§‹ à¦¨à§€à¦°à¦¬à¦¤à¦¾ à¦¬à¦¾à¦¦ à¦¦à¦¿à¦²à§‡ à¦ªà§à¦°à§‹ à¦­à¦¿à¦¡à¦¿à¦“à¦Ÿà¦¿à¦‡ à¦¬à¦¾à¦¦ à¦ªà§œà§‡ à¦¯à¦¾à§Ÿ! à¦…à¦¨à§à¦—à§à¦°à¦¹ à¦•à¦°à§‡ à¦•à¦¿à¦›à§ à¦¨à§€à¦°à¦¬à¦¤à¦¾ à¦†à¦¨à¦šà§‡à¦• à¦•à¦°à§à¦¨ à¦¬à¦¾ à¦¥à§à¦°à§‡à¦¶à¦¹à§‹à¦²à§à¦¡ à¦¬à¦¾à§œà¦¾à¦¨à¥¤");
+            alert("সবগুলো নীরবতা বাদ দিলে পুরো ভিডিওটিই বাদ পড়ে যায়! অনুগ্রহ করে কিছু নীরবতা আনচেক করুন বা থ্রেশহোল্ড বাড়ান।");
             return;
         }
 
@@ -22659,7 +22669,7 @@ document.addEventListener('DOMContentLoaded', () => {
         switchActiveClip(newClips[0].id);
         resetSilenceTrimmerUI();
 
-        alert(`à¦¸à¦«à¦²à¦­à¦¾à¦¬à§‡ ${cuts.length}à¦Ÿà¦¿ à¦¨à§€à¦°à¦¬ à¦…à¦‚à¦¶ à¦•à§‡à¦Ÿà§‡ à¦¬à¦¾à¦¦ à¦¦à§‡à¦“à§Ÿà¦¾ à¦¹à§Ÿà§‡à¦›à§‡à¥¤ à¦­à¦¿à¦¡à¦¿à¦“à¦Ÿà¦¿ à¦à¦–à¦¨ ${newClips.length}à¦Ÿà¦¿ à¦•à§à¦²à¦¿à¦ªà§‡ à¦¬à¦¿à¦­à¦•à§à¦¤ à¦•à¦°à¦¾ à¦¹à§Ÿà§‡à¦›à§‡à¥¤`);
+        alert(`সফলভাবে ${cuts.length}টি নীরব অংশ কেটে বাদ দেওয়া হয়েছে। ভিডিওটি এখন ${newClips.length}টি ক্লিপে বিভক্ত করা হয়েছে।`);
         if (typeof triggerAutoSave === 'function') triggerAutoSave();
     }
 
@@ -22686,13 +22696,13 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!activeClip || activeClip.type === 'image') {
             if (silenceScanBtn) {
                 silenceScanBtn.disabled = true;
-                silenceScanBtn.innerHTML = '<i class="fa-solid fa-ban"></i> Video Only (à¦¶à§à¦§à§ à¦­à¦¿à¦¡à¦¿à¦“à¦° à¦œà¦¨à§à¦¯)';
+                silenceScanBtn.innerHTML = '<i class="fa-solid fa-ban"></i> Video Only (শুধু ভিডিওর জন্য)';
             }
             resetSilenceTrimmerUI();
         } else {
             if (silenceScanBtn) {
                 silenceScanBtn.disabled = false;
-                silenceScanBtn.innerHTML = '<i class="fa-solid fa-magnifying-glass-chart"></i> Scan for Silence (à¦¨à§€à¦°à¦¬à¦¤à¦¾ à¦¸à§à¦•à§à¦¯à¦¾à¦¨ à¦•à¦°à§à¦¨)';
+                silenceScanBtn.innerHTML = '<i class="fa-solid fa-magnifying-glass-chart"></i> Scan for Silence (নীরবতা স্ক্যান করুন)';
             }
         }
     }
@@ -23119,7 +23129,7 @@ document.addEventListener('DOMContentLoaded', () => {
         function formatTimeBadge(startSec, endSec) {
             const hasStart = startSec != null && !isNaN(startSec);
             const hasEnd = endSec != null && !isNaN(endSec);
-            if (!hasStart && !hasEnd) return 'Full Video (à¦ªà§à¦°à§‹ à¦­à¦¿à¦¡à¦¿à¦“)';
+            if (!hasStart && !hasEnd) return 'Full Video (পুরো ভিডিও)';
             const sStr = hasStart ? parseFloat(startSec).toFixed(1) + 's' : '0.0s';
             const eStr = hasEnd ? parseFloat(endSec).toFixed(1) + 's' : 'End';
             return sStr + ' - ' + eStr;
@@ -23134,14 +23144,14 @@ document.addEventListener('DOMContentLoaded', () => {
             if (layers.length === 0) {
                 const empty = document.createElement('div');
                 empty.className = 'particle-empty-state';
-                empty.innerHTML = '<p><i class="fa-solid fa-smog" style="color:#38bdf8; margin-right:6px;"></i>à¦•à§‹à¦¨à§‹ à¦§à§‹à¦à¦¯à¦¼à¦¾ à¦¸à§‡à¦—à¦®à§‡à¦¨à§à¦Ÿ à¦¤à§ˆà¦°à¦¿ à¦•à¦°à¦¾ à¦¹à¦¯à¦¼à¦¨à¦¿à¥¤ à¦¨à¦¤à§à¦¨ à¦¯à§‹à¦— à¦•à¦°à¦¤à§‡ à¦¨à¦¿à¦šà§‡à¦° à¦¬à¦¾à¦Ÿà¦¨à§‡ à¦šà¦¾à¦ªà§à¦¨à¥¤</p>';
+                empty.innerHTML = '<p><i class="fa-solid fa-smog" style="color:#38bdf8; margin-right:6px;"></i>কোনো ধোঁয়া সেগমেন্ট তৈরি করা হয়নি। নতুন যোগ করতে নিচের বাটনে চাপুন।</p>';
                 listEl.appendChild(empty);
                 return;
             }
 
             layers.forEach((seg, idx) => {
                 if (!seg.id) seg.id = 'smoke_' + Date.now() + '_' + idx;
-                if (!seg.name) seg.name = 'à¦§à§‹à¦à¦¯à¦¼à¦¾ à¦¸à§‡à¦—à¦®à§‡à¦¨à§à¦Ÿ ' + (idx + 1);
+                if (!seg.name) seg.name = 'ধোঁয়া সেগমেন্ট ' + (idx + 1);
 
                 const item = document.createElement('div');
                 item.className = 'particle-segment-item' + (seg.expanded !== false ? ' expanded' : '');
@@ -23152,7 +23162,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 item.innerHTML = `
                     <div class="particle-segment-header">
                         <div class="particle-segment-title-area">
-                            <label class="switch" style="margin:0; transform:scale(0.8); transform-origin:left center;" title="à¦à¦‡ à¦¸à§‡à¦—à¦®à§‡à¦¨à§à¦Ÿ à¦…à¦¨/à¦…à¦« à¦•à¦°à§à¦¨" onclick="event.stopPropagation();">
+                            <label class="switch" style="margin:0; transform:scale(0.8); transform-origin:left center;" title="এই সেগমেন্ট অন/অফ করুন" onclick="event.stopPropagation();">
                                 <input type="checkbox" class="smoke-seg-toggle" ${seg.enabled !== false ? 'checked' : ''}>
                                 <span class="slider round"></span>
                             </label>
@@ -23160,14 +23170,14 @@ document.addEventListener('DOMContentLoaded', () => {
                             <span class="particle-time-badge">${timeBadgeText}</span>
                         </div>
                         <div class="particle-segment-actions">
-                            <button type="button" class="particle-del-btn smoke-seg-del-btn" title="à¦à¦‡ à¦¸à§‡à¦—à¦®à§‡à¦¨à§à¦Ÿ à¦®à§à¦›à§‡ à¦«à§‡à¦²à§à¦¨ (Delete)" onclick="event.stopPropagation();">
+                            <button type="button" class="particle-del-btn smoke-seg-del-btn" title="এই সেগমেন্ট মুছে ফেলুন (Delete)" onclick="event.stopPropagation();">
                                 <i class="fa-solid fa-trash"></i>
                             </button>
                             <i class="fa-solid fa-chevron-down particle-chevron"></i>
                         </div>
                     </div>
                     <div class="particle-segment-body">
-                        <div style="font-weight:600; font-size:11px; margin-bottom:6px; color:#cbd5e1;">Smoke Presets (à¦§à§‹à¦à¦¯à¦¼à¦¾à¦° à¦§à¦°à¦¨):</div>
+                        <div style="font-weight:600; font-size:11px; margin-bottom:6px; color:#cbd5e1;">Smoke Presets (ধোঁয়ার ধরন):</div>
                         <div style="display:grid; grid-template-columns: repeat(3, 1fr); gap:6px; margin-bottom:10px;">
                             <button type="button" class="btn btn-sm btn-outline ${seg.preset === 'smoke' ? 'active' : ''}" data-preset="smoke">Dense Smoke</button>
                             <button type="button" class="btn btn-sm btn-outline ${seg.preset === 'fog' ? 'active' : ''}" data-preset="fog">Mystic Fog</button>
@@ -23178,16 +23188,16 @@ document.addEventListener('DOMContentLoaded', () => {
 
                         <div style="display:grid; grid-template-columns: 1fr 1fr; gap:10px; margin-bottom:10px;">
                             <div class="control-group">
-                                <label>Color (à¦°à¦™)</label>
+                                <label>Color (রঙ)</label>
                                 <div class="color-picker-wrapper">
                                     <input type="color" class="smoke-seg-color" value="${seg.color || '#b8c4d0'}">
                                     <span class="color-value-text smoke-seg-color-val">${seg.color || '#b8c4d0'}</span>
                                 </div>
                             </div>
                             <div class="control-group">
-                                <label>Blend Mode (à¦®à§‹à¦¡)</label>
+                                <label>Blend Mode (মোড)</label>
                                 <select class="form-select smoke-seg-blend">
-                                    <option value="screen" ${seg.blendMode === 'screen' ? 'selected' : ''}>Screen (à¦‰à¦œà§à¦œà§à¦¬à¦²)</option>
+                                    <option value="screen" ${seg.blendMode === 'screen' ? 'selected' : ''}>Screen (উজ্জ্বল)</option>
                                     <option value="lighter" ${seg.blendMode === 'lighter' ? 'selected' : ''}>Additive Glow</option>
                                     <option value="source-over" ${seg.blendMode === 'source-over' ? 'selected' : ''}>Normal Overlay</option>
                                 </select>
@@ -23196,7 +23206,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
                         <div class="control-group">
                             <label style="display:flex; justify-content:space-between;">
-                                <span>Density (à¦˜à¦¨à¦¤à§à¦¬)</span>
+                                <span>Density (ঘনত্ব)</span>
                                 <span class="smoke-seg-density-val">${seg.density || 26}</span>
                             </label>
                             <input type="range" class="smoke-seg-density" min="10" max="100" value="${seg.density || 26}" step="1">
@@ -23204,7 +23214,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
                         <div class="control-group mt-2">
                             <label style="display:flex; justify-content:space-between;">
-                                <span>Speed (à¦—à¦¤à¦¿)</span>
+                                <span>Speed (গতি)</span>
                                 <span class="smoke-seg-speed-val">${seg.speed || 0.7}x</span>
                             </label>
                             <input type="range" class="smoke-seg-speed" min="0.2" max="3.0" value="${seg.speed || 0.7}" step="0.1">
@@ -23212,7 +23222,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
                         <div class="control-group mt-2">
                             <label style="display:flex; justify-content:space-between;">
-                                <span>Direction (à¦¬à¦¾à¦¯à¦¼à§à¦° à¦¦à¦¿à¦•)</span>
+                                <span>Direction (বায়ুর দিক)</span>
                                 <span class="smoke-seg-dir-val">${seg.direction !== undefined ? seg.direction : -90}Â°</span>
                             </label>
                             <input type="range" class="smoke-seg-dir" min="-180" max="180" value="${seg.direction !== undefined ? seg.direction : -90}" step="5">
@@ -23220,22 +23230,22 @@ document.addEventListener('DOMContentLoaded', () => {
 
                         <div class="control-group mt-2">
                             <label style="display:flex; justify-content:space-between;">
-                                <span>Opacity (à¦†à¦¬à¦›à¦¾ à¦­à¦¾à¦¬)</span>
+                                <span>Opacity (আবছা ভাব)</span>
                                 <span class="smoke-seg-opacity-val">${seg.opacity || 55}%</span>
                             </label>
                             <input type="range" class="smoke-seg-opacity" min="10" max="100" value="${seg.opacity || 55}" step="1">
                         </div>
 
                         <div class="mt-3">
-                            <p class="help-text" style="margin-bottom:6px;">à¦­à¦¿à¦¡à¦¿à¦“à¦° à¦•à§‹à¦¨ à¦¸à¦®à¦¯à¦¼ à¦¥à§‡à¦•à§‡ à¦•à§‹à¦¨ à¦¸à¦®à¦¯à¦¼ à¦ªà¦°à§à¦¯à¦¨à§à¦¤ à¦à¦‡ à¦§à§‹à¦à¦¯à¦¼à¦¾à¦Ÿà¦¿ à¦¥à¦¾à¦•à¦¬à§‡:</p>
+                            <p class="help-text" style="margin-bottom:6px;">ভিডিওর কোন সময় থেকে কোন সময় পর্যন্ত এই ধোঁয়াটি থাকবে:</p>
                             <div style="display:grid; grid-template-columns: 1fr 1fr; gap:10px;">
                                 <div class="control-group">
-                                    <label>Show From (à¦¸à§‡à¦•à§‡à¦¨à§à¦¡)</label>
-                                    <input type="number" step="any" min="0" class="form-input smoke-seg-start" placeholder="à¦ªà§à¦°à§‹ à¦­à¦¿à¦¡à¦¿à¦“ (0.0)" value="${(seg.startSec != null && !isNaN(seg.startSec)) ? seg.startSec : ''}">
+                                    <label>Show From (সেকেন্ড)</label>
+                                    <input type="number" step="any" min="0" class="form-input smoke-seg-start" placeholder="পুরো ভিডিও (0.0)" value="${(seg.startSec != null && !isNaN(seg.startSec)) ? seg.startSec : ''}">
                                 </div>
                                 <div class="control-group">
-                                    <label>Show Until (à¦¸à§‡à¦•à§‡à¦¨à§à¦¡)</label>
-                                    <input type="number" step="any" min="0" class="form-input smoke-seg-end" placeholder="à¦ªà§à¦°à§‹ à¦­à¦¿à¦¡à¦¿à¦“ (End)" value="${(seg.endSec != null && !isNaN(seg.endSec)) ? seg.endSec : ''}">
+                                    <label>Show Until (সেকেন্ড)</label>
+                                    <input type="number" step="any" min="0" class="form-input smoke-seg-end" placeholder="পুরো ভিডিও (End)" value="${(seg.endSec != null && !isNaN(seg.endSec)) ? seg.endSec : ''}">
                                 </div>
                             </div>
                         </div>
@@ -23389,7 +23399,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 const newId = 'smoke_' + Date.now();
                 const newSeg = {
                     id: newId,
-                    name: 'à¦§à§‹à¦à¦¯à¦¼à¦¾ à¦¸à§‡à¦—à¦®à§‡à¦¨à§à¦Ÿ ' + (layers.length + 1),
+                    name: 'ধোঁয়া সেগমেন্ট ' + (layers.length + 1),
                     enabled: true,
                     preset: 'smoke',
                     color: '#b8c4d0',
@@ -23430,14 +23440,14 @@ document.addEventListener('DOMContentLoaded', () => {
             if (layers.length === 0) {
                 const empty = document.createElement('div');
                 empty.className = 'particle-empty-state';
-                empty.innerHTML = '<p><i class="fa-solid fa-star" style="color:#fbbf24; margin-right:6px;"></i>à¦•à§‹à¦¨à§‹ à¦—à§à¦²à¦¿à¦Ÿà¦¾à¦° à¦¸à§‡à¦—à¦®à§‡à¦¨à§à¦Ÿ à¦¤à§ˆà¦°à¦¿ à¦•à¦°à¦¾ à¦¹à¦¯à¦¼à¦¨à¦¿à¥¤ à¦¨à¦¤à§à¦¨ à¦¯à§‹à¦— à¦•à¦°à¦¤à§‡ à¦¨à¦¿à¦šà§‡à¦° à¦¬à¦¾à¦Ÿà¦¨à§‡ à¦šà¦¾à¦ªà§à¦¨à¥¤</p>';
+                empty.innerHTML = '<p><i class="fa-solid fa-star" style="color:#fbbf24; margin-right:6px;"></i>কোনো গ্লিটার সেগমেন্ট তৈরি করা হয়নি। নতুন যোগ করতে নিচের বাটনে চাপুন।</p>';
                 listEl.appendChild(empty);
                 return;
             }
 
             layers.forEach((seg, idx) => {
                 if (!seg.id) seg.id = 'glitter_' + Date.now() + '_' + idx;
-                if (!seg.name) seg.name = 'à¦—à§à¦²à¦¿à¦Ÿà¦¾à¦° à¦¸à§‡à¦—à¦®à§‡à¦¨à§à¦Ÿ ' + (idx + 1);
+                if (!seg.name) seg.name = 'গ্লিটার সেগমেন্ট ' + (idx + 1);
 
                 const item = document.createElement('div');
                 item.className = 'particle-segment-item' + (seg.expanded !== false ? ' expanded' : '');
@@ -23448,7 +23458,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 item.innerHTML = `
                     <div class="particle-segment-header">
                         <div class="particle-segment-title-area">
-                            <label class="switch" style="margin:0; transform:scale(0.8); transform-origin:left center;" title="à¦à¦‡ à¦¸à§‡à¦—à¦®à§‡à¦¨à§à¦Ÿ à¦…à¦¨/à¦…à¦« à¦•à¦°à§à¦¨" onclick="event.stopPropagation();">
+                            <label class="switch" style="margin:0; transform:scale(0.8); transform-origin:left center;" title="এই সেগমেন্ট অন/অফ করুন" onclick="event.stopPropagation();">
                                 <input type="checkbox" class="glitter-seg-toggle" ${seg.enabled !== false ? 'checked' : ''}>
                                 <span class="slider round"></span>
                             </label>
@@ -23456,14 +23466,14 @@ document.addEventListener('DOMContentLoaded', () => {
                             <span class="particle-time-badge glitter-badge">${timeBadgeText}</span>
                         </div>
                         <div class="particle-segment-actions">
-                            <button type="button" class="particle-del-btn glitter-seg-del-btn" title="à¦à¦‡ à¦¸à§‡à¦—à¦®à§‡à¦¨à§à¦Ÿ à¦®à§à¦›à§‡ à¦«à§‡à¦²à§à¦¨ (Delete)" onclick="event.stopPropagation();">
+                            <button type="button" class="particle-del-btn glitter-seg-del-btn" title="এই সেগমেন্ট মুছে ফেলুন (Delete)" onclick="event.stopPropagation();">
                                 <i class="fa-solid fa-trash"></i>
                             </button>
                             <i class="fa-solid fa-chevron-down particle-chevron"></i>
                         </div>
                     </div>
                     <div class="particle-segment-body">
-                        <div style="font-weight:600; font-size:11px; margin-bottom:6px; color:#cbd5e1;">Glitter Presets (à¦à¦¿à¦°à¦¿à¦à¦¿à¦°à¦¿à¦° à¦§à¦°à¦¨):</div>
+                        <div style="font-weight:600; font-size:11px; margin-bottom:6px; color:#cbd5e1;">Glitter Presets (ঝিরিঝিরির ধরন):</div>
                         <div style="display:grid; grid-template-columns: repeat(2, 1fr); gap:6px; margin-bottom:10px;">
                             <button type="button" class="btn btn-sm btn-outline ${seg.preset === 'golden_rain' ? 'active' : ''}" data-gpreset="golden_rain">Golden Rain</button>
                             <button type="button" class="btn btn-sm btn-outline ${seg.preset === 'sparkle_stars' ? 'active' : ''}" data-gpreset="sparkle_stars">Sparkle Stars</button>
@@ -23473,7 +23483,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
                         <div class="control-group">
                             <label style="display:flex; justify-content:space-between;">
-                                <span>Density (à¦˜à¦¨à¦¤à§à¦¬)</span>
+                                <span>Density (ঘনত্ব)</span>
                                 <span class="glitter-seg-density-val">${seg.density || 65}</span>
                             </label>
                             <input type="range" class="glitter-seg-density" min="10" max="120" value="${seg.density || 65}" step="1">
@@ -23481,7 +23491,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
                         <div class="control-group mt-2">
                             <label style="display:flex; justify-content:space-between;">
-                                <span>Speed (à¦—à¦¤à¦¿)</span>
+                                <span>Speed (গতি)</span>
                                 <span class="glitter-seg-speed-val">${seg.speed || 1.0}x</span>
                             </label>
                             <input type="range" class="glitter-seg-speed" min="0.2" max="3.0" value="${seg.speed || 1.0}" step="0.1">
@@ -23489,7 +23499,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
                         <div class="control-group mt-2">
                             <label style="display:flex; justify-content:space-between;">
-                                <span>Size (à¦†à¦•à¦¾à¦°)</span>
+                                <span>Size (আকার)</span>
                                 <span class="glitter-seg-size-val">${seg.size || 1.1}x</span>
                             </label>
                             <input type="range" class="glitter-seg-size" min="0.3" max="2.5" value="${seg.size || 1.1}" step="0.1">
@@ -23497,22 +23507,22 @@ document.addEventListener('DOMContentLoaded', () => {
 
                         <div class="control-group mt-2">
                             <label style="display:flex; justify-content:space-between;">
-                                <span>Opacity (à¦†à¦¬à¦›à¦¾ à¦­à¦¾à¦¬)</span>
+                                <span>Opacity (আবছা ভাব)</span>
                                 <span class="glitter-seg-opacity-val">${seg.opacity || 85}%</span>
                             </label>
                             <input type="range" class="glitter-seg-opacity" min="10" max="100" value="${seg.opacity || 85}" step="1">
                         </div>
 
                         <div class="mt-3">
-                            <p class="help-text" style="margin-bottom:6px;">à¦­à¦¿à¦¡à¦¿à¦“à¦° à¦•à§‹à¦¨ à¦¸à¦®à¦¯à¦¼ à¦¥à§‡à¦•à§‡ à¦•à§‹à¦¨ à¦¸à¦®à¦¯à¦¼ à¦ªà¦°à§à¦¯à¦¨à§à¦¤ à¦à¦‡ à¦—à§à¦²à¦¿à¦Ÿà¦¾à¦°à¦Ÿà¦¿ à¦¥à¦¾à¦•à¦¬à§‡:</p>
+                            <p class="help-text" style="margin-bottom:6px;">ভিডিওর কোন সময় থেকে কোন সময় পর্যন্ত এই গ্লিটারটি থাকবে:</p>
                             <div style="display:grid; grid-template-columns: 1fr 1fr; gap:10px;">
                                 <div class="control-group">
-                                    <label>Show From (à¦¸à§‡à¦•à§‡à¦¨à§à¦¡)</label>
-                                    <input type="number" step="any" min="0" class="form-input glitter-seg-start" placeholder="à¦ªà§à¦°à§‹ à¦­à¦¿à¦¡à¦¿à¦“ (0.0)" value="${(seg.startSec != null && !isNaN(seg.startSec)) ? seg.startSec : ''}">
+                                    <label>Show From (সেকেন্ড)</label>
+                                    <input type="number" step="any" min="0" class="form-input glitter-seg-start" placeholder="পুরো ভিডিও (0.0)" value="${(seg.startSec != null && !isNaN(seg.startSec)) ? seg.startSec : ''}">
                                 </div>
                                 <div class="control-group">
-                                    <label>Show Until (à¦¸à§‡à¦•à§‡à¦¨à§à¦¡)</label>
-                                    <input type="number" step="any" min="0" class="form-input glitter-seg-end" placeholder="à¦ªà§à¦°à§‹ à¦­à¦¿à¦¡à¦¿à¦“ (End)" value="${(seg.endSec != null && !isNaN(seg.endSec)) ? seg.endSec : ''}">
+                                    <label>Show Until (সেকেন্ড)</label>
+                                    <input type="number" step="any" min="0" class="form-input glitter-seg-end" placeholder="পুরো ভিডিও (End)" value="${(seg.endSec != null && !isNaN(seg.endSec)) ? seg.endSec : ''}">
                                 </div>
                             </div>
                         </div>
@@ -23647,7 +23657,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 const newId = 'glitter_' + Date.now();
                 const newSeg = {
                     id: newId,
-                    name: 'à¦—à§à¦²à¦¿à¦Ÿà¦¾à¦° à¦¸à§‡à¦—à¦®à§‡à¦¨à§à¦Ÿ ' + (layers.length + 1),
+                    name: 'গ্লিটার সেগমেন্ট ' + (layers.length + 1),
                     enabled: true,
                     preset: 'golden_rain',
                     style: 'mixed',
