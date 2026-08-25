@@ -1564,7 +1564,8 @@ document.addEventListener('DOMContentLoaded', () => {
             // directly off makeupGainNode (bypassing this node entirely), so muting
             // the speaker can never silence the recorded/exported audio again.
             speakerMuteGain = audioCtx.createGain();
-            speakerMuteGain.gain.setValueAtTime(1, 0);
+            speakerMuteGain.gain.setValueAtTime(speakerMutedState ? 0 : currentSpeakerVolume, 0);
+            window.speakerMuteGain = speakerMuteGain;
 
             // Link DSP chain: Source -> Volume -> VideoVoiceChanger -> Highpass -> Lowpass -> NoiseGate -> Compressor -> MakeupGain -> SpeakerMute -> Destination
             videoSourceNode.connect(videoGainNode);
@@ -1688,27 +1689,73 @@ document.addEventListener('DOMContentLoaded', () => {
 
     let currentSpeakerVolume = 1.0;
     let speakerMutedState = false;
+    window.currentSpeakerVolume = currentSpeakerVolume;
+    window.speakerMutedState = speakerMutedState;
 
     window.setSpeakerMuted = function(muted) {
-        speakerMutedState = muted;
-        if (!speakerMuteGain || !audioCtx) {
-            state.video.muted = muted;
-            return false;
+        speakerMutedState = !!muted;
+        window.speakerMutedState = speakerMutedState;
+
+        if (state.video) {
+            try {
+                state.video.muted = speakerMutedState;
+            } catch (e) {}
         }
-        speakerMuteGain.gain.setValueAtTime(muted ? 0 : currentSpeakerVolume, audioCtx.currentTime);
+
+        if (speakerMuteGain && audioCtx) {
+            if (audioCtx.state === 'suspended') {
+                audioCtx.resume().catch(function () {});
+            }
+            try {
+                speakerMuteGain.gain.cancelScheduledValues(audioCtx.currentTime);
+                speakerMuteGain.gain.setValueAtTime(speakerMutedState ? 0 : currentSpeakerVolume, audioCtx.currentTime);
+            } catch (e) {
+                try { speakerMuteGain.gain.value = speakerMutedState ? 0 : currentSpeakerVolume; } catch (err) {}
+            }
+        }
+
+        const bgMusicPreview = document.getElementById('bgmusic-audio-preview');
+        if (bgMusicPreview) {
+            bgMusicPreview.muted = speakerMutedState;
+        }
+
         return true;
     };
     
     window.setSpeakerVolume = function(vol) {
+        vol = Math.max(0, Math.min(1, typeof vol === 'number' ? vol : parseFloat(vol) || 0));
         currentSpeakerVolume = vol;
-        if (!speakerMuteGain || !audioCtx) {
-            state.video.volume = vol;
-            return false;
+        window.currentSpeakerVolume = currentSpeakerVolume;
+
+        if (state.video) {
+            try {
+                state.video.volume = vol;
+                if (vol > 0 && state.video.muted && !speakerMutedState) {
+                    state.video.muted = false;
+                }
+            } catch (e) {}
         }
-        if (!speakerMutedState) {
-            speakerMuteGain.gain.setValueAtTime(vol, audioCtx.currentTime);
+
+        if (speakerMuteGain && audioCtx) {
+            if (audioCtx.state === 'suspended') {
+                audioCtx.resume().catch(function () {});
+            }
+            if (!speakerMutedState) {
+                try {
+                    speakerMuteGain.gain.cancelScheduledValues(audioCtx.currentTime);
+                    speakerMuteGain.gain.setValueAtTime(vol, audioCtx.currentTime);
+                } catch (e) {
+                    try { speakerMuteGain.gain.value = vol; } catch (err) {}
+                }
+            }
         }
-        state.video.volume = vol;
+
+        const bgMusicPreview = document.getElementById('bgmusic-audio-preview');
+        if (bgMusicPreview) {
+            const bgVol = (state.bgMusicVolume !== undefined ? state.bgMusicVolume : 0.8);
+            bgMusicPreview.volume = Math.max(0, Math.min(1, bgVol * vol));
+        }
+
         return true;
     };
     

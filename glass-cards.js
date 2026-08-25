@@ -34,6 +34,8 @@
         startSec: 0,
         durationSec: 5,
         themeColor: '#38bdf8', // Cyan/Sky glow
+        textColor: '#ffffff',
+        subTextColor: '#cbd5e1',
         cards: [
             {
                 id: 'gc_1',
@@ -417,7 +419,7 @@
             ctx.shadowColor = 'rgba(0, 0, 0, 0.8)';
             ctx.shadowBlur = 4 * scaleFactor;
             ctx.shadowOffsetY = 1.5 * scaleFactor;
-            ctx.fillStyle = '#ffffff';
+            ctx.fillStyle = card.textColor || cfg.textColor || '#ffffff';
             const titleFontSize = Math.round(16.5 * scaleFactor * textScaleFactor);
             ctx.font = `700 ${titleFontSize}px ${fontStack}`;
             ctx.textAlign = 'left';
@@ -438,7 +440,7 @@
             ctx.shadowColor = 'rgba(0, 0, 0, 0.7)';
             ctx.shadowBlur = 3 * scaleFactor;
             ctx.shadowOffsetY = 1 * scaleFactor;
-            ctx.fillStyle = '#cbd5e1';
+            ctx.fillStyle = card.subTextColor || cfg.subTextColor || '#cbd5e1';
             const subFontSize = Math.round(13 * scaleFactor * textScaleFactor);
             ctx.font = `500 ${subFontSize}px ${fontStack}`;
             ctx.textAlign = 'left';
@@ -532,6 +534,8 @@
         const glowInput = document.getElementById('glass-cards-glow');
         const glowVal = document.getElementById('glass-cards-glow-val');
         const themeColorInput = document.getElementById('glass-cards-color');
+        const textColorInput = document.getElementById('glass-cards-text-color');
+        const subTextColorInput = document.getElementById('glass-cards-subtext-color');
         const startInput = document.getElementById('glass-cards-start');
         const durInput = document.getElementById('glass-cards-dur');
         const cardsListEl = document.getElementById('glass-cards-items-list');
@@ -561,6 +565,8 @@
                 if (glowVal) glowVal.textContent = (cfg.glowIntensity != null ? cfg.glowIntensity : 80) + '%';
             }
             if (themeColorInput) themeColorInput.value = cfg.themeColor || '#38bdf8';
+            if (textColorInput) textColorInput.value = cfg.textColor || '#ffffff';
+            if (subTextColorInput) subTextColorInput.value = cfg.subTextColor || '#cbd5e1';
             if (startInput) startInput.value = cfg.startSec != null ? cfg.startSec : 0;
             if (durInput) durInput.value = cfg.durationSec != null ? cfg.durationSec : 5;
 
@@ -602,9 +608,11 @@
                             <i class="fa-solid fa-layer-group"></i> Card #${idx + 1}
                         </span>
                         <div style="display:flex; align-items:center; gap:6px;">
-                            <label style="font-size:11px; margin:0; color:#94a3b8;">কালার:</label>
-                            <input type="color" class="gc-color-inp" value="${c.color || cfg.themeColor || '#38bdf8'}" title="Card Accent Color" style="width:24px; height:24px; border-radius:4px; border:none; cursor:pointer; padding:0; background:transparent;">
-                            <button type="button" class="btn btn-outline gc-del-btn" title="Delete Card" style="padding: 2px 8px; font-size: 11px; color: #ef4444; border-color: rgba(239,68,68,0.3);"><i class="fa-solid fa-trash"></i></button>
+                            <label style="font-size:11px; margin:0; color:#94a3b8;" title="বর্ডার ও গ্লো কালার">বর্ডার:</label>
+                            <input type="color" class="gc-color-inp" value="${c.color || cfg.themeColor || '#38bdf8'}" title="Card Accent / Border Color" style="width:24px; height:24px; border-radius:4px; border:none; cursor:pointer; padding:0; background:transparent;">
+                            <label style="font-size:11px; margin:0; color:#94a3b8; margin-left:4px;" title="কার্ড টেক্সট কালার">টেক্সট:</label>
+                            <input type="color" class="gc-text-color-inp" value="${c.textColor || cfg.textColor || '#ffffff'}" title="Card Text Color" style="width:24px; height:24px; border-radius:4px; border:none; cursor:pointer; padding:0; background:transparent;">
+                            <button type="button" class="btn btn-outline gc-del-btn" title="Delete Card" style="padding: 2px 8px; font-size: 11px; color: #ef4444; border-color: rgba(239,68,68,0.3); margin-left:4px;"><i class="fa-solid fa-trash"></i></button>
                         </div>
                     </div>
 
@@ -644,6 +652,7 @@
                 const subInp = itemEl.querySelector('.gc-sub-inp');
                 const badgeInp = itemEl.querySelector('.gc-badge-inp');
                 const colorInp = itemEl.querySelector('.gc-color-inp');
+                const textColorInp = itemEl.querySelector('.gc-text-color-inp');
                 const delBtn = itemEl.querySelector('.gc-del-btn');
 
                 const updateCard = () => {
@@ -762,6 +771,24 @@
         if (themeColorInput) {
             themeColorInput.addEventListener('input', (e) => {
                 if (state.glassCardStack) state.glassCardStack.themeColor = e.target.value;
+                if (window.triggerCanvasRedraw) window.triggerCanvasRedraw();
+                if (window.triggerAutoSave) window.triggerAutoSave();
+            });
+        }
+
+        // Text & Subtitle Colors
+        if (textColorInput) {
+            textColorInput.addEventListener('input', (e) => {
+                if (!state.glassCardStack) state.glassCardStack = JSON.parse(JSON.stringify(DEFAULT_CONFIG));
+                state.glassCardStack.textColor = e.target.value;
+                if (window.triggerCanvasRedraw) window.triggerCanvasRedraw();
+                if (window.triggerAutoSave) window.triggerAutoSave();
+            });
+        }
+        if (subTextColorInput) {
+            subTextColorInput.addEventListener('input', (e) => {
+                if (!state.glassCardStack) state.glassCardStack = JSON.parse(JSON.stringify(DEFAULT_CONFIG));
+                state.glassCardStack.subTextColor = e.target.value;
                 if (window.triggerCanvasRedraw) window.triggerCanvasRedraw();
                 if (window.triggerAutoSave) window.triggerAutoSave();
             });

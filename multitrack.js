@@ -806,17 +806,17 @@
 
             if (anyAudioActive) {
                 var duckGain = fullVol * ratio;
-                // 1. Direct HTML5 video element control (100% reliable across all browsers)
-                if (state.video) {
+                // 1. Direct HTML5 video element control — only if user hasn't pressed preview-mute
+                if (state.video && !window.speakerMutedState) {
                     if (ratio === 0) {
                         state.video.muted = true;
                     } else {
                         state.video.muted = false;
-                        state.video.volume = Math.max(0, Math.min(1, duckGain));
+                        state.video.volume = Math.max(0, Math.min(1, duckGain * (window.currentSpeakerVolume !== undefined ? window.currentSpeakerVolume : 1)));
                     }
                 }
                 // 2. Web Audio DSP Gain Node control
-                if (window.videoGainNode && window._audioCtx) {
+                if (window.videoGainNode && window._audioCtx && !window.speakerMutedState) {
                     try {
                         window.videoGainNode.gain.cancelScheduledValues(window._audioCtx.currentTime);
                         window.videoGainNode.gain.setValueAtTime(duckGain, window._audioCtx.currentTime);
@@ -828,9 +828,10 @@
                 // Playhead exited the audio clip segment → Restore original video audio
                 if (state.video && !window.speakerMutedState) {
                     state.video.muted = false;
-                    state.video.volume = Math.max(0, Math.min(1, fullVol));
+                    var restoreVol = Math.max(0, Math.min(1, fullVol * (window.currentSpeakerVolume !== undefined ? window.currentSpeakerVolume : 1)));
+                    state.video.volume = restoreVol;
                 }
-                if (window.videoGainNode && window._audioCtx) {
+                if (window.videoGainNode && window._audioCtx && !window.speakerMutedState) {
                     try {
                         window.videoGainNode.gain.cancelScheduledValues(window._audioCtx.currentTime);
                         window.videoGainNode.gain.setValueAtTime(fullVol, window._audioCtx.currentTime);

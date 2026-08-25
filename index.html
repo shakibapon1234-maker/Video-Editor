@@ -180,7 +180,7 @@
 
                         <!-- Canvas Action Buttons Overlay (bottom-right) -->
                         <div class="canvas-overlay-actions" id="canvas-overlay-actions" style="display:none;">
-                            <button type="button" id="canvas-safezone-btn" class="canvas-overlay-btn active safezone-active" title="Meta / FB Reels Boost Safe Zone গাইড অন/অফ (Toggle Safe Zone Overlay)">
+                            <button type="button" id="canvas-safezone-btn" class="canvas-overlay-btn" title="Meta / FB Reels Boost Safe Zone গাইড অন/অফ (Toggle Safe Zone Overlay)">
                                 <i class="fa-solid fa-shield-halved"></i> <span>সেফ জোন</span>
                             </button>
                             <button type="button" id="canvas-snapshot-btn" class="canvas-overlay-btn" title="প্লে স্ক্রিনের স্ক্রিনশট নিন (Take Snapshot)">
@@ -539,7 +539,7 @@
                                 </p>
 
                                 <div class="safezone-preset-grid" style="display:grid; grid-template-columns: repeat(2, 1fr); gap:8px;" id="safezone-preset-grid">
-                                    <button type="button" class="safezone-mode-btn active" data-safezone="fb-reels-boost" id="sz-btn-fb-reels">
+                                    <button type="button" class="safezone-mode-btn" data-safezone="fb-reels-boost" id="sz-btn-fb-reels">
                                         <i class="fa-brands fa-facebook-f" style="color:#1877f2;"></i>
                                         <span>FB Reels Boost Safe Zone</span>
                                     </button>
@@ -551,7 +551,7 @@
                                         <i class="fa-solid fa-rectangle-ad" style="color:#f59e0b;"></i>
                                         <span>FB Feed Ad (4:5 / 1:1) Zone</span>
                                     </button>
-                                    <button type="button" class="safezone-mode-btn" data-safezone="none" id="sz-btn-none">
+                                    <button type="button" class="safezone-mode-btn active" data-safezone="none" id="sz-btn-none">
                                         <i class="fa-solid fa-eye-slash" style="color:#9ca3af;"></i>
                                         <span>বন্ধ (Hide Overlay)</span>
                                     </button>
@@ -1598,6 +1598,18 @@
                                     </div>
                                 </div>
 
+                                <!-- Text & Subtitle Color Controls -->
+                                <div style="display:grid; grid-template-columns: 1fr 1fr; gap:10px;" class="mt-3">
+                                    <div class="control-group">
+                                        <label><i class="fa-solid fa-font"></i> Text Color (টেক্সট কালার)</label>
+                                        <input type="color" id="glass-cards-text-color" value="#ffffff" style="width:100%; height:34px; border-radius:6px; border:1px solid rgba(255,255,255,0.15); cursor:pointer;">
+                                    </div>
+                                    <div class="control-group">
+                                        <label><i class="fa-solid fa-paragraph"></i> Subtitle Color (সাবটাইটেল কালার)</label>
+                                        <input type="color" id="glass-cards-subtext-color" value="#cbd5e1" style="width:100%; height:34px; border-radius:6px; border:1px solid rgba(255,255,255,0.15); cursor:pointer;">
+                                    </div>
+                                </div>
+
                                 <!-- Timing -->
                                 <div style="display:grid; grid-template-columns: 1fr 1fr; gap:10px;" class="mt-3">
                                     <div class="control-group">
@@ -2567,6 +2579,27 @@
                                         </div>
                                     </div>
                                     
+                                    <!-- Edit GIF Animation Speed Section -->
+                                    <div id="broll-edit-gif-section" style="display: none; border-top: 1px solid rgba(255,255,255,0.1); padding-top: 15px; margin-top: 15px;">
+                                        <h4 style="font-size: 13px; color: #38bdf8; margin-bottom: 6px;"><i class="fa-solid fa-gauge-high"></i> GIF Animation Speed (GIF গতি / প্লেব্যাক স্পিড)</h4>
+                                        <p class="help-text" style="margin-bottom: 10px;">GIF-এর নিজস্ব অ্যানিমেশন দ্রুত বা ধীর করতে নিচের স্পিড কন্ট্রোলার ব্যবহার করুন:</p>
+                                        
+                                        <div class="control-group">
+                                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
+                                                <label style="margin: 0;"><i class="fa-solid fa-person-running"></i> Playback Speed (গতি)</label>
+                                                <span id="broll-gif-speed-val" style="font-weight: 600; color: #38bdf8; font-size: 12px;">1.00x</span>
+                                            </div>
+                                            <input type="range" id="broll-gif-speed-slider" min="20" max="400" value="100" step="5" style="width: 100%; accent-color: #38bdf8; cursor: pointer;">
+                                        </div>
+
+                                        <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; margin-top: 8px;">
+                                            <button type="button" class="btn btn-sm btn-outline broll-gif-speed-btn" data-speed="0.5" style="font-size: 11px; padding: 4px 6px;">0.5x (ধীর)</button>
+                                            <button type="button" class="btn btn-sm btn-outline broll-gif-speed-btn" data-speed="1.0" style="font-size: 11px; padding: 4px 6px;">1.0x (স্বাভাবিক)</button>
+                                            <button type="button" class="btn btn-sm btn-outline broll-gif-speed-btn" data-speed="1.5" style="font-size: 11px; padding: 4px 6px;">1.5x (দ্রুত)</button>
+                                            <button type="button" class="btn btn-sm btn-outline broll-gif-speed-btn" data-speed="2.0" style="font-size: 11px; padding: 4px 6px;">2.0x (দ্বিগুণ)</button>
+                                        </div>
+                                    </div>
+
                                     <!-- Edit Image B-roll Section (Background Remover) -->
                                     <div id="broll-edit-image-section" style="display: none; border-top: 1px solid rgba(255,255,255,0.1); padding-top: 15px; margin-top: 15px;">
                                         <h4 style="font-size: 13px; color: var(--primary); margin-bottom: 10px;"><i class="fa-solid fa-wand-magic-sparkles"></i> Background Remover (ব্যাকগ্রাউন্ড মুছুন)</h4>

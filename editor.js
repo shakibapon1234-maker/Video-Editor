@@ -1114,12 +1114,11 @@ window.VideoEditor = {
     brightness: 100,
     contrast: 100,
     saturation: 100,
-    vignetteIntensity: 0, // 0-100, independent of filterPreset â€” combines with any preset
+    vignetteIntensity: 0, // 0-100, independent of filterPreset — combines with any preset
+    filmGrainIntensity: 0, // 0-100, independent overlay — see film-grain.js
     duotoneEnabled: false,
     duotoneShadowColor: '#1a1a4d',
     duotoneHighlightColor: '#ffcc00',
-    filmGrainIntensity: 0, // 0-100, independent overlay â€” see film-grain.js
-
     // Advanced Color Grading â€” custom per-channel RGB curves (Phase 4C)
     colorGradeEnabled: false,
     gradeRShadow: 0, gradeRMid: 0, gradeRHigh: 0,
@@ -1137,7 +1136,7 @@ window.VideoEditor = {
     backgroundImgFile: null,
 
     // Meta Reels & Ads Safe Zone Guide
-    safeZonePreset: 'fb-reels-boost', // 'none' | 'fb-reels-boost' | 'ig-reels-boost' | 'fb-feed-boost' | 'yt-shorts'
+    safeZonePreset: 'none', // 'none' | 'fb-reels-boost' | 'ig-reels-boost' | 'fb-feed-boost' | 'yt-shorts'
     showSafeZoneMockup: true,
     safeZoneAutoSnap: true,
 
@@ -2814,43 +2813,80 @@ document.addEventListener('DOMContentLoaded', () => {
     // video loaded yet / audio context not initialized), we fall back to
     // muting the <video> element directly.
     let previewSoundMuted = false;
+    let lastNonZeroVolume = 1.0;
+
+    function updateVolumeUI(vol, isMuted) {
+        if (!previewMuteBtn) return;
+        if (isMuted || vol <= 0.001) {
+            previewMuteBtn.innerHTML = '<i class="fa-solid fa-volume-xmark"></i>';
+            previewMuteBtn.style.background = 'rgba(248, 113, 113, 0.15)';
+            previewMuteBtn.style.borderColor = '#f87171';
+            previewMuteBtn.style.color = '#f87171';
+            previewMuteBtn.title = 'প্রিভিউ সাউন্ড অন করুন (Unmute preview)';
+        } else if (vol < 0.5) {
+            previewMuteBtn.innerHTML = '<i class="fa-solid fa-volume-low"></i>';
+            previewMuteBtn.style.background = 'rgba(148, 163, 184, 0.15)';
+            previewMuteBtn.style.borderColor = '#94a3b8';
+            previewMuteBtn.style.color = '#94a3b8';
+            previewMuteBtn.title = 'প্রিভিউ সাউন্ড অফ করুন (Mute preview)';
+        } else {
+            previewMuteBtn.innerHTML = '<i class="fa-solid fa-volume-high"></i>';
+            previewMuteBtn.style.background = 'rgba(148, 163, 184, 0.15)';
+            previewMuteBtn.style.borderColor = '#94a3b8';
+            previewMuteBtn.style.color = '#94a3b8';
+            previewMuteBtn.title = 'প্রিভিউ সাউন্ড অফ করুন (Mute preview)';
+        }
+    }
+
     if (previewMuteBtn) {
         previewMuteBtn.addEventListener('click', () => {
             previewSoundMuted = !previewSoundMuted;
-            const appliedViaGraph = window.setSpeakerMuted ? window.setSpeakerMuted(previewSoundMuted) : false;
-            if (!appliedViaGraph && state.video) {
-                state.video.muted = previewSoundMuted;
-            }
             if (previewSoundMuted) {
-                previewMuteBtn.innerHTML = '<i class="fa-solid fa-volume-xmark"></i>';
-                previewMuteBtn.style.background = 'rgba(248, 113, 113, 0.15)';
-                previewMuteBtn.style.borderColor = '#f87171';
-                previewMuteBtn.style.color = '#f87171';
-                previewMuteBtn.title = 'প্রিভিউ সাউন্ড অন করুন (Unmute preview)';
+                if (previewVolumeSlider) {
+                    const cur = parseFloat(previewVolumeSlider.value);
+                    if (cur > 0.01) lastNonZeroVolume = cur;
+                    previewVolumeSlider.value = 0;
+                }
+                if (window.setSpeakerMuted) window.setSpeakerMuted(true);
+                else if (state.video) state.video.muted = true;
+                updateVolumeUI(0, true);
             } else {
-                previewMuteBtn.innerHTML = '<i class="fa-solid fa-volume-high"></i>';
-                previewMuteBtn.style.background = 'rgba(148, 163, 184, 0.15)';
-                previewMuteBtn.style.borderColor = '#94a3b8';
-                previewMuteBtn.style.color = '#94a3b8';
-                previewMuteBtn.title = 'প্রিভিউ সাউন্ড অফ করুন — শুধুমাত্র আপনার স্পিকারের জন্য, এক্সপোর্ট করা ভিডিওর অডিওতে কোনো প্রভাব পড়বে না (Mute preview only)';
+                const restoreVol = lastNonZeroVolume || 1.0;
+                if (previewVolumeSlider) previewVolumeSlider.value = restoreVol;
+                if (window.setSpeakerMuted) window.setSpeakerMuted(false);
+                if (window.setSpeakerVolume) window.setSpeakerVolume(restoreVol);
+                else if (state.video) {
+                    state.video.muted = false;
+                    state.video.volume = restoreVol;
+                }
+                updateVolumeUI(restoreVol, false);
             }
         });
     }
 
     if (previewVolumeSlider) {
-        previewVolumeSlider.addEventListener('input', (e) => {
+        const handleVolumeChange = (e) => {
             const vol = parseFloat(e.target.value);
+            if (vol > 0.01) {
+                lastNonZeroVolume = vol;
+                if (previewSoundMuted) {
+                    previewSoundMuted = false;
+                    if (window.setSpeakerMuted) window.setSpeakerMuted(false);
+                }
+            } else {
+                previewSoundMuted = true;
+                if (window.setSpeakerMuted) window.setSpeakerMuted(true);
+            }
             if (window.setSpeakerVolume) {
                 window.setSpeakerVolume(vol);
             } else if (state.video) {
                 state.video.volume = vol;
+                if (vol > 0) state.video.muted = false;
             }
-            
-            // Auto unmute when volume is increased
-            if (vol > 0.01 && previewSoundMuted) {
-                if (previewMuteBtn) previewMuteBtn.click();
-            }
-        });
+            updateVolumeUI(vol, previewSoundMuted);
+        };
+        previewVolumeSlider.addEventListener('input', handleVolumeChange);
+        previewVolumeSlider.addEventListener('change', handleVolumeChange);
     }
 
     if (splitClipBtn) {
@@ -10094,8 +10130,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // --- Meta Ads & Reels Boost Safe Zone Engine ---
     function drawSafeZoneOverlay() {
-        const preset = state.safeZonePreset || 'fb-reels-boost';
-        if (preset === 'none') return;
+        const preset = state.safeZonePreset || 'none';
+        if (!preset || preset === 'none') return;
 
         const ctx = state.ctx;
         const canvasW = state.canvas.width;
@@ -15819,7 +15855,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 elapsedMs = performance.now();
             }
 
-            let relMs = Math.abs(elapsedMs) % totalDurationMs;
+            const speed = (item && item.gifSpeed != null) ? item.gifSpeed : 1.0;
+            let relMs = (Math.abs(elapsedMs * speed)) % totalDurationMs;
 
             let accum = 0;
             for (let i = 0; i < frames.length; i++) {
@@ -15972,6 +16009,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 // Each B-roll clip enters from a different side so a sequence
                 // of images doesn't always pop in from the same corner. This is
                 // just the starting default â€” fully editable from the panel.
+                gifSpeed: 1.0,
                 entryDirection: ['left', 'right', 'top', 'bottom'][Math.floor(Math.random() * 4)],
                 exitDirection: 'same',
                 animationStyle: brollModeSelect && brollModeSelect.value === 'pip' ? 'slide-pop' : 'zoom',
@@ -16770,6 +16808,20 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
             } else {
                 brollEditTextSection.style.display = 'none';
+            }
+        }
+        
+        const brollEditGifSection = document.getElementById('broll-edit-gif-section');
+        const brollGifSpeedSlider = document.getElementById('broll-gif-speed-slider');
+        const brollGifSpeedVal = document.getElementById('broll-gif-speed-val');
+        if (brollEditGifSection) {
+            if (item.type === 'gif') {
+                brollEditGifSection.style.display = 'block';
+                const curSpeed = item.gifSpeed != null ? item.gifSpeed : 1.0;
+                if (brollGifSpeedSlider) brollGifSpeedSlider.value = Math.round(curSpeed * 100);
+                if (brollGifSpeedVal) brollGifSpeedVal.innerText = curSpeed.toFixed(2) + 'x';
+            } else {
+                brollEditGifSection.style.display = 'none';
             }
         }
         

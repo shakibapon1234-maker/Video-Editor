@@ -209,8 +209,8 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         // Safe Zone Export Safety Validation for Meta / FB Reels Boost
-        if (window.checkSafeZoneCollisions && state.canvas && state.canvas.width) {
-            const preset = state.safeZonePreset || 'fb-reels-boost';
+        if (state.safeZonePreset && state.safeZonePreset !== 'none' && window.checkSafeZoneCollisions && state.canvas && state.canvas.width) {
+            const preset = state.safeZonePreset;
             let topPct = 0.12, bottomPct = 0.22, rightPct = 0.16, leftPct = 0.05;
             if (preset === 'ig-reels-boost') { topPct = 0.14; bottomPct = 0.20; rightPct = 0.15; }
             else if (preset === 'fb-feed-boost') { topPct = 0.06; bottomPct = 0.14; rightPct = 0.05; }
