@@ -4158,7 +4158,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // Styles that only make sense for the *text glyphs themselves* (progressive
     // reveal of characters/words/particles) — never offered on the Box Animation dropdown,
     // and handled separately at draw time rather than through the transform below.
-    const TEXT_OVERLAY_REVEAL_ANIM_STYLES = new Set(['typewriter', 'letter-cascade', 'word-stagger', 'word-3d-stagger', 'letter-track-expand', 'particle-dust', 'glitch', 'wave-reveal', 'blur-fade', 'smoke-vapor', 'neon-blur-in']);
+    const TEXT_OVERLAY_REVEAL_ANIM_STYLES = new Set(['typewriter', 'letter-cascade', 'word-stagger', 'word-3d-stagger', 'letter-track-expand', 'particle-dust', 'glitch', 'wave-reveal', 'blur-fade', 'smoke-vapor', 'neon-blur-in', 'reels-scatter', 'neon-speed-streak', '3d-flip-board']);
 
     // Triangle-wave reflection: bounces a value back and forth between 0 and
     // `range` at the given speed (px/sec), the way a classic "DVD logo"
@@ -4959,6 +4959,53 @@ document.addEventListener('DOMContentLoaded', () => {
                 };
 
                 drawBorderSegment(pos, pos + segLen);
+                ctx.restore();
+                break;
+            }
+            // ── Price Badge White ──────────────────────────────────────────────
+            // Reels-style white badge with double border and a green money-circle icon on the
+            // left. Matches the "💵 PRICE 1650" style seen in fashion-reels ads (2nd video).
+            case 'price-badge-white': {
+                const radius = 10;
+                const pad = Math.max(3, h * 0.05);
+                ctx.save();
+                // Drop shadow
+                ctx.shadowColor = 'rgba(0,0,0,0.18)';
+                ctx.shadowBlur = 12;
+                ctx.shadowOffsetY = 4;
+                // White card body
+                ctx.fillStyle = '#ffffff';
+                ctx.beginPath();
+                ctx.roundRect(x, y, w, h, radius);
+                ctx.fill();
+                ctx.shadowBlur = 0;
+                // Outer dark border
+                ctx.strokeStyle = '#111827';
+                ctx.lineWidth = Math.max(2, h * 0.045);
+                ctx.stroke();
+                // Inner inset border
+                ctx.lineWidth = Math.max(1.2, h * 0.025);
+                ctx.beginPath();
+                ctx.roundRect(x + pad, y + pad, w - pad * 2, h - pad * 2, Math.max(4, radius - pad));
+                ctx.stroke();
+
+                // Icon circle on left
+                const iconR = (h - pad * 4) * 0.38;
+                const iconCX = x + pad * 2 + iconR + 6;
+                const iconCY = y + h / 2;
+                ctx.strokeStyle = '#111827';
+                ctx.lineWidth = Math.max(1.5, h * 0.03);
+                ctx.beginPath();
+                ctx.arc(iconCX, iconCY, iconR, 0, Math.PI * 2);
+                ctx.stroke();
+                // Banknote icon / money emoji
+                ctx.save();
+                ctx.font = `${Math.round(iconR * 1.15)}px sans-serif`;
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                ctx.fillText('💵', iconCX, iconCY);
+                ctx.restore();
+
                 ctx.restore();
                 break;
             }
@@ -5833,6 +5880,209 @@ document.addEventListener('DOMContentLoaded', () => {
                 charX += cw;
             }
         }
+
+        ctx.restore();
+    }
+
+    // ⚡ Neon Speed Streak text animation: glowing purple/cyan comet streak sweeps across
+    // with characters flying in and locking into position with elastic bounce (1st video style).
+    function drawTextOverlayNeonSpeedStreak(ctx, text, progress, phase, fontSize, textColor, strokeColor, strokeWidth, currentTime) {
+        if (!text) return;
+        drawTextOverlayAnimatedLines(ctx, text, fontSize, (line) => drawTextOverlayNeonSpeedStreakLine(ctx, line, progress, phase, fontSize, textColor, strokeColor, strokeWidth, currentTime));
+    }
+
+    function drawTextOverlayNeonSpeedStreakLine(ctx, text, progress, phase, fontSize, textColor, strokeColor, strokeWidth, currentTime) {
+        if (!text) return;
+        const isEditingStill = (state.currentStep === 3 && !state.isPlaying);
+        const effectivePhase = isEditingStill ? 'settled' : phase;
+        const t = currentTime || 0;
+        const chars = splitGraphemes(text);
+        const widths = chars.map(c => ctx.measureText(c).width || fontSize * 0.5);
+        const totalWidth = widths.reduce((a, b) => a + b, 0);
+        const startX = -totalWidth / 2;
+
+        ctx.save();
+        if (strokeColor) { ctx.lineWidth = strokeWidth; ctx.strokeStyle = strokeColor; }
+
+        if (effectivePhase === 'settled') {
+            let cursorX = startX;
+            chars.forEach((c, i) => {
+                const w = widths[i];
+                const cx = cursorX + w / 2;
+                ctx.save();
+                ctx.translate(cx, 0);
+                if (strokeColor) ctx.strokeText(c, 0, 0);
+                ctx.fillStyle = textColor;
+                ctx.fillText(c, 0, 0);
+                ctx.restore();
+                cursorX += w;
+            });
+
+            // Gentle periodic neon streak shimmer across settled text
+            const shimmerP = (t * 0.7) % 2.5;
+            if (shimmerP < 1.0) {
+                const headX = startX + shimmerP * totalWidth;
+                ctx.save();
+                const beamGrad = ctx.createLinearGradient(headX - fontSize * 2, 0, headX + fontSize * 0.5, 0);
+                beamGrad.addColorStop(0, 'rgba(168, 85, 247, 0)');
+                beamGrad.addColorStop(0.7, 'rgba(34, 211, 238, 0.45)');
+                beamGrad.addColorStop(1, 'rgba(255, 255, 255, 0.85)');
+                ctx.fillStyle = beamGrad;
+                ctx.globalCompositeOperation = 'source-atop';
+                ctx.fillRect(startX - 10, -fontSize, totalWidth + 20, fontSize * 2);
+                ctx.restore();
+            }
+            ctx.restore();
+            return;
+        }
+
+        const p = (effectivePhase === 'in') ? easeOutCubicTO(progress) : (1 - easeOutCubicTO(progress));
+        const totalChars = chars.length;
+        const beamHeadX = startX + p * (totalWidth + fontSize * 2);
+
+        let cursorX = startX;
+        chars.forEach((c, i) => {
+            const w = widths[i];
+            const charCenterX = cursorX + w / 2;
+            const charStartP = (i / Math.max(1, totalChars)) * 0.65;
+            const charDur = 0.35;
+            const localP = Math.max(0, Math.min(1, (p - charStartP) / charDur));
+            const charEased = easeOutBackOvershoot(localP);
+
+            if (localP > 0.01) {
+                const flyX = (1 - Math.min(1, localP)) * -fontSize * 1.5;
+                const charAlpha = Math.min(1, localP * 2.5);
+                const charScale = 0.5 + 0.5 * charEased;
+
+                ctx.save();
+                ctx.globalAlpha *= charAlpha;
+                ctx.translate(charCenterX + flyX, 0);
+                ctx.scale(charScale, charScale);
+
+                if (localP < 0.9) {
+                    ctx.shadowColor = (i % 2 === 0) ? '#a855f7' : '#22d3ee';
+                    ctx.shadowBlur = fontSize * 0.4 * (1 - localP);
+                }
+
+                if (strokeColor) ctx.strokeText(c, 0, 0);
+                ctx.fillStyle = textColor;
+                ctx.fillText(c, 0, 0);
+                ctx.restore();
+            }
+            cursorX += w;
+        });
+
+        // Glowing Comet / Laser Streak head & tail
+        if (p < 0.98) {
+            ctx.save();
+            const streakLen = Math.min(totalWidth * 0.8, fontSize * 3.5);
+            const streakGrad = ctx.createLinearGradient(beamHeadX - streakLen, 0, beamHeadX, 0);
+            streakGrad.addColorStop(0, 'rgba(168, 85, 247, 0)');
+            streakGrad.addColorStop(0.4, 'rgba(168, 85, 247, 0.4)');
+            streakGrad.addColorStop(0.8, 'rgba(34, 211, 238, 0.8)');
+            streakGrad.addColorStop(1, 'rgba(255, 255, 255, 1)');
+
+            ctx.shadowColor = '#22d3ee';
+            ctx.shadowBlur = 16;
+            ctx.fillStyle = streakGrad;
+            ctx.beginPath();
+            ctx.ellipse(beamHeadX - streakLen / 2, 0, streakLen / 2, fontSize * 0.28, 0, 0, Math.PI * 2);
+            ctx.fill();
+
+            // Comet bright core head
+            ctx.shadowColor = '#ffffff';
+            ctx.shadowBlur = 20;
+            ctx.fillStyle = '#ffffff';
+            ctx.beginPath();
+            ctx.arc(beamHeadX, 0, fontSize * 0.22, 0, Math.PI * 2);
+            ctx.fill();
+
+            // Energy trailing particles
+            const particleCount = 8;
+            for (let pi = 0; pi < particleCount; pi++) {
+                const seed = (pi * 37 + Math.floor(t * 30)) % 100;
+                const pOffX = (seed % 60) * 0.01 * streakLen;
+                const pOffY = ((seed * 7) % 20 - 10) * 0.05 * fontSize;
+                ctx.fillStyle = (pi % 2 === 0) ? '#a855f7' : '#22d3ee';
+                ctx.beginPath();
+                ctx.arc(beamHeadX - pOffX, pOffY, Math.max(1, fontSize * 0.08), 0, Math.PI * 2);
+                ctx.fill();
+            }
+            ctx.restore();
+        }
+
+        ctx.restore();
+    }
+
+    // 🏷️ 3D Flip Board text animation: mechanical split-flap / 3D X-axis flip reveal (2nd video style).
+    function drawTextOverlay3DFlipBoard(ctx, text, progress, phase, fontSize, textColor, strokeColor, strokeWidth, currentTime) {
+        if (!text) return;
+        drawTextOverlayAnimatedLines(ctx, text, fontSize, (line) => drawTextOverlay3DFlipBoardLine(ctx, line, progress, phase, fontSize, textColor, strokeColor, strokeWidth, currentTime));
+    }
+
+    function drawTextOverlay3DFlipBoardLine(ctx, text, progress, phase, fontSize, textColor, strokeColor, strokeWidth, currentTime) {
+        if (!text) return;
+        const isEditingStill = (state.currentStep === 3 && !state.isPlaying);
+        const effectivePhase = isEditingStill ? 'settled' : phase;
+        const chars = splitGraphemes(text);
+        const widths = chars.map(c => ctx.measureText(c).width || fontSize * 0.5);
+        const totalWidth = widths.reduce((a, b) => a + b, 0);
+        const startX = -totalWidth / 2;
+
+        ctx.save();
+        if (strokeColor) { ctx.lineWidth = strokeWidth; ctx.strokeStyle = strokeColor; }
+
+        if (effectivePhase === 'settled') {
+            let cursorX = startX;
+            chars.forEach((c, i) => {
+                const w = widths[i];
+                ctx.save();
+                ctx.translate(cursorX + w / 2, 0);
+                if (strokeColor) ctx.strokeText(c, 0, 0);
+                ctx.fillStyle = textColor;
+                ctx.fillText(c, 0, 0);
+                ctx.restore();
+                cursorX += w;
+            });
+            ctx.restore();
+            return;
+        }
+
+        const p = (effectivePhase === 'in') ? progress : (1 - progress);
+        const totalChars = chars.length;
+        let cursorX = startX;
+
+        chars.forEach((c, i) => {
+            const w = widths[i];
+            const charCenterX = cursorX + w / 2;
+            const staggerDelay = totalChars > 1 ? (i / (totalChars - 1)) * 0.55 : 0;
+            const localDur = 0.45;
+            const rawP = Math.max(0, Math.min(1, (p - staggerDelay) / localDur));
+            const flipP = easeOutBackOvershoot(rawP);
+            const rotX = (1 - Math.min(1, flipP)) * (Math.PI / 2);
+            const scaleY = Math.max(0.01, Math.cos(rotX));
+            const flipAlpha = Math.min(1, rawP * 3);
+
+            if (rawP > 0.01) {
+                ctx.save();
+                ctx.globalAlpha *= flipAlpha;
+                ctx.translate(charCenterX, 0);
+                ctx.scale(1, scaleY);
+                const foldShade = (1 - scaleY) * 0.4;
+                ctx.translate(0, -(1 - scaleY) * fontSize * 0.2);
+
+                if (strokeColor) ctx.strokeText(c, 0, 0);
+                ctx.fillStyle = textColor;
+                ctx.fillText(c, 0, 0);
+
+                if (scaleY < 0.85) {
+                    ctx.fillStyle = `rgba(0, 0, 0, ${foldShade})`;
+                    ctx.fillText(c, 0, 0);
+                }
+                ctx.restore();
+            }
+            cursorX += w;
+        });
 
         ctx.restore();
     }
@@ -9317,6 +9567,38 @@ document.addEventListener('DOMContentLoaded', () => {
                                     }
                                 }
                             };
+                        } else if (textAnimStyle === 'neon-speed-streak' || textAnimStyle === 'reels-scatter') {
+                            _charDrawFn = (cCtx, char, i, totalChars) => {
+                                if (_effPhase === 'settled') {
+                                    if (outlineColor) { cCtx.lineWidth = outlineWidth; cCtx.strokeStyle = outlineColor; cCtx.strokeText(char, 0, 0); }
+                                    cCtx.fillText(char, 0, 0);
+                                    return;
+                                }
+                                const charStartP = (i / Math.max(1, totalChars || 1)) * 0.65;
+                                const localP = Math.max(0, Math.min(1, (textRevealAnim.p - charStartP) / 0.35));
+                                const charEased = easeOutBackOvershoot(localP);
+                                cCtx.globalAlpha *= Math.min(1, localP * 2.5);
+                                cCtx.scale(0.5 + 0.5 * charEased, 0.5 + 0.5 * charEased);
+                                if (outlineColor) { cCtx.lineWidth = outlineWidth; cCtx.strokeStyle = outlineColor; cCtx.strokeText(char, 0, 0); }
+                                cCtx.fillText(char, 0, 0);
+                            };
+                        } else if (textAnimStyle === '3d-flip-board') {
+                            _charDrawFn = (cCtx, char, i, totalChars) => {
+                                if (_effPhase === 'settled') {
+                                    if (outlineColor) { cCtx.lineWidth = outlineWidth; cCtx.strokeStyle = outlineColor; cCtx.strokeText(char, 0, 0); }
+                                    cCtx.fillText(char, 0, 0);
+                                    return;
+                                }
+                                const staggerDelay = (totalChars > 1) ? (i / (totalChars - 1)) * 0.55 : 0;
+                                const rawP = Math.max(0, Math.min(1, (textRevealAnim.p - staggerDelay) / 0.45));
+                                const flipP = easeOutBackOvershoot(rawP);
+                                const rotX = (1 - Math.min(1, flipP)) * (Math.PI / 2);
+                                const scaleY = Math.max(0.01, Math.cos(rotX));
+                                cCtx.globalAlpha *= Math.min(1, rawP * 3);
+                                cCtx.scale(1, scaleY);
+                                if (outlineColor) { cCtx.lineWidth = outlineWidth; cCtx.strokeStyle = outlineColor; cCtx.strokeText(char, 0, 0); }
+                                cCtx.fillText(char, 0, 0);
+                            };
                         } else if (_effPhase !== 'settled') {
                             const _p = easeOutCubicTO(textRevealAnim.p);
                             ctx2.globalAlpha *= Math.max(0.05, _p);
@@ -9429,6 +9711,10 @@ document.addEventListener('DOMContentLoaded', () => {
                         drawTextOverlayShineSweep(ctx2, textToDraw, currentTime, item.fontSize, item, outlineColor, outlineWidth);
                     } else if (textAnimStyle === 'rainbow-flow') {
                         drawTextOverlayRainbowFlow(ctx2, textToDraw, currentTime, outlineColor, outlineWidth, item.fontSize);
+                    } else if (textAnimStyle === 'reels-scatter' || textAnimStyle === 'neon-speed-streak') {
+                        drawTextOverlayNeonSpeedStreak(ctx2, textToDraw, textRevealAnim.p, textRevealAnim.phase, item.fontSize, item.color, outlineColor, outlineWidth, currentTime);
+                    } else if (textAnimStyle === '3d-flip-board') {
+                        drawTextOverlay3DFlipBoard(ctx2, textToDraw, textRevealAnim.p, textRevealAnim.phase, item.fontSize, item.color, outlineColor, outlineWidth, currentTime);
                     } else {
                         const linesToDraw = textToDraw.split('\n');
                         const lHeight = item.fontSize * 1.25;
