@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
@@ -8,7 +8,7 @@
     <!-- Google Fonts for Modern Typography -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=Hind+Siliguri:wght@400;500;600;700&family=Galada&family=Montserrat:wght@400;600;700;800&family=Poppins:wght@400;600;700&family=Bebas+Neue&family=Anton&family=Oswald:wght@400;600;700&family=Playfair+Display:wght@600;700&family=Caveat:wght@600;700&family=Pacifico&family=Archivo+Black&family=Righteous&family=Permanent+Marker&family=Baloo+Da+2:wght@600;700&family=Tiro+Bangla&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=Hind+Siliguri:wght@300;400;500;600;700&family=Galada&family=Montserrat:wght@400;600;700;800&family=Poppins:wght@400;600;700&family=Bebas+Neue&family=Anton&family=Oswald:wght@400;600;700&family=Playfair+Display:wght@600;700&family=Caveat:wght@600;700&family=Pacifico&family=Archivo+Black&family=Righteous&family=Permanent+Marker&family=Baloo+Da+2:wght@400;500;600;700;800&family=Tiro+Bangla:ital@0;1&family=Noto+Sans+Bengali:wght@300;400;500;600;700;800;900&family=Noto+Serif+Bengali:wght@300;400;500;600;700;800;900&family=Anek+Bangla:wght@300;400;500;600;700;800&family=Kalpurush&family=Mina:wght@400;700&family=Siyam+Rupali&family=Murecho:wght@300;400;500;600;700&family=Shonar+Bangla&display=swap" rel="stylesheet">
     <!-- FontAwesome for Icons -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <!-- Apply saved theme immediately to prevent a flash of the wrong theme -->
@@ -1235,10 +1235,24 @@
                                     <div class="control-group mt-3">
                                          <label>Font Family</label>
                                          <select id="banner-font-select" class="form-select">
-                                             <option value="Hind Siliguri">Hind Siliguri (Bengali Clean Sans)</option>
-                                             <option value="Galada">Galada (Bengali Stylized)</option>
-                                             <option value="Outfit">Outfit (English Bold)</option>
-                                             <option value="Plus Jakarta Sans">Plus Jakarta Sans</option>
+                                             <optgroup label="── বাংলা ভেরিয়েশন ফন্ট ──">
+                                                 <option value="Noto Sans Bengali">Noto Sans Bengali (নোটো সান্স — ক্লিন)</option>
+                                                 <option value="Noto Serif Bengali">Noto Serif Bengali (নোটো সেরিফ — ক্লাসিক)</option>
+                                                 <option value="Hind Siliguri">Hind Siliguri (হিন্দ সিলিগুড়ি — স্লিম)</option>
+                                                 <option value="Anek Bangla">Anek Bangla (আনেক — মডার্ন Variable)</option>
+                                                 <option value="Baloo Da 2">Baloo Da 2 (বালু দা — রাউন্ডেড)</option>
+                                                 <option value="Galada">Galada (গালাদা — স্টাইলিশ)</option>
+                                                 <option value="Tiro Bangla">Tiro Bangla (তিরো — সেরিফ ঐতিহ্যিক)</option>
+                                                 <option value="Kalpurush">Kalpurush (কল্পুরুষ — বোল্ড ডিসপ্লে)</option>
+                                                 <option value="Mina">Mina (মিনা — কম্প্যাক্ট মডার্ন)</option>
+                                                 <option value="Siyam Rupali">Siyam Rupali (সিয়াম রূপালী — স্টাইলিশ)</option>
+                                                 <option value="Murecho">Murecho (মুরেচো — রাউন্ডেড ফ্রেন্ডলি)</option>
+                                                 <option value="Shonar Bangla">Shonar Bangla (সোনার বাংলা — ট্র্যাডিশনাল)</option>
+                                             </optgroup>
+                                             <optgroup label="── ইংরেজি ফন্ট ──">
+                                                 <option value="Outfit">Outfit (English Bold)</option>
+                                                 <option value="Plus Jakarta Sans">Plus Jakarta Sans</option>
+                                             </optgroup>
                                          </select>
                                     </div>
                                     <div class="control-group mt-3">
@@ -1858,23 +1872,35 @@
                                 <div class="control-group mt-3">
                                     <label>Font Family</label>
                                     <select id="text-overlay-font-select" class="form-select">
-                                        <option value="Hind Siliguri">Hind Siliguri (Bengali Clean Sans)</option>
-                                        <option value="Galada">Galada (Bengali Stylized)</option>
-                                        <option value="Baloo Da 2">Baloo Da 2 (Bengali Rounded)</option>
-                                        <option value="Tiro Bangla">Tiro Bangla (Bengali Serif)</option>
-                                        <option value="Outfit">Outfit (English)</option>
-                                        <option value="Plus Jakarta Sans">Plus Jakarta Sans (English)</option>
-                                        <option value="Montserrat">Montserrat (English)</option>
-                                        <option value="Poppins">Poppins (English)</option>
-                                        <option value="Oswald">Oswald (English Condensed)</option>
-                                        <option value="Bebas Neue">Bebas Neue (English Bold Display)</option>
-                                        <option value="Anton">Anton (English Impact)</option>
-                                        <option value="Archivo Black">Archivo Black (English Heavy)</option>
-                                        <option value="Righteous">Righteous (English Rounded)</option>
-                                        <option value="Playfair Display">Playfair Display (English Elegant Serif)</option>
-                                        <option value="Caveat">Caveat (English Handwriting)</option>
-                                        <option value="Pacifico">Pacifico (English Script)</option>
-                                        <option value="Permanent Marker">Permanent Marker (English Marker)</option>
+                                        <optgroup label="── বাংলা ভেরিয়েশন ফন্ট ──">
+                                            <option value="Noto Sans Bengali">Noto Sans Bengali — নোটো সান্স (ক্লিন, মাল্টি-ওয়েট)</option>
+                                            <option value="Noto Serif Bengali">Noto Serif Bengali — নোটো সেরিফ (ক্লাসিক, মাল্টি-ওয়েট)</option>
+                                            <option value="Hind Siliguri">Hind Siliguri — হিন্দ সিলিগুড়ি (স্লিম স্যান্স)</option>
+                                            <option value="Anek Bangla">Anek Bangla — আনেক (মডার্ন Variable ফন্ট)</option>
+                                            <option value="Baloo Da 2">Baloo Da 2 — বালু দা (রাউন্ডেড, মাল্টি-ওয়েট)</option>
+                                            <option value="Galada">Galada — গালাদা (ডেকোরেটিভ ডিসপ্লে)</option>
+                                            <option value="Tiro Bangla">Tiro Bangla — তিরো বাংলা (ঐতিহ্যিক সেরিফ)</option>
+                                            <option value="Kalpurush">Kalpurush — কল্পুরুষ (বোল্ড ডিসপ্লে)</option>
+                                            <option value="Mina">Mina — মিনা (কম্প্যাক্ট মডার্ন)</option>
+                                            <option value="Siyam Rupali">Siyam Rupali — সিয়াম রূপালী (স্টাইলিশ)</option>
+                                            <option value="Murecho">Murecho — মুরেচো (রাউন্ডেড ফ্রেন্ডলি)</option>
+                                            <option value="Shonar Bangla">Shonar Bangla — সোনার বাংলা (ট্র্যাডিশনাল)</option>
+                                        </optgroup>
+                                        <optgroup label="── ইংরেজি ফন্ট ──">
+                                            <option value="Outfit">Outfit (English)</option>
+                                            <option value="Plus Jakarta Sans">Plus Jakarta Sans (English)</option>
+                                            <option value="Montserrat">Montserrat (English)</option>
+                                            <option value="Poppins">Poppins (English)</option>
+                                            <option value="Oswald">Oswald (English Condensed)</option>
+                                            <option value="Bebas Neue">Bebas Neue (English Bold Display)</option>
+                                            <option value="Anton">Anton (English Impact)</option>
+                                            <option value="Archivo Black">Archivo Black (English Heavy)</option>
+                                            <option value="Righteous">Righteous (English Rounded)</option>
+                                            <option value="Playfair Display">Playfair Display (English Elegant Serif)</option>
+                                            <option value="Caveat">Caveat (English Handwriting)</option>
+                                            <option value="Pacifico">Pacifico (English Script)</option>
+                                            <option value="Permanent Marker">Permanent Marker (English Marker)</option>
+                                        </optgroup>
                                     </select>
                                 </div>
 
@@ -2487,23 +2513,35 @@
                                         <div class="control-group mt-2">
                                             <label>Font Family (ফন্ট)</label>
                                             <select id="broll-edit-text-font-select" class="form-select">
-                                                <option value="Hind Siliguri">Hind Siliguri (Bengali Clean Sans)</option>
-                                                <option value="Galada">Galada (Bengali Stylized)</option>
-                                                <option value="Baloo Da 2">Baloo Da 2 (Bengali Rounded)</option>
-                                                <option value="Tiro Bangla">Tiro Bangla (Bengali Serif)</option>
-                                                <option value="Outfit">Outfit (English)</option>
-                                                <option value="Plus Jakarta Sans">Plus Jakarta Sans (English)</option>
-                                                <option value="Montserrat">Montserrat (English)</option>
-                                                <option value="Poppins">Poppins (English)</option>
-                                                <option value="Oswald">Oswald (English Condensed)</option>
-                                                <option value="Bebas Neue">Bebas Neue (English Bold Display)</option>
-                                                <option value="Anton">Anton (English Impact)</option>
-                                                <option value="Archivo Black">Archivo Black (English Heavy)</option>
-                                                <option value="Righteous">Righteous (English Rounded)</option>
-                                                <option value="Playfair Display">Playfair Display (English Elegant Serif)</option>
-                                                <option value="Caveat">Caveat (English Handwriting)</option>
-                                                <option value="Pacifico">Pacifico (English Script)</option>
-                                                <option value="Permanent Marker">Permanent Marker (English Marker)</option>
+                                                <optgroup label="── বাংলা ভেরিয়েশন ফন্ট ──">
+                                                    <option value="Noto Sans Bengali">Noto Sans Bengali — নোটো সান্স (ক্লিন, মাল্টি-ওয়েট)</option>
+                                                    <option value="Noto Serif Bengali">Noto Serif Bengali — নোটো সেরিফ (ক্লাসিক, মাল্টি-ওয়েট)</option>
+                                                    <option value="Hind Siliguri">Hind Siliguri — হিন্দ সিলিগুড়ি (স্লিম স্যান্স)</option>
+                                                    <option value="Anek Bangla">Anek Bangla — আনেক (মডার্ন Variable ফন্ট)</option>
+                                                    <option value="Baloo Da 2">Baloo Da 2 — বালু দা (রাউন্ডেড, মাল্টি-ওয়েট)</option>
+                                                    <option value="Galada">Galada — গালাদা (ডেকোরেটিভ ডিসপ্লে)</option>
+                                                    <option value="Tiro Bangla">Tiro Bangla — তিরো বাংলা (ঐতিহ্যিক সেরিফ)</option>
+                                                    <option value="Kalpurush">Kalpurush — কল্পুরুষ (বোল্ড ডিসপ্লে)</option>
+                                                    <option value="Mina">Mina — মিনা (কম্প্যাক্ট মডার্ন)</option>
+                                                    <option value="Siyam Rupali">Siyam Rupali — সিয়াম রূপালী (স্টাইলিশ)</option>
+                                                    <option value="Murecho">Murecho — মুরেচো (রাউন্ডেড ফ্রেন্ডলি)</option>
+                                                    <option value="Shonar Bangla">Shonar Bangla — সোনার বাংলা (ট্র্যাডিশনাল)</option>
+                                                </optgroup>
+                                                <optgroup label="── ইংরেজি ফন্ট ──">
+                                                    <option value="Outfit">Outfit (English)</option>
+                                                    <option value="Plus Jakarta Sans">Plus Jakarta Sans (English)</option>
+                                                    <option value="Montserrat">Montserrat (English)</option>
+                                                    <option value="Poppins">Poppins (English)</option>
+                                                    <option value="Oswald">Oswald (English Condensed)</option>
+                                                    <option value="Bebas Neue">Bebas Neue (English Bold Display)</option>
+                                                    <option value="Anton">Anton (English Impact)</option>
+                                                    <option value="Archivo Black">Archivo Black (English Heavy)</option>
+                                                    <option value="Righteous">Righteous (English Rounded)</option>
+                                                    <option value="Playfair Display">Playfair Display (English Elegant Serif)</option>
+                                                    <option value="Caveat">Caveat (English Handwriting)</option>
+                                                    <option value="Pacifico">Pacifico (English Script)</option>
+                                                    <option value="Permanent Marker">Permanent Marker (English Marker)</option>
+                                                </optgroup>
                                             </select>
                                         </div>
                                         <div class="control-group mt-2">
