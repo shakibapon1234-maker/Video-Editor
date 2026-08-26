@@ -4139,9 +4139,9 @@ document.addEventListener('DOMContentLoaded', () => {
         // replay it every `animLoopSec` seconds for as long as the overlay is
         // visible. The exit ("out") animation near the overlay's end still
         // plays once, normally, and is left untouched.
-        if (item.animLoop && item.animLoopSec > 0 && tOut >= animDur) {
+        if (item.animLoop && item.animLoopSec > 0) {
             const loopSec = Math.max(animDur, item.animLoopSec);
-            const tInLoop = tIn % loopSec;
+            const tInLoop = ((tIn % loopSec) + loopSec) % loopSec;
             if (tInLoop < animDur) return { p: Math.max(0, Math.min(1, tInLoop / animDur)), phase: 'in' };
             return { p: 1, phase: 'settled' };
         }
@@ -5072,6 +5072,18 @@ document.addEventListener('DOMContentLoaded', () => {
             return g;
         }
         return item.color || '#ffffff';
+    }
+
+    
+    function buildTextOverlayFont(item, fontPx, fontFamily) {
+        const isBold = (item && item.isBold !== undefined) ? !!item.isBold : true;
+        const isItalic = (item && item.isItalic !== undefined) ? !!item.isItalic : false;
+        const extraThick = (item && item.extraThickness) ? Number(item.extraThickness) : 0;
+        const weight = isBold ? (extraThick ? (700 + Math.min(200, extraThick * 20)) : 'bold') : 'normal';
+        const italicStyle = isItalic ? 'italic ' : '';
+        const fam = fontFamily || (item && item.font) || 'Hind Siliguri';
+        const px = fontPx || (item && item.fontSize) || 32;
+        return `${italicStyle}${weight} ${px}px "${fam}", "Plus Jakarta Sans", sans-serif`;
     }
 
     function renderTextWith3DAndColor(ctx, text, x, y, item, fontSize, align, outlineColor, outlineWidth) {
@@ -9430,8 +9442,16 @@ document.addEventListener('DOMContentLoaded', () => {
 
                 // Unified Container Transform for Box + Text
                 const hasBox = !!(item.boxStyle && item.boxStyle !== 'none');
-                const animStyleToUse = hasBox ? (boxAnimStyle !== 'none' ? boxAnimStyle : textAnimStyle) : textAnimStyle;
-                const animDurToUse = hasBox ? boxAnimDur : textAnimDur;
+                // Container animation: the whole box+text entrance/exit transform.
+                // - If a separate boxAnimStyle is set (e.g. slide-up), use it for the container.
+                // - If only textAnimStyle is set AND it is a CONTAINER-type anim (slide, zoom, etc.),
+                //   use it for the container too (legacy behaviour).
+                // - Reveal-type anims (typewriter, word-3d-stagger etc.) only animate the text
+                //   content; the container itself should be fully visible from start in that case.
+                const hasSpecificBoxAnim = hasBox && boxAnimStyle && boxAnimStyle !== 'none';
+                const textStyleIsRevealOnly = TEXT_OVERLAY_REVEAL_ANIM_STYLES && TEXT_OVERLAY_REVEAL_ANIM_STYLES.has(textAnimStyle);
+                const animStyleToUse = hasSpecificBoxAnim ? boxAnimStyle : (textStyleIsRevealOnly ? 'none' : textAnimStyle);
+                const animDurToUse = hasSpecificBoxAnim ? boxAnimDur : textAnimDur;
                 const containerT = computeOverlayAnimTransform(animStyleToUse, currentTime, item.startSec, item.endSec, animDurToUse, boxH, item.textAnimLoop, item.textAnimLoopSec, canvasW, canvasH, tx, ty, boxW, boxH);
                 const textRevealAnim = getTextOverlayAnimProgress({ animStyle: textAnimStyle, startSec: item.startSec, endSec: item.endSec, animLoop: item.textAnimLoop, animLoopSec: item.textAnimLoopSec }, currentTime, textAnimDur);
 
@@ -9448,7 +9468,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     drawTextOverlayBox(state.ctx, item.boxStyle, item.boxColor || '#4f46e5', boxW, boxH, currentTime, curveAmount);
                 }
 
-                state.ctx.font = `bold ${item.fontSize}px "${fontFamily}", "Plus Jakarta Sans", sans-serif`;
+                state.ctx.font = buildTextOverlayFont(item, item.fontSize, fontFamily);
                 state.ctx.fillStyle = item.color;
                 state.ctx.textAlign = 'center';
                 state.ctx.textBaseline = 'middle';
@@ -9808,6 +9828,48 @@ document.addEventListener('DOMContentLoaded', () => {
                     }
                 };
                 applyTextOverlayShadow(state.ctx, item, drawTextContent);
+
+                // Extra Thickness: simulated via repeated stroke pass to make text heavier
+                const _extraThick = item.extraThickness ? Number(item.extraThickness) : 0;
+                if (_extraThick > 0) {
+                    state.ctx.save();
+                    state.ctx.font = buildTextOverlayFont(item, item.fontSize, fontFamily);
+                    state.ctx.strokeStyle = item.color || '#ffffff';
+                    state.ctx.lineWidth = _extraThick * 1.5;
+                    state.ctx.lineJoin = 'round';
+                    state.ctx.textAlign = 'center';
+                    state.ctx.textBaseline = 'middle';
+                    const _thickLines = resolvedItemText.split('\n');
+                    const _thickLH = item.fontSize * 1.25;
+                    const _thickStartY = _thickLines.length <= 1 ? 0 : -((_thickLines.length - 1) * _thickLH) / 2;
+                    _thickLines.forEach((ln, li) => {
+                        state.ctx.strokeText(ln, 0, _thickStartY + li * _thickLH);
+                    });
+                    state.ctx.restore();
+                }
+
+                // Underline: draw a line below the rendered text
+                if (item.isUnderline) {
+                    state.ctx.save();
+                    state.ctx.font = buildTextOverlayFont(item, item.fontSize, fontFamily);
+                    state.ctx.textAlign = 'center';
+                    state.ctx.textBaseline = 'middle';
+                    const _ulLines = resolvedItemText.split('\n');
+                    const _ulLH = item.fontSize * 1.25;
+                    const _ulStartY = _ulLines.length <= 1 ? 0 : -((_ulLines.length - 1) * _ulLH) / 2;
+                    state.ctx.strokeStyle = item.color || '#ffffff';
+                    state.ctx.lineWidth = Math.max(1.5, item.fontSize * 0.065);
+                    _ulLines.forEach((ln, li) => {
+                        const lineWidth = state.ctx.measureText(ln).width;
+                        const lineY = _ulStartY + li * _ulLH;
+                        const underlineY = lineY + item.fontSize * 0.62;
+                        state.ctx.beginPath();
+                        state.ctx.moveTo(-lineWidth / 2, underlineY);
+                        state.ctx.lineTo(lineWidth / 2, underlineY);
+                        state.ctx.stroke();
+                    });
+                    state.ctx.restore();
+                }
 
                 // Selection box + resize & rotate handles in Step 3 for the active text overlay
                 if (state.currentStep === 3 && item.id === state.selectedTextOverlayId) {
@@ -12933,7 +12995,7 @@ document.addEventListener('DOMContentLoaded', () => {
     function getTextOverlayBox(item) {
         const canvasW = state.canvas.width;
         const canvasH = state.canvas.height;
-        state.ctx.font = `bold ${item.fontSize}px "${item.font || 'Hind Siliguri'}", "Plus Jakarta Sans", sans-serif`;
+        state.ctx.font = buildTextOverlayFont(item, item.fontSize);
 
         const text = item.text || '';
         const lines = text.split('\n');
@@ -14766,6 +14828,64 @@ document.addEventListener('DOMContentLoaded', () => {
     const textOverlayEndInput = document.getElementById('text-overlay-end');
     const textOverlayEditInput = document.getElementById('text-overlay-edit-input');
     const deleteTextOverlayBtn = document.getElementById('delete-text-overlay-btn');
+
+    const textOverlayBoldBtn = document.getElementById('text-overlay-bold-btn');
+    const textOverlayItalicBtn = document.getElementById('text-overlay-italic-btn');
+    const textOverlayUnderlineBtn = document.getElementById('text-overlay-underline-btn');
+    const textOverlayThicknessSlider = document.getElementById('text-overlay-thickness-slider');
+    const textOverlayThicknessVal = document.getElementById('text-overlay-thickness-val');
+
+    if (textOverlayBoldBtn) {
+        textOverlayBoldBtn.addEventListener('click', () => {
+            const item = getSelectedTextOverlay();
+            if (item) {
+                item.isBold = (item.isBold === undefined) ? false : !item.isBold;
+                textOverlayBoldBtn.classList.toggle('active', item.isBold);
+                drawFrame();
+                if (window.triggerAutoSave) window.triggerAutoSave();
+            }
+        });
+    }
+
+    if (textOverlayItalicBtn) {
+        textOverlayItalicBtn.addEventListener('click', () => {
+            const item = getSelectedTextOverlay();
+            if (item) {
+                item.isItalic = !item.isItalic;
+                textOverlayItalicBtn.classList.toggle('active', item.isItalic);
+                drawFrame();
+                if (window.triggerAutoSave) window.triggerAutoSave();
+            }
+        });
+    }
+
+    if (textOverlayUnderlineBtn) {
+        textOverlayUnderlineBtn.addEventListener('click', () => {
+            const item = getSelectedTextOverlay();
+            if (item) {
+                item.isUnderline = !item.isUnderline;
+                textOverlayUnderlineBtn.classList.toggle('active', item.isUnderline);
+                drawFrame();
+                if (window.triggerAutoSave) window.triggerAutoSave();
+            }
+        });
+    }
+
+    if (textOverlayThicknessSlider) {
+        textOverlayThicknessSlider.addEventListener('input', (e) => {
+            const val = parseInt(e.target.value) || 0;
+            if (textOverlayThicknessVal) textOverlayThicknessVal.innerText = val > 0 ? `+${val}px (Extra Bold)` : 'Normal (0px)';
+            const item = getSelectedTextOverlay();
+            if (item) {
+                item.extraThickness = val;
+                drawFrame();
+            }
+        });
+        textOverlayThicknessSlider.addEventListener('change', () => {
+            if (window.triggerAutoSave) window.triggerAutoSave();
+        });
+    }
+
 
     // Shadow / Glow controls (previously present in the DOM but never wired up)
     const textOverlayShadowEnabled = document.getElementById('text-overlay-shadow-enabled');

@@ -4556,3 +4556,36 @@ input:checked + .slider:before {
 .punch-zoom-quick strong { color: var(--text-primary); font-size: 13px; }
 .punch-zoom-advanced summary { cursor: pointer; color: var(--text-secondary); font-size: 13px; }
 .punch-zoom-advanced-content { padding-top: 4px; }
+
+/* Text Format Buttons (Bold, Italic, Underline) */
+.text-format-btn-group {
+    display: flex;
+    gap: 8px;
+    margin-top: 6px;
+}
+.btn-text-format {
+    flex: 1;
+    background: var(--bg-base, rgba(255,255,255,0.05));
+    border: 1px solid var(--border-color, rgba(255,255,255,0.12));
+    border-radius: 6px;
+    padding: 8px 10px;
+    color: var(--text-secondary, #cbd5e1);
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    transition: all 0.2s ease;
+}
+.btn-text-format:hover {
+    border-color: var(--border-hover, #6366f1);
+    color: #fff;
+}
+.btn-text-format.active {
+    background: rgba(79, 70, 229, 0.22);
+    border-color: var(--primary, #4f46e5);
+    color: #a5b4fc;
+    box-shadow: 0 0 10px rgba(79, 70, 229, 0.35);
+}
