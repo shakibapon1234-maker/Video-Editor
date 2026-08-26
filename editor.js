@@ -6119,6 +6119,54 @@ document.addEventListener('DOMContentLoaded', () => {
         ctx.restore();
     }
 
+
+    // Word 3D Tilt Stagger text animation: each word enters with a 3D-tilt pop (scaleY collapse + spring back)
+    // perfectly centered and multiline-aware so text never shifts away from the text box.
+    function drawTextOverlayWord3DStagger(ctx, text, progress, phase, fontSize, strokeColor, strokeWidth, item) {
+        if (!text) return;
+        drawTextOverlayAnimatedLines(ctx, text, fontSize || 40, (line) => drawTextOverlayWord3DStaggerLine(ctx, line, progress, phase, fontSize, strokeColor, strokeWidth, item));
+    }
+
+    function drawTextOverlayWord3DStaggerLine(ctx, line, progress, phase, fontSize, strokeColor, strokeWidth, item) {
+        const units = line.split(/(\s+)/);
+        const meaningfulWords = units.filter(u => u.trim().length > 0);
+        const totalMeaningful = meaningfulWords.length || 1;
+        const widths = units.map(u => ctx.measureText(u).width);
+        const totalWidth = widths.reduce((a, b) => a + b, 0);
+        let cursorX = -totalWidth / 2;
+        let wordIndex = 0;
+        
+        ctx.save();
+        if (strokeColor) { ctx.lineWidth = strokeWidth; ctx.strokeStyle = strokeColor; }
+        
+        units.forEach((unit, i) => {
+            const w = widths[i];
+            const isSpace = !unit.trim();
+            const cx = cursorX + w / 2;
+            
+            if (!isSpace) {
+                const wDelay = totalMeaningful > 1 ? (wordIndex / Math.max(1, totalMeaningful)) * 0.65 : 0;
+                const rawP = Math.max(0, Math.min(1,
+                    phase === 'settled' ? 1 :
+                    phase === 'in' ? (progress - wDelay) / Math.max(0.01, 1 - wDelay) :
+                    phase === 'out' ? Math.max(0, 1 - (progress + wDelay)) : 1
+                ));
+                const springP = Math.max(0.01, easeOutBackOvershoot(rawP));
+                
+                ctx.save();
+                ctx.translate(cx, 0);
+                ctx.scale(1, 0.12 + 0.88 * springP);
+                ctx.globalAlpha *= Math.min(1, rawP * 2);
+                if (strokeColor) { ctx.strokeText(unit, 0, 0); }
+                ctx.fillText(unit, 0, 0);
+                ctx.restore();
+                wordIndex++;
+            }
+            cursorX += w;
+        });
+        ctx.restore();
+    }
+
     // Rainbow Flow text animation: rainbow hue shifts continuously across letters
     function drawTextOverlayRainbowFlow(ctx, text, currentTime, strokeColor, strokeWidth, fontSize) {
         if (!text) return;
@@ -6492,6 +6540,64 @@ document.addEventListener('DOMContentLoaded', () => {
         let hueVal = 0;
         
         switch (state.filterPreset) {
+            case 'hdr-pop':
+                // 4K HDR Ultra Pop: Boosts dynamic range, clarity, rich colors for viral Reels
+                bVal = bVal * 1.08;
+                cVal = cVal * 1.32;
+                sVal = sVal * 1.38;
+                break;
+            case 'face-glow':
+                // Radiant Beauty & Skin Glow: flattering warm luminosity with clean highlights
+                bVal = bVal * 1.12;
+                cVal = cVal * 1.10;
+                sVal = sVal * 1.15;
+                sepiaVal = 14;
+                break;
+            case 'moody-cinema':
+                // Hollywood Moody 4K Cinema: deep cinematic contrast & rich tone curve
+                bVal = bVal * 0.98;
+                cVal = cVal * 1.38;
+                sVal = sVal * 1.20;
+                sepiaVal = 18;
+                hueVal = -5;
+                break;
+            case 'luxury-gold':
+                // Golden Hour Luxury Look: warm amber highlights and velvet shadows
+                bVal = bVal * 1.06;
+                cVal = cVal * 1.20;
+                sVal = sVal * 1.28;
+                sepiaVal = 38;
+                hueVal = 5;
+                break;
+            case 'vivid-punch':
+                // Viral Vivid: High-impact punchy colors and crisp micro-contrast
+                bVal = bVal * 1.06;
+                cVal = cVal * 1.28;
+                sVal = sVal * 1.48;
+                break;
+            case 'cyber-neon':
+                // Tokyo Cyberpunk / Neon Shift: vibrant cyan/magenta split
+                bVal = bVal * 1.02;
+                cVal = cVal * 1.35;
+                sVal = sVal * 1.35;
+                hueVal = 185;
+                sepiaVal = 10;
+                break;
+            case 'soft-pastel':
+                // Korean / Parisian Aesthetic: soft high-key creamy pastel palette
+                bVal = bVal * 1.14;
+                cVal = cVal * 0.92;
+                sVal = sVal * 1.08;
+                sepiaVal = 12;
+                hueVal = -3;
+                break;
+            case 'velvet-dark':
+                // Matte Dark Film: deep blacks, subdued moody tones
+                bVal = bVal * 0.94;
+                cVal = cVal * 1.26;
+                sVal = sVal * 0.88;
+                sepiaVal = 12;
+                break;
             case 'cinematic':
                 bVal = bVal * 1.05;
                 cVal = cVal * 1.25;
@@ -9648,34 +9754,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         });
                         ctx2.restore();
                     } else if (textAnimStyle === 'word-3d-stagger') {
-                        // Word-by-Word 3D Tilt Stagger: each word enters with a 3D-tilt
-                        // pop (scaleY collapse → spring back) staggered 80ms per word.
-                        const words = textToDraw.split(/\s+/);
-                        const totalW = words.length;
-                        const lhWS = item.fontSize * 1.25;
-                        ctx2.save();
-                        ctx2.font = ctx2.font; // ensure font set
-                        let curX = 0;
-                        const spW = ctx2.measureText(' ').width;
-                        words.forEach((word, wi) => {
-                            const wDelay = wi / Math.max(1, totalW) * 0.7;
-                            const rawP = Math.max(0, Math.min(1,
-                                textRevealAnim.phase === 'settled' ? 1 :
-                                textRevealAnim.phase === 'in' ? (textRevealAnim.p - wDelay) / (1 - wDelay) : 0
-                            ));
-                            const springP = Math.max(0.01, easeOutBackOvershoot(rawP));
-                            const wW = ctx2.measureText(word).width;
-                            ctx2.save();
-                            ctx2.translate(curX + wW / 2, 0);
-                            ctx2.scale(1, 0.12 + 0.88 * springP);
-                            ctx2.globalAlpha *= Math.min(1, rawP * 2);
-                            ctx2.translate(-wW / 2, 0);
-                            if (outlineColor) { ctx2.lineWidth = outlineWidth; ctx2.strokeStyle = outlineColor; ctx2.strokeText(word, 0, 0); }
-                            ctx2.fillText(word, 0, 0);
-                            ctx2.restore();
-                            curX += wW + spW;
-                        });
-                        ctx2.restore();
+                        drawTextOverlayWord3DStagger(ctx2, textToDraw, textRevealAnim.p, textRevealAnim.phase, item.fontSize, outlineColor, outlineWidth, item);
                     } else if (textAnimStyle === 'letter-track-expand') {
                         // Letter Tracking Expand: letters start compressed together
                         // (negative letterSpacing feel via manual x-offset) and
@@ -13891,7 +13970,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         initialText = "আপনার টেক্সট লিখুন";
                     }
                     const newItem = {
-                        id: typeof textOverlayIdCounter !== 'undefined' ? textOverlayIdCounter++ : Date.now(),
+                        id: generateUniqueTextOverlayId(),
                         clipId: state.activeClipId,
                         text: initialText,
                         x: cx,
@@ -14714,6 +14793,16 @@ document.addEventListener('DOMContentLoaded', () => {
     const textShadowPresetBevel = document.getElementById('text-shadow-preset-bevel');
 
     let textOverlayIdCounter = 1;
+    function generateUniqueTextOverlayId() {
+        let maxId = 0;
+        if (state && state.textOverlays) {
+            state.textOverlays.forEach(t => {
+                if (t && typeof t.id === 'number' && t.id > maxId) maxId = t.id;
+            });
+        }
+        textOverlayIdCounter = Math.max(textOverlayIdCounter || 1, maxId + 1);
+        return textOverlayIdCounter++;
+    }
 
     if (textOverlayEditInput) {
         textOverlayEditInput.addEventListener('input', (e) => {
@@ -15151,7 +15240,7 @@ document.addEventListener('DOMContentLoaded', () => {
         state.selectedTextOverlayId = null;
 
         const newItem = {
-            id: textOverlayIdCounter++,
+            id: generateUniqueTextOverlayId(),
             clipId: state.activeClipId,
             text: text,
             x: 0.5,
@@ -18250,6 +18339,16 @@ document.addEventListener('DOMContentLoaded', () => {
     };
 
     let shapeOverlayIdCounter = 1;
+    function generateUniqueShapeOverlayId() {
+        let maxId = 0;
+        if (state && state.shapeOverlays) {
+            state.shapeOverlays.forEach(s => {
+                if (s && typeof s.id === 'number' && s.id > maxId) maxId = s.id;
+            });
+        }
+        shapeOverlayIdCounter = Math.max(shapeOverlayIdCounter || 1, maxId + 1);
+        return shapeOverlayIdCounter++;
+    }
 
     function addShapeOverlay(type) {
         const isPlane = type === 'plane';
@@ -18257,7 +18356,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const defaultDur = isPlane ? 5 : 3;
         const end = Math.min(state.duration || (start + defaultDur), start + defaultDur);
         const newItem = {
-            id: shapeOverlayIdCounter++,
+            id: generateUniqueShapeOverlayId(),
             clipId: state.activeClipId,
             shapeType: type,
             text: isPlane ? 'YOUR TEXT HERE' : 'আপনার টেক্সট',
@@ -21370,24 +21469,72 @@ document.addEventListener('DOMContentLoaded', () => {
         collectMax(state.blurRegions);
         collectMax(state.subtitles);
         collectMax(state.bgMusicTracks);
-        // Bump global counters so new items get unique IDs
+
         const safeNext = maxId + 1;
-        if (typeof stickerIdCounter !== 'undefined' && stickerIdCounter <= maxId) {
-            stickerIdCounter = safeNext;
+        if (typeof textOverlayIdCounter !== 'undefined') textOverlayIdCounter = Math.max(textOverlayIdCounter, safeNext);
+        if (typeof stickerIdCounter !== 'undefined') stickerIdCounter = Math.max(stickerIdCounter, safeNext);
+        if (typeof symbolIdCounter !== 'undefined') symbolIdCounter = Math.max(symbolIdCounter, safeNext);
+        if (typeof shapeOverlayIdCounter !== 'undefined') shapeOverlayIdCounter = Math.max(shapeOverlayIdCounter, safeNext);
+
+        // De-duplicate text overlay IDs
+        if (state.textOverlays && state.textOverlays.length > 0) {
+            const seenIds = new Set();
+            state.textOverlays.forEach(item => {
+                if (!item) return;
+                if (item.id === undefined || item.id === null || seenIds.has(String(item.id))) {
+                    item.id = ++maxId;
+                }
+                seenIds.add(String(item.id));
+            });
+            if (typeof textOverlayIdCounter !== 'undefined') textOverlayIdCounter = Math.max(textOverlayIdCounter, maxId + 1);
         }
 
-        // De-duplicate B-roll overlay IDs. If two (or more) items share the same
-        // numeric id — which can happen when old projects are migrated or history
-        // snapshots are restored — every one of them will match a filter() and be
-        // deleted at once when the user tries to remove just one. Detect duplicates
-        // and assign a fresh unique id to any offending item so every B-roll is
-        // individually addressable.
+        // De-duplicate shape overlay IDs
+        if (state.shapeOverlays && state.shapeOverlays.length > 0) {
+            const seenIds = new Set();
+            state.shapeOverlays.forEach(item => {
+                if (!item) return;
+                if (item.id === undefined || item.id === null || seenIds.has(String(item.id))) {
+                    item.id = ++maxId;
+                }
+                seenIds.add(String(item.id));
+            });
+            if (typeof shapeOverlayIdCounter !== 'undefined') shapeOverlayIdCounter = Math.max(shapeOverlayIdCounter, maxId + 1);
+        }
+
+        // De-duplicate sticker IDs
+        if (state.stickers && state.stickers.length > 0) {
+            const seenIds = new Set();
+            state.stickers.forEach(item => {
+                if (!item) return;
+                if (item.id === undefined || item.id === null || seenIds.has(String(item.id))) {
+                    item.id = ++maxId;
+                }
+                seenIds.add(String(item.id));
+            });
+            if (typeof stickerIdCounter !== 'undefined') stickerIdCounter = Math.max(stickerIdCounter, maxId + 1);
+        }
+
+        // De-duplicate symbol overlay IDs
+        if (state.symbolOverlays && state.symbolOverlays.length > 0) {
+            const seenIds = new Set();
+            state.symbolOverlays.forEach(item => {
+                if (!item) return;
+                if (item.id === undefined || item.id === null || seenIds.has(String(item.id))) {
+                    item.id = ++maxId;
+                }
+                seenIds.add(String(item.id));
+            });
+            if (typeof symbolIdCounter !== 'undefined') symbolIdCounter = Math.max(symbolIdCounter, maxId + 1);
+        }
+
+        // De-duplicate B-roll overlay IDs
         if (state.brollOverlays && state.brollOverlays.length > 0) {
             const seenIds = new Set();
             state.brollOverlays.forEach(item => {
                 if (!item) return;
                 if (!item.id || seenIds.has(String(item.id))) {
-                    item.id = generateBrollId();
+                    item.id = (typeof generateBrollId === 'function') ? generateBrollId() : 'broll_' + Date.now() + '_' + Math.random().toString(36).substr(2, 6);
                 }
                 seenIds.add(String(item.id));
             });
@@ -21963,6 +22110,11 @@ document.addEventListener('DOMContentLoaded', () => {
                         return copy;
                     })
                 }))
+            ,
+                historyLabels: (state.historyLabels || []).slice(-35),
+                undoStack: (state.undoStack || []).slice(-35),
+                redoStack: (state.redoStack || []).slice(-20),
+                redoLabels: (state.redoLabels || []).slice(-20)
             };
 
             // Write settings and files to IndexedDB first
@@ -22546,11 +22698,15 @@ document.addEventListener('DOMContentLoaded', () => {
             const playPauseBtnEl = document.getElementById('play-pause-btn');
             if (playPauseBtnEl) playPauseBtnEl.innerHTML = '<i class="fa-solid fa-play"></i>';
 
-            state.undoStack = [];
-            state.historyLabels = [];
-            state.redoStack = [];
-            state.redoLabels = [];
-            if (typeof updateHistoryUI === 'function') updateHistoryUI();
+            state.historyLabels = (savedData && savedData.historyLabels) ? savedData.historyLabels : [];
+            state.undoStack = (savedData && savedData.undoStack) ? savedData.undoStack : [];
+            state.redoStack = (savedData && savedData.redoStack) ? savedData.redoStack : [];
+            state.redoLabels = (savedData && savedData.redoLabels) ? savedData.redoLabels : [];
+            if (typeof window.updateHistoryUI === 'function') {
+                window.updateHistoryUI();
+            } else if (typeof updateHistoryUI === 'function') {
+                updateHistoryUI();
+            }
 
             updateCanvasDimensions();
             syncUIFromState();

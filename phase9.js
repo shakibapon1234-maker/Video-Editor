@@ -503,6 +503,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (typeof window.triggerAutoSave === 'function') window.triggerAutoSave();
     }
     window.recordEditorHistory = recordEditorHistory;
+    window.updateHistoryUI = updateHistoryUI;
 
     function undoEditor() {
         if (state.undoStack.length === 0) return;
@@ -2112,12 +2113,8 @@ document.addEventListener('DOMContentLoaded', () => {
     ensureAllClips();
     syncPhase9ClipUI();
 
-    // Initial history snapshot after first clip load
+    // Refresh history UI on startup
     setTimeout(() => {
-        if (state.clips.length > 0 && state.undoStack.length === 0) {
-            recordEditorHistory('Initial state');
-            state.undoStack.pop();
-            state.historyLabels.pop();
-        }
-    }, 2500);
+        if (typeof updateHistoryUI === 'function') updateHistoryUI();
+    }, 1200);
 });
