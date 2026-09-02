@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
@@ -1877,6 +1877,50 @@
                                     <p class="help-text">চাইলে ডায়নামিক টোকেন লিখতে পারেন — <code>{{date}}</code> (আজকের তারিখ), <code>{{time}}</code> (এখনকার সময়), <code>{{counter}}</code> (প্লে টাইম অনুযায়ী গোনা শুরু), বা <code>{{counter:100}}</code> (১০০ থেকে গোনা শুরু) — প্রিভিউ/এক্সপোর্টের সময় আসল মান বসে যাবে।</p>
                                 </div>
 
+                                <!-- 1-Click Viral Text Style Presets (Trending Styles) -->
+                                <div class="control-group mt-3" id="text-overlay-presets-section">
+                                    <label style="display: flex; align-items: center; justify-content: space-between;">
+                                        <span><i class="fa-solid fa-wand-magic-sparkles" style="color: #f59e0b;"></i> 1-Click Design Presets (এক-ক্লিক ডিজাইন প্রিসেট)</span>
+                                    </label>
+                                    <div class="text-preset-chip-grid" style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; margin-top: 6px;">
+                                        <button type="button" class="btn-preset-chip" id="btn-preset-red-outline" title="হোয়াইট টেক্সট + গাঢ় রেড বর্ডার (১ম স্ক্রিনশট স্টাইল)">
+                                            <span class="preset-chip-badge" style="background:#ef4444; color:#fff; font-weight:900; border: 1.5px solid #fff;">T</span>
+                                            <div class="preset-chip-info">
+                                                <strong>Red Outline</strong>
+                                                <small>হোয়াইট + লাল বর্ডার</small>
+                                            </div>
+                                        </button>
+                                        <button type="button" class="btn-preset-chip" id="btn-preset-brush-stroke" title="রংতুলি ব্রাশ ব্যাকগ্রাউন্ড + টেক্সট (২য় স্ক্রিনশট স্টাইল)">
+                                            <span class="preset-chip-badge" style="background:linear-gradient(135deg, #10b981, #059669); color:#fff;">🖌️</span>
+                                            <div class="preset-chip-info">
+                                                <strong>Paint Brush</strong>
+                                                <small>রংতুলি ব্রাশ ব্যাকগ্রাউন্ড</small>
+                                            </div>
+                                        </button>
+                                        <button type="button" class="btn-preset-chip" id="btn-preset-glossy-glaze" title="চোখ ধাঁধানো গ্লসি ও ৩ডি গ্লেজ টেক্সট (৩য় স্ক্রিনশট স্টাইল)">
+                                            <span class="preset-chip-badge" style="background:linear-gradient(135deg, #38bdf8, #6366f1); color:#fff;">✨</span>
+                                            <div class="preset-chip-info">
+                                                <strong>Glossy Glaze 3D</strong>
+                                                <small>উজ্জ্বল গ্লসি ক্রিস্প লুক</small>
+                                            </div>
+                                        </button>
+                                        <button type="button" class="btn-preset-chip" id="btn-preset-red-pill" title="হোয়াইট রাউন্ডেড পিল + রেড টেক্সট ও রেড বর্ডার">
+                                            <span class="preset-chip-badge" style="background:#fff; color:#ef4444; border: 2px solid #ef4444; font-weight:bold;">💊</span>
+                                            <div class="preset-chip-info">
+                                                <strong>Red Pill Badge</strong>
+                                                <small>লাল বর্ডার পিল ব্যাজ</small>
+                                            </div>
+                                        </button>
+                                        <button type="button" class="btn-preset-chip" id="btn-preset-studio-bar" title="গাঢ় সিনেমাটিক স্টুডিও ব্যানার বার + গ্লসি টেক্সট" style="grid-column: span 2;">
+                                            <span class="preset-chip-badge" style="background:#0f172a; color:#38bdf8; border: 1px solid #38bdf8;">📺</span>
+                                            <div class="preset-chip-info">
+                                                <strong>Glossy Studio Bar</strong>
+                                                <small>গাঢ় সিনেমাটিক ব্যানার বার + হাই-কনট্রাস্ট টেক্সট</small>
+                                            </div>
+                                        </button>
+                                    </div>
+                                </div>
+
                                 <div class="control-group mt-3">
                                     <label>Font Family</label>
                                     <select id="text-overlay-font-select" class="form-select">
@@ -1964,6 +2008,52 @@
                                         <input type="color" id="text-overlay-color" value="#ffffff">
                                         <span class="color-value-text" id="text-overlay-color-val">#ffffff</span>
                                     </div>
+                                </div>
+
+                                <!-- Text Stroke / Outline Controls (বর্ডার / আউটলাইন) -->
+                                <div class="toggle-control mt-3">
+                                    <div class="toggle-label">
+                                        <h4><i class="fa-solid fa-border-all" style="color: #ef4444;"></i> Text Border / Stroke (টেক্সটের চারপাশের বর্ডার/আউটলাইন)</h4>
+                                        <p>হোয়াইট টেক্সটের বাইরে লাল/পছন্দের বর্ডার দিয়ে ফুটে তোলার জন্য (১ম স্ক্রিনশট স্টাইল)</p>
+                                    </div>
+                                    <label class="switch">
+                                        <input type="checkbox" id="text-overlay-stroke-enabled">
+                                        <span class="slider round"></span>
+                                    </label>
+                                </div>
+
+                                <div id="text-overlay-stroke-group" style="display:none; background: rgba(239, 68, 68, 0.06); border: 1px solid rgba(239, 68, 68, 0.25); border-radius: 8px; padding: 10px; margin-top: 8px;">
+                                    <div class="control-group">
+                                        <label>Stroke / Border Color (বর্ডারের কালার)</label>
+                                        <div class="color-picker-wrapper">
+                                            <input type="color" id="text-overlay-stroke-color" value="#ef4444">
+                                            <span class="color-value-text" id="text-overlay-stroke-color-val">#ef4444</span>
+                                        </div>
+                                    </div>
+                                    <div class="control-group mt-2">
+                                        <label>Border Thickness (বর্ডার কতটা মোটা হবে)</label>
+                                        <div class="slider-val-container">
+                                            <input type="range" id="text-overlay-stroke-width" min="1" max="30" value="6">
+                                            <span id="text-overlay-stroke-width-val">6px</span>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div class="control-group mt-3">
+                                    <label>Visual Look / Glaze Style (৩ডি ও গ্লসি লুক)</label>
+                                    <select id="text-overlay-visual-template" class="form-select">
+                                        <option value="standard" selected>Standard (স্বাভাবিক টেক্সট)</option>
+                                        <option value="glossy-glaze">✨ Ultra-Glossy 3D Glaze (চোখ ধাঁধানো গ্লসি গ্লেজ)</option>
+                                        <option value="word-bevel-3d">🧊 Bevel 3D (বেভেল ৩ডি)</option>
+                                        <option value="word-depth-3d">🧱 Depth 3D Shadow (ডিপ শ্যাডো ৩ডি)</option>
+                                        <option value="word-3d-extruded">🏢 Extruded 3D (এক্সট্রুডেড ৩ডি)</option>
+                                        <option value="word-3d-isometric">📐 Isometric 3D (আইসোমেট্রিক)</option>
+                                        <option value="word-3d-neon">💡 Neon 3D (নিয়ন ৩ডি)</option>
+                                        <option value="word-3d-popart">🎨 Pop-Art 3D (পপ আর্ট)</option>
+                                        <option value="word-3d-glass">🫧 Frosted Glass 3D (গ্লাস ৩ডি)</option>
+                                        <option value="word-3d-chrome">🪙 Metallic Chrome 3D (ক্রোম মেটাল)</option>
+                                        <option value="word-3d-holo">🌈 Holographic Holo 3D (হলো কালার)</option>
+                                    </select>
                                 </div>
 
                                 <div class="control-group mt-3">
@@ -2202,23 +2292,32 @@
                                     <label>Box Style (ব্যাকগ্রাউন্ড বক্স)</label>
                                     <select id="text-overlay-box-select" class="form-select">
                                         <option value="none">None (কোনো বক্স নেই)</option>
-                                        <option value="solid">Solid Box</option>
-                                        <option value="outline">Outline Box</option>
-                                        <option value="gradient">Gradient Box</option>
-                                        <option value="pill">Pill / Badge</option>
-                                        <option value="marker">Highlighter Marker</option>
-                                        <option value="speech">Speech Bubble</option>
-                                        <option value="ribbon">Ribbon Banner</option>
-                                        <option value="neon">Neon Glow</option>
-                                        <option value="glassmorphism">🫧 Glassmorphism (ফ্রোস্টেড গ্লাস লুক)</option>
-                                        <option value="cyber-cut">⚡ Cyberpunk Cut (সাইবার কাট বর্ডার)</option>
-                                        <option value="double-border">🔳 Double Frame (ডাবল বর্ডার ব্যানার)</option>
-                                        <option value="shimmer-border">✨ Shimmer Glow Border (শিমার গ্লোয়িং বর্ডার)</option>
-                                        <option value="bracket-frame">📐 Corner Brackets (HUD কর্নার ব্র্যাকেট)</option>
-                                        <option value="glow-aura">🌌 Glow Aura (দ্যুতিময় অরা বক্স)</option>
-                                        <option value="stripes-box">🏁 Motion Stripes (ডায়াগোনাল মেটালিক স্ট্রাইপস)</option>
-                                        <option value="running-border-red">🔴 Running Red Border (লাল রানিং বর্ডার অ্যানিমেশন)</option>
-                                        <option value="running-border">✨ Running Color Border (রানিং কাস্টম বর্ডার অ্যানিমেশন)</option>
+                                        <optgroup label="── 🖌️ পেইন্ট ও আর্টিস্টিক ব্যাকগ্রাউন্ড ──">
+                                            <option value="brush-stroke">🖌️ Artistic Paint Brush (রংতুলি ব্রাশ ব্যাকগ্রাউন্ড)</option>
+                                            <option value="brush-glow">✨ Glowing Paint Brush (গ্লোয়িং ব্রাশ স্ট্রোক)</option>
+                                            <option value="paint-splash">🎨 Watercolor Splash (রঙের ছিটা / স্প্ল্যাশ)</option>
+                                            <option value="studio-bar">📺 Dark Studio Bar (সিনেমাটিক ব্যানার বার)</option>
+                                            <option value="red-pill">🔴 Red Border Pill (রেড বর্ডার পিল ব্যাজ)</option>
+                                        </optgroup>
+                                        <optgroup label="── স্ট্যান্ডার্ড ও রিলস শেপ ──">
+                                            <option value="solid">Solid Box</option>
+                                            <option value="outline">Outline Box</option>
+                                            <option value="gradient">Gradient Box</option>
+                                            <option value="pill">Pill / Badge</option>
+                                            <option value="marker">Highlighter Marker</option>
+                                            <option value="speech">Speech Bubble</option>
+                                            <option value="ribbon">Ribbon Banner</option>
+                                            <option value="neon">Neon Glow</option>
+                                            <option value="glassmorphism">🫧 Glassmorphism (ফ্রোস্টেড গ্লাস লুক)</option>
+                                            <option value="cyber-cut">⚡ Cyberpunk Cut (সাইবার কাট বর্ডার)</option>
+                                            <option value="double-border">🔳 Double Frame (ডাবল বর্ডার ব্যানার)</option>
+                                            <option value="shimmer-border">✨ Shimmer Glow Border (শিমার গ্লোয়িং বর্ডার)</option>
+                                            <option value="bracket-frame">📐 Corner Brackets (HUD কর্নার ব্র্যাকেট)</option>
+                                            <option value="glow-aura">🌌 Glow Aura (দ্যুতিময় অরা বক্স)</option>
+                                            <option value="stripes-box">🏁 Motion Stripes (ডায়াগোনাল মেটালিক স্ট্রাইপস)</option>
+                                            <option value="running-border-red">🔴 Running Red Border (লাল রানিং বর্ডার অ্যানিমেশন)</option>
+                                            <option value="running-border">✨ Running Color Border (রানিং কাস্টম বর্ডার অ্যানিমেশন)</option>
+                                        </optgroup>
                                     </select>
                                 </div>
 

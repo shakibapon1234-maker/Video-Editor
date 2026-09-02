@@ -4485,6 +4485,49 @@ document.addEventListener('DOMContentLoaded', () => {
                     drawCurvedBoxPath(ctx, w, h, curveAmount);
                     ctx.fill();
                     break;
+                case 'brush-stroke':
+                case 'brush-glow':
+                    if (style === 'brush-glow') {
+                        ctx.shadowColor = color || '#10b981';
+                        ctx.shadowBlur = Math.max(16, h * 0.45);
+                    }
+                    ctx.fillStyle = color || '#10b981';
+                    drawCurvedBoxPath(ctx, w * 1.08, h * 1.15, curveAmount);
+                    ctx.fill();
+                    ctx.fillStyle = shadeColorTO(color || '#10b981', 25);
+                    ctx.globalAlpha *= 0.65;
+                    drawCurvedBoxPath(ctx, w * 0.9, h * 0.6, curveAmount);
+                    ctx.fill();
+                    break;
+                case 'paint-splash':
+                    ctx.fillStyle = color || '#3b82f6';
+                    drawCurvedBoxPath(ctx, w, h, curveAmount);
+                    ctx.fill();
+                    break;
+                case 'studio-bar':
+                    ctx.fillStyle = color || '#0f172a';
+                    ctx.shadowColor = 'rgba(0,0,0,0.6)';
+                    ctx.shadowBlur = 12;
+                    drawCurvedBoxPath(ctx, w, h, curveAmount);
+                    ctx.fill();
+                    ctx.shadowBlur = 0;
+                    ctx.strokeStyle = 'rgba(255,255,255,0.2)';
+                    ctx.lineWidth = 1.5;
+                    drawCurvedBoxPath(ctx, w, h, curveAmount);
+                    ctx.stroke();
+                    break;
+                case 'red-pill':
+                    ctx.fillStyle = '#ffffff';
+                    ctx.shadowColor = 'rgba(0,0,0,0.25)';
+                    ctx.shadowBlur = 8;
+                    drawCurvedBoxPath(ctx, w, h, curveAmount);
+                    ctx.fill();
+                    ctx.shadowBlur = 0;
+                    ctx.strokeStyle = color || '#ef4444';
+                    ctx.lineWidth = Math.max(3, h * 0.08);
+                    drawCurvedBoxPath(ctx, w, h, curveAmount);
+                    ctx.stroke();
+                    break;
                 case 'neon':
                     ctx.fillStyle = 'rgba(10,10,20,0.55)';
                     drawCurvedBoxPath(ctx, w, h, curveAmount);
@@ -5009,6 +5052,142 @@ document.addEventListener('DOMContentLoaded', () => {
                 ctx.restore();
                 break;
             }
+            // ── Artistic Paint Brush & Glow (2nd Screenshot Style) ──────────────
+            case 'brush-stroke':
+            case 'brush-glow': {
+                const isGlow = (style === 'brush-glow');
+                ctx.save();
+                if (isGlow) {
+                    ctx.shadowColor = color || '#10b981';
+                    ctx.shadowBlur = Math.max(16, h * 0.45);
+                }
+                const strokeCol = color || '#10b981';
+                // 1. Soft atmospheric base
+                ctx.fillStyle = hexToRgba(strokeCol, 0.4);
+                ctx.beginPath();
+                ctx.ellipse(0, 0, w * 0.52, h * 0.46, -0.02, 0, Math.PI * 2);
+                ctx.fill();
+
+                // 2. Primary organic acrylic brush sweep
+                const leftTip = x - w * 0.05;
+                const rightTip = x + w + w * 0.05;
+                const midY = y + h / 2;
+                ctx.fillStyle = strokeCol;
+                ctx.beginPath();
+                ctx.moveTo(leftTip + 12, midY - h * 0.38);
+                ctx.bezierCurveTo(x + w * 0.2, y - 4, x + w * 0.7, y - 2, rightTip - 8, midY - h * 0.42);
+                ctx.lineTo(rightTip, midY - h * 0.15);
+                ctx.lineTo(rightTip + 6, midY + h * 0.05);
+                ctx.lineTo(rightTip - 4, midY + h * 0.25);
+                ctx.lineTo(rightTip - 14, midY + h * 0.44);
+                ctx.bezierCurveTo(x + w * 0.75, y + h + 4, x + w * 0.25, y + h + 2, leftTip + 18, midY + h * 0.42);
+                ctx.lineTo(leftTip + 4, midY + h * 0.2);
+                ctx.lineTo(leftTip, midY - h * 0.05);
+                ctx.lineTo(leftTip + 6, midY - h * 0.25);
+                ctx.closePath();
+                ctx.fill();
+
+                // 3. Layered secondary bristle streaks
+                ctx.fillStyle = shadeColorTO(strokeCol, 22);
+                ctx.globalAlpha *= 0.65;
+                ctx.beginPath();
+                ctx.moveTo(leftTip + 20, midY - h * 0.22);
+                ctx.bezierCurveTo(x + w * 0.3, midY - h * 0.28, x + w * 0.8, midY - h * 0.18, rightTip - 18, midY - h * 0.26);
+                ctx.lineTo(rightTip - 22, midY - h * 0.12);
+                ctx.bezierCurveTo(x + w * 0.7, midY - h * 0.15, x + w * 0.3, midY - h * 0.12, leftTip + 26, midY - h * 0.08);
+                ctx.closePath();
+                ctx.fill();
+
+                // 4. Bristle dry strokes along edge
+                ctx.strokeStyle = strokeCol;
+                ctx.lineWidth = Math.max(2, h * 0.04);
+                ctx.lineCap = 'round';
+                ctx.beginPath();
+                ctx.moveTo(leftTip - 2, midY + h * 0.08);
+                ctx.lineTo(leftTip + 24, midY + h * 0.12);
+                ctx.moveTo(rightTip - 20, midY - h * 0.3);
+                ctx.lineTo(rightTip + 8, midY - h * 0.24);
+                ctx.stroke();
+
+                ctx.restore();
+                break;
+            }
+            case 'paint-splash': {
+                ctx.save();
+                const splashCol = color || '#3b82f6';
+                ctx.fillStyle = splashCol;
+                ctx.beginPath();
+                ctx.roundRect(x, y, w, h, 8);
+                ctx.fill();
+                const dots = [
+                    { dx: -w*0.52, dy: -h*0.35, r: 4 },
+                    { dx: -w*0.48, dy: -h*0.45, r: 2.5 },
+                    { dx: -w*0.54, dy: h*0.2, r: 3 },
+                    { dx: w*0.53, dy: -h*0.25, r: 4.5 },
+                    { dx: w*0.49, dy: h*0.38, r: 3 },
+                    { dx: w*0.55, dy: h*0.15, r: 2 }
+                ];
+                dots.forEach(d => {
+                    ctx.beginPath();
+                    ctx.arc(d.dx, d.dy, Math.max(2, d.r * (h / 40)), 0, Math.PI * 2);
+                    ctx.fill();
+                });
+                ctx.restore();
+                break;
+            }
+            // ── Dark Studio Bar (3rd Screenshot Style) ──────────────────────────
+            case 'studio-bar': {
+                ctx.save();
+                const barCol = color || '#0f172a';
+                ctx.shadowColor = 'rgba(0, 0, 0, 0.6)';
+                ctx.shadowBlur = 16;
+                ctx.shadowOffsetY = 6;
+                
+                const grad = ctx.createLinearGradient(x, y, x, y + h);
+                grad.addColorStop(0, shadeColorTO(barCol, 15));
+                grad.addColorStop(0.5, barCol);
+                grad.addColorStop(1, shadeColorTO(barCol, -25));
+                ctx.fillStyle = grad;
+                ctx.beginPath();
+                if (ctx.roundRect) ctx.roundRect(x, y, w, h, 6);
+                else ctx.rect(x, y, w, h);
+                ctx.fill();
+                
+                ctx.shadowBlur = 0;
+                ctx.strokeStyle = 'rgba(255, 255, 255, 0.25)';
+                ctx.lineWidth = 1.5;
+                ctx.beginPath();
+                ctx.moveTo(x + 4, y + 1);
+                ctx.lineTo(x + w - 4, y + 1);
+                ctx.stroke();
+
+                ctx.strokeStyle = 'rgba(255, 255, 255, 0.1)';
+                ctx.strokeRect(x, y, w, h);
+                ctx.restore();
+                break;
+            }
+            // ── Red Border Pill Badge (1st Screenshot Style) ────────────────────
+            case 'red-pill': {
+                ctx.save();
+                const pillBorderCol = color || '#ef4444';
+                ctx.shadowColor = 'rgba(0,0,0,0.25)';
+                ctx.shadowBlur = 10;
+                ctx.shadowOffsetY = 3;
+                
+                ctx.fillStyle = '#ffffff';
+                ctx.beginPath();
+                ctx.roundRect(x, y, w, h, h / 2);
+                ctx.fill();
+                
+                ctx.shadowBlur = 0;
+                ctx.strokeStyle = pillBorderCol;
+                ctx.lineWidth = Math.max(3, h * 0.08);
+                ctx.beginPath();
+                ctx.roundRect(x, y, w, h, h / 2);
+                ctx.stroke();
+                ctx.restore();
+                break;
+            }
         }
         ctx.restore();
     }
@@ -5332,9 +5511,52 @@ document.addEventListener('DOMContentLoaded', () => {
                 const hFill = getFrontFill(0);
                 ctx.fillStyle = hFill === '#ffffff' ? `hsla(${(hueBase + 140) % 360}, 85%, 78%, 1)` : hFill;
                 ctx.fillText(text, x, y);
-            } else {
+            } else if (template.includes('glossy')) {
+                // ── Ultra-Glossy 3D Glaze (3rd Screenshot Style) ──────────────
+                ctx.save();
+                ctx.lineJoin = 'round';
+                ctx.miterLimit = 2;
                 if (outlineColor) {
-                    ctx.lineWidth = outlineWidth || Math.max(2, fontPx * 0.06);
+                    ctx.lineWidth = (outlineWidth || 2) * 2;
+                    ctx.strokeStyle = outlineColor;
+                    ctx.strokeText(text, x, y);
+                } else {
+                    ctx.lineWidth = Math.max(2, fontPx * 0.06);
+                    ctx.strokeStyle = 'rgba(0, 0, 0, 0.65)';
+                    ctx.strokeText(text, x, y);
+                }
+                
+                ctx.shadowColor = 'rgba(0, 0, 0, 0.75)';
+                ctx.shadowBlur = Math.max(6, fontPx * 0.12);
+                ctx.shadowOffsetY = Math.max(2, fontPx * 0.05);
+
+                const grad = ctx.createLinearGradient(x, y - fontPx * 0.55, x, y + fontPx * 0.55);
+                const baseC = getFrontFill(0);
+                grad.addColorStop(0, '#ffffff');
+                grad.addColorStop(0.46, baseC === '#ffffff' ? '#ffffff' : baseC);
+                grad.addColorStop(0.50, shadeColorTO(baseC === '#ffffff' ? '#e2e8f0' : baseC, -8));
+                grad.addColorStop(1, shadeColorTO(baseC === '#ffffff' ? '#cbd5e1' : baseC, -22));
+                ctx.fillStyle = grad;
+                ctx.fillText(text, x, y);
+                ctx.shadowBlur = 0;
+
+                // Specular upper-half gloss sheen
+                const sheenGrad = ctx.createLinearGradient(x, y - fontPx * 0.52, x, y - fontPx * 0.02);
+                sheenGrad.addColorStop(0, 'rgba(255, 255, 255, 0.92)');
+                sheenGrad.addColorStop(1, 'rgba(255, 255, 255, 0.12)');
+                ctx.fillStyle = sheenGrad;
+                ctx.fillText(text, x, y);
+
+                // Top rim-light stroke
+                ctx.lineWidth = Math.max(1, fontPx * 0.025);
+                ctx.strokeStyle = 'rgba(255, 255, 255, 0.7)';
+                ctx.strokeText(text, x, y);
+                ctx.restore();
+            } else {
+                ctx.lineJoin = 'round';
+                ctx.miterLimit = 2;
+                if (outlineColor) {
+                    ctx.lineWidth = (outlineWidth || Math.max(2, fontPx * 0.06)) * 2;
                     ctx.strokeStyle = outlineColor;
                     ctx.strokeText(text, x, y);
                 } else {
@@ -5350,7 +5572,8 @@ document.addEventListener('DOMContentLoaded', () => {
                         const cw = widths[idx];
                         ctx.save();
                         ctx.translate(curX + cw / 2, y);
-                        if (outlineColor) { ctx.lineWidth = outlineWidth; ctx.strokeStyle = outlineColor; ctx.strokeText(c, 0, 0); }
+                        ctx.lineJoin = 'round';
+                        if (outlineColor) { ctx.lineWidth = outlineWidth * 2; ctx.strokeStyle = outlineColor; ctx.strokeText(c, 0, 0); }
                         ctx.fillStyle = getFrontFill(idx);
                         ctx.fillText(c, 0, 0);
                         ctx.restore();
@@ -5362,28 +5585,74 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
             }
         } else {
-            if (outlineColor) {
-                ctx.lineWidth = outlineWidth || 2;
-                ctx.strokeStyle = outlineColor;
-                ctx.strokeText(text, x, y);
-            }
-            if (colorMode === 'per-letter') {
-                const widths = charList.map(c => ctx.measureText(c).width);
-                const totalW = widths.reduce((a, b) => a + b, 0);
-                let curX = (ctx.textAlign === 'center') ? (x - totalW / 2) : (ctx.textAlign === 'right' ? (x - totalW) : x);
-                charList.forEach((c, idx) => {
-                    const cw = widths[idx];
-                    ctx.save();
-                    ctx.translate(curX + cw / 2, y);
-                    if (outlineColor) { ctx.lineWidth = outlineWidth; ctx.strokeStyle = outlineColor; ctx.strokeText(c, 0, 0); }
-                    ctx.fillStyle = getFrontFill(idx);
-                    ctx.fillText(c, 0, 0);
-                    ctx.restore();
-                    curX += cw;
-                });
-            } else {
-                ctx.fillStyle = getFrontFill(0);
+            if (template.includes('glossy')) {
+                // ── Ultra-Glossy 3D Glaze in standard 2D path ──────────────
+                ctx.save();
+                ctx.lineJoin = 'round';
+                ctx.miterLimit = 2;
+                if (outlineColor) {
+                    ctx.lineWidth = (outlineWidth || 2) * 2;
+                    ctx.strokeStyle = outlineColor;
+                    ctx.strokeText(text, x, y);
+                } else {
+                    ctx.lineWidth = Math.max(2, fontPx * 0.06);
+                    ctx.strokeStyle = 'rgba(0, 0, 0, 0.65)';
+                    ctx.strokeText(text, x, y);
+                }
+                
+                ctx.shadowColor = 'rgba(0, 0, 0, 0.75)';
+                ctx.shadowBlur = Math.max(6, fontPx * 0.12);
+                ctx.shadowOffsetY = Math.max(2, fontPx * 0.05);
+
+                const grad = ctx.createLinearGradient(x, y - fontPx * 0.55, x, y + fontPx * 0.55);
+                const baseC = getFrontFill(0);
+                grad.addColorStop(0, '#ffffff');
+                grad.addColorStop(0.46, baseC === '#ffffff' ? '#ffffff' : baseC);
+                grad.addColorStop(0.50, shadeColorTO(baseC === '#ffffff' ? '#e2e8f0' : baseC, -8));
+                grad.addColorStop(1, shadeColorTO(baseC === '#ffffff' ? '#cbd5e1' : baseC, -22));
+                ctx.fillStyle = grad;
                 ctx.fillText(text, x, y);
+                ctx.shadowBlur = 0;
+
+                // Specular upper-half gloss sheen
+                const sheenGrad = ctx.createLinearGradient(x, y - fontPx * 0.52, x, y - fontPx * 0.02);
+                sheenGrad.addColorStop(0, 'rgba(255, 255, 255, 0.92)');
+                sheenGrad.addColorStop(1, 'rgba(255, 255, 255, 0.12)');
+                ctx.fillStyle = sheenGrad;
+                ctx.fillText(text, x, y);
+
+                // Top rim-light stroke
+                ctx.lineWidth = Math.max(1, fontPx * 0.025);
+                ctx.strokeStyle = 'rgba(255, 255, 255, 0.7)';
+                ctx.strokeText(text, x, y);
+                ctx.restore();
+            } else {
+                ctx.lineJoin = 'round';
+                ctx.miterLimit = 2;
+                if (outlineColor) {
+                    ctx.lineWidth = (outlineWidth || 2) * 2;
+                    ctx.strokeStyle = outlineColor;
+                    ctx.strokeText(text, x, y);
+                }
+                if (colorMode === 'per-letter') {
+                    const widths = charList.map(c => ctx.measureText(c).width);
+                    const totalW = widths.reduce((a, b) => a + b, 0);
+                    let curX = (ctx.textAlign === 'center') ? (x - totalW / 2) : (ctx.textAlign === 'right' ? (x - totalW) : x);
+                    charList.forEach((c, idx) => {
+                        const cw = widths[idx];
+                        ctx.save();
+                        ctx.translate(curX + cw / 2, y);
+                        ctx.lineJoin = 'round';
+                        if (outlineColor) { ctx.lineWidth = (outlineWidth || 2) * 2; ctx.strokeStyle = outlineColor; ctx.strokeText(c, 0, 0); }
+                        ctx.fillStyle = getFrontFill(idx);
+                        ctx.fillText(c, 0, 0);
+                        ctx.restore();
+                        curX += cw;
+                    });
+                } else {
+                    ctx.fillStyle = getFrontFill(0);
+                    ctx.fillText(text, x, y);
+                }
             }
         }
         ctx.restore();
@@ -9402,9 +9671,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
                 const fontFamily = item.font || 'Hind Siliguri';
                 const fStyle = (item.italic ? 'italic ' : '') + (item.bold === false ? '' : 'bold ');
-                state.ctx.font = `${fStyle}${item.fontSize}px "${fontFamily}", "Plus Jakarta Sans", sans-serif`;
-                const outlineWidth = Math.max(2, item.fontSize * 0.08);
-                const outlineColor = 'rgba(0,0,0,0.55)';
+                const template = (item && (item.visualTemplate || item.imageDesign)) || 'standard';
+                const hasCustomStroke = !!(item && item.strokeEnabled);
+                const outlineWidth = hasCustomStroke ? Number(item.strokeWidth || 6) : (template.includes('glossy') ? 2 : Math.max(2, item.fontSize * 0.08));
+                const outlineColor = hasCustomStroke ? (item.strokeColor || '#ef4444') : (template.includes('glossy') ? 'rgba(0,0,0,0.65)' : 'rgba(0,0,0,0.55)');
 
                 // Resolve {{date}}/{{time}}/{{counter}} tokens against the current
                 // playhead time before measuring/drawing; item.text itself is left
@@ -9420,7 +9690,6 @@ document.addEventListener('DOMContentLoaded', () => {
                     if (lineW > maxLineWidth) maxLineWidth = lineW;
                 });
 
-                const template = (item && (item.visualTemplate || item.imageDesign)) || 'standard';
                 const is3DText = template && (template.includes('3d') || template.includes('bevel') || template.includes('depth') || template.includes('extruded') || template.includes('isometric') || template.includes('popart') || template.includes('chrome') || template.includes('glass') || template.includes('holo'));
                 const extra3D_W = is3DText ? item.fontSize * 0.35 : 0;
                 const extra3D_H = is3DText ? item.fontSize * 0.35 : 0;
@@ -14886,6 +15155,211 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
+    // Visual Template (3D & Glaze Styles)
+    const textOverlayVisualTemplate = document.getElementById('text-overlay-visual-template');
+    if (textOverlayVisualTemplate) {
+        textOverlayVisualTemplate.addEventListener('change', (e) => {
+            const item = getSelectedTextOverlay();
+            if (item) { item.visualTemplate = e.target.value; drawFrame(); if (window.triggerAutoSave) window.triggerAutoSave(); }
+        });
+    }
+
+    // Text Stroke / Outline Controls (1st Screenshot Style)
+    const textOverlayStrokeEnabled = document.getElementById('text-overlay-stroke-enabled');
+    const textOverlayStrokeGroup = document.getElementById('text-overlay-stroke-group');
+    const textOverlayStrokeColor = document.getElementById('text-overlay-stroke-color');
+    const textOverlayStrokeColorVal = document.getElementById('text-overlay-stroke-color-val');
+    const textOverlayStrokeWidth = document.getElementById('text-overlay-stroke-width');
+    const textOverlayStrokeWidthVal = document.getElementById('text-overlay-stroke-width-val');
+
+    function refreshTextOverlayStrokeVisibility() {
+        if (!textOverlayStrokeGroup) return;
+        textOverlayStrokeGroup.style.display = (textOverlayStrokeEnabled && textOverlayStrokeEnabled.checked) ? 'block' : 'none';
+    }
+
+    if (textOverlayStrokeEnabled) {
+        textOverlayStrokeEnabled.addEventListener('change', (e) => {
+            refreshTextOverlayStrokeVisibility();
+            const item = getSelectedTextOverlay();
+            if (item) { item.strokeEnabled = e.target.checked; drawFrame(); if (window.triggerAutoSave) window.triggerAutoSave(); }
+        });
+    }
+
+    if (textOverlayStrokeColor) {
+        textOverlayStrokeColor.addEventListener('input', (e) => {
+            if (textOverlayStrokeColorVal) textOverlayStrokeColorVal.innerText = e.target.value;
+            const item = getSelectedTextOverlay();
+            if (item) { item.strokeColor = e.target.value; drawFrame(); if (window.triggerAutoSave) window.triggerAutoSave(); }
+        });
+    }
+
+    if (textOverlayStrokeWidth) {
+        textOverlayStrokeWidth.addEventListener('input', (e) => {
+            const val = parseInt(e.target.value, 10) || 1;
+            if (textOverlayStrokeWidthVal) textOverlayStrokeWidthVal.innerText = val + 'px';
+            const item = getSelectedTextOverlay();
+            if (item) { item.strokeWidth = val; drawFrame(); if (window.triggerAutoSave) window.triggerAutoSave(); }
+        });
+    }
+
+    // 1-Click Design Presets (Red Outline, Paint Brush, Glossy Glaze 3D, Red Pill, Studio Bar)
+    const btnPresetRedOutline = document.getElementById('btn-preset-red-outline');
+    const btnPresetBrushStroke = document.getElementById('btn-preset-brush-stroke');
+    const btnPresetGlossyGlaze = document.getElementById('btn-preset-glossy-glaze');
+    const btnPresetRedPill = document.getElementById('btn-preset-red-pill');
+    const btnPresetStudioBar = document.getElementById('btn-preset-studio-bar');
+
+    function applyTextOverlayPreset(presetType) {
+        const item = getSelectedTextOverlay();
+        if (window.captureUndoCheckpoint) window.captureUndoCheckpoint();
+
+        if (presetType === 'red-outline') {
+            // 1st Screenshot: Bold White Text + Vivid Red Border + subtle dark shadow
+            const fields = {
+                color: '#ffffff',
+                isBold: true,
+                extraThickness: 2,
+                strokeEnabled: true,
+                strokeColor: '#ef4444',
+                strokeWidth: 6,
+                boxStyle: 'none',
+                visualTemplate: 'standard',
+                shadowEnabled: true,
+                shadowColor: '#000000',
+                shadowOpacity: 70,
+                shadowBlur: 6,
+                shadowOffsetX: 2,
+                shadowOffsetY: 2
+            };
+            if (item) Object.assign(item, fields);
+            if (textOverlayColorInput) { textOverlayColorInput.value = '#ffffff'; if (textOverlayColorVal) textOverlayColorVal.innerText = '#ffffff'; }
+            if (textOverlayBoldBtn) textOverlayBoldBtn.classList.add('active');
+            if (textOverlayThicknessSlider) { textOverlayThicknessSlider.value = 2; if (textOverlayThicknessVal) textOverlayThicknessVal.innerText = '+2px (Extra Bold)'; }
+            if (textOverlayStrokeEnabled) textOverlayStrokeEnabled.checked = true;
+            if (textOverlayStrokeColor) { textOverlayStrokeColor.value = '#ef4444'; if (textOverlayStrokeColorVal) textOverlayStrokeColorVal.innerText = '#ef4444'; }
+            if (textOverlayStrokeWidth) { textOverlayStrokeWidth.value = 6; if (textOverlayStrokeWidthVal) textOverlayStrokeWidthVal.innerText = '6px'; }
+            if (textOverlayBoxSelect) textOverlayBoxSelect.value = 'none';
+            if (textOverlayVisualTemplate) textOverlayVisualTemplate.value = 'standard';
+            if (textOverlayShadowEnabled) textOverlayShadowEnabled.checked = true;
+            if (textOverlayShadowColor) { textOverlayShadowColor.value = '#000000'; if (textOverlayShadowColorVal) textOverlayShadowColorVal.innerText = '#000000'; }
+            if (textOverlayShadowBlur) { textOverlayShadowBlur.value = 6; if (textOverlayShadowBlurVal) textOverlayShadowBlurVal.innerText = '6px'; }
+            if (textOverlayShadowOffsetX) { textOverlayShadowOffsetX.value = 2; if (textOverlayShadowOffsetXVal) textOverlayShadowOffsetXVal.innerText = '2px'; }
+            if (textOverlayShadowOffsetY) { textOverlayShadowOffsetY.value = 2; if (textOverlayShadowOffsetYVal) textOverlayShadowOffsetYVal.innerText = '2px'; }
+            if (textOverlayShadowOpacity) { textOverlayShadowOpacity.value = 70; if (textOverlayShadowOpacityVal) textOverlayShadowOpacityVal.innerText = '70%'; }
+        } else if (presetType === 'brush-stroke') {
+            // 2nd Screenshot: Paint Brush Stroke Background + Text
+            const fields = {
+                color: '#ffffff',
+                isBold: true,
+                strokeEnabled: false,
+                boxStyle: 'brush-glow',
+                boxColor: '#10b981',
+                visualTemplate: 'standard',
+                shadowEnabled: true,
+                shadowColor: '#000000',
+                shadowOpacity: 50,
+                shadowBlur: 4,
+                shadowOffsetX: 1,
+                shadowOffsetY: 1
+            };
+            if (item) Object.assign(item, fields);
+            if (textOverlayColorInput) { textOverlayColorInput.value = '#ffffff'; if (textOverlayColorVal) textOverlayColorVal.innerText = '#ffffff'; }
+            if (textOverlayBoldBtn) textOverlayBoldBtn.classList.add('active');
+            if (textOverlayStrokeEnabled) textOverlayStrokeEnabled.checked = false;
+            if (textOverlayBoxSelect) textOverlayBoxSelect.value = 'brush-glow';
+            if (textOverlayBoxColorInput) { textOverlayBoxColorInput.value = '#10b981'; if (textOverlayBoxColorVal) textOverlayBoxColorVal.innerText = '#10b981'; }
+            if (textOverlayVisualTemplate) textOverlayVisualTemplate.value = 'standard';
+        } else if (presetType === 'glossy-glaze') {
+            // 3rd Screenshot: Eye-catching Ultra-Glossy 3D Glaze Text
+            const fields = {
+                color: '#ffffff',
+                isBold: true,
+                extraThickness: 1,
+                visualTemplate: 'glossy-glaze',
+                strokeEnabled: false,
+                boxStyle: 'none',
+                shadowEnabled: true,
+                shadowColor: '#000000',
+                shadowOpacity: 75,
+                shadowBlur: 10,
+                shadowOffsetX: 0,
+                shadowOffsetY: 4
+            };
+            if (item) Object.assign(item, fields);
+            if (textOverlayColorInput) { textOverlayColorInput.value = '#ffffff'; if (textOverlayColorVal) textOverlayColorVal.innerText = '#ffffff'; }
+            if (textOverlayBoldBtn) textOverlayBoldBtn.classList.add('active');
+            if (textOverlayThicknessSlider) { textOverlayThicknessSlider.value = 1; if (textOverlayThicknessVal) textOverlayThicknessVal.innerText = '+1px (Extra Bold)'; }
+            if (textOverlayVisualTemplate) textOverlayVisualTemplate.value = 'glossy-glaze';
+            if (textOverlayStrokeEnabled) textOverlayStrokeEnabled.checked = false;
+            if (textOverlayBoxSelect) textOverlayBoxSelect.value = 'none';
+            if (textOverlayShadowEnabled) textOverlayShadowEnabled.checked = true;
+            if (textOverlayShadowColor) { textOverlayShadowColor.value = '#000000'; if (textOverlayShadowColorVal) textOverlayShadowColorVal.innerText = '#000000'; }
+            if (textOverlayShadowBlur) { textOverlayShadowBlur.value = 10; if (textOverlayShadowBlurVal) textOverlayShadowBlurVal.innerText = '10px'; }
+            if (textOverlayShadowOffsetX) { textOverlayShadowOffsetX.value = 0; if (textOverlayShadowOffsetXVal) textOverlayShadowOffsetXVal.innerText = '0px'; }
+            if (textOverlayShadowOffsetY) { textOverlayShadowOffsetY.value = 4; if (textOverlayShadowOffsetYVal) textOverlayShadowOffsetYVal.innerText = '4px'; }
+            if (textOverlayShadowOpacity) { textOverlayShadowOpacity.value = 75; if (textOverlayShadowOpacityVal) textOverlayShadowOpacityVal.innerText = '75%'; }
+        } else if (presetType === 'red-pill') {
+            // 1st Screenshot Subtitle: White Pill with Red Border + Red Text
+            const fields = {
+                color: '#ef4444',
+                isBold: true,
+                boxStyle: 'red-pill',
+                boxColor: '#ef4444',
+                strokeEnabled: false,
+                visualTemplate: 'standard',
+                shadowEnabled: true,
+                shadowColor: 'rgba(0,0,0,0.3)',
+                shadowOpacity: 40,
+                shadowBlur: 6,
+                shadowOffsetX: 1,
+                shadowOffsetY: 2
+            };
+            if (item) Object.assign(item, fields);
+            if (textOverlayColorInput) { textOverlayColorInput.value = '#ef4444'; if (textOverlayColorVal) textOverlayColorVal.innerText = '#ef4444'; }
+            if (textOverlayBoldBtn) textOverlayBoldBtn.classList.add('active');
+            if (textOverlayBoxSelect) textOverlayBoxSelect.value = 'red-pill';
+            if (textOverlayBoxColorInput) { textOverlayBoxColorInput.value = '#ef4444'; if (textOverlayBoxColorVal) textOverlayBoxColorVal.innerText = '#ef4444'; }
+            if (textOverlayStrokeEnabled) textOverlayStrokeEnabled.checked = false;
+            if (textOverlayVisualTemplate) textOverlayVisualTemplate.value = 'standard';
+        } else if (presetType === 'studio-bar') {
+            // 3rd Screenshot Banner: Dark Studio Bar + Glossy White Text
+            const fields = {
+                color: '#ffffff',
+                isBold: true,
+                extraThickness: 1,
+                boxStyle: 'studio-bar',
+                boxColor: '#0f172a',
+                visualTemplate: 'glossy-glaze',
+                strokeEnabled: false,
+                shadowEnabled: true,
+                shadowColor: '#000000',
+                shadowOpacity: 80,
+                shadowBlur: 12,
+                shadowOffsetX: 0,
+                shadowOffsetY: 4
+            };
+            if (item) Object.assign(item, fields);
+            if (textOverlayColorInput) { textOverlayColorInput.value = '#ffffff'; if (textOverlayColorVal) textOverlayColorVal.innerText = '#ffffff'; }
+            if (textOverlayBoldBtn) textOverlayBoldBtn.classList.add('active');
+            if (textOverlayThicknessSlider) { textOverlayThicknessSlider.value = 1; if (textOverlayThicknessVal) textOverlayThicknessVal.innerText = '+1px (Extra Bold)'; }
+            if (textOverlayBoxSelect) textOverlayBoxSelect.value = 'studio-bar';
+            if (textOverlayBoxColorInput) { textOverlayBoxColorInput.value = '#0f172a'; if (textOverlayBoxColorVal) textOverlayBoxColorVal.innerText = '#0f172a'; }
+            if (textOverlayVisualTemplate) textOverlayVisualTemplate.value = 'glossy-glaze';
+            if (textOverlayStrokeEnabled) textOverlayStrokeEnabled.checked = false;
+        }
+
+        refreshTextOverlayBoxColorVisibility();
+        refreshTextOverlayStrokeVisibility();
+        refreshTextOverlayShadowVisibility();
+        drawFrame();
+        if (window.triggerAutoSave) window.triggerAutoSave();
+    }
+
+    if (btnPresetRedOutline) btnPresetRedOutline.addEventListener('click', () => applyTextOverlayPreset('red-outline'));
+    if (btnPresetBrushStroke) btnPresetBrushStroke.addEventListener('click', () => applyTextOverlayPreset('brush-stroke'));
+    if (btnPresetGlossyGlaze) btnPresetGlossyGlaze.addEventListener('click', () => applyTextOverlayPreset('glossy-glaze'));
+    if (btnPresetRedPill) btnPresetRedPill.addEventListener('click', () => applyTextOverlayPreset('red-pill'));
+    if (btnPresetStudioBar) btnPresetStudioBar.addEventListener('click', () => applyTextOverlayPreset('studio-bar'));
 
     // Shadow / Glow controls (previously present in the DOM but never wired up)
     const textOverlayShadowEnabled = document.getElementById('text-overlay-shadow-enabled');
@@ -15368,6 +15842,10 @@ document.addEventListener('DOMContentLoaded', () => {
             fontSize: parseInt(textOverlayFontsizeSlider.value),
             color: textOverlayColorInput.value,
             font: textOverlayFontSelect.value || 'Hind Siliguri',
+            visualTemplate: textOverlayVisualTemplate ? textOverlayVisualTemplate.value : 'standard',
+            strokeEnabled: textOverlayStrokeEnabled ? !!textOverlayStrokeEnabled.checked : false,
+            strokeColor: textOverlayStrokeColor ? textOverlayStrokeColor.value : '#ef4444',
+            strokeWidth: textOverlayStrokeWidth ? parseInt(textOverlayStrokeWidth.value, 10) : 6,
             boxStyle: textOverlayBoxSelect.value || 'none',
             boxColor: textOverlayBoxColorInput.value || '#4f46e5',
             textAnimStyle: textOverlayAnimSelect.value || 'none',
@@ -15468,6 +15946,12 @@ document.addEventListener('DOMContentLoaded', () => {
         if (textOverlayGradientDirection) textOverlayGradientDirection.value = item.gradientDirection || 'horizontal';
         refreshColorModeGroupsVisibility();
         textOverlayFontSelect.value = item.font || 'Hind Siliguri';
+        if (textOverlayVisualTemplate) textOverlayVisualTemplate.value = item.visualTemplate || 'standard';
+        if (textOverlayStrokeEnabled) textOverlayStrokeEnabled.checked = !!item.strokeEnabled;
+        if (textOverlayStrokeColor) { const sc = item.strokeColor || '#ef4444'; textOverlayStrokeColor.value = sc; if (textOverlayStrokeColorVal) textOverlayStrokeColorVal.innerText = sc; }
+        if (textOverlayStrokeWidth) { const sw = item.strokeWidth !== undefined ? item.strokeWidth : 6; textOverlayStrokeWidth.value = sw; if (textOverlayStrokeWidthVal) textOverlayStrokeWidthVal.innerText = sw + 'px'; }
+        refreshTextOverlayStrokeVisibility();
+
         textOverlayBoxSelect.value = item.boxStyle || 'none';
         textOverlayBoxColorInput.value = item.boxColor || '#4f46e5';
         textOverlayBoxColorVal.innerText = item.boxColor || '#4f46e5';

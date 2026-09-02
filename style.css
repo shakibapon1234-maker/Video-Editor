@@ -4589,3 +4589,65 @@ input:checked + .slider:before {
     color: #a5b4fc;
     box-shadow: 0 0 10px rgba(79, 70, 229, 0.35);
 }
+
+/* 1-Click Text Style Preset Chips */
+.text-preset-chip-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 8px;
+    margin-top: 6px;
+}
+.btn-preset-chip {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 7px 10px;
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 8px;
+    cursor: pointer;
+    text-align: left;
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    color: var(--text-primary, #fff);
+}
+.btn-preset-chip:hover {
+    background: rgba(99, 102, 241, 0.12);
+    border-color: #818cf8;
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
+}
+.btn-preset-chip:active {
+    transform: translateY(0);
+}
+.preset-chip-badge {
+    width: 28px;
+    height: 28px;
+    border-radius: 6px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 14px;
+    flex-shrink: 0;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.3);
+}
+.preset-chip-info {
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+.preset-chip-info strong {
+    font-size: 12px;
+    font-weight: 700;
+    color: #f8fafc;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.preset-chip-info small {
+    font-size: 10px;
+    color: var(--text-secondary, #94a3b8);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
