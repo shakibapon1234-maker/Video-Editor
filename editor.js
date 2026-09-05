@@ -1,4 +1,4 @@
-// ============================================================
+﻿// ============================================================
 // Wings Fly Brand Reveal -- embedded logo assets (v1.0)
 // Combines the Wings Fly gold badge, the Wings Fly wordmark, and the
 // NSDA (National Skills Development Authority) recognition seal into
@@ -4447,6 +4447,29 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Draws a dynamic background box for Text Overlays (centered at (0,0) relative to
     // the overlay's position). (w, h) are the full box dimensions.
+        function applyOverlayGlowPreset(ctx, glowPreset, currentTime) {
+        if (!glowPreset || glowPreset === 'none') return;
+        const pulse = 0.85 + 0.15 * Math.sin((currentTime || 0) * 4.5);
+        switch (glowPreset) {
+            case 'soft-white':
+                ctx.shadowColor = 'rgba(255, 255, 255, 0.9)';
+                ctx.shadowBlur = 18 * pulse;
+                break;
+            case 'neon-blue':
+                ctx.shadowColor = '#00e5ff';
+                ctx.shadowBlur = 24 * pulse;
+                break;
+            case 'golden':
+                ctx.shadowColor = '#fbbf24';
+                ctx.shadowBlur = 22 * pulse;
+                break;
+            case 'fire-red':
+                ctx.shadowColor = '#ef4444';
+                ctx.shadowBlur = 25 * pulse;
+                break;
+        }
+    }
+
     function drawTextOverlayBox(ctx, style, color, w, h, currentTime, curveAmount) {
         if (!style || style === 'none') return;
         const x = -w / 2, y = -h / 2;
@@ -5690,7 +5713,7 @@ document.addEventListener('DOMContentLoaded', () => {
             ctx.rotate(charAngle / 2);
             ctx.save();
             ctx.translate(0, arcUp ? -radius : radius);
-            if (!arcUp) ctx.rotate(Math.PI);
+            if (!arcUp) { ctx.rotate(Math.PI); ctx.scale(-1, 1); }
             if (charDrawFn) {
                 charDrawFn(ctx, chars[i], i, chars.length);
             } else {
@@ -7368,8 +7391,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
                 sublines.forEach((lineObj, k) => {
                     const revealAt = k * secondsPerLine;
-                    const localT = tSinceStart - revealAt;
-                    if (localT < 0) return; // this line's turn hasn't come yet — draw nothing
+                    const rawLocalT = tSinceStart - revealAt;
+                    if (rawLocalT < -0.016) return;
+                    const localT = Math.max(0, rawLocalT); // this line's turn hasn't come yet — draw nothing
 
                     const lineY = firstLineY + k * lineHeight;
                     const lineX = isBulletPage ? (textX + lineObj.bulletWidth) : textX;
@@ -7382,11 +7406,14 @@ document.addEventListener('DOMContentLoaded', () => {
                     if (isTypewriter) {
                         const lineGraphemes = splitGraphemes(lineObj.text);
                         const typeDur = Math.min(secondsPerLine * 0.85, Math.max(0.4, lineGraphemes.length * 0.045));
-                        const p = Math.max(0, Math.min(1, localT / typeDur));
+                        // Clamp progress monotonically: once a character is revealed it never disappears
+                        // (prevents float-jitter flicker where localT oscillates around a boundary)
+                        const p = localT >= typeDur ? 1 : Math.max(0, Math.min(1, localT / typeDur));
                         const revealCount = Math.max(0, Math.min(lineGraphemes.length, Math.round(lineGraphemes.length * p)));
                         const textToDraw = lineGraphemes.slice(0, revealCount).join('');
                         if (lineObj.bullet) renderTextWith3DAndColor(ctx, lineObj.bullet, textX, lineY, item, item.fontSize, isBulletPage ? 'left' : 'center');
                         renderTextWith3DAndColor(ctx, textToDraw, lineX, lineY, item, item.fontSize, align);
+                        drawLineRevealUnderline(ctx, item, textToDraw, lineX, lineY, align);
                         if (p < 1 && Math.floor(currentTime * 2.5) % 2 === 0) {
                             const w = ctx.measureText(textToDraw).width;
                             const curX = (align === 'center') ? (lineX + w / 2 + Math.max(2, item.fontSize * 0.04)) : (lineX + w + Math.max(2, item.fontSize * 0.04));
@@ -7396,8 +7423,6 @@ document.addEventListener('DOMContentLoaded', () => {
                             ctx.moveTo(curX, lineY - item.fontSize * 0.4);
                             ctx.lineTo(curX, lineY + item.fontSize * 0.4);
                             ctx.stroke();
-                        } else {
-                            drawLineRevealUnderline(ctx, item, textToDraw, lineX, lineY, align);
                         }
                     } else if (isKinetic) {
                         const transitionDur = Math.min(1.0, Math.max(0.3, secondsPerLine * 0.5));
@@ -9733,6 +9758,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (containerScaleX !== 1 || containerScaleY !== 1) state.ctx.scale(containerScaleX, containerScaleY);
 
                 // Draw Box behind text in unified coordinate space
+                if (item.glowPreset && item.glowPreset !== 'none') {
+                    applyOverlayGlowPreset(state.ctx, item.glowPreset, currentTime);
+                }
                 if (hasBox) {
                     drawTextOverlayBox(state.ctx, item.boxStyle, item.boxColor || '#4f46e5', boxW, boxH, currentTime, curveAmount);
                 }
@@ -15556,6 +15584,18 @@ document.addEventListener('DOMContentLoaded', () => {
         if (item) { item.boxStyle = e.target.value; drawFrame(); }
     });
 
+    const textOverlayGlowPreset = document.getElementById('text-overlay-glow-preset');
+    if (textOverlayGlowPreset) {
+        textOverlayGlowPreset.addEventListener('change', (e) => {
+            const item = getSelectedTextOverlay();
+            if (item) {
+                item.glowPreset = e.target.value;
+                drawFrame();
+                if (window.triggerAutoSave) window.triggerAutoSave();
+            }
+        });
+    }
+
     textOverlayBoxColorInput.addEventListener('input', (e) => {
         textOverlayBoxColorVal.innerText = e.target.value;
         const item = getSelectedTextOverlay();
@@ -15953,6 +15993,8 @@ document.addEventListener('DOMContentLoaded', () => {
         refreshTextOverlayStrokeVisibility();
 
         textOverlayBoxSelect.value = item.boxStyle || 'none';
+        const textOverlayGlowPresetEl = document.getElementById('text-overlay-glow-preset');
+        if (textOverlayGlowPresetEl) textOverlayGlowPresetEl.value = item.glowPreset || 'none';
         textOverlayBoxColorInput.value = item.boxColor || '#4f46e5';
         textOverlayBoxColorVal.innerText = item.boxColor || '#4f46e5';
         textOverlayAnimSelect.value = item.textAnimStyle || item.animStyle || 'none';
@@ -17411,6 +17453,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
     if (addFloatingCoinsBtn) addFloatingCoinsBtn.addEventListener('click', () => addBuiltInBroll('floating-coins', 'fade', 'Floating Coins (টাকা)'));
     if (addGrowthChartBtn) addGrowthChartBtn.addEventListener('click', () => addBuiltInBroll('growth-chart', 'fade', 'Growth Chart (গ্রাফ)'));
+    const addBarChartBtn = document.getElementById('add-bar-chart-btn');
+    const addNodeDiagramBtn = document.getElementById('add-node-diagram-btn');
+    if (addBarChartBtn) addBarChartBtn.addEventListener('click', () => addBuiltInBroll('bar-chart', 'fade', 'Bar Chart (বার চার্ট)'));
+    if (addNodeDiagramBtn) addNodeDiagramBtn.addEventListener('click', () => addBuiltInBroll('node-diagram', 'fade', 'Funnel Diagram (নোড ট্রি)'));
     if (addLikeBurstBtn) addLikeBurstBtn.addEventListener('click', () => addBuiltInBroll('like-burst', 'fade', 'Reaction Burst (লাইক)'));
     if (addSpeedometerBtn) addSpeedometerBtn.addEventListener('click', () => addBuiltInBroll('speedometer', 'fade', 'Speedometer (মিটার)'));
     if (addGlassCardBtn) addGlassCardBtn.addEventListener('click', () => addBuiltInBroll('glass-card', 'slide-up', 'Glass Card (গ্লাস কার্ড)'));
@@ -19574,6 +19620,229 @@ document.addEventListener('DOMContentLoaded', () => {
         ctx.restore();
     }
 
+        function drawAnimatedBarChart(ctx, x, y, width, height, elapsed) {
+        const pad = width * 0.08;
+        const cx = x + pad;
+        const cy = y + height * 0.16;
+        const cw = width - pad * 2;
+        const ch = height * 0.70;
+
+        ctx.save();
+        // Modern glass card background
+        ctx.fillStyle = 'rgba(15, 23, 42, 0.90)';
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.16)';
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        if (ctx.roundRect) ctx.roundRect(x, y, width, height, 12);
+        else ctx.rect(x, y, width, height);
+        ctx.fill();
+        ctx.stroke();
+
+        // Card header
+        ctx.font = 'bold ' + Math.max(12, width * 0.052) + 'px sans-serif';
+        ctx.fillStyle = '#f8fafc';
+        ctx.textAlign = 'left';
+        ctx.textBaseline = 'top';
+        ctx.fillText('\uD83D\uDCCA Growth Performance', x + pad, y + height * 0.06);
+
+        // Soft grid lines
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.10)';
+        ctx.lineWidth = 1;
+        for (let g = 0; g <= 3; g++) {
+            const lineY = cy + (ch * g) / 3;
+            ctx.beginPath();
+            ctx.moveTo(cx, lineY);
+            ctx.lineTo(cx + cw, lineY);
+            ctx.stroke();
+        }
+
+        const bars = [
+            { label: 'Q1', target: 0.55, start: '#38bdf8', end: '#0284c7' },
+            { label: 'Q2', target: 0.75, start: '#a855f7', end: '#7c3aed' },
+            { label: 'Q3', target: 0.90, start: '#34d399', end: '#059669' },
+            { label: 'Q4', target: 1.00, start: '#fbbf24', end: '#d97706' },
+        ];
+
+        const barSlotW = cw / bars.length;
+        const barW = barSlotW * 0.58;
+        const barBaseY = cy + ch;
+
+        bars.forEach((b, i) => {
+            const delay = i * 0.20;
+            const barElapsed = Math.max(0, elapsed - delay);
+            const p = Math.max(0, Math.min(1, barElapsed / 0.60));
+            // easeOutBack bounce formula
+            const s = 1.70158;
+            const eased = p === 1 ? 1 : 1 + (s + 1) * Math.pow(p - 1, 3) + s * Math.pow(p - 1, 2);
+            const barH = ch * b.target * Math.max(0, eased);
+            const bx = cx + i * barSlotW + (barSlotW - barW) / 2;
+            const by = barBaseY - barH;
+
+            // Bar Gradient
+            const bGrad = ctx.createLinearGradient(bx, by, bx, barBaseY);
+            bGrad.addColorStop(0, b.start);
+            bGrad.addColorStop(1, b.end);
+
+            ctx.save();
+            ctx.fillStyle = bGrad;
+            ctx.shadowColor = b.start;
+            ctx.shadowBlur = Math.min(14, barH * 0.25);
+            ctx.beginPath();
+            if (ctx.roundRect) {
+                ctx.roundRect(bx, by, barW, barH, [6, 6, 0, 0]);
+            } else {
+                ctx.rect(bx, by, barW, barH);
+            }
+            ctx.fill();
+            ctx.restore();
+
+            // Value text above bar
+            if (p > 0.4) {
+                const alpha = Math.min(1, (p - 0.4) / 0.6);
+                ctx.save();
+                ctx.globalAlpha = alpha;
+                ctx.font = 'bold ' + Math.max(10, width * 0.038) + 'px sans-serif';
+                ctx.fillStyle = '#ffffff';
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'bottom';
+                ctx.fillText('+' + Math.round(b.target * 100 * p) + '%', bx + barW / 2, by - 4);
+                ctx.restore();
+            }
+
+            // X-axis label
+            ctx.font = Math.max(10, width * 0.042) + 'px sans-serif';
+            ctx.fillStyle = '#94a3b8';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'top';
+            ctx.fillText(b.label, bx + barW / 2, barBaseY + height * 0.04);
+        });
+
+        ctx.restore();
+    }
+
+    function drawFunnelNodeDiagram(ctx, x, y, width, height, elapsed) {
+        ctx.save();
+        // Modern glass card background
+        ctx.fillStyle = 'rgba(15, 23, 42, 0.90)';
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.16)';
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        if (ctx.roundRect) ctx.roundRect(x, y, width, height, 12);
+        else ctx.rect(x, y, width, height);
+        ctx.fill();
+        ctx.stroke();
+
+        // Title
+        ctx.font = 'bold ' + Math.max(12, width * 0.050) + 'px sans-serif';
+        ctx.fillStyle = '#f8fafc';
+        ctx.textAlign = 'left';
+        ctx.textBaseline = 'top';
+        ctx.fillText('\uD83C\uDF33 Campaign Funnel Flow', x + width * 0.08, y + height * 0.08);
+
+        const nodes = [
+            { title: 'Campaign', stat: '100K Reach', color: '#38bdf8', icon: '\uD83C\uDFAF' },
+            { title: 'Ad Sets', stat: '12K Clicks', color: '#fbbf24', icon: '\u2699\uFE0F' },
+            { title: 'Ads', stat: '2.8K Orders', color: '#34d399', icon: '\uD83D\uDE80' },
+        ];
+
+        const totalNodes = nodes.length;
+        const nodeY = y + height * 0.48;
+        const startX = x + width * 0.18;
+        const endX = x + width * 0.82;
+        const stepX = (endX - startX) / (totalNodes - 1);
+        const nodeR = Math.max(16, width * 0.08);
+
+        // Animated Connectors
+        for (let c = 0; c < totalNodes - 1; c++) {
+            const x1 = startX + c * stepX + nodeR;
+            const x2 = startX + (c + 1) * stepX - nodeR;
+            const connElapsed = Math.max(0, elapsed - (c * 0.7 + 0.35));
+            const connP = Math.min(1, connElapsed / 0.45);
+
+            if (connP > 0) {
+                ctx.save();
+                ctx.strokeStyle = 'rgba(255, 255, 255, 0.18)';
+                ctx.lineWidth = 3;
+                ctx.beginPath();
+                ctx.moveTo(x1, nodeY);
+                ctx.lineTo(x2, nodeY);
+                ctx.stroke();
+
+                // Animated glowing line
+                ctx.strokeStyle = nodes[c].color;
+                ctx.lineWidth = 3;
+                ctx.shadowColor = nodes[c].color;
+                ctx.shadowBlur = 8;
+                ctx.beginPath();
+                ctx.moveTo(x1, nodeY);
+                ctx.lineTo(x1 + (x2 - x1) * connP, nodeY);
+                ctx.stroke();
+
+                // Moving flow pulses
+                ctx.setLineDash([6, 6]);
+                ctx.lineDashOffset = -elapsed * 28;
+                ctx.strokeStyle = '#ffffff';
+                ctx.lineWidth = 2;
+                ctx.beginPath();
+                ctx.moveTo(x1, nodeY);
+                ctx.lineTo(x1 + (x2 - x1) * connP, nodeY);
+                ctx.stroke();
+                ctx.restore();
+            }
+        }
+
+        // Draw Nodes
+        nodes.forEach((node, idx) => {
+            const nodeElapsed = Math.max(0, elapsed - idx * 0.7);
+            const p = Math.min(1, nodeElapsed / 0.45);
+            if (p <= 0) return;
+
+            const s = 1.70158;
+            const eased = p === 1 ? 1 : 1 + (s + 1) * Math.pow(p - 1, 3) + s * Math.pow(p - 1, 2);
+            const nx = startX + idx * stepX;
+            const curR = nodeR * Math.max(0, eased);
+
+            ctx.save();
+            ctx.translate(nx, nodeY);
+
+            // Node Circle
+            ctx.fillStyle = '#1e293b';
+            ctx.strokeStyle = node.color;
+            ctx.lineWidth = Math.max(2.5, nodeR * 0.15);
+            ctx.shadowColor = node.color;
+            ctx.shadowBlur = 12 * Math.min(1, p);
+            ctx.beginPath();
+            ctx.arc(0, 0, curR, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.stroke();
+            ctx.shadowBlur = 0;
+
+            // Icon
+            ctx.font = Math.max(12, curR * 0.95) + 'px sans-serif';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText(node.icon, 0, 1);
+
+            // Label & Stat below node
+            if (p > 0.6) {
+                const textAlpha = Math.min(1, (p - 0.6) / 0.4);
+                ctx.globalAlpha = textAlpha;
+                ctx.font = 'bold ' + Math.max(10, width * 0.040) + 'px sans-serif';
+                ctx.fillStyle = '#ffffff';
+                ctx.textBaseline = 'top';
+                ctx.fillText(node.title, 0, curR + height * 0.08);
+
+                ctx.font = Math.max(9, width * 0.034) + 'px sans-serif';
+                ctx.fillStyle = node.color;
+                ctx.fillText(node.stat, 0, curR + height * 0.18);
+            }
+
+            ctx.restore();
+        });
+
+        ctx.restore();
+    }
+
     function drawGrowthChart(ctx, x, y, width, height, elapsed) {
         const pad = width * 0.08;
         const gx = x + pad;
@@ -19903,6 +20172,8 @@ document.addEventListener('DOMContentLoaded', () => {
         // ---- NEW: Reels-inspired motion graphic stickers ----
         if (item.builtInType === 'floating-coins') { drawFloatingCoins(ctx, x, y, width, height, effectiveElapsed); return; }
         if (item.builtInType === 'growth-chart') { drawGrowthChart(ctx, x, y, width, height, effectiveElapsed); return; }
+        if (item.builtInType === 'bar-chart') { drawAnimatedBarChart(ctx, x, y, width, height, effectiveElapsed); return; }
+        if (item.builtInType === 'node-diagram') { drawFunnelNodeDiagram(ctx, x, y, width, height, effectiveElapsed); return; }
         if (item.builtInType === 'like-burst') { drawLikeBurst(ctx, x, y, width, height, effectiveElapsed); return; }
         if (item.builtInType === 'speedometer') { drawSpeedometer(ctx, x, y, width, height, effectiveElapsed); return; }
         if (item.builtInType === 'glass-card') { drawGlassCardSticker(ctx, item, x, y, width, height, effectiveElapsed); return; }
