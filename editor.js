@@ -5233,7 +5233,8 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     const PER_LETTER_PALETTES = {
-        rainbow: ['#ef4444', '#f97316', '#eab308', '#10b981', '#06b6d4', '#3b82f6', '#8b5cf6', '#ec4899'],
+        rainbow: ['#ff3b30', '#ff8a00', '#ffd166', '#4ade80', '#22d3ee', '#3b82f6', '#8b5cf6', '#ff4db8'],
+        rainbowVivid: ['#ff3b30', '#ff7b00', '#ffd60a', '#32e58a', '#1dd3ff', '#4f8cff', '#8b5cf6', '#ff5bbd'],
         neon: ['#ff0055', '#00f0ff', '#ff00ff', '#00ff66', '#ffff00', '#9900ff'],
         pastel: ['#f472b6', '#fb923c', '#facc15', '#4ade80', '#38bdf8', '#c084fc'],
         fire: ['#ef4444', '#f97316', '#f59e0b', '#fbbf24', '#fde047', '#fb7185'],
@@ -5381,8 +5382,28 @@ document.addEventListener('DOMContentLoaded', () => {
                     ctx.lineWidth = Math.max(4, fontPx * 0.12);
                     ctx.strokeStyle = '#000000';
                     ctx.strokeText(text, x, y);
-                    ctx.fillStyle = (i % 2 === 0) ? '#000000' : (overrideColor || '#ef4444');
-                    ctx.fillText(text, x, y);
+                    if (colorMode === 'per-letter') {
+                        // Per-letter rainbow: draw each character individually in its own darkened hue
+                        const _sliceWidths = charList.map(c => ctx.measureText(c).width);
+                        const _sliceTotalW = _sliceWidths.reduce((a, b) => a + b, 0);
+                        let _sliceCurX = (ctx.textAlign === 'center') ? (x - _sliceTotalW / 2) : (ctx.textAlign === 'right' ? (x - _sliceTotalW) : x);
+                        charList.forEach((c, idx) => {
+                            const cw = _sliceWidths[idx];
+                            const baseColor = getFrontFill(idx);
+                            ctx.save();
+                            ctx.translate(_sliceCurX + cw / 2, y);
+                            ctx.lineWidth = Math.max(4, fontPx * 0.12);
+                            ctx.strokeStyle = '#000000';
+                            ctx.strokeText(c, 0, 0);
+                            ctx.fillStyle = (i % 2 === 0) ? '#000000' : shadeColorTO(baseColor, -30);
+                            ctx.fillText(c, 0, 0);
+                            ctx.restore();
+                            _sliceCurX += cw;
+                        });
+                    } else {
+                        ctx.fillStyle = (i % 2 === 0) ? '#000000' : (overrideColor || '#ef4444');
+                        ctx.fillText(text, x, y);
+                    }
                 } else if (template.includes('neon')) {
                     ctx.shadowColor = overrideColor ? shadeColorTO(overrideColor, 20) : '#06b6d4';
                     ctx.shadowBlur = Math.max(8, fontPx * 0.2);
@@ -15375,7 +15396,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const fields = {
                 color: '#ffffff',
                 colorMode: 'per-letter',
-                perLetterPalette: 'rainbow',
+                perLetterPalette: 'rainbowVivid',
                 isBold: true,
                 extraThickness: 2,
                 visualTemplate: 'word-3d-popart',
