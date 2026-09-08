@@ -161,18 +161,23 @@
     // Main Draw Function called inside canvas frame loop
     function drawGlassCardStack(ctx, cfg, currentTime, canvasW, canvasH) {
         if (!cfg || !cfg.enabled || !cfg.cards || cfg.cards.length === 0) return;
+        const state = ve();
 
         const startT = cfg.startSec || 0;
         const dur = cfg.durationSec || 5;
+        const explicitCardEnds = cfg.cards
+            .map((card) => Number(card.endSec))
+            .filter((endSec) => Number.isFinite(endSec));
+        const stackEnd = Math.max(startT + dur, ...explicitCardEnds);
         const elapsed = currentTime - startT;
 
         // Visibility check
-        if (elapsed < 0 || elapsed > dur) return;
+        if (elapsed < 0 || currentTime > stackEnd) return;
 
         // Exit fade in the last 0.4s
         let exitAlpha = 1;
-        if (elapsed > dur - 0.4) {
-            exitAlpha = Math.max(0, (dur - elapsed) / 0.4);
+        if (currentTime > stackEnd - 0.4) {
+            exitAlpha = Math.max(0, (stackEnd - currentTime) / 0.4);
         }
 
         // Smart responsive dimension calculation:
@@ -236,9 +241,19 @@
         ctx.globalAlpha = exitAlpha;
 
         cfg.cards.forEach((card, idx) => {
-            const cardStart = idx * (cfg.staggerDelay || 0.25);
-            const cardElapsed = elapsed - cardStart;
-            if (cardElapsed < 0) return; // Not yet appeared
+            const cardStartSec = card.startSec != null
+                ? Math.max(startT, Number(card.startSec) || startT)
+                : startT + idx * (cfg.staggerDelay || 0.25);
+            const cardEndSec = card.endSec != null
+                ? (Number(card.endSec) || startT + dur)
+                : startT + dur;
+            if (currentTime < cardStartSec || currentTime > cardEndSec || cardEndSec <= cardStartSec) return;
+            const cardElapsed = currentTime - cardStartSec;
+            const cardDuration = Math.max(0.1, cardEndSec - cardStartSec);
+            let cardExitAlpha = 1;
+            if (cardEndSec - currentTime < 0.4) {
+                cardExitAlpha = Math.max(0, (cardEndSec - currentTime) / 0.4);
+            }
 
             // Animation timing calculation
             let cardAlpha = 1;
@@ -281,13 +296,16 @@
 
             const currentX = originX + offsetX;
             const currentY = originY + idx * (cardH + spacing) + offsetY;
+            const cardCenterX = card.x != null ? card.x * canvasW : currentX + cardW / 2;
+            const cardCenterY = card.y != null ? card.y * canvasH : currentY + cardH / 2;
 
             ctx.save();
-            ctx.globalAlpha = exitAlpha * cardAlpha;
+            ctx.globalAlpha = exitAlpha * cardExitAlpha * cardAlpha;
 
             // Center transform for pop scale
-            ctx.translate(currentX + cardW / 2, currentY + cardH / 2);
+            ctx.translate(cardCenterX, cardCenterY);
             ctx.scale(cardScale, cardScale);
+            ctx.rotate((Number(card.rotation) || 0) * Math.PI / 180);
             ctx.translate(-cardW / 2, -cardH / 2);
 
             const r = Math.min(16 * scaleFactor, cardH * 0.24);
@@ -368,6 +386,29 @@
             ctx.stroke();
             ctx.restore();
 
+            const isTextOnly = card.layout === 'text-only';
+            const fontStack = `'Hind Siliguri', 'Outfit', 'Kalpurush', 'Noto Sans Bengali', -apple-system, sans-serif`;
+
+            if (isTextOnly) {
+                // Single-sentence cards are centered text boxes; all glass,
+                // border, glow, animation, and shimmer layers stay shared.
+                ctx.save();
+                ctx.fillStyle = card.textColor || cfg.textColor || '#ffffff';
+                ctx.shadowColor = hexToRgba(accentColor, 0.9);
+                ctx.shadowBlur = 8 * scaleFactor * glowFactor;
+                ctx.font = `700 ${Math.round(17 * scaleFactor * textScaleFactor)}px ${fontStack}`;
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                const sentence = card.text || card.title || '';
+                const maxSentenceWidth = cardW - 30 * scaleFactor;
+                let sentenceText = sentence;
+                while (sentenceText.length > 3 && ctx.measureText(sentenceText + '…').width > maxSentenceWidth) {
+                    sentenceText = sentenceText.slice(0, -1);
+                }
+                if (sentenceText !== sentence) sentenceText += '…';
+                ctx.fillText(sentenceText, cardW / 2, cardH / 2);
+                ctx.restore();
+            } else {
             // 7. Icon Squircle Plate & Vector Icon Drawing
             const iconBoxSize = cardH * 0.64;
             const iconX = r * 1.4;
@@ -416,7 +457,6 @@
             }
 
             // 9. Typography (Title & Subtitle with Crisp Contrast & Shadow)
-            const fontStack = `'Hind Siliguri', 'Outfit', 'Kalpurush', 'Noto Sans Bengali', -apple-system, sans-serif`;
             const textLeft = iconX + iconBoxSize + 14 * scaleFactor;
             const maxTextWidth = cardW - textLeft - (hasBadge ? badgeWidth + 16 * scaleFactor : 14 * scaleFactor);
 
@@ -490,6 +530,7 @@
                 ctx.fillText(card.badge, bX + bW / 2, bY + bH / 2 + 0.5);
                 ctx.restore();
             }
+            }
 
             // 11. Light Sweep Shimmer Effect
             if (shimmerProgress >= 0 && shimmerProgress <= 1) {
@@ -508,6 +549,26 @@
 
                 ctx.fillStyle = shimmerGrad;
                 ctx.fillRect(0, 0, cardW, cardH);
+                ctx.restore();
+            }
+
+            if (state && state.currentStep === 3 && !state.isPlaying && state.selectedGlassCardId === card.id) {
+                ctx.save();
+                ctx.strokeStyle = 'rgba(129, 140, 248, 0.95)';
+                ctx.lineWidth = Math.max(1.5, 2 * scaleFactor);
+                ctx.setLineDash([6, 4]);
+                ctx.strokeRect(0, 0, cardW, cardH);
+                ctx.setLineDash([]);
+                const handleY = -Math.max(28, cardH * 0.28);
+                ctx.beginPath();
+                ctx.moveTo(cardW / 2, 0);
+                ctx.lineTo(cardW / 2, handleY);
+                ctx.stroke();
+                ctx.beginPath();
+                ctx.arc(cardW / 2, handleY, 8, 0, Math.PI * 2);
+                ctx.fillStyle = '#ffffff';
+                ctx.fill();
+                ctx.stroke();
                 ctx.restore();
             }
 
@@ -547,6 +608,7 @@
         const durInput = document.getElementById('glass-cards-dur');
         const cardsListEl = document.getElementById('glass-cards-items-list');
         const addCardBtn = document.getElementById('add-glass-card-item-btn');
+        const addTextBoxBtn = document.getElementById('add-glass-text-box-btn');
 
         const STYLE_PRESETS = {
             'electric-cyan': { bgColor: '#071827', themeColor: '#22d3ee', glowIntensity: 100, cards: ['#22d3ee', '#38bdf8', '#06b6d4', '#67e8f9'] },
@@ -636,6 +698,7 @@
                     <option value="${p.type}" ${c.iconType === p.type ? 'selected' : ''}>${p.label}</option>
                 `).join('');
                 const isCustomIcon = c.iconType === 'custom';
+                const isTextOnly = c.layout === 'text-only';
 
                 itemEl.innerHTML = `
                     <div style="display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid rgba(255,255,255,0.07); padding-bottom: 6px;">
@@ -651,19 +714,35 @@
                         </div>
                     </div>
 
+                    <div style="display:grid; grid-template-columns: 1fr 1fr; gap:8px;">
+                        <div>
+                            <label style="font-size:11px; color:#94a3b8; display:block; margin-bottom:3px;">Start Time (শুরু)</label>
+                            <input type="number" class="form-input gc-start-inp" min="0" step="0.1" value="${c.startSec != null ? c.startSec : ((cfg.startSec || 0) + idx * (cfg.staggerDelay || 0.25))}" placeholder="0">
+                        </div>
+                        <div>
+                            <label style="font-size:11px; color:#94a3b8; display:block; margin-bottom:3px;">End Time (শেষ)</label>
+                            <input type="number" class="form-input gc-end-inp" min="0" step="0.1" value="${c.endSec != null ? c.endSec : ((cfg.startSec || 0) + (cfg.durationSec || 5))}" placeholder="5">
+                        </div>
+                    </div>
+
                     <!-- Icon Preset & Title Text Boxes -->
                     <div>
                         <div style="display: grid; grid-template-columns: 110px 1fr; gap: 8px;">
                             <div>
+                                <label style="font-size: 11px; color: #94a3b8; display: block; margin-bottom: 3px;">Card Type:</label>
+                                <select class="form-select gc-layout-sel" style="font-size:12px; padding: 6px 8px; margin-bottom:6px;">
+                                    <option value="standard" ${!isTextOnly ? 'selected' : ''}>Offer Card</option>
+                                    <option value="text-only" ${isTextOnly ? 'selected' : ''}>Single Text Box</option>
+                                </select>
                                 <label style="font-size: 11px; color: #94a3b8; display: block; margin-bottom: 3px;">আইকন (Icon):</label>
-                                <select class="form-select gc-icon-type-sel" style="font-size:12px; padding: 6px 8px;">
+                                <select class="form-select gc-icon-type-sel" style="font-size:12px; padding: 6px 8px; display:${isTextOnly ? 'none' : 'block'};">
                                     ${presetOptionsHtml}
                                     <option value="custom" ${c.iconType === 'custom' ? 'selected' : ''}>✍️ Custom</option>
                                 </select>
                             </div>
                             <div>
-                                <label style="font-size: 11px; color: #94a3b8; display: block; margin-bottom: 3px;">Title (শিরোনাম / মূল লেখা):</label>
-                                    <input type="text" class="form-input gc-title-inp" value="${escapeHtml(c.title)}" placeholder="যেমন: স্পেশাল ৫০% অফার">
+                                <label style="font-size: 11px; color: #94a3b8; display: block; margin-bottom: 3px;">${isTextOnly ? 'Sentence (একটি বাক্য):' : 'Title (শিরোনাম / মূল লেখা):'}</label>
+                                    <input type="text" class="form-input gc-title-inp" value="${escapeHtml(isTextOnly ? (c.text || c.title) : c.title)}" placeholder="${isTextOnly ? 'যেমন: আজকের অফারটি এখনই নিন' : 'যেমন: স্পেশাল ৫০% অফার'}">
                                     <div class="gc-custom-icon-wrap" style="display:${isCustomIcon ? 'block' : 'none'}; margin-top:6px;">
                                         <label style="font-size:11px; color:#94a3b8; display:block; margin-bottom:3px;">Custom Icon / Emoji (নিজের আইকন)</label>
                                         <input type="text" class="form-input gc-custom-icon-inp" value="${escapeHtml(c.icon)}" placeholder="যেমন: 🎯 বা VIP">
@@ -687,6 +766,7 @@
 
                 // Bind events
                 const iconTypeSel = itemEl.querySelector('.gc-icon-type-sel');
+                const layoutSel = itemEl.querySelector('.gc-layout-sel');
                 const customIconWrap = itemEl.querySelector('.gc-custom-icon-wrap');
                 const customIconInp = itemEl.querySelector('.gc-custom-icon-inp');
                 const titleInp = itemEl.querySelector('.gc-title-inp');
@@ -694,28 +774,37 @@
                 const badgeInp = itemEl.querySelector('.gc-badge-inp');
                 const colorInp = itemEl.querySelector('.gc-color-inp');
                 const textColorInp = itemEl.querySelector('.gc-text-color-inp');
+                const startInp = itemEl.querySelector('.gc-start-inp');
+                const endInp = itemEl.querySelector('.gc-end-inp');
                 const delBtn = itemEl.querySelector('.gc-del-btn');
 
                 const updateCard = () => {
+                    c.layout = layoutSel ? layoutSel.value : 'standard';
                     c.iconType = iconTypeSel.value;
                     const preset = ICON_PRESETS.find(p => p.type === c.iconType);
                     if (preset) c.icon = preset.emoji;
                     if (c.iconType === 'custom' && customIconInp) c.icon = customIconInp.value;
                     if (customIconWrap) customIconWrap.style.display = c.iconType === 'custom' ? 'block' : 'none';
                     c.title = titleInp.value;
+                    if (c.layout === 'text-only') c.text = titleInp.value;
                     c.subtitle = subInp.value;
                     c.badge = badgeInp.value;
                     c.color = colorInp.value;
+                    c.startSec = Math.max(0, parseFloat(startInp.value) || 0);
+                    c.endSec = Math.max(c.startSec + 0.1, parseFloat(endInp.value) || c.startSec + 5);
                     if (window.triggerCanvasRedraw) window.triggerCanvasRedraw();
                     if (window.triggerAutoSave) window.triggerAutoSave();
                 };
 
                 iconTypeSel.addEventListener('change', updateCard);
+                if (layoutSel) layoutSel.addEventListener('change', () => { updateCard(); renderCardsListUI(); });
                 if (customIconInp) customIconInp.addEventListener('input', updateCard);
                 titleInp.addEventListener('input', updateCard);
                 subInp.addEventListener('input', updateCard);
                 badgeInp.addEventListener('input', updateCard);
                 colorInp.addEventListener('input', updateCard);
+                startInp.addEventListener('change', updateCard);
+                endInp.addEventListener('change', updateCard);
 
                 delBtn.addEventListener('click', () => {
                     cfg.cards.splice(idx, 1);
@@ -878,6 +967,20 @@
             });
         }
 
+        if (addTextBoxBtn) {
+            addTextBoxBtn.addEventListener('click', () => {
+                if (!state.glassCardStack) state.glassCardStack = JSON.parse(JSON.stringify(DEFAULT_CONFIG));
+                state.glassCardStack.cards.push({
+                    id: 'gc_text_' + Date.now(), layout: 'text-only', text: 'আপনার নিজের একটি বাক্য লিখুন',
+                    title: 'আপনার নিজের একটি বাক্য লিখুন', subtitle: '', badge: '', icon: '', iconType: 'custom',
+                    color: state.glassCardStack.themeColor || '#38bdf8'
+                });
+                renderCardsListUI();
+                if (window.triggerCanvasRedraw) window.triggerCanvasRedraw();
+                if (window.triggerAutoSave) window.triggerAutoSave();
+            });
+        }
+
         window.syncGlassCardsUI = syncUIFromState;
         syncUIFromState();
     }
@@ -889,12 +992,133 @@
         drawGlassCardStack(ctx, state.glassCardStack, currentTime, canvasW, canvasH);
     };
 
+    function getGlassCardGeometry(cfg, card, index, canvasW, canvasH) {
+        const isPortrait = canvasH > canvasW;
+        const baseRef = isPortrait ? (canvasW / 500) : (canvasW / 1050);
+        const scaleFactor = Math.max(0.35, baseRef) * Math.max(0.4, (cfg.scale != null ? cfg.scale : 100) / 100);
+        const cardW = Math.min(canvasW * 0.94, (cfg.width || 390) * scaleFactor);
+        const cardH = (cfg.cardHeight || 74) * scaleFactor;
+        const spacing = (cfg.spacing || 12) * scaleFactor;
+        const totalStackH = (cardH + spacing) * cfg.cards.length - spacing;
+        const marginX = 24 * scaleFactor;
+        const marginY = 32 * scaleFactor;
+        let originX = canvasW - cardW - marginX;
+        let originY = canvasH - totalStackH - marginY;
+        if (cfg.position === 'bottom-left') originX = marginX;
+        if (cfg.position === 'bottom-center') originX = (canvasW - cardW) / 2;
+        if (cfg.position === 'top-right') { originX = canvasW - cardW - marginX; originY = marginY; }
+        if (cfg.position === 'top-left') { originX = marginX; originY = marginY; }
+        if (cfg.position === 'top-center') { originX = (canvasW - cardW) / 2; originY = marginY; }
+        if (cfg.position === 'center') { originX = (canvasW - cardW) / 2; originY = (canvasH - totalStackH) / 2; }
+        const defaultCenterX = originX + cardW / 2;
+        const defaultCenterY = originY + index * (cardH + spacing) + cardH / 2;
+        return {
+            cardW, cardH,
+            cx: card.x != null ? card.x * canvasW : defaultCenterX,
+            cy: card.y != null ? card.y * canvasH : defaultCenterY,
+            scaleFactor
+        };
+    }
+
+    function glassPointInCard(point, card, geometry) {
+        const angle = -(Number(card.rotation) || 0) * Math.PI / 180;
+        const dx = point.x - geometry.cx;
+        const dy = point.y - geometry.cy;
+        const localX = dx * Math.cos(angle) - dy * Math.sin(angle);
+        const localY = dx * Math.sin(angle) + dy * Math.cos(angle);
+        return { localX, localY };
+    }
+
+    function findGlassCardAt(point, state) {
+        const cfg = state.glassCardStack;
+        const canvasW = state.canvas.width;
+        const canvasH = state.canvas.height;
+        const now = state.currentTime || 0;
+        for (let index = cfg.cards.length - 1; index >= 0; index--) {
+            const card = cfg.cards[index];
+            const start = card.startSec != null ? Number(card.startSec) : (cfg.startSec || 0) + index * (cfg.staggerDelay || 0.25);
+            const end = card.endSec != null ? Number(card.endSec) : (cfg.startSec || 0) + (cfg.durationSec || 5);
+            if (now < start || now > end) continue;
+            const geometry = getGlassCardGeometry(cfg, card, index, canvasW, canvasH);
+            const local = glassPointInCard(point, card, geometry);
+            const handleDistance = Math.max(28, geometry.cardH * 0.28);
+            const handleY = -geometry.cardH / 2 - handleDistance;
+            const onRotateHandle = Math.hypot(local.localX, local.localY - handleY) <= 16;
+            const insideBody = Math.abs(local.localX) <= geometry.cardW / 2 && Math.abs(local.localY) <= geometry.cardH / 2;
+            if (insideBody || onRotateHandle) {
+                return { card, index, geometry, local };
+            }
+        }
+        return null;
+    }
+
+    function getGlassCanvasPoint(event, canvas) {
+        const rect = canvas.getBoundingClientRect();
+        return {
+            x: (event.clientX - rect.left) * (canvas.width / rect.width),
+            y: (event.clientY - rect.top) * (canvas.height / rect.height)
+        };
+    }
+
+    function bindGlassCardCanvasInteractions() {
+        const state = ve();
+        const canvas = state && state.canvas;
+        if (!state || !canvas || canvas.__glassCardInteractionsBound) return;
+        canvas.__glassCardInteractionsBound = true;
+
+        canvas.addEventListener('mousedown', (event) => {
+            if (state.currentStep !== 3 || state.isPlaying || !state.glassCardStack?.enabled) return;
+            const point = getGlassCanvasPoint(event, canvas);
+            const hit = findGlassCardAt(point, state);
+            if (!hit) return;
+            state.selectedGlassCardId = hit.card.id;
+            const handleDistance = Math.max(28, hit.geometry.cardH * 0.28);
+            const handleLocalY = -hit.geometry.cardH / 2 - handleDistance;
+            const handleHit = Math.hypot(hit.local.localX, hit.local.localY - handleLocalY) <= 16;
+            if (handleHit) {
+                state.glassCardInteraction = { mode: 'rotate', card: hit.card, geometry: hit.geometry, startAngle: Math.atan2(point.y - hit.geometry.cy, point.x - hit.geometry.cx), startRotation: Number(hit.card.rotation) || 0 };
+            } else {
+                state.glassCardInteraction = { mode: 'drag', card: hit.card, dx: point.x - hit.geometry.cx, dy: point.y - hit.geometry.cy };
+            }
+            if (window.captureUndoCheckpoint) window.captureUndoCheckpoint();
+            if (window.triggerCanvasRedraw) window.triggerCanvasRedraw();
+            event.preventDefault();
+        });
+
+        document.addEventListener('mousemove', (event) => {
+            const interaction = state.glassCardInteraction;
+            if (!interaction) return;
+            const point = getGlassCanvasPoint(event, canvas);
+            const card = interaction.card;
+            if (interaction.mode === 'drag') {
+                card.x = Math.max(0, Math.min(1, (point.x - interaction.dx) / canvas.width));
+                card.y = Math.max(0, Math.min(1, (point.y - interaction.dy) / canvas.height));
+            } else {
+                const angle = Math.atan2(point.y - interaction.geometry.cy, point.x - interaction.geometry.cx);
+                let rotation = interaction.startRotation + (angle - interaction.startAngle) * 180 / Math.PI;
+                rotation = ((rotation % 360) + 360) % 360;
+                if (Math.abs(rotation) < 4 || Math.abs(rotation - 360) < 4) rotation = 0;
+                card.rotation = rotation;
+            }
+            if (window.triggerCanvasRedraw) window.triggerCanvasRedraw();
+            event.preventDefault();
+        });
+
+        document.addEventListener('mouseup', () => {
+            if (!state.glassCardInteraction) return;
+            state.glassCardInteraction = null;
+            if (window.triggerAutoSave) window.triggerAutoSave();
+        });
+    }
+
     // Auto-hook into editor render cycle
     document.addEventListener('DOMContentLoaded', () => {
         setTimeout(initGlassCardStackUI, 600);
+        setTimeout(bindGlassCardCanvasInteractions, 800);
     });
 
     if (document.readyState === 'complete' || document.readyState === 'interactive') {
         setTimeout(initGlassCardStackUI, 300);
+        setTimeout(bindGlassCardCanvasInteractions, 500);
     }
 })();
