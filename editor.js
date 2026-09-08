@@ -9775,7 +9775,11 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
 
                 state.ctx.font = buildTextOverlayFont(item, item.fontSize, fontFamily);
-                state.ctx.fillStyle = item.color;
+                // Seed every playback animation branch with the same fill used by
+                // the settled renderer, so animated text keeps its gradient mode.
+                state.ctx.fillStyle = getTextOverlayFillStyle(
+                    state.ctx, item, 0, 1, boxW, boxH, resolvedItemText, 0, 0, item.fontSize
+                );
                 state.ctx.textAlign = 'center';
                 state.ctx.textBaseline = 'middle';
 
@@ -9799,6 +9803,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
 
                 const drawTextContent = (ctx2) => {
+                    const playbackTextFill = getTextOverlayFillStyle(
+                        ctx2, item, 0, 1, boxW, boxH, textToDraw, 0, 0, item.fontSize
+                    );
                     // Determine which curve mode is active
                     const _hasCurveSimple = curveAmount &&
                         !(item.curvePoints && item.curvePoints.length >= 2) &&
@@ -10053,15 +10060,15 @@ document.addEventListener('DOMContentLoaded', () => {
                     } else if (textAnimStyle === 'word-stagger' && textRevealAnim.phase !== 'settled') {
                         drawTextOverlayStaggered(ctx2, textToDraw, 'word', textRevealAnim.p, outlineColor, outlineWidth, item.fontSize);
                     } else if (textAnimStyle === 'particle-dust') {
-                        drawTextOverlayParticleDust(ctx2, textToDraw, textRevealAnim.p, textRevealAnim.phase, item.fontSize, item.color, outlineColor, outlineWidth, currentTime);
+                        drawTextOverlayParticleDust(ctx2, textToDraw, textRevealAnim.p, textRevealAnim.phase, item.fontSize, playbackTextFill, outlineColor, outlineWidth, currentTime);
                     } else if (textAnimStyle === 'glitch') {
-                        drawTextOverlayGlitch(ctx2, textToDraw, currentTime, item.color, outlineColor, outlineWidth, item.fontSize);
+                        drawTextOverlayGlitch(ctx2, textToDraw, currentTime, playbackTextFill, outlineColor, outlineWidth, item.fontSize);
                     } else if (textAnimStyle === 'wave-reveal') {
                         drawTextOverlayWave(ctx2, textToDraw, textRevealAnim.p, textRevealAnim.phase, item.fontSize, currentTime, outlineColor, outlineWidth);
                     } else if (textAnimStyle === 'blur-fade') {
                         drawTextOverlayBlurFade(ctx2, textToDraw, textRevealAnim.p, textRevealAnim.phase, item.fontSize, outlineColor, outlineWidth);
                     } else if (textAnimStyle === 'smoke-vapor') {
-                        drawTextOverlaySmokeVapor(ctx2, textToDraw, textRevealAnim.p, textRevealAnim.phase, item.fontSize, outlineColor, outlineWidth, item.color, currentTime);
+                        drawTextOverlaySmokeVapor(ctx2, textToDraw, textRevealAnim.p, textRevealAnim.phase, item.fontSize, outlineColor, outlineWidth, playbackTextFill, currentTime);
                     } else if (textAnimStyle === 'neon-blur-in') {
                         // Neon Glow Blur-In: text emerges from a wide cyan/purple blur
                         // into sharp focus — similar to the reels video title cards.
@@ -10117,9 +10124,9 @@ document.addEventListener('DOMContentLoaded', () => {
                     } else if (textAnimStyle === 'rainbow-flow') {
                         drawTextOverlayRainbowFlow(ctx2, textToDraw, currentTime, outlineColor, outlineWidth, item.fontSize);
                     } else if (textAnimStyle === 'reels-scatter' || textAnimStyle === 'neon-speed-streak') {
-                        drawTextOverlayNeonSpeedStreak(ctx2, textToDraw, textRevealAnim.p, textRevealAnim.phase, item.fontSize, item.color, outlineColor, outlineWidth, currentTime);
+                        drawTextOverlayNeonSpeedStreak(ctx2, textToDraw, textRevealAnim.p, textRevealAnim.phase, item.fontSize, playbackTextFill, outlineColor, outlineWidth, currentTime);
                     } else if (textAnimStyle === '3d-flip-board') {
-                        drawTextOverlay3DFlipBoard(ctx2, textToDraw, textRevealAnim.p, textRevealAnim.phase, item.fontSize, item.color, outlineColor, outlineWidth, currentTime);
+                        drawTextOverlay3DFlipBoard(ctx2, textToDraw, textRevealAnim.p, textRevealAnim.phase, item.fontSize, playbackTextFill, outlineColor, outlineWidth, currentTime);
                     } else {
                         const linesToDraw = textToDraw.split('\n');
                         const lHeight = item.fontSize * 1.25;
