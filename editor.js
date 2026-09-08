@@ -1,4 +1,4 @@
-﻿// ============================================================
+// ============================================================
 // Wings Fly Brand Reveal -- embedded logo assets (v1.0)
 // Combines the Wings Fly gold badge, the Wings Fly wordmark, and the
 // NSDA (National Skills Development Authority) recognition seal into
@@ -9707,6 +9707,10 @@ document.addEventListener('DOMContentLoaded', () => {
                 const resolvedItemText = resolveTextOverlayTokens(item.text, item, currentTime);
 
                 // Multiline text & box sizing calculation
+                // measureText() uses the context's current font. Set it before
+                // measuring so one overlay cannot inherit the previous overlay's
+                // font and produce an intermittent box size.
+                state.ctx.font = buildTextOverlayFont(item, item.fontSize, fontFamily);
                 const textLines = resolvedItemText.split('\n');
                 const lineHeight = item.fontSize * 1.28;
                 let maxLineWidth = 0;
@@ -9730,9 +9734,14 @@ document.addEventListener('DOMContentLoaded', () => {
                     calculatedBoxW *= (1 + strength * 0.12);
                 }
 
-                // If text length has grown beyond fixedBoxW, auto-expand so text never sticks out
-                let boxW = Math.max(item.fixedBoxW || 0, calculatedBoxW);
-                let boxH = Math.max(item.fixedBoxH || 0, calculatedBoxH);
+                // fixedBoxW/fixedBoxH: stored as canvas-relative fraction (0-1) in new projects,
+                // or as legacy absolute pixels (>1) in projects saved before this fix.
+                // De-normalize to canvas pixels for rendering.
+                const fixedW = item.fixedBoxW ? (item.fixedBoxW <= 1 ? item.fixedBoxW * canvasW : item.fixedBoxW) : 0;
+                const fixedH = item.fixedBoxH ? (item.fixedBoxH <= 1 ? item.fixedBoxH * canvasH : item.fixedBoxH) : 0;
+                // If text has grown beyond fixed box, auto-expand so text never sticks out
+                let boxW = Math.max(fixedW, calculatedBoxW);
+                let boxH = Math.max(fixedH, calculatedBoxH);
 
                 // Unified Container Transform for Box + Text
                 const hasBox = !!(item.boxStyle && item.boxStyle !== 'none');
@@ -11153,8 +11162,10 @@ document.addEventListener('DOMContentLoaded', () => {
                 const boxPadX = Math.max(16, fontSize * 0.45);
                 const boxPadY = Math.max(10, fontSize * 0.32);
                 const hasBox = item.boxStyle && item.boxStyle !== 'none';
-                const itemW = Math.max(item.fixedBoxW || 0, maxLineW + (hasBox ? boxPadX * 2 : 10)) * (item.scale ?? 1);
-                const itemH = Math.max(item.fixedBoxH || 0, textH + (hasBox ? boxPadY * 2 : 10)) * (item.scale ?? 1);
+                const sz_fixedW = item.fixedBoxW ? (item.fixedBoxW <= 1 ? item.fixedBoxW * canvasW : item.fixedBoxW) : 0;
+                const sz_fixedH = item.fixedBoxH ? (item.fixedBoxH <= 1 ? item.fixedBoxH * canvasH : item.fixedBoxH) : 0;
+                const itemW = Math.max(sz_fixedW, maxLineW + (hasBox ? boxPadX * 2 : 10)) * (item.scale ?? 1);
+                const itemH = Math.max(sz_fixedH, textH + (hasBox ? boxPadY * 2 : 10)) * (item.scale ?? 1);
                 ctx.restore();
 
                 const left = itemCenterX - itemW / 2;
@@ -11282,8 +11293,10 @@ document.addEventListener('DOMContentLoaded', () => {
                 const boxPadX = Math.max(16, fontSize * 0.45);
                 const boxPadY = Math.max(10, fontSize * 0.32);
                 const hasBox = item.boxStyle && item.boxStyle !== 'none';
-                const itemW = Math.max(item.fixedBoxW || 0, maxLineW + (hasBox ? boxPadX * 2 : 10)) * (item.scale ?? 1);
-                const itemH = Math.max(item.fixedBoxH || 0, textH + (hasBox ? boxPadY * 2 : 10)) * (item.scale ?? 1);
+                const snap_fixedW = item.fixedBoxW ? (item.fixedBoxW <= 1 ? item.fixedBoxW * canvasW : item.fixedBoxW) : 0;
+                const snap_fixedH = item.fixedBoxH ? (item.fixedBoxH <= 1 ? item.fixedBoxH * canvasH : item.fixedBoxH) : 0;
+                const itemW = Math.max(snap_fixedW, maxLineW + (hasBox ? boxPadX * 2 : 10)) * (item.scale ?? 1);
+                const itemH = Math.max(snap_fixedH, textH + (hasBox ? boxPadY * 2 : 10)) * (item.scale ?? 1);
                 ctx.restore();
 
                 const halfWNorm = (itemW / 2) / canvasW;
@@ -13187,7 +13200,10 @@ document.addEventListener('DOMContentLoaded', () => {
     // so they play back identically in the live preview and in the exported
     // video (which re-renders this same function frame-by-frame).
     function drawShapeOverlayText(ctx, item, w, h, facing) {
-        const fontSize = item.fontSize || 28;
+        const canvasWidth = state.canvas.width || 1080;
+        if (!item.fontSizeCanvasWidth) item.fontSizeCanvasWidth = canvasWidth;
+        const fontSizeCanvasWidth = item.fontSizeCanvasWidth || 1080;
+        const fontSize = (item.fontSize || 28) * (canvasWidth / fontSizeCanvasWidth);
         const anim = item.textAnimation || 'none';
         const t = state.currentTime || 0;
         ctx.save();
@@ -13207,6 +13223,22 @@ document.addEventListener('DOMContentLoaded', () => {
         const textY = (item.shapeType === 'oval' ? -h * 0.06 : 0);
         const lineHeight = fontSize * 1.22;
         const baseColor = item.textColor || '#ffffff';
+        const words = String(item.text || '').split(' ');
+        let probeLine = '';
+        let widestLine = 0;
+        for (let i = 0; i < words.length; i++) {
+            const probe = probeLine + words[i] + ' ';
+            if (ctx.measureText(probe).width > maxWidth && probeLine) {
+                widestLine = Math.max(widestLine, ctx.measureText(probeLine).width);
+                probeLine = words[i] + ' ';
+            } else {
+                probeLine = probe;
+            }
+        }
+        widestLine = Math.max(widestLine, ctx.measureText(probeLine.trim()).width);
+        const textFitScale = widestLine > maxWidth ? maxWidth / widestLine : 1;
+        ctx.translate(textX, textY);
+        ctx.scale(textFitScale, textFitScale);
 
         if (anim === 'shimmer') {
             // A bright band sweeps left-to-right across the text and loops.
@@ -13222,19 +13254,18 @@ document.addEventListener('DOMContentLoaded', () => {
             ctx.fillStyle = grad;
             ctx.shadowColor = 'rgba(255,255,255,0.65)';
             ctx.shadowBlur = fontSize * 0.22;
-            drawWrappedText(ctx, item.text, textX, textY, maxWidth, lineHeight);
+            drawWrappedText(ctx, item.text, 0, 0, maxWidth, lineHeight);
         } else if (anim === 'pulse') {
             const scale = 1 + Math.sin(t * 4) * 0.06;
             ctx.fillStyle = baseColor;
-            ctx.translate(textX, textY);
             ctx.scale(scale, scale);
             drawWrappedText(ctx, item.text, 0, 0, maxWidth, lineHeight);
         } else if (anim === 'spin') {
             ctx.fillStyle = baseColor;
-            drawWrappedTextWobble(ctx, item.text, textX, textY, maxWidth, lineHeight, t);
+            drawWrappedTextWobble(ctx, item.text, 0, 0, maxWidth, lineHeight, t);
         } else {
             ctx.fillStyle = baseColor;
-            drawWrappedText(ctx, item.text, textX, textY, maxWidth, lineHeight);
+            drawWrappedText(ctx, item.text, 0, 0, maxWidth, lineHeight);
         }
         ctx.restore();
     }
@@ -13314,8 +13345,11 @@ document.addEventListener('DOMContentLoaded', () => {
             calculatedW *= (1 + strength * 0.08);
         }
 
-        let w = Math.max(item.fixedBoxW || 0, calculatedW);
-        let h = Math.max(item.fixedBoxH || 0, calculatedH);
+        // De-normalize: fixedBoxW/H stored as fraction (<=1) in new saves, or legacy absolute px (>1)
+        const fixedW_box = item.fixedBoxW ? (item.fixedBoxW <= 1 ? item.fixedBoxW * canvasW : item.fixedBoxW) : 0;
+        const fixedH_box = item.fixedBoxH ? (item.fixedBoxH <= 1 ? item.fixedBoxH * canvasH : item.fixedBoxH) : 0;
+        let w = Math.max(fixedW_box, calculatedW);
+        let h = Math.max(fixedH_box, calculatedH);
 
         return { cx: item.x * canvasW, cy: item.y * canvasH, w, h };
     }
@@ -14310,14 +14344,14 @@ document.addEventListener('DOMContentLoaded', () => {
 
                 if (selectedItem) {
                     // Update existing selected item to the drawn box position, size, and box style.
-                    // Store the pixel dimensions of the drawn box so the background box always
-                    // matches exactly what the user drew, regardless of text length.
+                    // Store box dimensions as canvas-relative fractions (not absolute pixels) so
+                    // they stay consistent when canvas resolution changes (export, resize, reload).
                     selectedItem.x = cx;
                     selectedItem.y = cy;
                     selectedItem.fontSize = calcFontSize;
                     selectedItem.boxStyle = activeBoxStyle;
-                    selectedItem.fixedBoxW = w;  // preserve drawn width
-                    selectedItem.fixedBoxH = h;  // preserve drawn height
+                    selectedItem.fixedBoxW = w / canvasW;  // store as fraction of canvas width
+                    selectedItem.fixedBoxH = h / canvasH;  // store as fraction of canvas height
                     if (!selectedItem.boxColor) selectedItem.boxColor = textOverlayBoxColorInput ? textOverlayBoxColorInput.value : '#4f46e5';
 
                     if (typeof renderTextOverlayList === 'function') renderTextOverlayList();
@@ -14335,8 +14369,8 @@ document.addEventListener('DOMContentLoaded', () => {
                         x: cx,
                         y: cy,
                         fontSize: calcFontSize,
-                        fixedBoxW: w,   // lock box to drawn width
-                        fixedBoxH: h,   // lock box to drawn height
+                        fixedBoxW: w / canvasW,   // store as fraction of canvas width (not absolute px)
+                        fixedBoxH: h / canvasH,   // store as fraction of canvas height (not absolute px)
                         color: textOverlayColorInput ? textOverlayColorInput.value : '#ffffff',
                         colorMode: textOverlayColorMode ? textOverlayColorMode.value : 'solid',
                         perLetterPalette: textOverlayPerLetterPalette ? textOverlayPerLetterPalette.value : 'rainbow',
@@ -19021,6 +19055,7 @@ document.addEventListener('DOMContentLoaded', () => {
             textColor: isPlane ? '#c62828' : '#ffffff',
             textAnimation: 'none',
             fontSize: isPlane ? 22 : 28,
+            fontSizeCanvasWidth: state.canvas.width || 1080,
             font: 'Hind Siliguri',
             flightPath: isPlane ? 'ltr' : 'static',
             startSec: start,
