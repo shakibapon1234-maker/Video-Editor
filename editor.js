@@ -10102,7 +10102,9 @@ document.addEventListener('DOMContentLoaded', () => {
                         ctx2.save();
                         ctx2.globalAlpha *= Math.max(0.05, p);
                         linesToDrawTr.forEach((lineText, lIdx) => {
-                            const chars = lineText.split('');
+                            // Bengali conjuncts and vowel signs must stay together
+                            // while the tracking animation lays out each unit.
+                            const chars = splitGraphemes(lineText);
                             const charWidths = chars.map(c => ctx2.measureText(c).width);
                             const totalW2 = charWidths.reduce((a, b) => a + b, 0);
                             const gap = -item.fontSize * 0.28 * trackFactor; // negative gap = compressed
@@ -15275,6 +15277,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const btnPresetRedOutline = document.getElementById('btn-preset-red-outline');
     const btnPresetBrushStroke = document.getElementById('btn-preset-brush-stroke');
     const btnPresetGlossyGlaze = document.getElementById('btn-preset-glossy-glaze');
+    const btnPresetRainbowPopart = document.getElementById('btn-preset-rainbow-popart');
     const btnPresetRedPill = document.getElementById('btn-preset-red-pill');
     const btnPresetStudioBar = document.getElementById('btn-preset-studio-bar');
 
@@ -15367,6 +15370,41 @@ document.addEventListener('DOMContentLoaded', () => {
             if (textOverlayShadowOffsetX) { textOverlayShadowOffsetX.value = 0; if (textOverlayShadowOffsetXVal) textOverlayShadowOffsetXVal.innerText = '0px'; }
             if (textOverlayShadowOffsetY) { textOverlayShadowOffsetY.value = 4; if (textOverlayShadowOffsetYVal) textOverlayShadowOffsetYVal.innerText = '4px'; }
             if (textOverlayShadowOpacity) { textOverlayShadowOpacity.value = 75; if (textOverlayShadowOpacityVal) textOverlayShadowOpacityVal.innerText = '75%'; }
+        } else if (presetType === 'rainbow-popart') {
+            // Screenshot-style multicolour 3D text from the companion editor.
+            const fields = {
+                color: '#ffffff',
+                colorMode: 'per-letter',
+                perLetterPalette: 'rainbow',
+                isBold: true,
+                extraThickness: 2,
+                visualTemplate: 'word-3d-popart',
+                strokeEnabled: true,
+                strokeColor: '#111111',
+                strokeWidth: 5,
+                boxStyle: 'none',
+                shadowEnabled: true,
+                shadowColor: '#000000',
+                shadowOpacity: 75,
+                shadowBlur: 7,
+                shadowOffsetX: 3,
+                shadowOffsetY: 4
+            };
+            if (item) Object.assign(item, fields);
+            if (textOverlayColorInput) { textOverlayColorInput.value = '#ffffff'; if (textOverlayColorVal) textOverlayColorVal.innerText = '#ffffff'; }
+            if (textOverlayBoldBtn) textOverlayBoldBtn.classList.add('active');
+            if (textOverlayThicknessSlider) { textOverlayThicknessSlider.value = 2; if (textOverlayThicknessVal) textOverlayThicknessVal.innerText = '+2px (Extra Bold)'; }
+            if (textOverlayVisualTemplate) textOverlayVisualTemplate.value = 'word-3d-popart';
+            if (textOverlayStrokeEnabled) textOverlayStrokeEnabled.checked = true;
+            if (textOverlayStrokeColor) { textOverlayStrokeColor.value = '#111111'; if (textOverlayStrokeColorVal) textOverlayStrokeColorVal.innerText = '#111111'; }
+            if (textOverlayStrokeWidth) { textOverlayStrokeWidth.value = 5; if (textOverlayStrokeWidthVal) textOverlayStrokeWidthVal.innerText = '5px'; }
+            if (textOverlayBoxSelect) textOverlayBoxSelect.value = 'none';
+            if (textOverlayShadowEnabled) textOverlayShadowEnabled.checked = true;
+            if (textOverlayShadowColor) { textOverlayShadowColor.value = '#000000'; if (textOverlayShadowColorVal) textOverlayShadowColorVal.innerText = '#000000'; }
+            if (textOverlayShadowBlur) { textOverlayShadowBlur.value = 7; if (textOverlayShadowBlurVal) textOverlayShadowBlurVal.innerText = '7px'; }
+            if (textOverlayShadowOffsetX) { textOverlayShadowOffsetX.value = 3; if (textOverlayShadowOffsetXVal) textOverlayShadowOffsetXVal.innerText = '3px'; }
+            if (textOverlayShadowOffsetY) { textOverlayShadowOffsetY.value = 4; if (textOverlayShadowOffsetYVal) textOverlayShadowOffsetYVal.innerText = '4px'; }
+            if (textOverlayShadowOpacity) { textOverlayShadowOpacity.value = 75; if (textOverlayShadowOpacityVal) textOverlayShadowOpacityVal.innerText = '75%'; }
         } else if (presetType === 'red-pill') {
             // 1st Screenshot Subtitle: White Pill with Red Border + Red Text
             const fields = {
@@ -15427,6 +15465,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (btnPresetRedOutline) btnPresetRedOutline.addEventListener('click', () => applyTextOverlayPreset('red-outline'));
     if (btnPresetBrushStroke) btnPresetBrushStroke.addEventListener('click', () => applyTextOverlayPreset('brush-stroke'));
     if (btnPresetGlossyGlaze) btnPresetGlossyGlaze.addEventListener('click', () => applyTextOverlayPreset('glossy-glaze'));
+    if (btnPresetRainbowPopart) btnPresetRainbowPopart.addEventListener('click', () => applyTextOverlayPreset('rainbow-popart'));
     if (btnPresetRedPill) btnPresetRedPill.addEventListener('click', () => applyTextOverlayPreset('red-pill'));
     if (btnPresetStudioBar) btnPresetStudioBar.addEventListener('click', () => applyTextOverlayPreset('studio-bar'));
 

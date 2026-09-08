@@ -1620,6 +1620,20 @@
                                     </div>
                                 </div>
 
+                                <div class="control-group mt-3">
+                                    <label><i class="fa-solid fa-palette"></i> Neon Style Preset (রেডিমেড কালার স্টাইল)</label>
+                                    <select id="glass-cards-style-preset" class="form-select">
+                                        <option value="custom">Custom / বর্তমান সেটিং</option>
+                                        <option value="electric-cyan">Electric Cyan (সায়ান গ্লো)</option>
+                                        <option value="neon-pink">Neon Pink (পিংক গ্লো)</option>
+                                        <option value="laser-lime">Laser Lime (লাইম গ্লো)</option>
+                                        <option value="violet-ultra">Violet Ultra (ভায়োলেট গ্লো)</option>
+                                        <option value="sunset-fire">Sunset Fire (অরেঞ্জ/লাল গ্লো)</option>
+                                        <option value="rainbow-neon">Rainbow Neon (রেইনবো গ্লো)</option>
+                                    </select>
+                                    <p class="help-text mt-1">এক ক্লিকে গ্লাস, বর্ডার, কার্ড ও আইকনের উজ্জ্বল কালার বদলাবে।</p>
+                                </div>
+
                                 <!-- Text & Subtitle Color Controls -->
                                 <div style="display:grid; grid-template-columns: 1fr 1fr; gap:10px;" class="mt-3">
                                     <div class="control-group">
@@ -1902,6 +1916,13 @@
                                             <div class="preset-chip-info">
                                                 <strong>Glossy Glaze 3D</strong>
                                                 <small>উজ্জ্বল গ্লসি ক্রিস্প লুক</small>
+                                            </div>
+                                        </button>
+                                        <button type="button" class="btn-preset-chip" id="btn-preset-rainbow-popart" title="স্ক্রিনশটের মতো রঙিন বাংলা/ইংরেজি 3D টেক্সট">
+                                            <span class="preset-chip-badge" style="background:linear-gradient(135deg, #ef4444, #eab308, #10b981, #3b82f6); color:#fff; font-weight:900;">3D</span>
+                                            <div class="preset-chip-info">
+                                                <strong>Rainbow Pop 3D</strong>
+                                                <small>রঙিন অক্ষর + কালো 3D আউটলাইন</small>
                                             </div>
                                         </button>
                                         <button type="button" class="btn-preset-chip" id="btn-preset-red-pill" title="হোয়াইট রাউন্ডেড পিল + রেড টেক্সট ও রেড বর্ডার">
@@ -5003,6 +5024,6 @@
 
     <script src="punch-zoom-ui.js?v=4"></script>
     <script src="ui-customization.js?v=6"></script>
-    <script src="glass-cards.js?v=3"></script>
+    <script src="glass-cards.js?v=4"></script>
 </body>
 </html>

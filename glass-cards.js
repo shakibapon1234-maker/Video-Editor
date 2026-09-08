@@ -109,6 +109,12 @@
         return `rgba(${r}, ${g}, ${b}, ${alpha})`;
     }
 
+    function escapeHtml(value) {
+        return String(value ?? '').replace(/[&<>'"]/g, (char) => ({
+            '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;'
+        }[char]));
+    }
+
     // Draw high-resolution vector icon on Canvas
     function drawVectorIcon(ctx, iconKey, iconText, x, y, size, accentColor) {
         ctx.save();
@@ -533,6 +539,7 @@
         const bgOpacityVal = document.getElementById('glass-cards-bg-opacity-val');
         const glowInput = document.getElementById('glass-cards-glow');
         const glowVal = document.getElementById('glass-cards-glow-val');
+        const stylePresetSelect = document.getElementById('glass-cards-style-preset');
         const themeColorInput = document.getElementById('glass-cards-color');
         const textColorInput = document.getElementById('glass-cards-text-color');
         const subTextColorInput = document.getElementById('glass-cards-subtext-color');
@@ -541,11 +548,38 @@
         const cardsListEl = document.getElementById('glass-cards-items-list');
         const addCardBtn = document.getElementById('add-glass-card-item-btn');
 
+        const STYLE_PRESETS = {
+            'electric-cyan': { bgColor: '#071827', themeColor: '#22d3ee', glowIntensity: 100, cards: ['#22d3ee', '#38bdf8', '#06b6d4', '#67e8f9'] },
+            'neon-pink': { bgColor: '#21091d', themeColor: '#f472b6', glowIntensity: 100, cards: ['#fb7185', '#f472b6', '#e879f9', '#f9a8d4'] },
+            'laser-lime': { bgColor: '#101d0b', themeColor: '#a3e635', glowIntensity: 100, cards: ['#a3e635', '#4ade80', '#bef264', '#22c55e'] },
+            'violet-ultra': { bgColor: '#160d2d', themeColor: '#c084fc', glowIntensity: 100, cards: ['#c084fc', '#a78bfa', '#818cf8', '#e879f9'] },
+            'sunset-fire': { bgColor: '#29120b', themeColor: '#fb923c', glowIntensity: 100, cards: ['#fb923c', '#f97316', '#ef4444', '#facc15'] },
+            'rainbow-neon': { bgColor: '#090d20', themeColor: '#38bdf8', glowIntensity: 100, cards: ['#22d3ee', '#a3e635', '#f472b6', '#facc15'] }
+        };
+
+        function applyStylePreset(presetKey) {
+            const preset = STYLE_PRESETS[presetKey];
+            if (!preset) return;
+            if (!state.glassCardStack) state.glassCardStack = JSON.parse(JSON.stringify(DEFAULT_CONFIG));
+            const cfg = state.glassCardStack;
+            cfg.bgColor = preset.bgColor;
+            cfg.themeColor = preset.themeColor;
+            cfg.glowIntensity = preset.glowIntensity;
+            cfg.cards.forEach((card, index) => {
+                card.color = preset.cards[index % preset.cards.length];
+            });
+            syncUIFromState();
+            if (stylePresetSelect) stylePresetSelect.value = presetKey;
+            if (window.triggerCanvasRedraw) window.triggerCanvasRedraw();
+            if (window.triggerAutoSave) window.triggerAutoSave();
+        }
+
         function syncUIFromState() {
             const cfg = state.glassCardStack || DEFAULT_CONFIG;
             if (enableToggle) enableToggle.checked = !!cfg.enabled;
             if (posSelect) posSelect.value = cfg.position || 'bottom-right';
             if (animSelect) animSelect.value = cfg.animation || 'spring-shimmer';
+            if (stylePresetSelect) stylePresetSelect.value = 'custom';
             
             if (scaleInput) {
                 scaleInput.value = cfg.scale != null ? cfg.scale : 100;
@@ -601,6 +635,7 @@
                 const presetOptionsHtml = ICON_PRESETS.map(p => `
                     <option value="${p.type}" ${c.iconType === p.type ? 'selected' : ''}>${p.label}</option>
                 `).join('');
+                const isCustomIcon = c.iconType === 'custom';
 
                 itemEl.innerHTML = `
                     <div style="display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid rgba(255,255,255,0.07); padding-bottom: 6px;">
@@ -628,7 +663,11 @@
                             </div>
                             <div>
                                 <label style="font-size: 11px; color: #94a3b8; display: block; margin-bottom: 3px;">Title (শিরোনাম / মূল লেখা):</label>
-                                <input type="text" class="form-input gc-title-inp" value="${c.title || ''}" placeholder="যেমন: স্পেশাল ৫০% অফার">
+                                    <input type="text" class="form-input gc-title-inp" value="${escapeHtml(c.title)}" placeholder="যেমন: স্পেশাল ৫০% অফার">
+                                    <div class="gc-custom-icon-wrap" style="display:${isCustomIcon ? 'block' : 'none'}; margin-top:6px;">
+                                        <label style="font-size:11px; color:#94a3b8; display:block; margin-bottom:3px;">Custom Icon / Emoji (নিজের আইকন)</label>
+                                        <input type="text" class="form-input gc-custom-icon-inp" value="${escapeHtml(c.icon)}" placeholder="যেমন: 🎯 বা VIP">
+                                    </div>
                             </div>
                         </div>
                     </div>
@@ -637,17 +676,19 @@
                     <div style="display: grid; grid-template-columns: 1fr 100px; gap: 8px;">
                         <div>
                             <label style="font-size: 11px; color: #94a3b8; display: block; margin-bottom: 3px;">Subtitle (ছোট বিবরণ):</label>
-                            <input type="text" class="form-input gc-sub-inp" value="${c.subtitle || ''}" placeholder="যেমন: সারা দেশে ক্যাশ অন ডেলিভারি">
+                            <input type="text" class="form-input gc-sub-inp" value="${escapeHtml(c.subtitle)}" placeholder="যেমন: সারা দেশে ক্যাশ অন ডেলিভারি">
                         </div>
                         <div>
                             <label style="font-size: 11px; color: #94a3b8; display: block; margin-bottom: 3px;">Badge (ট্যাগ):</label>
-                            <input type="text" class="form-input gc-badge-inp" value="${c.badge || ''}" placeholder="FREE COD">
+                            <input type="text" class="form-input gc-badge-inp" value="${escapeHtml(c.badge)}" placeholder="FREE COD">
                         </div>
                     </div>
                 `;
 
                 // Bind events
                 const iconTypeSel = itemEl.querySelector('.gc-icon-type-sel');
+                const customIconWrap = itemEl.querySelector('.gc-custom-icon-wrap');
+                const customIconInp = itemEl.querySelector('.gc-custom-icon-inp');
                 const titleInp = itemEl.querySelector('.gc-title-inp');
                 const subInp = itemEl.querySelector('.gc-sub-inp');
                 const badgeInp = itemEl.querySelector('.gc-badge-inp');
@@ -659,6 +700,8 @@
                     c.iconType = iconTypeSel.value;
                     const preset = ICON_PRESETS.find(p => p.type === c.iconType);
                     if (preset) c.icon = preset.emoji;
+                    if (c.iconType === 'custom' && customIconInp) c.icon = customIconInp.value;
+                    if (customIconWrap) customIconWrap.style.display = c.iconType === 'custom' ? 'block' : 'none';
                     c.title = titleInp.value;
                     c.subtitle = subInp.value;
                     c.badge = badgeInp.value;
@@ -668,6 +711,7 @@
                 };
 
                 iconTypeSel.addEventListener('change', updateCard);
+                if (customIconInp) customIconInp.addEventListener('input', updateCard);
                 titleInp.addEventListener('input', updateCard);
                 subInp.addEventListener('input', updateCard);
                 badgeInp.addEventListener('input', updateCard);
@@ -709,6 +753,10 @@
                 if (window.triggerCanvasRedraw) window.triggerCanvasRedraw();
                 if (window.triggerAutoSave) window.triggerAutoSave();
             });
+        }
+
+        if (stylePresetSelect) {
+            stylePresetSelect.addEventListener('change', (e) => applyStylePreset(e.target.value));
         }
 
         // Card Size / Scale Slider
