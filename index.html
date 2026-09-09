@@ -1894,6 +1894,31 @@
                                     <p class="help-text">চাইলে ডায়নামিক টোকেন লিখতে পারেন — <code>{{date}}</code> (আজকের তারিখ), <code>{{time}}</code> (এখনকার সময়), <code>{{counter}}</code> (প্লে টাইম অনুযায়ী গোনা শুরু), বা <code>{{counter:100}}</code> (১০০ থেকে গোনা শুরু) — প্রিভিউ/এক্সপোর্টের সময় আসল মান বসে যাবে।</p>
                                 </div>
 
+                                <div class="control-group mt-3" id="text-overlay-split-content-group" style="display:none; border:1px solid rgba(14,165,233,.35); border-radius:8px; padding:10px; background:rgba(14,165,233,.06);">
+                                    <label><i class="fa-solid fa-layer-group" style="color:#38bdf8;"></i> Split Shape Text (দুই অংশে আলাদা লেখা)</label>
+                                    <textarea id="text-overlay-glass-text" class="form-input form-textarea" rows="2" maxlength="100" placeholder="উপরের Glass অংশের লেখা"></textarea>
+                                    <div class="color-picker-wrapper mt-2">
+                                        <input type="color" id="text-overlay-glass-text-color" value="#1f2937">
+                                        <span class="color-value-text" id="text-overlay-glass-text-color-val">#1f2937</span>
+                                    </div>
+                                    <textarea id="text-overlay-solid-text" class="form-input form-textarea mt-2" rows="2" maxlength="100" placeholder="নিচের Solid অংশের লেখা"></textarea>
+                                    <div class="color-picker-wrapper mt-2">
+                                        <input type="color" id="text-overlay-solid-text-color" value="#ffffff">
+                                        <span class="color-value-text" id="text-overlay-solid-text-color-val">#ffffff</span>
+                                    </div>
+                                    <label class="mt-2">Glass Bed Color / গ্লাস অংশের রং</label>
+                                    <div class="color-picker-wrapper">
+                                        <input type="color" id="text-overlay-glass-box-color" value="#ffffff">
+                                        <span class="color-value-text" id="text-overlay-glass-box-color-val">#ffffff</span>
+                                    </div>
+                                    <label class="mt-2">Solid Bed Color / সলিড অংশের রং</label>
+                                    <div class="color-picker-wrapper">
+                                        <input type="color" id="text-overlay-solid-box-color" value="#0ea5e9">
+                                        <span class="color-value-text" id="text-overlay-solid-box-color-val">#0ea5e9</span>
+                                    </div>
+                                    <p class="help-text mt-1">প্রথম ঘরের লেখা গ্লাস অংশে, দ্বিতীয় ঘরের লেখা নিচের সলিড অংশে যাবে।</p>
+                                </div>
+
                                 <!-- 1-Click Viral Text Style Presets (Trending Styles) -->
                                 <div class="control-group mt-3" id="text-overlay-presets-section">
                                     <label style="display: flex; align-items: center; justify-content: space-between;">
@@ -1940,6 +1965,20 @@
                                             <div class="preset-chip-info">
                                                 <strong>Glossy Studio Bar</strong>
                                                 <small>গাঢ় সিনেমাটিক ব্যানার বার + হাই-কনট্রাস্ট টেক্সট</small>
+                                            </div>
+                                        </button>
+                                        <button type="button" class="btn-preset-chip" id="btn-preset-glass-solid-split" title="উপরের অংশ ফ্রস্টেড গ্লাস, নিচের অংশ সলিড কালার ব্যাকপ্লেট" style="grid-column: span 2;">
+                                            <span class="preset-chip-badge" style="background:linear-gradient(180deg, rgba(255,255,255,.28) 0 48%, #0ea5e9 48%); color:#fff; border:1px solid rgba(255,255,255,.7);">◐</span>
+                                            <div class="preset-chip-info">
+                                                <strong>Glass + Solid Split</strong>
+                                                <small>গ্লাস বেড + নিচে সলিড কালার</small>
+                                            </div>
+                                        </button>
+                                        <button type="button" class="btn-preset-chip" id="btn-preset-glass-solid-vertical" title="বাম পাশে গ্লাস, ডান পাশে সলিড কালার ব্যাকপ্লেট" style="grid-column: span 2;">
+                                            <span class="preset-chip-badge" style="background:linear-gradient(90deg, rgba(255,255,255,.28) 0 48%, #0ea5e9 48%); color:#fff; border:1px solid rgba(255,255,255,.7);">↕</span>
+                                            <div class="preset-chip-info">
+                                                <strong>Glass + Solid Vertical</strong>
+                                                <small>পাশাপাশি গ্লাস + সলিড কালার</small>
                                             </div>
                                         </button>
                                     </div>
@@ -2322,6 +2361,7 @@
                                             <option value="paint-splash">🎨 Watercolor Splash (রঙের ছিটা / স্প্ল্যাশ)</option>
                                             <option value="studio-bar">📺 Dark Studio Bar (সিনেমাটিক ব্যানার বার)</option>
                                             <option value="red-pill">🔴 Red Border Pill (রেড বর্ডার পিল ব্যাজ)</option>
+                                            <option value="glass-solid-split">◐ Glass + Solid Split (গ্লাস + সলিড দুই-টোন ব্যাকপ্লেট)</option>
                                         </optgroup>
                                         <optgroup label="── স্ট্যান্ডার্ড ও রিলস শেপ ──">
                                             <option value="solid">Solid Box</option>

@@ -4470,7 +4470,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    function drawTextOverlayBox(ctx, style, color, w, h, currentTime, curveAmount) {
+    function drawTextOverlayBox(ctx, style, color, w, h, currentTime, curveAmount, splitOrientation, glassColor) {
         if (!style || style === 'none') return;
         const x = -w / 2, y = -h / 2;
         const isCurved = curveAmount && Math.abs(curveAmount) > 0.05;
@@ -4726,6 +4726,53 @@ document.addEventListener('DOMContentLoaded', () => {
                 ctx.stroke();
                 ctx.restore();
                 break;
+            case 'glass-solid-split': {
+                ctx.save();
+                const radius = 14;
+                const isVertical = splitOrientation === 'vertical';
+                const splitX = x + w * 0.48;
+                const splitY = y + h * 0.48;
+                ctx.shadowColor = 'rgba(0, 0, 0, 0.38)';
+                ctx.shadowBlur = 16;
+                ctx.shadowOffsetY = 5;
+                ctx.fillStyle = glassColor ? hexToRgba(glassColor, 0.18) : 'rgba(255, 255, 255, 0.16)';
+                ctx.beginPath();
+                ctx.roundRect(x, y, w, h, radius);
+                ctx.fill();
+                ctx.shadowBlur = 0;
+                ctx.shadowOffsetY = 0;
+
+                ctx.save();
+                ctx.beginPath();
+                ctx.roundRect(x, y, w, h, radius);
+                ctx.clip();
+                ctx.fillStyle = color || '#0ea5e9';
+                ctx.globalAlpha *= 0.92;
+                if (isVertical) ctx.fillRect(splitX, y, w - (splitX - x), h);
+                else ctx.fillRect(x, splitY, w, h - (splitY - y));
+                ctx.fillStyle = 'rgba(255, 255, 255, 0.22)';
+                ctx.fillRect(x, y, w, Math.max(2, h * 0.035));
+                ctx.restore();
+
+                ctx.strokeStyle = 'rgba(255, 255, 255, 0.72)';
+                ctx.lineWidth = Math.max(1.5, h * 0.04);
+                ctx.beginPath();
+                ctx.roundRect(x, y, w, h, radius);
+                ctx.stroke();
+                ctx.strokeStyle = 'rgba(255, 255, 255, 0.5)';
+                ctx.lineWidth = Math.max(1, h * 0.025);
+                ctx.beginPath();
+                if (isVertical) {
+                    ctx.moveTo(splitX, y + radius * 0.7);
+                    ctx.lineTo(splitX, y + h - radius * 0.7);
+                } else {
+                    ctx.moveTo(x + radius * 0.7, splitY);
+                    ctx.lineTo(x + w - radius * 0.7, splitY);
+                }
+                ctx.stroke();
+                ctx.restore();
+                break;
+            }
             case 'cyber-cut': {
                 const cut = Math.min(16, h * 0.3);
                 ctx.save();
@@ -9726,14 +9773,20 @@ document.addEventListener('DOMContentLoaded', () => {
                 // playhead time before measuring/drawing; item.text itself is left
                 // untouched so the editing UI still shows the raw token text.
                 const resolvedItemText = resolveTextOverlayTokens(item.text, item, currentTime);
+                const isGlassSolidSplit = item.boxStyle === 'glass-solid-split';
+                const resolvedGlassText = resolveTextOverlayTokens(item.glassText || resolvedItemText, item, currentTime);
+                const resolvedSolidText = resolveTextOverlayTokens(item.solidText || '', item, currentTime);
 
                 // Multiline text & box sizing calculation
                 // measureText() uses the context's current font. Set it before
                 // measuring so one overlay cannot inherit the previous overlay's
                 // font and produce an intermittent box size.
-                state.ctx.font = buildTextOverlayFont(item, item.fontSize, fontFamily);
-                const textLines = resolvedItemText.split('\n');
-                const lineHeight = item.fontSize * 1.28;
+                const measureItem = isGlassSolidSplit ? { ...item, fontSize: Math.max(14, item.fontSize * 0.72) } : item;
+                state.ctx.font = buildTextOverlayFont(measureItem, measureItem.fontSize, fontFamily);
+                const textLines = isGlassSolidSplit
+                    ? [resolvedGlassText || ' ', resolvedSolidText || ' ']
+                    : resolvedItemText.split('\n');
+                const lineHeight = measureItem.fontSize * 1.28;
                 let maxLineWidth = 0;
                 textLines.forEach(line => {
                     const lineW = state.ctx.measureText(line).width;
@@ -9792,7 +9845,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     applyOverlayGlowPreset(state.ctx, item.glowPreset, currentTime);
                 }
                 if (hasBox) {
-                    drawTextOverlayBox(state.ctx, item.boxStyle, item.boxColor || '#4f46e5', boxW, boxH, currentTime, curveAmount);
+                    drawTextOverlayBox(state.ctx, item.boxStyle, item.solidBoxColor || item.boxColor || '#4f46e5', boxW, boxH, currentTime, curveAmount, item.splitOrientation, item.glassBoxColor);
                 }
 
                 state.ctx.font = buildTextOverlayFont(item, item.fontSize, fontFamily);
@@ -9824,6 +9877,53 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
 
                 const drawTextContent = (ctx2) => {
+                    if (isGlassSolidSplit) {
+                        const baseSplitFontSize = Math.max(14, item.fontSize * 0.72);
+                        const splitGap = Math.max(12, baseSplitFontSize * 0.22);
+                        const maxTextWidth = item.splitOrientation === 'vertical'
+                            ? Math.max(20, boxW * 0.48 - splitGap * 2)
+                            : Math.max(20, boxW - splitGap * 2);
+                        const getFitFontSize = (text, maxWidth) => {
+                            if (!text) return baseSplitFontSize;
+                            const measured = ctx2.measureText(text).width;
+                            return measured > maxWidth ? Math.max(10, baseSplitFontSize * maxWidth / measured) : baseSplitFontSize;
+                        };
+                        const glassFontSize = getFitFontSize(resolvedGlassText, maxTextWidth);
+                        const solidFontSize = getFitFontSize(resolvedSolidText, maxTextWidth);
+                        const splitFontSize = Math.min(glassFontSize, solidFontSize);
+                        const splitLineHeight = splitFontSize * 1.28;
+                        const splitTextY = [-splitLineHeight * 0.5, splitLineHeight * 0.5];
+                        const splitTextX = [-boxW * 0.25, boxW * 0.25];
+                        const splitItems = [
+                            { text: resolvedGlassText, color: item.glassTextColor || '#1f2937', x: 0, y: splitTextY[0] },
+                            { text: resolvedSolidText, color: item.solidTextColor || '#ffffff', x: 0, y: splitTextY[1] }
+                        ];
+                        if (item.splitOrientation === 'vertical') {
+                            splitItems[0].x = splitTextX[0];
+                            splitItems[0].y = 0;
+                            splitItems[1].x = splitTextX[1];
+                            splitItems[1].y = 0;
+                        }
+                        ctx2.save();
+                        ctx2.beginPath();
+                        ctx2.roundRect(-boxW / 2 + 4, -boxH / 2 + 4, boxW - 8, boxH - 8, 10);
+                        ctx2.clip();
+                        splitItems.forEach((splitItem) => {
+                            if (!splitItem.text) return;
+                            const splitTextStyle = {
+                                ...item,
+                                color: splitItem.color,
+                                colorMode: 'solid',
+                                visualTemplate: 'standard',
+                                strokeEnabled: false,
+                                extraThickness: 0,
+                                shadowEnabled: false
+                            };
+                            renderTextWith3DAndColor(ctx2, splitItem.text, splitItem.x, splitItem.y, splitTextStyle, splitFontSize, 'center', 'rgba(0,0,0,0.35)', Math.max(1.5, splitFontSize * 0.035));
+                        });
+                        ctx2.restore();
+                        return;
+                    }
                     const playbackTextFill = getTextOverlayFillStyle(
                         ctx2, item, 0, 1, boxW, boxH, textToDraw, 0, 0, item.fontSize
                     );
@@ -10167,7 +10267,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
                 // Extra Thickness: simulated via repeated stroke pass to make text heavier
                 const _extraThick = item.extraThickness ? Number(item.extraThickness) : 0;
-                if (_extraThick > 0) {
+                if (_extraThick > 0 && !isGlassSolidSplit) {
                     state.ctx.save();
                     state.ctx.font = buildTextOverlayFont(item, item.fontSize, fontFamily);
                     state.ctx.strokeStyle = item.color || '#ffffff';
@@ -10185,7 +10285,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
 
                 // Underline: draw a line below the rendered text
-                if (item.isUnderline) {
+                if (item.isUnderline && !isGlassSolidSplit) {
                     state.ctx.save();
                     state.ctx.font = buildTextOverlayFont(item, item.fontSize, fontFamily);
                     state.ctx.textAlign = 'center';
@@ -13353,11 +13453,15 @@ document.addEventListener('DOMContentLoaded', () => {
     function getTextOverlayBox(item) {
         const canvasW = state.canvas.width;
         const canvasH = state.canvas.height;
-        state.ctx.font = buildTextOverlayFont(item, item.fontSize);
+        const isGlassSolidSplit = item.boxStyle === 'glass-solid-split';
+        const splitFontSize = Math.max(14, item.fontSize * 0.72);
+        state.ctx.font = buildTextOverlayFont(item, isGlassSolidSplit ? splitFontSize : item.fontSize);
 
         const text = item.text || '';
-        const lines = text.split('\n');
-        const lineHeight = item.fontSize * 1.25;
+        const lines = isGlassSolidSplit
+            ? [(item.glassText || text), (item.solidText || '')].filter(Boolean)
+            : text.split('\n');
+        const lineHeight = (isGlassSolidSplit ? splitFontSize : item.fontSize) * 1.25;
         let maxW = 0;
         lines.forEach(line => {
             const wLine = state.ctx.measureText(line).width;
@@ -13368,6 +13472,12 @@ document.addEventListener('DOMContentLoaded', () => {
         const boxPadY = Math.max(10, item.fontSize * 0.32);
         let calculatedW = maxW + boxPadX * 2;
         let calculatedH = lines.length * lineHeight + boxPadY * 2;
+        if (isGlassSolidSplit && item.splitOrientation === 'vertical') {
+            const glassW = state.ctx.measureText(item.glassText || text).width;
+            const solidW = state.ctx.measureText(item.solidText || '').width;
+            calculatedW = glassW + solidW + boxPadX * 2 + splitFontSize * 0.3;
+            calculatedH = lineHeight + boxPadY * 2;
+        }
 
         if (item.curve) {
             const strength = Math.min(1, Math.abs(item.curve) / 100);
@@ -15189,6 +15299,17 @@ document.addEventListener('DOMContentLoaded', () => {
     const textOverlayEndInput = document.getElementById('text-overlay-end');
     const textOverlayEditInput = document.getElementById('text-overlay-edit-input');
     const deleteTextOverlayBtn = document.getElementById('delete-text-overlay-btn');
+    const textOverlaySplitContentGroup = document.getElementById('text-overlay-split-content-group');
+    const textOverlayGlassTextInput = document.getElementById('text-overlay-glass-text');
+    const textOverlayGlassTextColor = document.getElementById('text-overlay-glass-text-color');
+    const textOverlayGlassTextColorVal = document.getElementById('text-overlay-glass-text-color-val');
+    const textOverlaySolidTextInput = document.getElementById('text-overlay-solid-text');
+    const textOverlaySolidTextColor = document.getElementById('text-overlay-solid-text-color');
+    const textOverlaySolidTextColorVal = document.getElementById('text-overlay-solid-text-color-val');
+    const textOverlayGlassBoxColor = document.getElementById('text-overlay-glass-box-color');
+    const textOverlayGlassBoxColorVal = document.getElementById('text-overlay-glass-box-color-val');
+    const textOverlaySolidBoxColor = document.getElementById('text-overlay-solid-box-color');
+    const textOverlaySolidBoxColorVal = document.getElementById('text-overlay-solid-box-color-val');
 
     const textOverlayBoldBtn = document.getElementById('text-overlay-bold-btn');
     const textOverlayItalicBtn = document.getElementById('text-overlay-italic-btn');
@@ -15301,6 +15422,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const btnPresetRainbowPopart = document.getElementById('btn-preset-rainbow-popart');
     const btnPresetRedPill = document.getElementById('btn-preset-red-pill');
     const btnPresetStudioBar = document.getElementById('btn-preset-studio-bar');
+    const btnPresetGlassSolidSplit = document.getElementById('btn-preset-glass-solid-split');
+    const btnPresetGlassSolidVertical = document.getElementById('btn-preset-glass-solid-vertical');
 
     function applyTextOverlayPreset(presetType) {
         const item = getSelectedTextOverlay();
@@ -15474,9 +15597,62 @@ document.addEventListener('DOMContentLoaded', () => {
             if (textOverlayBoxColorInput) { textOverlayBoxColorInput.value = '#0f172a'; if (textOverlayBoxColorVal) textOverlayBoxColorVal.innerText = '#0f172a'; }
             if (textOverlayVisualTemplate) textOverlayVisualTemplate.value = 'glossy-glaze';
             if (textOverlayStrokeEnabled) textOverlayStrokeEnabled.checked = false;
+        } else if (presetType === 'glass-solid-split') {
+            const fields = {
+                color: '#ffffff',
+                isBold: true,
+                extraThickness: 1,
+                boxStyle: 'glass-solid-split',
+                boxColor: '#0ea5e9',
+                splitOrientation: 'horizontal',
+                visualTemplate: 'standard',
+                strokeEnabled: false,
+                shadowEnabled: true,
+                shadowColor: '#000000',
+                shadowOpacity: 55,
+                shadowBlur: 9,
+                shadowOffsetX: 0,
+                shadowOffsetY: 3
+            };
+            if (item) {
+                item.glassText = item.glassText || item.text || '';
+                item.solidText = item.solidText || '';
+                item.glassTextColor = item.glassTextColor || '#1f2937';
+                item.solidTextColor = item.solidTextColor || '#ffffff';
+                item.glassBoxColor = item.glassBoxColor || '#ffffff';
+                item.solidBoxColor = item.solidBoxColor || '#0ea5e9';
+            }
+            if (item) Object.assign(item, fields);
+            if (textOverlayColorInput) { textOverlayColorInput.value = '#ffffff'; if (textOverlayColorVal) textOverlayColorVal.innerText = '#ffffff'; }
+            if (textOverlayBoldBtn) textOverlayBoldBtn.classList.add('active');
+            if (textOverlayThicknessSlider) { textOverlayThicknessSlider.value = 1; if (textOverlayThicknessVal) textOverlayThicknessVal.innerText = '+1px (Extra Bold)'; }
+            if (textOverlayBoxSelect) textOverlayBoxSelect.value = 'glass-solid-split';
+            if (textOverlayBoxColorInput) { textOverlayBoxColorInput.value = '#0ea5e9'; if (textOverlayBoxColorVal) textOverlayBoxColorVal.innerText = '#0ea5e9'; }
+            if (textOverlayVisualTemplate) textOverlayVisualTemplate.value = 'standard';
+            if (textOverlayStrokeEnabled) textOverlayStrokeEnabled.checked = false;
+            if (textOverlaySplitContentGroup) textOverlaySplitContentGroup.style.display = 'block';
+            if (textOverlayGlassTextInput) textOverlayGlassTextInput.value = item ? (item.glassText || '') : '';
+            if (textOverlaySolidTextInput) textOverlaySolidTextInput.value = item ? (item.solidText || '') : '';
+            if (textOverlayGlassTextColor) { textOverlayGlassTextColor.value = item ? (item.glassTextColor || '#1f2937') : '#1f2937'; if (textOverlayGlassTextColorVal) textOverlayGlassTextColorVal.innerText = textOverlayGlassTextColor.value; }
+            if (textOverlaySolidTextColor) { textOverlaySolidTextColor.value = item ? (item.solidTextColor || '#ffffff') : '#ffffff'; if (textOverlaySolidTextColorVal) textOverlaySolidTextColorVal.innerText = textOverlaySolidTextColor.value; }
+            if (textOverlayGlassBoxColor) { textOverlayGlassBoxColor.value = item ? (item.glassBoxColor || '#ffffff') : '#ffffff'; if (textOverlayGlassBoxColorVal) textOverlayGlassBoxColorVal.innerText = textOverlayGlassBoxColor.value; }
+            if (textOverlaySolidBoxColor) { textOverlaySolidBoxColor.value = item ? (item.solidBoxColor || '#0ea5e9') : '#0ea5e9'; if (textOverlaySolidBoxColorVal) textOverlaySolidBoxColorVal.innerText = textOverlaySolidBoxColor.value; }
+            if (textOverlayShadowEnabled) textOverlayShadowEnabled.checked = true;
+            if (textOverlayShadowColor) { textOverlayShadowColor.value = '#000000'; if (textOverlayShadowColorVal) textOverlayShadowColorVal.innerText = '#000000'; }
+            if (textOverlayShadowBlur) { textOverlayShadowBlur.value = 9; if (textOverlayShadowBlurVal) textOverlayShadowBlurVal.innerText = '9px'; }
+            if (textOverlayShadowOffsetX) { textOverlayShadowOffsetX.value = 0; if (textOverlayShadowOffsetXVal) textOverlayShadowOffsetXVal.innerText = '0px'; }
+            if (textOverlayShadowOffsetY) { textOverlayShadowOffsetY.value = 3; if (textOverlayShadowOffsetYVal) textOverlayShadowOffsetYVal.innerText = '3px'; }
+            if (textOverlayShadowOpacity) { textOverlayShadowOpacity.value = 55; if (textOverlayShadowOpacityVal) textOverlayShadowOpacityVal.innerText = '55%'; }
+        } else if (presetType === 'glass-solid-vertical') {
+            applyTextOverlayPreset('glass-solid-split');
+            if (item) item.splitOrientation = 'vertical';
+            if (textOverlaySplitContentGroup) textOverlaySplitContentGroup.style.display = 'block';
+            drawFrame();
+            return;
         }
 
         refreshTextOverlayBoxColorVisibility();
+        refreshTextOverlaySplitContentVisibility();
         refreshTextOverlayStrokeVisibility();
         refreshTextOverlayShadowVisibility();
         drawFrame();
@@ -15489,6 +15665,8 @@ document.addEventListener('DOMContentLoaded', () => {
     if (btnPresetRainbowPopart) btnPresetRainbowPopart.addEventListener('click', () => applyTextOverlayPreset('rainbow-popart'));
     if (btnPresetRedPill) btnPresetRedPill.addEventListener('click', () => applyTextOverlayPreset('red-pill'));
     if (btnPresetStudioBar) btnPresetStudioBar.addEventListener('click', () => applyTextOverlayPreset('studio-bar'));
+    if (btnPresetGlassSolidSplit) btnPresetGlassSolidSplit.addEventListener('click', () => applyTextOverlayPreset('glass-solid-split'));
+    if (btnPresetGlassSolidVertical) btnPresetGlassSolidVertical.addEventListener('click', () => applyTextOverlayPreset('glass-solid-vertical'));
 
     // Shadow / Glow controls (previously present in the DOM but never wired up)
     const textOverlayShadowEnabled = document.getElementById('text-overlay-shadow-enabled');
@@ -15538,6 +15716,44 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         });
     }
+
+    function refreshTextOverlaySplitContentVisibility() {
+        if (textOverlaySplitContentGroup) {
+            textOverlaySplitContentGroup.style.display = textOverlayBoxSelect && textOverlayBoxSelect.value === 'glass-solid-split' ? 'block' : 'none';
+        }
+    }
+
+    function bindSplitTextInput(input, field) {
+        if (!input) return;
+        input.addEventListener('input', (e) => {
+            const item = getSelectedTextOverlay();
+            if (item) {
+                item[field] = e.target.value;
+                drawFrame();
+                if (window.triggerAutoSave) window.triggerAutoSave();
+            }
+        });
+    }
+
+    function bindSplitTextColor(input, valueEl, field) {
+        if (!input) return;
+        input.addEventListener('input', (e) => {
+            if (valueEl) valueEl.innerText = e.target.value;
+            const item = getSelectedTextOverlay();
+            if (item) {
+                item[field] = e.target.value;
+                drawFrame();
+                if (window.triggerAutoSave) window.triggerAutoSave();
+            }
+        });
+    }
+
+    bindSplitTextInput(textOverlayGlassTextInput, 'glassText');
+    bindSplitTextInput(textOverlaySolidTextInput, 'solidText');
+    bindSplitTextColor(textOverlayGlassTextColor, textOverlayGlassTextColorVal, 'glassTextColor');
+    bindSplitTextColor(textOverlaySolidTextColor, textOverlaySolidTextColorVal, 'solidTextColor');
+    bindSplitTextColor(textOverlayGlassBoxColor, textOverlayGlassBoxColorVal, 'glassBoxColor');
+    bindSplitTextColor(textOverlaySolidBoxColor, textOverlaySolidBoxColorVal, 'solidBoxColor');
 
     if (textOverlayAnimSpeedSlider) {
         textOverlayAnimSpeedSlider.addEventListener('input', (e) => {
@@ -15681,9 +15897,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
     textOverlayBoxSelect.addEventListener('change', (e) => {
         refreshTextOverlayBoxColorVisibility();
+        refreshTextOverlaySplitContentVisibility();
         const item = getSelectedTextOverlay();
         if (item) { item.boxStyle = e.target.value; drawFrame(); }
     });
+    refreshTextOverlaySplitContentVisibility();
 
     const textOverlayGlowPreset = document.getElementById('text-overlay-glow-preset');
     if (textOverlayGlowPreset) {
@@ -15989,6 +16207,12 @@ document.addEventListener('DOMContentLoaded', () => {
             strokeWidth: textOverlayStrokeWidth ? parseInt(textOverlayStrokeWidth.value, 10) : 6,
             boxStyle: textOverlayBoxSelect.value || 'none',
             boxColor: textOverlayBoxColorInput.value || '#4f46e5',
+            glassText: '',
+            solidText: '',
+            glassTextColor: '#1f2937',
+            solidTextColor: '#ffffff',
+            glassBoxColor: '#ffffff',
+            solidBoxColor: '#0ea5e9',
             textAnimStyle: textOverlayAnimSelect.value || 'none',
             animStyle: textOverlayAnimSelect.value || 'none', // legacy fallback field, kept in sync
             textAnimSpeedSec: textOverlayAnimSpeedSlider ? parseFloat(textOverlayAnimSpeedSlider.value) || 0.5 : 0.5,
@@ -16094,6 +16318,13 @@ document.addEventListener('DOMContentLoaded', () => {
         refreshTextOverlayStrokeVisibility();
 
         textOverlayBoxSelect.value = item.boxStyle || 'none';
+        refreshTextOverlaySplitContentVisibility();
+        if (textOverlayGlassTextInput) textOverlayGlassTextInput.value = item.glassText || item.text || '';
+        if (textOverlaySolidTextInput) textOverlaySolidTextInput.value = item.solidText || '';
+        if (textOverlayGlassTextColor) { textOverlayGlassTextColor.value = item.glassTextColor || '#1f2937'; if (textOverlayGlassTextColorVal) textOverlayGlassTextColorVal.innerText = textOverlayGlassTextColor.value; }
+        if (textOverlaySolidTextColor) { textOverlaySolidTextColor.value = item.solidTextColor || '#ffffff'; if (textOverlaySolidTextColorVal) textOverlaySolidTextColorVal.innerText = textOverlaySolidTextColor.value; }
+        if (textOverlayGlassBoxColor) { textOverlayGlassBoxColor.value = item.glassBoxColor || '#ffffff'; if (textOverlayGlassBoxColorVal) textOverlayGlassBoxColorVal.innerText = textOverlayGlassBoxColor.value; }
+        if (textOverlaySolidBoxColor) { textOverlaySolidBoxColor.value = item.solidBoxColor || '#0ea5e9'; if (textOverlaySolidBoxColorVal) textOverlaySolidBoxColorVal.innerText = textOverlaySolidBoxColor.value; }
         const textOverlayGlowPresetEl = document.getElementById('text-overlay-glow-preset');
         if (textOverlayGlowPresetEl) textOverlayGlowPresetEl.value = item.glowPreset || 'none';
         textOverlayBoxColorInput.value = item.boxColor || '#4f46e5';
