@@ -1,0 +1,8 @@
+{
+    "chat.tools.terminal.autoApprove": {
+        "/^cd /d \"d:\\\\Main Branch\\\\app helper\\\\Video-Editor\"; python -m py_compile git_repo_manager\\.py$/": {
+            "approve": true,
+            "matchCommandLine": true
+        }
+    }
+}

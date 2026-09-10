@@ -131,6 +131,16 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
+    // The option is server-only; mobile/Capacitor exports render locally.
+    (function hideEnhanceOnMobile() {
+        const isCap = typeof window !== 'undefined' && window.Capacitor &&
+            window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform();
+        if (!isCap) return;
+        const box = document.getElementById('enhance-quality-checkbox');
+        const group = box && box.closest('.control-group');
+        if (group) group.style.display = 'none';
+    })();
+
     const renderBtn = document.getElementById('render-btn');
     const renderProgressBox = document.getElementById('render-progress-box');
     const renderProgressFill = document.getElementById('render-progress-fill');
@@ -141,6 +151,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const renderSuccessBox = document.getElementById('render-success-box');
     const downloadLink = document.getElementById('download-link');
     const qualitySelect = document.getElementById('quality-select');
+    const enhanceCheckboxEl = document.getElementById('enhance-quality-checkbox');
 
     // Export Progress UX (Phase 6B): cancellation flag checked inside every
     // render tick loop (intro / clips / outro), plus wall-clock timestamps
@@ -264,6 +275,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (cancelRenderBtn) cancelRenderBtn.disabled = false;
         renderBtn.disabled = true;
         if (qualitySelect) qualitySelect.disabled = true;
+        if (enhanceCheckboxEl) enhanceCheckboxEl.disabled = true;
         renderBtn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Rendering...';
         renderProgressBox.style.display = 'block';
         renderSuccessBox.style.display = 'none';
@@ -314,6 +326,7 @@ document.addEventListener('DOMContentLoaded', () => {
             renderProgressBox.style.display = 'none';
             renderBtn.disabled = false;
             if (qualitySelect) qualitySelect.disabled = false;
+            if (enhanceCheckboxEl) enhanceCheckboxEl.disabled = false;
             renderBtn.innerHTML = '<i class="fa-solid fa-wand-magic-sparkles"></i> Render & Export Video';
         } finally {
             stopTickerWorker();
@@ -453,12 +466,15 @@ document.addEventListener('DOMContentLoaded', () => {
                     this.wasmEngine = new window.MobileRenderEngine();
                     await this.wasmEngine.init(totalFrames, filename, onStatus);
                 } else {
-                    await serverLog(`Sending init control message, totalFrames: ${totalFrames}, filename: ${filename}`);
+                    const enhanceCheckbox = document.getElementById('enhance-quality-checkbox');
+                    const enhanceQuality = !isCapacitorApp() && !!(enhanceCheckbox && enhanceCheckbox.checked);
+                    await serverLog(`Sending init control message, totalFrames: ${totalFrames}, filename: ${filename}, enhanceQuality: ${enhanceQuality}`);
                     this.ws.send(JSON.stringify({
                         type: 'init',
                         totalFrames: totalFrames,
                         filename: filename,
-                        customThumbnailData
+                        customThumbnailData,
+                        enhanceQuality
                     }));
                     await new Promise((resolve) => {
                         const onMsg = async (event) => {
@@ -626,6 +642,7 @@ document.addEventListener('DOMContentLoaded', () => {
             renderProgressBox.style.display = 'none';
             renderBtn.disabled = false;
             if (qualitySelect) qualitySelect.disabled = false;
+            if (enhanceCheckboxEl) enhanceCheckboxEl.disabled = false;
             renderBtn.innerHTML = '<i class="fa-solid fa-wand-magic-sparkles"></i> Render & Export Video';
             if (renderEtaText) renderEtaText.innerText = '';
             state.customExportTime = undefined;
@@ -947,6 +964,7 @@ document.addEventListener('DOMContentLoaded', () => {
             renderSuccessBox.style.display = 'block';
             renderBtn.disabled = false;
             if (qualitySelect) qualitySelect.disabled = false;
+            if (enhanceCheckboxEl) enhanceCheckboxEl.disabled = false;
             renderBtn.innerHTML = '<i class="fa-solid fa-wand-magic-sparkles"></i> Render Again';
         }, 500);
     }
@@ -1063,6 +1081,7 @@ document.addEventListener('DOMContentLoaded', () => {
         renderBtn.disabled = true;
         batchRenderBtn.disabled = true;
         if (qualitySelect) qualitySelect.disabled = true;
+        if (enhanceCheckboxEl) enhanceCheckboxEl.disabled = true;
         
         renderProgressBox.style.display = 'block';
         renderSuccessBox.style.display = 'none';
@@ -1187,6 +1206,7 @@ document.addEventListener('DOMContentLoaded', () => {
             renderBtn.disabled = false;
             batchRenderBtn.disabled = false;
             if (qualitySelect) qualitySelect.disabled = false;
+            if (enhanceCheckboxEl) enhanceCheckboxEl.disabled = false;
             renderBtn.innerHTML = '<i class="fa-solid fa-wand-magic-sparkles"></i> Render & Export Video';
             
             if (exportCancelled) {

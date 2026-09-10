@@ -320,6 +320,7 @@ wss.on('connection', (ws) => {
     let frameCount = 0;
     let totalFrames = 0;
     let expectedFilename = 'output.mp4';
+    let enhanceQuality = false;
     let mode = 'idle'; // idle, frames, audio
 
     ws.on('message', async (message, isBinary) => {
@@ -348,6 +349,7 @@ wss.on('connection', (ws) => {
                     frameCount = 0;
                     totalFrames = data.totalFrames;
                     expectedFilename = data.filename || 'output.mp4';
+                    enhanceQuality = !!data.enhanceQuality;
                     if (data.customThumbnailData) {
                         const imageData = data.customThumbnailData.replace(/^data:image\/[a-zA-Z+]+;base64,/, '');
                         fs.writeFileSync(path.join(tempDir, 'custom-thumbnail.jpg'), Buffer.from(imageData, 'base64'));
@@ -377,7 +379,7 @@ wss.on('connection', (ws) => {
                     mode = 'idle';
                     const diskFrames = fs.existsSync(tempDir) ? fs.readdirSync(tempDir).filter(f => f.startsWith('frame_')).length : frameCount;
                     const finalFrameCount = Math.max(diskFrames, frameCount, totalFrames || 0);
-                    compileVideo(ws, tempDir, expectedFilename, finalFrameCount);
+                    compileVideo(ws, tempDir, expectedFilename, finalFrameCount, enhanceQuality);
                 }
             } else {
                 // Handle binary payloads
@@ -428,7 +430,7 @@ function cleanupDir(dirPath) {
     }
 }
 
-function compileVideo(ws, tempDir, filename, totalFrames) {
+function compileVideo(ws, tempDir, filename, totalFrames, enhanceQuality = false) {
     const audioPath = path.join(tempDir, 'audio.wav');
     const customThumbnailPath = path.join(tempDir, 'custom-thumbnail.jpg');
     const finalOutputPath = path.join(OUTPUT_DIR, filename);
@@ -464,11 +466,15 @@ function compileVideo(ws, tempDir, filename, totalFrames) {
 
     const hasAudio = fs.existsSync(audioPath);
     const inputPattern = path.join(tempDir, 'frame_%05d.jpg').replace(/\\/g, '/');
+    const videoFilterChain = enhanceQuality
+        ? 'hqdn3d=1.5:1.5:4:4,scale=1920:-2:flags=lanczos,unsharp=5:5:0.8:5:5:0.4,scale=trunc(iw/16)*16:trunc(ih/16)*16,setsar=1'
+        : 'scale=trunc(iw/16)*16:trunc(ih/16)*16,setsar=1';
+
     let command = ffmpeg()
         .input(inputPattern)
         .inputOptions(['-framerate 30'])
         .fps(30)
-        .videoFilters('scale=trunc(iw/16)*16:trunc(ih/16)*16,setsar=1');
+        .videoFilters(videoFilterChain);
 
     if (hasAudio) {
         command = command.input(audioPath.replace(/\\/g, '/'));
@@ -477,12 +483,13 @@ function compileVideo(ws, tempDir, filename, totalFrames) {
     // Set output duration explicitly from actual frames so outro is never cut
     const duration = actualFrames / 30 + 0.05;
 
+    const encodeOptions = enhanceQuality
+        ? ['-c:v libx264', '-pix_fmt yuv420p', '-preset fast', '-crf 16']
+        : ['-c:v libx264', '-pix_fmt yuv420p', '-preset fast', '-crf 23'];
+
     command
         .outputOptions([
-            '-c:v libx264',
-            '-pix_fmt yuv420p',
-            '-preset fast',
-            '-crf 23',
+            ...encodeOptions,
             '-g 60',
             '-keyint_min 30',
             '-sc_threshold 0',
