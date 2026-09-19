@@ -27,6 +27,61 @@
     // keys, see editor.js's text-overlay-add-btn handler) so nothing is
     // missing that the render code expects.
     var LOWER_THIRD_PRESETS = {
+        'preset-creator-headline-underline': {
+            label: '🔥 Creator Headline + Growing Underline',
+            font: 'Hind Siliguri',
+            name: {
+                defaultText: 'কে বন্ধ করে দিল?',
+                fontSize: 44, color: '#ffffff', colorMode: 'solid',
+                boxStyle: 'none', boxColor: '#ef4444',
+                animStyle: 'spring-pop', x: 0.5, y: 0.82,
+                accentBar: true, accentBarEnabled: true,
+                accentBarColor: '#ef4444', accentBarHeight: 5, accentBarAnim: 'draw-left'
+            },
+            title: null
+        },
+        'preset-creator-pill-badge': {
+            label: '💊 Creator Pill Badge (পিল কলআউট ব্যাজ)',
+            font: 'Hind Siliguri',
+            name: {
+                defaultText: '016......',
+                fontSize: 32, color: '#ffffff', colorMode: 'solid',
+                boxStyle: 'pill', boxColor: '#dc2626',
+                animStyle: 'pill-unfold', x: 0.25, y: 0.48
+            },
+            title: null
+        },
+        'preset-creator-statement-card': {
+            label: '📢 Creator Statement Card (স্টেটমেন্ট কার্ড)',
+            font: 'Hind Siliguri',
+            isMultiBox: true,
+            box1: {
+                defaultText: '🔴 বিশেষ ঘোষণা / ব্রেকিং নিউজ',
+                fontSize: 22, color: '#fbbf24', colorMode: 'solid',
+                boxStyle: 'solid', boxColor: '#881337',
+                animStyle: 'badge-slide', x: 0.5, y: 0.74
+            },
+            box2: {
+                defaultText: 'এক কোম্পানি-এর মাল্টিপল ব্র্যান্ড\nঅপারেট করা আইনত সম্পূর্ণ বৈধ।',
+                fontSize: 26, color: '#ffffff', colorMode: 'solid',
+                boxStyle: 'solid', boxColor: '#4c0519',
+                animStyle: 'spring-pop', x: 0.5, y: 0.85,
+                accentBar: true, accentBarEnabled: true,
+                accentBarColor: '#ef4444', accentBarHeight: 4, accentBarAnim: 'draw-left'
+            }
+        },
+        'preset-creator-tag-bounce': {
+            label: '🏷️ Creator Brand Tag (ব্র্যান্ড / লোগো স্প্রিং)',
+            font: 'Hind Siliguri',
+            name: {
+                defaultText: '🔴 Airtel 2026',
+                fontSize: 30, color: '#ffffff', colorMode: 'solid',
+                boxStyle: 'gradient', boxColor: '#dc2626',
+                gradientColor1: '#dc2626', gradientColor2: '#991b1b', gradientDirection: 'horizontal',
+                animStyle: 'elastic-bounce', x: 0.20, y: 0.16
+            },
+            title: null
+        },
         'preset-lt-news-split': {
             label: 'News Split Ticker',
             font: 'Hind Siliguri',
@@ -128,6 +183,13 @@
             boxStyle: line.boxStyle || 'none',
             boxColor: line.boxColor || '#4f46e5',
             animStyle: line.animStyle || 'none',
+            textAnimStyle: line.animStyle || 'none',
+            boxAnimStyle: line.animStyle || 'none',
+            accentBar: !!line.accentBar,
+            accentBarEnabled: !!line.accentBarEnabled,
+            accentBarColor: line.accentBarColor || '#ef4444',
+            accentBarHeight: line.accentBarHeight || 5,
+            accentBarAnim: line.accentBarAnim || 'draw-left',
             animSpeedSec: 0.5,
             curve: 0,
             curvePoints: [],
@@ -160,17 +222,33 @@
         var createdIds = [];
 
         if (preset.isMultiBox) {
-            var b1Text = nameText || preset.box1.defaultText;
-            var b2Text = titleText || preset.box2.defaultText;
-            var b3Text = preset.box3.defaultText;
+            var b1Text = nameText || (preset.box1 && preset.box1.defaultText) || '';
+            var b2Text = titleText || (preset.box2 && preset.box2.defaultText) || '';
+            var b3Text = (preset.box3 && preset.box3.defaultText) || '';
 
-            var item1 = buildOverlayItem(b1Text, preset.box1, preset.font, 1, startSec, endSec);
-            var item2 = buildOverlayItem(b2Text, preset.box2, preset.font, 2, startSec, endSec);
-            var item3 = buildOverlayItem(b3Text, preset.box3, preset.font, 3, startSec, endSec);
-
-            state.textOverlays.push(item1, item2, item3);
-            createdIds.push(item1.id, item2.id, item3.id);
+            if (preset.box1 && b1Text) {
+                var item1 = buildOverlayItem(b1Text, preset.box1, preset.font, 1, startSec, endSec);
+                state.textOverlays.push(item1);
+                createdIds.push(item1.id);
+            }
+            if (preset.box2 && b2Text) {
+                var item2 = buildOverlayItem(b2Text, preset.box2, preset.font, 2, startSec, endSec);
+                state.textOverlays.push(item2);
+                createdIds.push(item2.id);
+            }
+            if (preset.box3 && b3Text) {
+                var item3 = buildOverlayItem(b3Text, preset.box3, preset.font, 3, startSec, endSec);
+                state.textOverlays.push(item3);
+                createdIds.push(item3.id);
+            }
         } else {
+            if (!nameText && preset.name && preset.name.defaultText) {
+                nameText = preset.name.defaultText;
+            }
+            if (!titleText && preset.title && preset.title.defaultText) {
+                titleText = preset.title.defaultText;
+            }
+
             if (!nameText && !titleText) {
                 if (presetKey === 'preset-lt-top-badge') {
                     nameText = '🎓 আপনার সফল ক্যারিয়ার!';

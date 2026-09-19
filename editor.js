@@ -4110,6 +4110,21 @@ document.addEventListener('DOMContentLoaded', () => {
         return 1 + c3 * Math.pow(x - 1, 3) + c1 * Math.pow(x - 1, 2);
     }
 
+    // High-impact spring elastic overshoot for Creator/YouTube overlays
+    function easeOutElasticSpring(x) {
+        if (x <= 0) return 0;
+        if (x >= 1) return 1;
+        const c4 = (2 * Math.PI) / 3;
+        return Math.pow(2, -10 * x) * Math.sin((x * 10 - 0.75) * c4) + 1;
+    }
+
+    // Snappy spring overshoot for badges and callouts
+    function easeOutSnappySpring(x) {
+        const c1 = 2.4;
+        const c3 = c1 + 1;
+        return 1 + c3 * Math.pow(x - 1, 3) + c1 * Math.pow(x - 1, 2);
+    }
+
     // --- Text Overlay v2: box styles, entry/exit animation, curved text ---
     function easeOutCubicTO(p) { return 1 - Math.pow(1 - Math.max(0, Math.min(1, p)), 3); }
 
@@ -4346,6 +4361,36 @@ document.addEventListener('DOMContentLoaded', () => {
                 result.alpha  = Math.min(1, eased * 1.8);
                 break;
             }
+            // ============================================================
+            // NEW — Creator & Dynamic Motion styles (Inspired by abc.mp4)
+            // ============================================================
+            case 'spring-pop': {
+                const sp = easeOutSnappySpring(p);
+                result.scale = Math.max(0.01, sp);
+                result.alpha = Math.max(0.05, eased);
+                break;
+            }
+            case 'elastic-bounce': {
+                const el = easeOutElasticSpring(p);
+                result.scale = Math.max(0.01, el);
+                result.rot = (1 - eased) * 0.08 * (p < 0.5 ? 1 : -1);
+                result.alpha = Math.max(0.05, eased);
+                break;
+            }
+            case 'pill-unfold': {
+                const sp = easeOutSnappySpring(p);
+                result.scaleX = Math.max(0.01, sp);
+                result.scaleY = 0.8 + 0.2 * eased;
+                result.alpha = Math.max(0.05, eased);
+                break;
+            }
+            case 'badge-slide': {
+                const sp = easeOutSnappySpring(p);
+                result.offX = -(1 - sp) * refSize * 2.2;
+                result.scale = 0.9 + 0.1 * sp;
+                result.alpha = Math.max(0.05, eased);
+                break;
+            }
             default:
                 break;
         }
@@ -4470,6 +4515,116 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
+    // Draws an authentic curved paint brush banner following the text arc
+    function drawCurvedBrushStroke(ctx, color, w, h, curveAmount) {
+        const strokeCol = color || '#e11d48';
+        const strength = Math.min(1, Math.abs(curveAmount) / 100);
+        if (strength <= 0.001) {
+            drawAuthenticPaintBrushBanner(ctx, strokeCol, w, h);
+            return;
+        }
+        const arcUp = curveAmount > 0;
+        const totalAngle = strength * 2.3;
+        const innerW = Math.max(20, w * 0.92);
+        const radius = innerW / totalAngle;
+        const halfH = Math.max(10, (h * 0.44));
+
+        const centerY = arcUp ? radius : -radius;
+        const rTop = arcUp ? (radius + halfH) : (radius - halfH);
+        const rBottom = arcUp ? (radius - halfH) : (radius + halfH);
+        const startA = arcUp ? (-Math.PI / 2 - totalAngle * 0.52) : (Math.PI / 2 - totalAngle * 0.52);
+        const endA = arcUp ? (-Math.PI / 2 + totalAngle * 0.52) : (Math.PI / 2 + totalAngle * 0.52);
+
+        ctx.save();
+
+        function makeLCG(seed) {
+            let s = seed >>> 0;
+            return function() {
+                s = (Math.imul(s, 1664525) + 1013904223) >>> 0;
+                return s / 4294967296;
+            };
+        }
+        const rnd = makeLCG(0x4a71b2);
+
+        const darkTone = shadeColorTO(strokeCol, -18);
+        const lightTone = shadeColorTO(strokeCol, 22);
+
+        // 1. Soft Drop Shadow
+        ctx.shadowColor = 'rgba(0, 0, 0, 0.40)';
+        ctx.shadowBlur = 8;
+        ctx.shadowOffsetY = 3;
+
+        // 2. Build jagged outer and inner curved edges
+        const numSteps = Math.max(24, Math.round(innerW / 7));
+        const outerPts = [];
+        const innerPts = [];
+
+        for (let i = 0; i <= numSteps; i++) {
+            const frac = i / numSteps;
+            const ang = startA + frac * (endA - startA);
+            const jitterOut = (rnd() - 0.5) * Math.min(3, halfH * 0.12);
+            const jitterIn = (rnd() - 0.5) * Math.min(3, halfH * 0.12);
+            const ro = Math.max(1, rTop + jitterOut);
+            const ri = Math.max(1, rBottom + jitterIn);
+
+            outerPts.push([Math.cos(ang) * ro, centerY + Math.sin(ang) * ro]);
+            innerPts.push([Math.cos(ang) * ri, centerY + Math.sin(ang) * ri]);
+        }
+
+        ctx.fillStyle = strokeCol;
+        ctx.beginPath();
+        ctx.moveTo(outerPts[0][0], outerPts[0][1]);
+        for (let i = 1; i < outerPts.length; i++) ctx.lineTo(outerPts[i][0], outerPts[i][1]);
+        for (let i = innerPts.length - 1; i >= 0; i--) ctx.lineTo(innerPts[i][0], innerPts[i][1]);
+        ctx.closePath();
+        ctx.fill();
+
+        ctx.shadowBlur = 0;
+        ctx.shadowOffsetY = 0;
+
+        // 3. Concentric Arc Bristle Striations along the curve
+        const numStreaks = 8;
+        const streakRnd = makeLCG(0xb7e419);
+        for (let s = 0; s < numStreaks; s++) {
+            const frac = s / (numStreaks - 1);
+            const rMid = rBottom + frac * (rTop - rBottom);
+            const sStart = startA + streakRnd() * 0.08;
+            const sEnd = endA - streakRnd() * 0.08;
+            const isHighlight = s % 3 === 0;
+
+            ctx.strokeStyle = isHighlight ? lightTone : darkTone;
+            ctx.globalAlpha = isHighlight ? 0.35 : 0.22;
+            ctx.lineWidth = 1.5 + streakRnd() * 2;
+            ctx.lineCap = 'round';
+            ctx.beginPath();
+            ctx.arc(0, centerY, Math.max(1, rMid), sStart, sEnd, false);
+            ctx.stroke();
+        }
+
+        // 4. Subtle bristles at the two ends (start and end) staying close
+        const numEndBristles = 8;
+        for (let b = 0; b < numEndBristles; b++) {
+            const frac = b / (numEndBristles - 1);
+            const rB = rBottom + frac * (rTop - rBottom);
+            const extAngle = (rnd() - 0.5) * 0.03;
+
+            // Start end
+            ctx.strokeStyle = rnd() > 0.5 ? darkTone : strokeCol;
+            ctx.lineWidth = 1.5 + rnd() * 2;
+            ctx.globalAlpha = 0.8;
+            ctx.beginPath();
+            ctx.arc(0, centerY, rB, startA - extAngle, startA + 0.02, false);
+            ctx.stroke();
+
+            // End end
+            ctx.beginPath();
+            ctx.arc(0, centerY, rB, endA - 0.02, endA + extAngle, false);
+            ctx.stroke();
+        }
+
+        ctx.restore();
+    }
+
     function drawTextOverlayBox(ctx, style, color, w, h, currentTime, curveAmount, splitOrientation, glassColor) {
         if (!style || style === 'none') return;
         const x = -w / 2, y = -h / 2;
@@ -4510,17 +4665,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     break;
                 case 'brush-stroke':
                 case 'brush-glow':
-                    if (style === 'brush-glow') {
-                        ctx.shadowColor = color || '#10b981';
-                        ctx.shadowBlur = Math.max(16, h * 0.45);
-                    }
-                    ctx.fillStyle = color || '#10b981';
-                    drawCurvedBoxPath(ctx, w * 1.08, h * 1.15, curveAmount);
-                    ctx.fill();
-                    ctx.fillStyle = shadeColorTO(color || '#10b981', 25);
-                    ctx.globalAlpha *= 0.65;
-                    drawCurvedBoxPath(ctx, w * 0.9, h * 0.6, curveAmount);
-                    ctx.fill();
+                    drawCurvedBrushStroke(ctx, color, w, h, curveAmount);
                     break;
                 case 'paint-splash':
                     ctx.fillStyle = color || '#3b82f6';
@@ -5122,62 +5267,122 @@ document.addEventListener('DOMContentLoaded', () => {
                 ctx.restore();
                 break;
             }
-            // ── Artistic Paint Brush & Glow (2nd Screenshot Style) ──────────────
+            // ── Real Authentic Paint Brush Banner (Hugging text border closely) ──
             case 'brush-stroke':
             case 'brush-glow': {
-                const isGlow = (style === 'brush-glow');
+                const strokeCol = color || '#e11d48';
                 ctx.save();
-                if (isGlow) {
-                    ctx.shadowColor = color || '#10b981';
-                    ctx.shadowBlur = Math.max(16, h * 0.45);
-                }
-                const strokeCol = color || '#10b981';
-                // 1. Soft atmospheric base
-                ctx.fillStyle = hexToRgba(strokeCol, 0.4);
-                ctx.beginPath();
-                ctx.ellipse(0, 0, w * 0.52, h * 0.46, -0.02, 0, Math.PI * 2);
-                ctx.fill();
 
-                // 2. Primary organic acrylic brush sweep
-                const leftTip = x - w * 0.05;
-                const rightTip = x + w + w * 0.05;
-                const midY = y + h / 2;
+                function makeLCG(seed) {
+                    let s = seed >>> 0;
+                    return function() {
+                        s = (Math.imul(s, 1664525) + 1013904223) >>> 0;
+                        return s / 4294967296;
+                    };
+                }
+
+                const rnd = makeLCG(0x4a71b2);
+
+                // Body bounds tightly aligned with text border
+                const bodyW = Math.max(w * 0.98, 40);
+                const bodyH = Math.max(h * 0.94, 20);
+                const halfW = bodyW / 2;
+                const halfH = bodyH / 2;
+
+                const darkTone = shadeColorTO(strokeCol, -18);
+                const lightTone = shadeColorTO(strokeCol, 22);
+
+                // 1. Soft Drop Shadow
+                ctx.shadowColor = 'rgba(0, 0, 0, 0.40)';
+                ctx.shadowBlur = 8;
+                ctx.shadowOffsetY = 3;
+
+                // 2. Main Solid Paint Body with subtle jagged bristle edges
+                const numEdgeSteps = Math.max(20, Math.round(bodyW / 7));
+                const topPoints = [];
+                for (let i = 0; i <= numEdgeSteps; i++) {
+                    const frac = i / numEdgeSteps;
+                    const px = -halfW + frac * bodyW;
+                    const jitter = (rnd() - 0.5) * Math.min(3, bodyH * 0.10);
+                    topPoints.push([px, -halfH + jitter]);
+                }
+
+                const botPoints = [];
+                for (let i = numEdgeSteps; i >= 0; i--) {
+                    const frac = i / numEdgeSteps;
+                    const px = -halfW + frac * bodyW;
+                    const jitter = (rnd() - 0.5) * Math.min(3, bodyH * 0.10);
+                    botPoints.push([px, halfH + jitter]);
+                }
+
                 ctx.fillStyle = strokeCol;
                 ctx.beginPath();
-                ctx.moveTo(leftTip + 12, midY - h * 0.38);
-                ctx.bezierCurveTo(x + w * 0.2, y - 4, x + w * 0.7, y - 2, rightTip - 8, midY - h * 0.42);
-                ctx.lineTo(rightTip, midY - h * 0.15);
-                ctx.lineTo(rightTip + 6, midY + h * 0.05);
-                ctx.lineTo(rightTip - 4, midY + h * 0.25);
-                ctx.lineTo(rightTip - 14, midY + h * 0.44);
-                ctx.bezierCurveTo(x + w * 0.75, y + h + 4, x + w * 0.25, y + h + 2, leftTip + 18, midY + h * 0.42);
-                ctx.lineTo(leftTip + 4, midY + h * 0.2);
-                ctx.lineTo(leftTip, midY - h * 0.05);
-                ctx.lineTo(leftTip + 6, midY - h * 0.25);
+                ctx.moveTo(topPoints[0][0], topPoints[0][1]);
+                for (let i = 1; i < topPoints.length; i++) ctx.lineTo(topPoints[i][0], topPoints[i][1]);
+                for (let i = 0; i < botPoints.length; i++) ctx.lineTo(botPoints[i][0], botPoints[i][1]);
                 ctx.closePath();
                 ctx.fill();
 
-                // 3. Layered secondary bristle streaks
-                ctx.fillStyle = shadeColorTO(strokeCol, 22);
-                ctx.globalAlpha *= 0.65;
-                ctx.beginPath();
-                ctx.moveTo(leftTip + 20, midY - h * 0.22);
-                ctx.bezierCurveTo(x + w * 0.3, midY - h * 0.28, x + w * 0.8, midY - h * 0.18, rightTip - 18, midY - h * 0.26);
-                ctx.lineTo(rightTip - 22, midY - h * 0.12);
-                ctx.bezierCurveTo(x + w * 0.7, midY - h * 0.15, x + w * 0.3, midY - h * 0.12, leftTip + 26, midY - h * 0.08);
-                ctx.closePath();
-                ctx.fill();
+                ctx.shadowBlur = 0;
+                ctx.shadowOffsetY = 0;
 
-                // 4. Bristle dry strokes along edge
-                ctx.strokeStyle = strokeCol;
-                ctx.lineWidth = Math.max(2, h * 0.04);
-                ctx.lineCap = 'round';
-                ctx.beginPath();
-                ctx.moveTo(leftTip - 2, midY + h * 0.08);
-                ctx.lineTo(leftTip + 24, midY + h * 0.12);
-                ctx.moveTo(rightTip - 20, midY - h * 0.3);
-                ctx.lineTo(rightTip + 8, midY - h * 0.24);
-                ctx.stroke();
+                // 3. Bristles at Left & Right Ends (Finishing right at the text edge, not extending far out)
+                const numBristles = Math.max(18, Math.round(bodyH * 0.85));
+                const bristleRnd = makeLCG(0x8f23c1);
+                const bristleTones = [strokeCol, strokeCol, darkTone, lightTone];
+
+                for (let i = 0; i < numBristles; i++) {
+                    const frac = i / (numBristles - 1);
+                    const py = -halfH + frac * bodyH + (bristleRnd() - 0.5) * 2;
+                    const tone = bristleTones[i % bristleTones.length];
+                    const thickness = 1.5 + bristleRnd() * 2.5;
+
+                    // Left bristles extend only 4-10px beyond body edge
+                    const leftExtension = 3 + bristleRnd() * 6;
+                    const leftStartX = -halfW - leftExtension;
+                    const leftEndX = -halfW + 4 + bristleRnd() * 8;
+
+                    ctx.strokeStyle = tone;
+                    ctx.lineWidth = thickness;
+                    ctx.lineCap = 'round';
+                    ctx.globalAlpha = 0.85 + bristleRnd() * 0.15;
+                    ctx.beginPath();
+                    ctx.moveTo(leftStartX, py + (bristleRnd() - 0.5) * 1.5);
+                    ctx.lineTo(leftEndX, py);
+                    ctx.stroke();
+
+                    // Right bristles extend only 4-10px beyond body edge
+                    const rightExtension = 3 + bristleRnd() * 6;
+                    const rightStartX = halfW - 4 - bristleRnd() * 8;
+                    const rightEndX = halfW + rightExtension;
+
+                    ctx.strokeStyle = tone;
+                    ctx.lineWidth = thickness;
+                    ctx.beginPath();
+                    ctx.moveTo(rightStartX, py);
+                    ctx.lineTo(rightEndX, py + (bristleRnd() - 0.5) * 1.5);
+                    ctx.stroke();
+                }
+
+                // 4. Dry-Brush Canvas Texture Striations Across The Body
+                const bodyStreakCount = Math.max(10, Math.round(bodyH * 0.45));
+                const streakRnd = makeLCG(0xb7e419);
+                for (let s = 0; s < bodyStreakCount; s++) {
+                    const frac = s / (bodyStreakCount - 1);
+                    const sy = -halfH * 0.85 + frac * (bodyH * 1.7);
+                    const sx1 = -halfW * 0.85 + streakRnd() * (bodyW * 0.2);
+                    const sx2 = halfW * 0.85 - streakRnd() * (bodyW * 0.2);
+                    const isHighlight = s % 3 === 0;
+
+                    ctx.strokeStyle = isHighlight ? lightTone : darkTone;
+                    ctx.globalAlpha = isHighlight ? 0.35 : 0.20;
+                    ctx.lineWidth = 1.5 + streakRnd() * 2;
+                    ctx.lineCap = 'round';
+                    ctx.beginPath();
+                    ctx.moveTo(sx1, sy);
+                    ctx.lineTo(sx2, sy);
+                    ctx.stroke();
+                }
 
                 ctx.restore();
                 break;
@@ -9797,25 +10002,10 @@ document.addEventListener('DOMContentLoaded', () => {
                 const extra3D_W = is3DText ? item.fontSize * 0.35 : 0;
                 const extra3D_H = is3DText ? item.fontSize * 0.35 : 0;
 
-                const boxPadX = Math.max(24, item.fontSize * 0.55 + extra3D_W);
-                const boxPadY = Math.max(14, item.fontSize * 0.38 + extra3D_H);
-                let calculatedBoxW = maxLineWidth + boxPadX * 2;
-                let calculatedBoxH = textLines.length * lineHeight + boxPadY * 2;
-
-                if (curveAmount) {
-                    const strength = Math.min(1, Math.abs(curveAmount) / 100);
-                    calculatedBoxH += item.fontSize * strength * 0.9;
-                    calculatedBoxW *= (1 + strength * 0.12);
-                }
-
-                // fixedBoxW/fixedBoxH: stored as canvas-relative fraction (0-1) in new projects,
-                // or as legacy absolute pixels (>1) in projects saved before this fix.
-                // De-normalize to canvas pixels for rendering.
-                const fixedW = item.fixedBoxW ? (item.fixedBoxW <= 1 ? item.fixedBoxW * canvasW : item.fixedBoxW) : 0;
-                const fixedH = item.fixedBoxH ? (item.fixedBoxH <= 1 ? item.fixedBoxH * canvasH : item.fixedBoxH) : 0;
-                // If text has grown beyond fixed box, auto-expand so text never sticks out
-                let boxW = Math.max(fixedW, calculatedBoxW);
-                let boxH = Math.max(fixedH, calculatedBoxH);
+                // Compute unified box metrics using getTextOverlayBox so hit testing, handles, and drawing 100% align
+                const boxMetrics = getTextOverlayBox(item);
+                let boxW = boxMetrics.w;
+                let boxH = boxMetrics.h;
 
                 // Unified Container Transform for Box + Text
                 const hasBox = !!(item.boxStyle && item.boxStyle !== 'none');
@@ -9845,7 +10035,10 @@ document.addEventListener('DOMContentLoaded', () => {
                     applyOverlayGlowPreset(state.ctx, item.glowPreset, currentTime);
                 }
                 if (hasBox) {
-                    drawTextOverlayBox(state.ctx, item.boxStyle, item.solidBoxColor || item.boxColor || '#4f46e5', boxW, boxH, currentTime, curveAmount, item.splitOrientation, item.glassBoxColor);
+                    const activeBoxColor = (item.boxStyle === 'glass-solid-split')
+                        ? (item.solidBoxColor || item.boxColor || '#0ea5e9')
+                        : (item.boxColor || item.solidBoxColor || '#4f46e5');
+                    drawTextOverlayBox(state.ctx, item.boxStyle, activeBoxColor, boxW, boxH, currentTime, curveAmount, item.splitOrientation, item.glassBoxColor);
                 }
 
                 state.ctx.font = buildTextOverlayFont(item, item.fontSize, fontFamily);
@@ -10284,8 +10477,9 @@ document.addEventListener('DOMContentLoaded', () => {
                     state.ctx.restore();
                 }
 
-                // Underline: draw a line below the rendered text
-                if (item.isUnderline && !isGlassSolidSplit) {
+                // Underline & Creator Accent Bar: draw a line below the rendered text
+                const hasAccentBar = !!(item.accentBar || item.accentBarEnabled);
+                if ((item.isUnderline || hasAccentBar) && !isGlassSolidSplit) {
                     state.ctx.save();
                     state.ctx.font = buildTextOverlayFont(item, item.fontSize, fontFamily);
                     state.ctx.textAlign = 'center';
@@ -10293,16 +10487,40 @@ document.addEventListener('DOMContentLoaded', () => {
                     const _ulLines = resolvedItemText.split('\n');
                     const _ulLH = item.fontSize * 1.25;
                     const _ulStartY = _ulLines.length <= 1 ? 0 : -((_ulLines.length - 1) * _ulLH) / 2;
-                    state.ctx.strokeStyle = item.color || '#ffffff';
-                    state.ctx.lineWidth = Math.max(1.5, item.fontSize * 0.065);
+
+                    // Animated draw progress from left to right during reveal/entrance
+                    let lineDrawP = 1;
+                    const inAnim = getTextOverlayAnimProgress({ animStyle: textAnimStyle, startSec: item.startSec, endSec: item.endSec, animLoop: item.textAnimLoop, animLoopSec: item.textAnimLoopSec }, currentTime, textAnimDur);
+                    if (inAnim.phase === 'in') {
+                        lineDrawP = Math.max(0, Math.min(1, easeOutCubicTO(inAnim.p * 1.25)));
+                    } else if (inAnim.phase === 'out') {
+                        lineDrawP = Math.max(0, Math.min(1, easeOutCubicTO(inAnim.p)));
+                    }
+
+                    const barColor = item.accentBarColor || (hasAccentBar ? (item.boxColor || '#ef4444') : (item.color || '#ffffff'));
+                    state.ctx.strokeStyle = barColor;
+                    state.ctx.fillStyle = barColor;
+                    const barHeight = item.accentBarHeight || (hasAccentBar ? Math.max(3.5, item.fontSize * 0.085) : Math.max(1.5, item.fontSize * 0.065));
+                    state.ctx.lineWidth = barHeight;
+                    state.ctx.lineCap = 'round';
+
                     _ulLines.forEach((ln, li) => {
-                        const lineWidth = state.ctx.measureText(ln).width;
+                        // For accent bar on multiline, draw under the last line; for normal underline, draw on each
+                        if (hasAccentBar && li !== _ulLines.length - 1) return;
+                        const measuredW = state.ctx.measureText(ln).width;
+                        const extraPad = hasAccentBar ? Math.max(12, item.fontSize * 0.35) : 0;
+                        const lineWidth = measuredW + extraPad;
                         const lineY = _ulStartY + li * _ulLH;
-                        const underlineY = lineY + item.fontSize * 0.62;
-                        state.ctx.beginPath();
-                        state.ctx.moveTo(-lineWidth / 2, underlineY);
-                        state.ctx.lineTo(lineWidth / 2, underlineY);
-                        state.ctx.stroke();
+                        const underlineY = lineY + item.fontSize * (hasAccentBar ? 0.72 : 0.62);
+                        const leftX = -lineWidth / 2;
+                        const targetX = leftX + lineWidth * lineDrawP;
+
+                        if (targetX > leftX) {
+                            state.ctx.beginPath();
+                            state.ctx.moveTo(leftX, underlineY);
+                            state.ctx.lineTo(targetX, underlineY);
+                            state.ctx.stroke();
+                        }
                     });
                     state.ctx.restore();
                 }
@@ -10315,13 +10533,22 @@ document.addEventListener('DOMContentLoaded', () => {
                     state.ctx.strokeRect(-boxW / 2, -boxH / 2, boxW, boxH);
                     state.ctx.setLineDash([]);
 
-                    // Resize handle (bottom-right corner)
-                    const cornerSize = 12;
-                    state.ctx.fillStyle = '#ffffff';
-                    state.ctx.fillRect(boxW / 2 - cornerSize / 2, boxH / 2 - cornerSize / 2, cornerSize, cornerSize);
-                    state.ctx.strokeStyle = '#4f46e5';
-                    state.ctx.lineWidth = 2;
-                    state.ctx.strokeRect(boxW / 2 - cornerSize / 2, boxH / 2 - cornerSize / 2, cornerSize, cornerSize);
+                    // 4 Corner Resize Handles (all 4 corners interactive)
+                    const cornerSize = 14;
+                    const halfCS = cornerSize / 2;
+                    const cornerPos = [
+                        [boxW / 2 - halfCS, boxH / 2 - halfCS],    // Bottom-Right
+                        [-boxW / 2 - halfCS, boxH / 2 - halfCS],   // Bottom-Left
+                        [boxW / 2 - halfCS, -boxH / 2 - halfCS],   // Top-Right
+                        [-boxW / 2 - halfCS, -boxH / 2 - halfCS]   // Top-Left
+                    ];
+                    cornerPos.forEach(([hx, hy]) => {
+                        state.ctx.fillStyle = '#ffffff';
+                        state.ctx.fillRect(hx, hy, cornerSize, cornerSize);
+                        state.ctx.strokeStyle = '#4f46e5';
+                        state.ctx.lineWidth = 2;
+                        state.ctx.strokeRect(hx, hy, cornerSize, cornerSize);
+                    });
 
                     // Rotate handle (circle above top-center with stem line)
                     const handleDist = Math.max(28, Math.min(canvasW, canvasH) * 0.05);
@@ -13468,8 +13695,10 @@ document.addEventListener('DOMContentLoaded', () => {
             if (wLine > maxW) maxW = wLine;
         });
 
-        const boxPadX = Math.max(16, item.fontSize * 0.45);
-        const boxPadY = Math.max(10, item.fontSize * 0.32);
+        const isBrush = item.boxStyle === 'brush-stroke' || item.boxStyle === 'brush-glow';
+        // Snug, natural padding so brush stroke hugs the text borders closely
+        const boxPadX = isBrush ? Math.max(14, item.fontSize * 0.36) : Math.max(16, item.fontSize * 0.45);
+        const boxPadY = isBrush ? Math.max(8, item.fontSize * 0.22) : Math.max(10, item.fontSize * 0.32);
         let calculatedW = maxW + boxPadX * 2;
         let calculatedH = lines.length * lineHeight + boxPadY * 2;
         if (isGlassSolidSplit && item.splitOrientation === 'vertical') {
@@ -13572,10 +13801,25 @@ document.addEventListener('DOMContentLoaded', () => {
         const box = getTextOverlayBox(item);
         const scale = Math.max(0.05, Number(item.scale) || 1);
         const angle = (item.rotation || 0) * Math.PI / 180;
-        const world = rotatePointAround(box.cx + (box.w / 2) * scale, box.cy + (box.h / 2) * scale, box.cx, box.cy, angle);
         const rect = state.canvas.getBoundingClientRect();
-        const radius = 16 * (state.canvas.width / rect.width);
-        return Math.hypot(coords.x - world.x, coords.y - world.y) < radius;
+        // Generous hit radius in canvas pixels
+        const radius = Math.max(24, 20 * (state.canvas.width / (rect.width || 1)));
+
+        // Test all 4 corners
+        const corners = [
+            { id: 'br', x: box.cx + (box.w / 2) * scale, y: box.cy + (box.h / 2) * scale },
+            { id: 'bl', x: box.cx - (box.w / 2) * scale, y: box.cy + (box.h / 2) * scale },
+            { id: 'tr', x: box.cx + (box.w / 2) * scale, y: box.cy - (box.h / 2) * scale },
+            { id: 'tl', x: box.cx - (box.w / 2) * scale, y: box.cy - (box.h / 2) * scale }
+        ];
+
+        for (const c of corners) {
+            const world = rotatePointAround(c.x, c.y, box.cx, box.cy, angle);
+            if (Math.hypot(coords.x - world.x, coords.y - world.y) <= radius) {
+                return c.id;
+            }
+        }
+        return false;
     }
 
     function findTextOverlayAt(coords) {
@@ -14427,6 +14671,18 @@ document.addEventListener('DOMContentLoaded', () => {
         if (state.shapeOverlays && state.shapeOverlays.length > 0 && findShapeOverlayAt(idleCoords)) {
             state.canvas.style.cursor = 'move';
             return;
+        }
+        // Hover cursor over Text Overlay handles vs body
+        if (state.currentStep === 3 && state.selectedTextOverlayId !== null) {
+            if (findTextOverlayRotateHandle(idleCoords)) {
+                state.canvas.style.cursor = 'crosshair';
+                return;
+            }
+            const corner = findTextOverlayResizeHandle(idleCoords);
+            if (corner) {
+                state.canvas.style.cursor = (corner === 'br' || corner === 'tl') ? 'nwse-resize' : 'nesw-resize';
+                return;
+            }
         }
         if (state.textOverlays && state.textOverlays.length > 0 && findTextOverlayAt(idleCoords)) {
             state.canvas.style.cursor = 'move';
@@ -15415,15 +15671,7 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    // 1-Click Design Presets (Red Outline, Paint Brush, Glossy Glaze 3D, Red Pill, Studio Bar)
-    const btnPresetRedOutline = document.getElementById('btn-preset-red-outline');
-    const btnPresetBrushStroke = document.getElementById('btn-preset-brush-stroke');
-    const btnPresetGlossyGlaze = document.getElementById('btn-preset-glossy-glaze');
-    const btnPresetRainbowPopart = document.getElementById('btn-preset-rainbow-popart');
-    const btnPresetRedPill = document.getElementById('btn-preset-red-pill');
-    const btnPresetStudioBar = document.getElementById('btn-preset-studio-bar');
-    const btnPresetGlassSolidSplit = document.getElementById('btn-preset-glass-solid-split');
-    const btnPresetGlassSolidVertical = document.getElementById('btn-preset-glass-solid-vertical');
+    // 1-Click Design Presets (now via dropdown — see dropdown logic below)
 
     function applyTextOverlayPreset(presetType) {
         const item = getSelectedTextOverlay();
@@ -15462,29 +15710,42 @@ document.addEventListener('DOMContentLoaded', () => {
             if (textOverlayShadowOffsetX) { textOverlayShadowOffsetX.value = 2; if (textOverlayShadowOffsetXVal) textOverlayShadowOffsetXVal.innerText = '2px'; }
             if (textOverlayShadowOffsetY) { textOverlayShadowOffsetY.value = 2; if (textOverlayShadowOffsetYVal) textOverlayShadowOffsetYVal.innerText = '2px'; }
             if (textOverlayShadowOpacity) { textOverlayShadowOpacity.value = 70; if (textOverlayShadowOpacityVal) textOverlayShadowOpacityVal.innerText = '70%'; }
-        } else if (presetType === 'brush-stroke') {
-            // 2nd Screenshot: Paint Brush Stroke Background + Text
+        } else if (presetType === 'brush-stroke' || presetType === 'brush-title-card') {
+            // Authentic Paint Brush Stroke (Screenshot 3: জরুরি নিয়োগ / কাতার স্টাইল)
+            const defaultBrushCol = '#e11d48';
             const fields = {
                 color: '#ffffff',
                 isBold: true,
-                strokeEnabled: false,
-                boxStyle: 'brush-glow',
-                boxColor: '#10b981',
+                extraThickness: 2,
+                strokeEnabled: true,
+                strokeColor: '#000000',
+                strokeWidth: 3,
+                boxStyle: 'brush-stroke',
+                boxColor: defaultBrushCol,
+                solidBoxColor: defaultBrushCol,
                 visualTemplate: 'standard',
                 shadowEnabled: true,
                 shadowColor: '#000000',
-                shadowOpacity: 50,
-                shadowBlur: 4,
-                shadowOffsetX: 1,
-                shadowOffsetY: 1
+                shadowOpacity: 65,
+                shadowBlur: 6,
+                shadowOffsetX: 2,
+                shadowOffsetY: 2
             };
             if (item) Object.assign(item, fields);
             if (textOverlayColorInput) { textOverlayColorInput.value = '#ffffff'; if (textOverlayColorVal) textOverlayColorVal.innerText = '#ffffff'; }
             if (textOverlayBoldBtn) textOverlayBoldBtn.classList.add('active');
-            if (textOverlayStrokeEnabled) textOverlayStrokeEnabled.checked = false;
-            if (textOverlayBoxSelect) textOverlayBoxSelect.value = 'brush-glow';
-            if (textOverlayBoxColorInput) { textOverlayBoxColorInput.value = '#10b981'; if (textOverlayBoxColorVal) textOverlayBoxColorVal.innerText = '#10b981'; }
+            if (textOverlayThicknessSlider) { textOverlayThicknessSlider.value = 2; if (textOverlayThicknessVal) textOverlayThicknessVal.innerText = '+2px (Extra Bold)'; }
+            if (textOverlayStrokeEnabled) textOverlayStrokeEnabled.checked = true;
+            if (textOverlayStrokeColor) { textOverlayStrokeColor.value = '#000000'; if (textOverlayStrokeColorVal) textOverlayStrokeColorVal.innerText = '#000000'; }
+            if (textOverlayStrokeWidth) { textOverlayStrokeWidth.value = 3; if (textOverlayStrokeWidthVal) textOverlayStrokeWidthVal.innerText = '3px'; }
+            if (textOverlayBoxSelect) textOverlayBoxSelect.value = 'brush-stroke';
+            if (textOverlayBoxColorInput) { textOverlayBoxColorInput.value = defaultBrushCol; if (textOverlayBoxColorVal) textOverlayBoxColorVal.innerText = defaultBrushCol; }
             if (textOverlayVisualTemplate) textOverlayVisualTemplate.value = 'standard';
+            if (textOverlayShadowEnabled) textOverlayShadowEnabled.checked = true;
+            if (textOverlayShadowColor) { textOverlayShadowColor.value = '#000000'; if (textOverlayShadowColorVal) textOverlayShadowColorVal.innerText = '#000000'; }
+            if (textOverlayShadowBlur) { textOverlayShadowBlur.value = 6; if (textOverlayShadowBlurVal) textOverlayShadowBlurVal.innerText = '6px'; }
+            if (textOverlayShadowOpacity) { textOverlayShadowOpacity.value = 65; if (textOverlayShadowOpacityVal) textOverlayShadowOpacityVal.innerText = '65%'; }
+            if (typeof refreshPresetBrushColorVisibility === 'function') refreshPresetBrushColorVisibility('brush-stroke');
         } else if (presetType === 'glossy-glaze') {
             // 3rd Screenshot: Eye-catching Ultra-Glossy 3D Glaze Text
             const fields = {
@@ -15643,6 +15904,41 @@ document.addEventListener('DOMContentLoaded', () => {
             if (textOverlayShadowOffsetX) { textOverlayShadowOffsetX.value = 0; if (textOverlayShadowOffsetXVal) textOverlayShadowOffsetXVal.innerText = '0px'; }
             if (textOverlayShadowOffsetY) { textOverlayShadowOffsetY.value = 3; if (textOverlayShadowOffsetYVal) textOverlayShadowOffsetYVal.innerText = '3px'; }
             if (textOverlayShadowOpacity) { textOverlayShadowOpacity.value = 55; if (textOverlayShadowOpacityVal) textOverlayShadowOpacityVal.innerText = '55%'; }
+        } else if (presetType === 'brush-title-card') {
+            // Brush Title Card: bold paint-brush background behind white text (India Visa style)
+            const fields = {
+                color: '#ffffff',
+                isBold: true,
+                extraThickness: 2,
+                strokeEnabled: true,
+                strokeColor: '#000000',
+                strokeWidth: 3,
+                boxStyle: 'brush-stroke',
+                boxColor: '#e11d48',
+                visualTemplate: 'standard',
+                shadowEnabled: true,
+                shadowColor: '#000000',
+                shadowOpacity: 60,
+                shadowBlur: 8,
+                shadowOffsetX: 1,
+                shadowOffsetY: 2
+            };
+            if (item) Object.assign(item, fields);
+            if (textOverlayColorInput) { textOverlayColorInput.value = '#ffffff'; if (textOverlayColorVal) textOverlayColorVal.innerText = '#ffffff'; }
+            if (textOverlayBoldBtn) textOverlayBoldBtn.classList.add('active');
+            if (textOverlayThicknessSlider) { textOverlayThicknessSlider.value = 2; if (textOverlayThicknessVal) textOverlayThicknessVal.innerText = '+2px (Extra Bold)'; }
+            if (textOverlayStrokeEnabled) textOverlayStrokeEnabled.checked = true;
+            if (textOverlayStrokeColor) { textOverlayStrokeColor.value = '#000000'; if (textOverlayStrokeColorVal) textOverlayStrokeColorVal.innerText = '#000000'; }
+            if (textOverlayStrokeWidth) { textOverlayStrokeWidth.value = 3; if (textOverlayStrokeWidthVal) textOverlayStrokeWidthVal.innerText = '3px'; }
+            if (textOverlayBoxSelect) textOverlayBoxSelect.value = 'brush-stroke';
+            if (textOverlayBoxColorInput) { textOverlayBoxColorInput.value = '#e11d48'; if (textOverlayBoxColorVal) textOverlayBoxColorVal.innerText = '#e11d48'; }
+            if (textOverlayVisualTemplate) textOverlayVisualTemplate.value = 'standard';
+            if (textOverlayShadowEnabled) textOverlayShadowEnabled.checked = true;
+            if (textOverlayShadowColor) { textOverlayShadowColor.value = '#000000'; if (textOverlayShadowColorVal) textOverlayShadowColorVal.innerText = '#000000'; }
+            if (textOverlayShadowBlur) { textOverlayShadowBlur.value = 8; if (textOverlayShadowBlurVal) textOverlayShadowBlurVal.innerText = '8px'; }
+            if (textOverlayShadowOffsetX) { textOverlayShadowOffsetX.value = 1; if (textOverlayShadowOffsetXVal) textOverlayShadowOffsetXVal.innerText = '1px'; }
+            if (textOverlayShadowOffsetY) { textOverlayShadowOffsetY.value = 2; if (textOverlayShadowOffsetYVal) textOverlayShadowOffsetYVal.innerText = '2px'; }
+            if (textOverlayShadowOpacity) { textOverlayShadowOpacity.value = 60; if (textOverlayShadowOpacityVal) textOverlayShadowOpacityVal.innerText = '60%'; }
         } else if (presetType === 'glass-solid-vertical') {
             applyTextOverlayPreset('glass-solid-split');
             if (item) item.splitOrientation = 'vertical';
@@ -15659,14 +15955,144 @@ document.addEventListener('DOMContentLoaded', () => {
         if (window.triggerAutoSave) window.triggerAutoSave();
     }
 
-    if (btnPresetRedOutline) btnPresetRedOutline.addEventListener('click', () => applyTextOverlayPreset('red-outline'));
-    if (btnPresetBrushStroke) btnPresetBrushStroke.addEventListener('click', () => applyTextOverlayPreset('brush-stroke'));
-    if (btnPresetGlossyGlaze) btnPresetGlossyGlaze.addEventListener('click', () => applyTextOverlayPreset('glossy-glaze'));
-    if (btnPresetRainbowPopart) btnPresetRainbowPopart.addEventListener('click', () => applyTextOverlayPreset('rainbow-popart'));
-    if (btnPresetRedPill) btnPresetRedPill.addEventListener('click', () => applyTextOverlayPreset('red-pill'));
-    if (btnPresetStudioBar) btnPresetStudioBar.addEventListener('click', () => applyTextOverlayPreset('studio-bar'));
-    if (btnPresetGlassSolidSplit) btnPresetGlassSolidSplit.addEventListener('click', () => applyTextOverlayPreset('glass-solid-split'));
-    if (btnPresetGlassSolidVertical) btnPresetGlassSolidVertical.addEventListener('click', () => applyTextOverlayPreset('glass-solid-vertical'));
+    // ── Preset Dropdown Logic ────────────────────────────────────────────
+    const presetDropdownTrigger = document.getElementById('btn-preset-dropdown-trigger');
+    const presetDropdownMenu    = document.getElementById('preset-dropdown-menu');
+    const presetChevronIcon     = document.getElementById('preset-chevron-icon');
+    const presetTriggerLabel    = document.getElementById('preset-trigger-label');
+
+    const PRESET_LABELS = {
+        'red-outline':        { icon: '🎨', label: 'Red Outline' },
+        'brush-stroke':       { icon: '🖌️', label: 'Paint Brush Banner' },
+        'brush-title-card':   { icon: '🖌️', label: 'Paint Brush Banner' },
+        'glossy-glaze':       { icon: '✨', label: 'Glossy Glaze 3D' },
+        'rainbow-popart':     { icon: '3D', label: 'Rainbow Pop 3D' },
+        'red-pill':           { icon: '💊', label: 'Red Pill Badge' },
+        'studio-bar':         { icon: '📺', label: 'Glossy Studio Bar' },
+        'glass-solid-split':  { icon: '◐',  label: 'Glass + Solid Split' },
+        'glass-solid-vertical':{ icon: '↕', label: 'Glass + Solid Vertical' }
+    };
+
+    function openPresetDropdown() {
+        if (!presetDropdownMenu) return;
+        presetDropdownMenu.style.display = 'block';
+        if (presetDropdownTrigger) presetDropdownTrigger.classList.add('open');
+    }
+    function closePresetDropdown() {
+        if (!presetDropdownMenu) return;
+        presetDropdownMenu.style.display = 'none';
+        if (presetDropdownTrigger) presetDropdownTrigger.classList.remove('open');
+    }
+
+    if (presetDropdownTrigger) {
+        presetDropdownTrigger.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const isOpen = presetDropdownMenu && presetDropdownMenu.style.display !== 'none';
+            isOpen ? closePresetDropdown() : openPresetDropdown();
+        });
+    }
+
+    // Brush presets that use box color as the brush stroke color
+    const BRUSH_PRESETS = new Set(['brush-stroke', 'brush-glow', 'brush-title-card', 'paint-brush']);
+
+    function refreshPresetBrushColorVisibility(preset) {
+        const brushColorGroup = document.getElementById('preset-brush-color-group');
+        if (!brushColorGroup) return;
+        const isBrush = BRUSH_PRESETS.has(preset);
+        brushColorGroup.style.display = isBrush ? 'block' : 'none';
+        // Sync the brush color picker with the current box color
+        if (isBrush) {
+            const brushColorInput = document.getElementById('preset-brush-color-input');
+            const brushColorVal   = document.getElementById('preset-brush-color-val');
+            const item = getSelectedTextOverlay ? getSelectedTextOverlay() : null;
+            const currentBoxColor = (item && (item.boxColor || item.solidBoxColor)) ? (item.boxColor || item.solidBoxColor) : '#e11d48';
+            if (brushColorInput) brushColorInput.value = currentBoxColor;
+            if (brushColorVal)   brushColorVal.innerText = currentBoxColor;
+        }
+    }
+
+    if (presetDropdownMenu) {
+        presetDropdownMenu.querySelectorAll('.preset-dropdown-item').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                const preset = btn.getAttribute('data-preset');
+                if (!preset) return;
+                // Update trigger label
+                if (presetTriggerLabel && PRESET_LABELS[preset]) {
+                    presetTriggerLabel.innerHTML =
+                        `<i class="fa-solid fa-check" style="color:#4ade80;margin-right:4px;"></i> ${PRESET_LABELS[preset].label}`;
+                }
+                // Mark active item
+                presetDropdownMenu.querySelectorAll('.preset-dropdown-item').forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+                closePresetDropdown();
+                applyTextOverlayPreset(preset);
+                // Show/hide brush color picker based on preset type
+                refreshPresetBrushColorVisibility(preset);
+            });
+        });
+    }
+
+    // Brush color picker — live update brush stroke color
+    {
+        const brushColorInput = document.getElementById('preset-brush-color-input');
+        const brushColorVal   = document.getElementById('preset-brush-color-val');
+        if (brushColorInput) {
+            brushColorInput.addEventListener('input', (e) => {
+                const newColor = e.target.value;
+                if (brushColorVal) brushColorVal.innerText = newColor;
+                const item = getSelectedTextOverlay ? getSelectedTextOverlay() : null;
+                if (item) {
+                    item.boxColor = newColor;
+                    item.solidBoxColor = newColor;
+                    // Also keep the main box color picker in sync
+                    if (textOverlayBoxColorInput) { textOverlayBoxColorInput.value = newColor; }
+                    if (textOverlayBoxColorVal)   textOverlayBoxColorVal.innerText = newColor;
+                    drawFrame();
+                    if (window.triggerAutoSave) window.triggerAutoSave();
+                }
+            });
+        }
+    }
+
+
+    // Quick brush color swatches handler
+    document.querySelectorAll('.btn-brush-col-swatch').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            const color = btn.getAttribute('data-col');
+            const textColor = btn.getAttribute('data-text');
+            if (!color) return;
+
+            const item = getSelectedTextOverlay ? getSelectedTextOverlay() : null;
+            if (item) {
+                item.boxColor = color;
+                item.solidBoxColor = color;
+                if (textColor) item.color = textColor;
+                const brushColorInput = document.getElementById('preset-brush-color-input');
+                const brushColorVal   = document.getElementById('preset-brush-color-val');
+                if (brushColorInput) brushColorInput.value = color;
+                if (brushColorVal) brushColorVal.innerText = color;
+                if (textOverlayBoxColorInput) textOverlayBoxColorInput.value = color;
+                if (textOverlayBoxColorVal) textOverlayBoxColorVal.innerText = color;
+                if (textColor && textOverlayColorInput) {
+                    textOverlayColorInput.value = textColor;
+                    if (textOverlayColorVal) textOverlayColorVal.innerText = textColor;
+                }
+                drawFrame();
+                if (window.triggerAutoSave) window.triggerAutoSave();
+            }
+        });
+    });
+
+    // Close dropdown when clicking outside
+    document.addEventListener('click', (e) => {
+        if (presetDropdownMenu && presetDropdownMenu.style.display !== 'none') {
+            if (!presetDropdownTrigger.contains(e.target) && !presetDropdownMenu.contains(e.target)) {
+                closePresetDropdown();
+            }
+        }
+    });
 
     // Shadow / Glow controls (previously present in the DOM but never wired up)
     const textOverlayShadowEnabled = document.getElementById('text-overlay-shadow-enabled');
@@ -15705,11 +16131,35 @@ document.addEventListener('DOMContentLoaded', () => {
         return textOverlayIdCounter++;
     }
 
+    // Live bidirectional sync for main Text Content box at top
+    if (textOverlayInput) {
+        textOverlayInput.addEventListener('input', (e) => {
+            const item = getSelectedTextOverlay();
+            if (item) {
+                item.text = e.target.value;
+                if (textOverlayEditInput) textOverlayEditInput.value = e.target.value;
+                renderTextOverlayList();
+                drawFrame();
+                if (window.triggerAutoSave) window.triggerAutoSave();
+            }
+        });
+    }
+
+    // Quick Add Text Button right beside the main text box
+    const quickAddTextBtn = document.getElementById('quick-add-text-btn');
+    if (quickAddTextBtn) {
+        quickAddTextBtn.addEventListener('click', (e) => {
+            e.preventDefault();
+            if (addTextOverlayBtn) addTextOverlayBtn.click();
+        });
+    }
+
     if (textOverlayEditInput) {
         textOverlayEditInput.addEventListener('input', (e) => {
             const item = getSelectedTextOverlay();
             if (item) {
                 item.text = e.target.value;
+                if (textOverlayInput) textOverlayInput.value = e.target.value;
                 renderTextOverlayList();
                 drawFrame();
                 if (window.triggerAutoSave) window.triggerAutoSave();
@@ -15898,6 +16348,9 @@ document.addEventListener('DOMContentLoaded', () => {
     textOverlayBoxSelect.addEventListener('change', (e) => {
         refreshTextOverlayBoxColorVisibility();
         refreshTextOverlaySplitContentVisibility();
+        if (typeof refreshPresetBrushColorVisibility === 'function') {
+            refreshPresetBrushColorVisibility(e.target.value);
+        }
         const item = getSelectedTextOverlay();
         if (item) { item.boxStyle = e.target.value; drawFrame(); }
     });
@@ -16289,13 +16742,18 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function showTextOverlayTimingFor(id) {
         const item = state.textOverlays.find(t => t.id === id);
+        const activeBadge = document.getElementById('text-overlay-active-badge');
         if (!item) {
             textOverlayTimingContainer.style.display = 'none';
             if (textOverlayEditInput) textOverlayEditInput.value = '';
+            if (textOverlayInput) textOverlayInput.value = '';
+            if (activeBadge) activeBadge.style.display = 'none';
             return;
         }
         textOverlayTimingContainer.style.display = 'block';
         if (textOverlayEditInput) textOverlayEditInput.value = item.text || '';
+        if (textOverlayInput) textOverlayInput.value = item.text || '';
+        if (activeBadge) activeBadge.style.display = 'inline';
         textOverlayStartInput.value = item.startSec;
         textOverlayEndInput.value = item.endSec;
 
@@ -16319,6 +16777,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
         textOverlayBoxSelect.value = item.boxStyle || 'none';
         refreshTextOverlaySplitContentVisibility();
+        if (typeof refreshPresetBrushColorVisibility === 'function') {
+            refreshPresetBrushColorVisibility(item.boxStyle || 'none');
+        }
         if (textOverlayGlassTextInput) textOverlayGlassTextInput.value = item.glassText || item.text || '';
         if (textOverlaySolidTextInput) textOverlaySolidTextInput.value = item.solidText || '';
         if (textOverlayGlassTextColor) { textOverlayGlassTextColor.value = item.glassTextColor || '#1f2937'; if (textOverlayGlassTextColorVal) textOverlayGlassTextColorVal.innerText = textOverlayGlassTextColor.value; }

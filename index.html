@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
@@ -1889,9 +1889,17 @@
                                 <p class="help-text">টেক্সট লিখে "Add Text" চাপুন, তারপর প্রিভিউ স্ক্রিনে ড্র্যাগ করে এর অবস্থান ঠিক করুন।</p>
 
                                 <div class="control-group">
-                                    <label>Text Content</label>
-                                    <textarea id="text-overlay-input" class="form-input form-textarea" rows="3" maxlength="200" placeholder="যেমনঃ আজকের অফার মাত্র ৫০০ টাকা!&#10;(Enter চেপে একাধিক লাইনে ভাগ করতে পারবেন)"></textarea>
-                                    <p class="help-text">চাইলে ডায়নামিক টোকেন লিখতে পারেন — <code>{{date}}</code> (আজকের তারিখ), <code>{{time}}</code> (এখনকার সময়), <code>{{counter}}</code> (প্লে টাইম অনুযায়ী গোনা শুরু), বা <code>{{counter:100}}</code> (১০০ থেকে গোনা শুরু) — প্রিভিউ/এক্সপোর্টের সময় আসল মান বসে যাবে।</p>
+                                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">
+                                        <label style="margin:0; font-weight:600;">Text Content (টেক্সট লিখুন / পরিবর্তন করুন)</label>
+                                        <span id="text-overlay-active-badge" style="font-size:11px; color:#4ade80; display:none;">● লাইভ এডিটিং সক্রিয়</span>
+                                    </div>
+                                    <textarea id="text-overlay-input" class="form-input form-textarea" rows="2" maxlength="200" style="min-height:55px; font-size:14px; line-height:1.4;" placeholder="এখানে টেক্সট লিখুন (যেমন: জরুরি নিয়োগ বা কাতার)..."></textarea>
+                                    <div style="display:flex; gap:8px; margin-top:6px;">
+                                        <button type="button" id="quick-add-text-btn" class="btn btn-primary btn-sm" style="flex:1; padding:6px 12px; font-size:12px; font-weight:600;">
+                                            <i class="fa-solid fa-plus"></i> নতুন টেক্সট যোগ করুন (Add Text)
+                                        </button>
+                                    </div>
+                                    <p class="help-text mt-1" style="font-size:11px;">স্ক্রিনের টেক্সট সিলেক্ট করে এখানে লিখলেই সাথে সাথে পরিবর্তন হবে, অথবা লিখে 'নতুন টেক্সট যোগ করুন' চাপুন।</p>
                                 </div>
 
                                 <div class="control-group mt-3" id="text-overlay-split-content-group" style="display:none; border:1px solid rgba(14,165,233,.35); border-radius:8px; padding:10px; background:rgba(14,165,233,.06);">
@@ -1919,68 +1927,98 @@
                                     <p class="help-text mt-1">প্রথম ঘরের লেখা গ্লাস অংশে, দ্বিতীয় ঘরের লেখা নিচের সলিড অংশে যাবে।</p>
                                 </div>
 
-                                <!-- 1-Click Viral Text Style Presets (Trending Styles) -->
-                                <div class="control-group mt-3" id="text-overlay-presets-section">
-                                    <label style="display: flex; align-items: center; justify-content: space-between;">
-                                        <span><i class="fa-solid fa-wand-magic-sparkles" style="color: #f59e0b;"></i> 1-Click Design Presets (এক-ক্লিক ডিজাইন প্রিসেট)</span>
+                                <!-- 1-Click Design Presets — Dropdown -->
+                                <div class="control-group mt-3" id="text-overlay-presets-section" style="position:relative;">
+                                    <label>
+                                        <i class="fa-solid fa-wand-magic-sparkles" style="color: #f59e0b;"></i>
+                                        1-Click Design Presets (এক-ক্লিক ডিজাইন প্রিসেট)
                                     </label>
-                                    <div class="text-preset-chip-grid" style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; margin-top: 6px;">
-                                        <button type="button" class="btn-preset-chip" id="btn-preset-red-outline" title="হোয়াইট টেক্সট + গাঢ় রেড বর্ডার (১ম স্ক্রিনশট স্টাইল)">
-                                            <span class="preset-chip-badge" style="background:#ef4444; color:#fff; font-weight:900; border: 1.5px solid #fff;">T</span>
+                                    <button type="button" id="btn-preset-dropdown-trigger" class="btn-preset-dropdown-trigger">
+                                        <span id="preset-trigger-label"><i class="fa-solid fa-palette"></i> &nbsp;প্রিসেট বেছে নিন...</span>
+                                        <i class="fa-solid fa-chevron-down" id="preset-chevron-icon"></i>
+                                    </button>
+                                    <!-- Dropdown popup -->
+                                    <div id="preset-dropdown-menu" class="preset-dropdown-menu" style="display:none;">
+                                        <button type="button" class="preset-dropdown-item" data-preset="red-outline">
+                                            <span class="preset-chip-badge" style="background:#ef4444; color:#fff; font-weight:900; border:1.5px solid #fff;">T</span>
                                             <div class="preset-chip-info">
                                                 <strong>Red Outline</strong>
                                                 <small>হোয়াইট + লাল বর্ডার</small>
                                             </div>
                                         </button>
-                                        <button type="button" class="btn-preset-chip" id="btn-preset-brush-stroke" title="রংতুলি ব্রাশ ব্যাকগ্রাউন্ড + টেক্সট (২য় স্ক্রিনশট স্টাইল)">
-                                            <span class="preset-chip-badge" style="background:linear-gradient(135deg, #10b981, #059669); color:#fff;">🖌️</span>
+                                        <button type="button" class="preset-dropdown-item" data-preset="brush-stroke">
+                                            <span class="preset-chip-badge" style="background:linear-gradient(135deg,#e11d48,#b91c1c); color:#fff;">🖌️</span>
                                             <div class="preset-chip-info">
-                                                <strong>Paint Brush</strong>
-                                                <small>রংতুলি ব্রাশ ব্যাকগ্রাউন্ড</small>
+                                                <strong>Paint Brush Banner (রংতুলি ব্রাশ)</strong>
+                                                <small>আসল রংতুলির ব্রাশ ব্যানার (জরুরি নিয়োগ / কাতার স্টাইল)</small>
                                             </div>
                                         </button>
-                                        <button type="button" class="btn-preset-chip" id="btn-preset-glossy-glaze" title="চোখ ধাঁধানো গ্লসি ও ৩ডি গ্লেজ টেক্সট (৩য় স্ক্রিনশট স্টাইল)">
-                                            <span class="preset-chip-badge" style="background:linear-gradient(135deg, #38bdf8, #6366f1); color:#fff;">✨</span>
+                                        <button type="button" class="preset-dropdown-item" data-preset="glossy-glaze">
+                                            <span class="preset-chip-badge" style="background:linear-gradient(135deg,#38bdf8,#6366f1); color:#fff;">✨</span>
                                             <div class="preset-chip-info">
                                                 <strong>Glossy Glaze 3D</strong>
                                                 <small>উজ্জ্বল গ্লসি ক্রিস্প লুক</small>
                                             </div>
                                         </button>
-                                        <button type="button" class="btn-preset-chip" id="btn-preset-rainbow-popart" title="স্ক্রিনশটের মতো রঙিন বাংলা/ইংরেজি 3D টেক্সট">
-                                            <span class="preset-chip-badge" style="background:linear-gradient(135deg, #ef4444, #eab308, #10b981, #3b82f6); color:#fff; font-weight:900;">3D</span>
+                                        <button type="button" class="preset-dropdown-item" data-preset="rainbow-popart">
+                                            <span class="preset-chip-badge" style="background:linear-gradient(135deg,#ef4444,#eab308,#10b981,#3b82f6); color:#fff; font-weight:900;">3D</span>
                                             <div class="preset-chip-info">
                                                 <strong>Rainbow Pop 3D</strong>
                                                 <small>রঙিন অক্ষর + কালো 3D আউটলাইন</small>
                                             </div>
                                         </button>
-                                        <button type="button" class="btn-preset-chip" id="btn-preset-red-pill" title="হোয়াইট রাউন্ডেড পিল + রেড টেক্সট ও রেড বর্ডার">
-                                            <span class="preset-chip-badge" style="background:#fff; color:#ef4444; border: 2px solid #ef4444; font-weight:bold;">💊</span>
+                                        <button type="button" class="preset-dropdown-item" data-preset="red-pill">
+                                            <span class="preset-chip-badge" style="background:#fff; color:#ef4444; border:2px solid #ef4444; font-weight:bold;">💊</span>
                                             <div class="preset-chip-info">
                                                 <strong>Red Pill Badge</strong>
                                                 <small>লাল বর্ডার পিল ব্যাজ</small>
                                             </div>
                                         </button>
-                                        <button type="button" class="btn-preset-chip" id="btn-preset-studio-bar" title="গাঢ় সিনেমাটিক স্টুডিও ব্যানার বার + গ্লসি টেক্সট" style="grid-column: span 2;">
-                                            <span class="preset-chip-badge" style="background:#0f172a; color:#38bdf8; border: 1px solid #38bdf8;">📺</span>
+                                        <button type="button" class="preset-dropdown-item" data-preset="studio-bar">
+                                            <span class="preset-chip-badge" style="background:#0f172a; color:#38bdf8; border:1px solid #38bdf8;">📺</span>
                                             <div class="preset-chip-info">
                                                 <strong>Glossy Studio Bar</strong>
-                                                <small>গাঢ় সিনেমাটিক ব্যানার বার + হাই-কনট্রাস্ট টেক্সট</small>
+                                                <small>সিনেমাটিক ব্যানার বার + হাই-কনট্রাস্ট টেক্সট</small>
                                             </div>
                                         </button>
-                                        <button type="button" class="btn-preset-chip" id="btn-preset-glass-solid-split" title="উপরের অংশ ফ্রস্টেড গ্লাস, নিচের অংশ সলিড কালার ব্যাকপ্লেট" style="grid-column: span 2;">
-                                            <span class="preset-chip-badge" style="background:linear-gradient(180deg, rgba(255,255,255,.28) 0 48%, #0ea5e9 48%); color:#fff; border:1px solid rgba(255,255,255,.7);">◐</span>
+                                        <button type="button" class="preset-dropdown-item" data-preset="glass-solid-split">
+                                            <span class="preset-chip-badge" style="background:linear-gradient(180deg,rgba(255,255,255,.28) 0 48%,#0ea5e9 48%); color:#fff; border:1px solid rgba(255,255,255,.7);">◐</span>
                                             <div class="preset-chip-info">
                                                 <strong>Glass + Solid Split</strong>
                                                 <small>গ্লাস বেড + নিচে সলিড কালার</small>
                                             </div>
                                         </button>
-                                        <button type="button" class="btn-preset-chip" id="btn-preset-glass-solid-vertical" title="বাম পাশে গ্লাস, ডান পাশে সলিড কালার ব্যাকপ্লেট" style="grid-column: span 2;">
-                                            <span class="preset-chip-badge" style="background:linear-gradient(90deg, rgba(255,255,255,.28) 0 48%, #0ea5e9 48%); color:#fff; border:1px solid rgba(255,255,255,.7);">↕</span>
+                                        <button type="button" class="preset-dropdown-item" data-preset="glass-solid-vertical">
+                                            <span class="preset-chip-badge" style="background:linear-gradient(90deg,rgba(255,255,255,.28) 0 48%,#0ea5e9 48%); color:#fff; border:1px solid rgba(255,255,255,.7);">↕</span>
                                             <div class="preset-chip-info">
                                                 <strong>Glass + Solid Vertical</strong>
                                                 <small>পাশাপাশি গ্লাস + সলিড কালার</small>
                                             </div>
                                         </button>
+                                    </div>
+                                    <!-- Dedicated Brush Stroke Color Controls -->
+                                    <div id="preset-brush-color-group" style="display:none; margin-top:10px; padding:12px; background:rgba(225, 29, 72, 0.09); border:1px solid rgba(225, 29, 72, 0.35); border-radius:8px;">
+                                        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+                                            <label style="font-size:12px; font-weight:700; color:#f43f5e; margin:0; display:flex; align-items:center; gap:6px;">
+                                                <i class="fa-solid fa-paintbrush"></i>
+                                                ব্রাশের রং (Brush Stroke Color)
+                                            </label>
+                                            <!-- Quick Preset Colors like Reference Screenshot 3 -->
+                                            <div style="display:flex; gap:6px;" id="brush-quick-palette">
+                                                <button type="button" class="btn-brush-col-swatch" data-col="#e11d48" data-text="#ffffff" style="background:#e11d48; width:22px; height:22px; border-radius:50%; border:2px solid #fff; cursor:pointer; box-shadow:0 1px 3px rgba(0,0,0,0.4);" title="লাল ব্রাশ (জরুরি নিয়োগ স্টাইল)"></button>
+                                                <button type="button" class="btn-brush-col-swatch" data-col="#facc15" data-text="#0f172a" style="background:#facc15; width:22px; height:22px; border-radius:50%; border:2px solid #fff; cursor:pointer; box-shadow:0 1px 3px rgba(0,0,0,0.4);" title="হলুদ ব্রাশ (কাতার স্টাইল)"></button>
+                                                <button type="button" class="btn-brush-col-swatch" data-col="#10b981" data-text="#ffffff" style="background:#10b981; width:22px; height:22px; border-radius:50%; border:2px solid #fff; cursor:pointer; box-shadow:0 1px 3px rgba(0,0,0,0.4);" title="সবুজ ব্রাশ"></button>
+                                                <button type="button" class="btn-brush-col-swatch" data-col="#0284c7" data-text="#ffffff" style="background:#0284c7; width:22px; height:22px; border-radius:50%; border:2px solid #fff; cursor:pointer; box-shadow:0 1px 3px rgba(0,0,0,0.4);" title="নীল ব্রাশ"></button>
+                                                <button type="button" class="btn-brush-col-swatch" data-col="#1e293b" data-text="#ffffff" style="background:#1e293b; width:22px; height:22px; border-radius:50%; border:2px solid #fff; cursor:pointer; box-shadow:0 1px 3px rgba(0,0,0,0.4);" title="কালো ব্রাশ"></button>
+                                            </div>
+                                        </div>
+                                        <div class="color-picker-wrapper">
+                                            <input type="color" id="preset-brush-color-input" value="#e11d48">
+                                            <span class="color-value-text" id="preset-brush-color-val">#e11d48</span>
+                                        </div>
+                                        <p class="help-text mt-1" style="font-size:11px; margin:5px 0 0 0; color:#94a3b8;">
+                                            ব্রাশের রঙ বদলাতে দ্রুত উপরে লাল/হলুদে চাপুন অথবা কালার পিকার ব্যবহার করুন।
+                                        </p>
                                     </div>
                                 </div>
 
@@ -2152,6 +2190,12 @@
                                 <div class="control-group mt-2">
                                     <label>Text Animation (টেক্সট অ্যানিমেশন)</label>
                                     <select id="text-overlay-anim-select" class="form-select">
+                                        <optgroup label="🔥 Creator &amp; Dynamic Motion (ইউটিউব ক্রিয়েটর স্পেশাল)">
+                                             <option value="spring-pop">🚀 Creator Spring Pop (স্মুথ স্প্রিং বাউন্স)</option>
+                                             <option value="elastic-bounce">🪀 Elastic Overshoot (ইলাস্টিক ওভারশুট)</option>
+                                             <option value="pill-unfold">💊 Pill Badge Unfold (পিল ব্যাজ বিস্তার)</option>
+                                             <option value="badge-slide">🏷️ Badge Spring Slide (ব্যাজ স্প্রিং স্লাইড)</option>
+                                         </optgroup>
                                         <optgroup label="3D &amp; Cinematic Reels (রিলস স্পেশাল)">
                                             <option value="3d-pop-tilt">🔥 3D Pop &amp; Tilt (3D প্রফেশনাল পপ-ইন)</option>
                                             <option value="neon-blur-in">💡 Neon Glow Blur-In (নিয়ন ফোকাস ব্লার)</option>
@@ -2407,6 +2451,12 @@
                                 <div class="control-group mt-3" id="text-overlay-box-anim-group">
                                     <label>Box Animation (বক্সের অ্যানিমেশন)</label>
                                     <select id="text-overlay-box-anim-select" class="form-select">
+                                        <optgroup label="🔥 Creator &amp; Dynamic Motion (ইউটিউব ক্রিয়েটর স্পেশাল)">
+                                            <option value="spring-pop">🚀 Creator Spring Pop (স্মুথ স্প্রিং বাউন্স)</option>
+                                            <option value="elastic-bounce">🪀 Elastic Overshoot (ইলাস্টিক ওভারশুট)</option>
+                                            <option value="pill-unfold">💊 Pill Badge Unfold (পিল ব্যাজ বিস্তার)</option>
+                                            <option value="badge-slide">🏷️ Badge Spring Slide (ব্যাজ স্প্রিং স্লাইড)</option>
+                                        </optgroup>
                                         <optgroup label="3D &amp; Cinematic Reels (রিলস স্পেশাল)">
                                             <option value="3d-pop-tilt">🔥 3D Pop &amp; Tilt (3D প্রফেশনাল পপ-ইন)</option>
                                             <option value="neon-blur-in">💡 Neon Glow Blur-In (নিয়ন ফোকাস ব্লার)</option>
@@ -2531,6 +2581,10 @@
                                 <div class="control-group mt-3">
                                     <label>Design (ডিজাইন)</label>
                                     <select id="lower-third-preset-select" class="form-select">
+                                        <option value="preset-creator-headline-underline">🔥 Creator Headline + Growing Underline (যেমনঃ কে বন্ধ করে দিল?)</option>
+                                        <option value="preset-creator-pill-badge">💊 Creator Pill Badge (লাল পিল কলআউট — যেমনঃ 016......)</option>
+                                        <option value="preset-creator-statement-card">📢 Creator Statement Card (ডার্ক-রেড কার্ড + আন্ডারলাইন)</option>
+                                        <option value="preset-creator-tag-bounce">🏷️ Creator Brand Tag (ব্র্যান্ড / লোগো স্প্রিং বাউন্স)</option>
                                         <option value="preset-lt-news-split">📺 News Split Ticker (৩-ভাগ নিউজ ব্যানার — ঠিকানা, ওয়াটসঅ্যাপ, ডেসক্রিপশন)</option>
                                         <option value="preset-lt-top-badge">🎓 Top-Left Header Badge (উপরে বামে ব্যাজ ব্যানার)</option>
                                         <option value="preset-lt-classic">Classic Broadcast (গাঢ় ব্যাকগ্রাউন্ড বার, স্লাইড-ইন)</option>

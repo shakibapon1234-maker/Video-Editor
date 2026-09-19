@@ -4651,3 +4651,82 @@ input:checked + .slider:before {
     text-overflow: ellipsis;
 }
 
+
+/* == Preset Dropdown Trigger Button == */
+.btn-preset-dropdown-trigger {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    width: 100%;
+    margin-top: 6px;
+    padding: 9px 14px;
+    background: linear-gradient(135deg, rgba(245,158,11,0.12) 0%, rgba(99,102,241,0.10) 100%);
+    border: 1.5px solid rgba(245,158,11,0.35);
+    border-radius: 10px;
+    color: #fcd34d;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    gap: 8px;
+}
+.btn-preset-dropdown-trigger:hover {
+    background: linear-gradient(135deg, rgba(245,158,11,0.22) 0%, rgba(99,102,241,0.18) 100%);
+    border-color: #f59e0b;
+    box-shadow: 0 4px 14px rgba(245,158,11,0.18);
+    color: #fff;
+}
+.btn-preset-dropdown-trigger #preset-chevron-icon {
+    transition: transform 0.22s ease;
+    font-size: 11px;
+    opacity: 0.75;
+}
+.btn-preset-dropdown-trigger.open #preset-chevron-icon {
+    transform: rotate(180deg);
+}
+
+/* == Preset Dropdown Popup Menu == */
+.preset-dropdown-menu {
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: calc(100% + 4px);
+    z-index: 9999;
+    background: #1a1f2e;
+    border: 1.5px solid rgba(99,102,241,0.35);
+    border-radius: 12px;
+    box-shadow: 0 12px 40px rgba(0,0,0,0.55), 0 0 0 1px rgba(255,255,255,0.05);
+    padding: 6px;
+    max-height: 340px;
+    overflow-y: auto;
+    scrollbar-width: thin;
+    scrollbar-color: rgba(99,102,241,0.4) transparent;
+}
+.preset-dropdown-menu::-webkit-scrollbar { width: 4px; }
+.preset-dropdown-menu::-webkit-scrollbar-track { background: transparent; }
+.preset-dropdown-menu::-webkit-scrollbar-thumb { background: rgba(99,102,241,0.4); border-radius: 4px; }
+
+.preset-dropdown-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    width: 100%;
+    padding: 8px 10px;
+    background: transparent;
+    border: 1px solid transparent;
+    border-radius: 8px;
+    cursor: pointer;
+    text-align: left;
+    transition: all 0.18s ease;
+    color: var(--text-primary, #f1f5f9);
+    margin-bottom: 2px;
+}
+.preset-dropdown-item:last-child { margin-bottom: 0; }
+.preset-dropdown-item:hover {
+    background: rgba(99,102,241,0.14);
+    border-color: rgba(99,102,241,0.3);
+}
+.preset-dropdown-item.active {
+    background: rgba(99,102,241,0.22);
+    border-color: #818cf8;
+}
