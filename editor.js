@@ -23497,12 +23497,39 @@ document.addEventListener('DOMContentLoaded', () => {
             }
 
             state.activeProjectId = targetProjId;
-            const matchedProject = getProjectsRegistry()
-                .filter(project => project.videoFingerprint === videoFingerprint && localStorage.getItem(`studio_flow_project_${project.id}`))
-                .sort((a, b) => b.lastModified - a.lastModified)[0];
-            const savedProjectId = localStorage.getItem(`studio_flow_project_${targetProjId}`)
-                ? targetProjId
-                : (matchedProject ? matchedProject.id : (localStorage.getItem(`studio_flow_project_${legacyProjId}`) ? legacyProjId : null));
+
+            // --- BUG FIX: Check IndexedDB *and* localStorage for saved project ---
+            // Previously only localStorage mirror was checked, which silently failed
+            // whenever the browser cleared or quota-exceeded localStorage. Now we
+            // also probe IndexedDB directly so the restore always works.
+            const _dbForCheck = await getDB();
+            const _hasInDB = (key) => new Promise(res => {
+                try {
+                    const tx = _dbForCheck.transaction(STORE_NAME, 'readonly');
+                    const req = tx.objectStore(STORE_NAME).get(key);
+                    req.onsuccess = () => res(req.result !== undefined && req.result !== null);
+                    req.onerror = () => res(false);
+                } catch(e) { res(false); }
+            });
+
+            // Check targetProjId in IndexedDB first, then localStorage
+            let savedProjectId = null;
+            if (localStorage.getItem(`studio_flow_project_${targetProjId}`) || await _hasInDB(`${targetProjId}_project_settings`)) {
+                savedProjectId = targetProjId;
+            } else if (localStorage.getItem(`studio_flow_project_${legacyProjId}`) || await _hasInDB(`${legacyProjId}_project_settings`)) {
+                savedProjectId = legacyProjId;
+            } else {
+                // Check registry for fingerprint-matched projects (also probe IndexedDB)
+                const registryProjects = getProjectsRegistry()
+                    .filter(p => p.videoFingerprint === videoFingerprint)
+                    .sort((a, b) => b.lastModified - a.lastModified);
+                for (const project of registryProjects) {
+                    if (localStorage.getItem(`studio_flow_project_${project.id}`) || await _hasInDB(`${project.id}_project_settings`)) {
+                        savedProjectId = project.id;
+                        break;
+                    }
+                }
+            }
 
             if (savedProjectId) {
                 console.log(`Existing saved project found for video ${file.name}! Restoring project ${savedProjectId}...`);
@@ -23854,7 +23881,10 @@ document.addEventListener('DOMContentLoaded', () => {
                             localStorage.removeItem(k);
                         }
                     }
-                    localStorage.setItem('studio_flow_active_project_id', projId);
+                    // Always save at minimum the active project pointer so restore can find it
+                    try { localStorage.setItem('studio_flow_active_project_id', projId); } catch (e) {}
+                    // Try once more to save the full JSON (may now fit after cleanup)
+                    try { localStorage.setItem(`studio_flow_project_${projId}`, JSON.stringify(settingsToSave)); } catch (e) {}
                 } catch (e) {}
             }
             registerProjectMetadata(projId, projName);
@@ -23874,7 +23904,39 @@ document.addEventListener('DOMContentLoaded', () => {
     // --- Restore state on application startup or project switch ---
     async function restoreProjectFromBrowserStorage(targetProjectId, activeVideoFile) {
         try {
-            const projId = targetProjectId || localStorage.getItem('studio_flow_active_project_id') || getCurrentProjectId();
+            // --- BUG FIX: Startup restore fallback ---
+            // If localStorage.studio_flow_active_project_id is missing (e.g., cleared by browser),
+            // getCurrentProjectId() returns 'proj_default' which never matches anything.
+            // Now we also scan all IndexedDB keys for _project_settings entries.
+            let projId = targetProjectId || localStorage.getItem('studio_flow_active_project_id');
+            if (!projId) {
+                // Try to find any saved project in IndexedDB directly
+                try {
+                    const _scanDB = await getDB();
+                    const _tx = _scanDB.transaction(STORE_NAME, 'readonly');
+                    const _store = _tx.objectStore(STORE_NAME);
+                    const _allKeys = await new Promise((res, rej) => {
+                        const req = _store.getAllKeys();
+                        req.onsuccess = () => res(req.result);
+                        req.onerror = () => rej(req.error);
+                    });
+                    // Prefer the key matching studio_flow_active_project_id saved inside registry
+                    const registry = getProjectsRegistry();
+                    for (const entry of registry) {
+                        if (_allKeys.includes(`${entry.id}_project_settings`)) {
+                            projId = entry.id;
+                            break;
+                        }
+                    }
+                    // Generic fallback: first _project_settings key in DB
+                    if (!projId) {
+                        const settingKey = _allKeys.find(k => k.endsWith('_project_settings'));
+                        if (settingKey) projId = settingKey.replace('_project_settings', '');
+                    }
+                } catch (e) {}
+                if (!projId) projId = getCurrentProjectId();
+            }
+
             let savedData = await getFileFromDBWithFallback('project_settings', projId);
             if (!savedData) {
                 let savedSettingsRaw = null;
