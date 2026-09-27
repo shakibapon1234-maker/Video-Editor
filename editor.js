@@ -4625,6 +4625,187 @@ document.addEventListener('DOMContentLoaded', () => {
         ctx.restore();
     }
 
+    // ── Info Row (ইনফো রো) Banner Helpers & Rendering ──────────────────────────
+    function getDefaultInfoRowCells() {
+        return [
+            { text: 'সরাসরি কোম্পানিতে\nকাজের সুযোগ', color: '#1a4730', iconColor: '#ef4444', icon: '✔', textColor: '#ffffff', accentColor: '#facc15' },
+            { text: 'আধুনিক রিফর্ম', color: '#1a3a5c', iconColor: '#3b82f6', icon: '✔', textColor: '#ffffff', accentColor: '#facc15' },
+            { text: 'থাকা খাওয়ার\nসুবিধা', color: '#1a4730', iconColor: '#22c55e', icon: '✔', textColor: '#ffffff', accentColor: '#facc15' }
+        ];
+    }
+
+    function drawInfoRowBoxBackground(ctx, item, w, h) {
+        const cells = item.infoRowCells && item.infoRowCells.length ? item.infoRowCells : getDefaultInfoRowCells();
+        const n = cells.length;
+        const x = -w / 2;
+        const y = -h / 2;
+        const cellPx = w / n;
+        const r = Math.min(h * 0.28, 18);
+
+        ctx.save();
+        ctx.shadowColor = 'rgba(0, 0, 0, 0.45)';
+        ctx.shadowBlur = 12;
+        ctx.shadowOffsetY = 4;
+
+        for (let i = 0; i < n; i++) {
+            const cell = cells[i];
+            const cx = x + i * cellPx;
+            ctx.fillStyle = cell.color || '#1a4730';
+            ctx.beginPath();
+            if (i === 0 && n > 1) {
+                // Left pill
+                ctx.moveTo(cx + r, y);
+                ctx.lineTo(cx + cellPx, y);
+                ctx.lineTo(cx + cellPx, y + h);
+                ctx.lineTo(cx + r, y + h);
+                ctx.arcTo(cx, y + h, cx, y + h - r, r);
+                ctx.lineTo(cx, y + r);
+                ctx.arcTo(cx, y, cx + r, y, r);
+            } else if (i === n - 1 && n > 1) {
+                // Right pill
+                ctx.moveTo(cx, y);
+                ctx.lineTo(cx + cellPx - r, y);
+                ctx.arcTo(cx + cellPx, y, cx + cellPx, y + r, r);
+                ctx.lineTo(cx + cellPx, y + h - r);
+                ctx.arcTo(cx + cellPx, y + h, cx + cellPx - r, y + h, r);
+                ctx.lineTo(cx, y + h);
+            } else if (n === 1) {
+                // Single cell full pill
+                ctx.moveTo(cx + r, y);
+                ctx.lineTo(cx + cellPx - r, y);
+                ctx.arcTo(cx + cellPx, y, cx + cellPx, y + r, r);
+                ctx.lineTo(cx + cellPx, y + h - r);
+                ctx.arcTo(cx + cellPx, y + h, cx + cellPx - r, y + h, r);
+                ctx.lineTo(cx + r, y + h);
+                ctx.arcTo(cx, y + h, cx, y + h - r, r);
+                ctx.lineTo(cx, y + r);
+                ctx.arcTo(cx, y, cx + r, y, r);
+            } else {
+                ctx.rect(cx, y, cellPx, h);
+            }
+            ctx.closePath();
+            ctx.fill();
+
+            // Divider line between cells
+            if (i < n - 1) {
+                ctx.save();
+                ctx.shadowBlur = 0;
+                ctx.strokeStyle = 'rgba(255, 255, 255, 0.32)';
+                ctx.lineWidth = Math.max(1.5, Math.min(3, w * 0.002));
+                ctx.beginPath();
+                ctx.moveTo(cx + cellPx, y + h * 0.12);
+                ctx.lineTo(cx + cellPx, y + h * 0.88);
+                ctx.stroke();
+                ctx.restore();
+            }
+        }
+
+        // Clean border outline around the whole banner
+        ctx.shadowBlur = 0;
+        ctx.shadowOffsetY = 0;
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.45)';
+        ctx.lineWidth = Math.max(1.5, h * 0.03);
+        ctx.beginPath();
+        ctx.moveTo(x + r, y);
+        ctx.lineTo(x + w - r, y);
+        ctx.arcTo(x + w, y, x + w, y + r, r);
+        ctx.lineTo(x + w, y + h - r);
+        ctx.arcTo(x + w, y + h, x + w - r, y + h, r);
+        ctx.lineTo(x + r, y + h);
+        ctx.arcTo(x, y + h, x, y + h - r, r);
+        ctx.lineTo(x, y + r);
+        ctx.arcTo(x, y, x + r, y, r);
+        ctx.closePath();
+        ctx.stroke();
+
+        ctx.restore();
+    }
+
+    function drawInfoRowContent(ctx, item, w, h, fontFamily) {
+        const cells = item.infoRowCells && item.infoRowCells.length ? item.infoRowCells : getDefaultInfoRowCells();
+        const n = cells.length;
+        const x = -w / 2;
+        const y = -h / 2;
+        const cellPx = w / n;
+        const showIcons = item.infoRowShowIcons !== false;
+        const pad = h * 0.08;
+
+        for (let i = 0; i < n; i++) {
+            const cell = cells[i];
+            const cx = x + i * cellPx;
+
+            let textStartX, textAvailW;
+
+            if (showIcons) {
+                // Circle icon
+                const iconR = Math.min(h * 0.28, cellPx * 0.16);
+                const iconCX = cx + pad + iconR;
+                const iconCY = 0;
+
+                ctx.save();
+                ctx.fillStyle = cell.iconColor || '#22c55e';
+                ctx.beginPath();
+                ctx.arc(iconCX, iconCY, iconR, 0, Math.PI * 2);
+                ctx.fill();
+
+                ctx.strokeStyle = 'rgba(255, 255, 255, 0.75)';
+                ctx.lineWidth = Math.max(1.5, iconR * 0.14);
+                ctx.stroke();
+
+                ctx.fillStyle = '#ffffff';
+                ctx.font = `bold ${Math.round(iconR * 1.15)}px ${fontFamily || 'Hind Siliguri'}, sans-serif`;
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                ctx.fillText(cell.icon || '✔', iconCX, iconCY + iconR * 0.05);
+                ctx.restore();
+
+                textStartX = iconCX + iconR + pad * 1.2;
+                textAvailW = (cx + cellPx) - textStartX - pad;
+            } else {
+                // No icon — text gets the FULL width of the cell right up to the border!
+                textStartX = cx + pad * 1.2;
+                textAvailW = cellPx - pad * 2.4;
+            }
+
+            const lines = String(cell.text || '').split(/\r?\n/).filter(l => l.length > 0);
+            if (lines.length === 0) continue;
+
+            const lineCount = lines.length;
+            const maxFontH = (h - pad * 2) / lineCount;
+            let fontSize = Math.min(Math.round(maxFontH * 0.90), Math.round(h * 0.46));
+
+            while (fontSize > 11) {
+                ctx.font = `800 ${fontSize}px ${fontFamily || 'Hind Siliguri'}, sans-serif`;
+                const maxLineW = lines.reduce((mw, l) => Math.max(mw, ctx.measureText(l).width), 0);
+                if (maxLineW <= textAvailW) break;
+                fontSize--;
+            }
+            fontSize = Math.max(11, fontSize);
+
+            const lineH = fontSize * 1.24;
+            const blockH = lineCount * lineH;
+            let ty = -blockH / 2 + fontSize * 0.82;
+
+            lines.forEach((line, li) => {
+                ctx.save();
+                ctx.font = `800 ${fontSize}px ${fontFamily || 'Hind Siliguri'}, sans-serif`;
+                ctx.textAlign = 'left';
+                ctx.textBaseline = 'alphabetic';
+
+                ctx.shadowColor = 'rgba(0,0,0,0.6)';
+                ctx.shadowBlur = 4;
+                ctx.shadowOffsetX = 1;
+                ctx.shadowOffsetY = 1;
+
+                ctx.fillStyle = li === 0 ? (cell.accentColor || '#facc15') : (cell.textColor || '#ffffff');
+                ctx.fillText(line, textStartX, ty);
+                ctx.restore();
+
+                ty += lineH;
+            });
+        }
+    }
+
     function drawTextOverlayBox(ctx, style, color, w, h, currentTime, curveAmount, splitOrientation, glassColor) {
         if (!style || style === 'none') return;
         const x = -w / 2, y = -h / 2;
@@ -10035,10 +10216,14 @@ document.addEventListener('DOMContentLoaded', () => {
                     applyOverlayGlowPreset(state.ctx, item.glowPreset, currentTime);
                 }
                 if (hasBox) {
-                    const activeBoxColor = (item.boxStyle === 'glass-solid-split')
-                        ? (item.solidBoxColor || item.boxColor || '#0ea5e9')
-                        : (item.boxColor || item.solidBoxColor || '#4f46e5');
-                    drawTextOverlayBox(state.ctx, item.boxStyle, activeBoxColor, boxW, boxH, currentTime, curveAmount, item.splitOrientation, item.glassBoxColor);
+                    if (item.boxStyle === 'info-row') {
+                        drawInfoRowBoxBackground(state.ctx, item, boxW, boxH);
+                    } else {
+                        const activeBoxColor = (item.boxStyle === 'glass-solid-split')
+                            ? (item.solidBoxColor || item.boxColor || '#0ea5e9')
+                            : (item.boxColor || item.solidBoxColor || '#4f46e5');
+                        drawTextOverlayBox(state.ctx, item.boxStyle, activeBoxColor, boxW, boxH, currentTime, curveAmount, item.splitOrientation, item.glassBoxColor);
+                    }
                 }
 
                 state.ctx.font = buildTextOverlayFont(item, item.fontSize, fontFamily);
@@ -10070,6 +10255,10 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
 
                 const drawTextContent = (ctx2) => {
+                    if (item.boxStyle === 'info-row') {
+                        drawInfoRowContent(ctx2, item, boxW, boxH, fontFamily);
+                        return;
+                    }
                     if (isGlassSolidSplit) {
                         const baseSplitFontSize = Math.max(14, item.fontSize * 0.72);
                         const splitGap = Math.max(12, baseSplitFontSize * 0.22);
@@ -13680,6 +13869,17 @@ document.addEventListener('DOMContentLoaded', () => {
     function getTextOverlayBox(item) {
         const canvasW = state.canvas.width;
         const canvasH = state.canvas.height;
+
+        if (item.boxStyle === 'info-row') {
+            const defaultW = Math.round(canvasW * 0.90);
+            const defaultH = Math.max(68, Math.round(canvasH * 0.11));
+            const fixedW_box = item.fixedBoxW ? (item.fixedBoxW <= 1 ? item.fixedBoxW * canvasW : item.fixedBoxW) : 0;
+            const fixedH_box = item.fixedBoxH ? (item.fixedBoxH <= 1 ? item.fixedBoxH * canvasH : item.fixedBoxH) : 0;
+            let w = Math.max(fixedW_box, defaultW);
+            let h = Math.max(fixedH_box, defaultH);
+            return { cx: item.x * canvasW, cy: item.y * canvasH, w, h };
+        }
+
         const isGlassSolidSplit = item.boxStyle === 'glass-solid-split';
         const splitFontSize = Math.max(14, item.fontSize * 0.72);
         state.ctx.font = buildTextOverlayFont(item, isGlassSolidSplit ? splitFontSize : item.fontSize);
@@ -15674,10 +15874,36 @@ document.addEventListener('DOMContentLoaded', () => {
     // 1-Click Design Presets (now via dropdown — see dropdown logic below)
 
     function applyTextOverlayPreset(presetType) {
-        const item = getSelectedTextOverlay();
+        let item = getSelectedTextOverlay();
+        if (!item) {
+            const quickAddBtn = document.getElementById('quick-add-text-btn') || document.getElementById('add-text-overlay-btn');
+            if (quickAddBtn) {
+                quickAddBtn.click();
+                item = getSelectedTextOverlay();
+            }
+        }
         if (window.captureUndoCheckpoint) window.captureUndoCheckpoint();
 
-        if (presetType === 'red-outline') {
+        if (presetType === 'info-row') {
+            if (item) {
+                item.boxStyle = 'info-row';
+                if (!item.infoRowCells || !Array.isArray(item.infoRowCells) || item.infoRowCells.length === 0) {
+                    item.infoRowCells = getDefaultInfoRowCells();
+                }
+                item.infoRowShowIcons = false; // default false so text fills cell edge-to-edge as user requested
+                item.visualTemplate = 'standard';
+                item.strokeEnabled = false;
+                item.color = '#ffffff';
+                item.font = item.font || 'Noto Sans Bengali';
+                item.isBold = true;
+                item.text = item.text || 'ইনফো রো ব্যানার';
+            }
+            if (textOverlayBoxSelect) textOverlayBoxSelect.value = 'info-row';
+            refreshTextOverlayInfoRowVisibility();
+            drawFrame();
+            if (window.triggerAutoSave) window.triggerAutoSave();
+            return;
+        } else if (presetType === 'red-outline') {
             // 1st Screenshot: Bold White Text + Vivid Red Border + subtle dark shadow
             const fields = {
                 color: '#ffffff',
@@ -15962,6 +16188,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const presetTriggerLabel    = document.getElementById('preset-trigger-label');
 
     const PRESET_LABELS = {
+        'info-row':           { icon: '▤',  label: 'Info Row Banner' },
         'red-outline':        { icon: '🎨', label: 'Red Outline' },
         'brush-stroke':       { icon: '🖌️', label: 'Paint Brush Banner' },
         'brush-title-card':   { icon: '🖌️', label: 'Paint Brush Banner' },
@@ -16205,6 +16432,130 @@ document.addEventListener('DOMContentLoaded', () => {
     bindSplitTextColor(textOverlayGlassBoxColor, textOverlayGlassBoxColorVal, 'glassBoxColor');
     bindSplitTextColor(textOverlaySolidBoxColor, textOverlaySolidBoxColorVal, 'solidBoxColor');
 
+    // ── Info Row (ইনফো রো) Dedicated Settings Panel Logic ───────────────────
+    function refreshTextOverlayInfoRowVisibility() {
+        const infoRowGroup = document.getElementById('text-overlay-info-row-group');
+        if (!infoRowGroup) return;
+        const item = getSelectedTextOverlay();
+        const isInfoRow = item && item.boxStyle === 'info-row';
+        infoRowGroup.style.display = isInfoRow ? 'block' : 'none';
+        if (isInfoRow) {
+            renderInfoRowCellsEditor();
+        }
+    }
+
+    function renderInfoRowCellsEditor() {
+        const item = getSelectedTextOverlay();
+        if (!item || item.boxStyle !== 'info-row') return;
+        if (!item.infoRowCells || !Array.isArray(item.infoRowCells) || item.infoRowCells.length === 0) {
+            item.infoRowCells = getDefaultInfoRowCells();
+        }
+        const countSelect = document.getElementById('text-overlay-info-row-count');
+        const showIconsCheck = document.getElementById('text-overlay-info-row-show-icons');
+        const container = document.getElementById('text-overlay-info-row-cells-container');
+
+        if (countSelect) countSelect.value = item.infoRowCells.length;
+        if (showIconsCheck) showIconsCheck.checked = item.infoRowShowIcons !== false;
+        if (!container) return;
+
+        const showingIcons = item.infoRowShowIcons !== false;
+        container.innerHTML = item.infoRowCells.map((cell, i) => `
+            <div class="info-row-cell-card" data-cell-idx="${i}" style="border:1px solid rgba(255,255,255,0.14); border-radius:8px; padding:10px; margin-top:10px; background:rgba(255,255,255,0.04);">
+                <div style="font-size:11px; font-weight:700; color:#fbbf24; margin-bottom:8px; text-transform:uppercase; letter-spacing:0.5px;">
+                    সেল ${i + 1} (Cell ${i + 1})
+                </div>
+                <label style="font-size:12px; margin-bottom:4px; display:block;">টেক্সট (Text)</label>
+                <textarea data-cell-prop="text" class="form-input form-textarea" rows="2" style="width:100%; font-size:12px; resize:vertical; min-height:48px;" placeholder="লেখা লিখুন...">${cell.text || ''}</textarea>
+                <div style="display:grid; grid-template-columns:1fr 1fr; gap:6px; margin-top:8px;">
+                    <div>
+                        <label style="font-size:11px; margin-bottom:2px; display:block;">ব্যাকগ্রাউন্ড</label>
+                        <div class="color-picker-wrapper" style="height:32px;">
+                            <input type="color" data-cell-prop="color" value="${cell.color || '#1a4730'}" style="width:100%; height:26px; padding:0;">
+                        </div>
+                    </div>
+                    <div style="${showingIcons ? '' : 'display:none;'}">
+                        <label style="font-size:11px; margin-bottom:2px; display:block;">আইকন কালার</label>
+                        <div class="color-picker-wrapper" style="height:32px;">
+                            <input type="color" data-cell-prop="iconColor" value="${cell.iconColor || '#22c55e'}" style="width:100%; height:26px; padding:0;">
+                        </div>
+                    </div>
+                    <div>
+                        <label style="font-size:11px; margin-bottom:2px; display:block;">টেক্সট কালার</label>
+                        <div class="color-picker-wrapper" style="height:32px;">
+                            <input type="color" data-cell-prop="textColor" value="${cell.textColor || '#ffffff'}" style="width:100%; height:26px; padding:0;">
+                        </div>
+                    </div>
+                    <div>
+                        <label style="font-size:11px; margin-bottom:2px; display:block;">১ম লাইন হাইলাইট</label>
+                        <div class="color-picker-wrapper" style="height:32px;">
+                            <input type="color" data-cell-prop="accentColor" value="${cell.accentColor || '#facc15'}" style="width:100%; height:26px; padding:0;">
+                        </div>
+                    </div>
+                </div>
+                <div style="margin-top:8px; ${showingIcons ? '' : 'display:none;'}">
+                    <label style="font-size:11px; margin-bottom:2px; display:block;">আইকন প্রতীক (চিহ্ন বা ইমোজি)</label>
+                    <input type="text" data-cell-prop="icon" class="form-input" value="${cell.icon || '✔'}" maxlength="4" style="font-size:16px; text-align:center; width:65px; padding:4px 6px;">
+                </div>
+            </div>
+        `).join('');
+
+        container.querySelectorAll('[data-cell-prop]').forEach(input => {
+            const handler = () => {
+                const currentItem = getSelectedTextOverlay();
+                if (!currentItem || !currentItem.infoRowCells) return;
+                const cellCard = input.closest('[data-cell-idx]');
+                if (!cellCard) return;
+                const idx = parseInt(cellCard.dataset.cellIdx, 10);
+                const prop = input.dataset.cellProp;
+                if (!currentItem.infoRowCells[idx]) return;
+                currentItem.infoRowCells[idx][prop] = input.value;
+                drawFrame();
+                if (window.triggerAutoSave) window.triggerAutoSave();
+            };
+            input.addEventListener('input', handler);
+            input.addEventListener('change', handler);
+        });
+    }
+
+    const infoRowCountSelect = document.getElementById('text-overlay-info-row-count');
+    if (infoRowCountSelect) {
+        infoRowCountSelect.addEventListener('change', () => {
+            const item = getSelectedTextOverlay();
+            if (!item || item.boxStyle !== 'info-row') return;
+            const newCount = Math.max(2, Math.min(4, parseInt(infoRowCountSelect.value, 10) || 3));
+            item.infoRowCells = item.infoRowCells || getDefaultInfoRowCells();
+            const DEFAULT_COLORS = ['#1a4730', '#1a3a5c', '#2d1b4e', '#1a2d4e'];
+            const DEFAULT_ICON_COLORS = ['#ef4444', '#3b82f6', '#22c55e', '#f59e0b'];
+            while (item.infoRowCells.length < newCount) {
+                const idx = item.infoRowCells.length;
+                item.infoRowCells.push({
+                    text: `সেল ${idx + 1}`,
+                    color: DEFAULT_COLORS[idx % DEFAULT_COLORS.length],
+                    iconColor: DEFAULT_ICON_COLORS[idx % DEFAULT_ICON_COLORS.length],
+                    icon: '✔',
+                    textColor: '#ffffff',
+                    accentColor: '#facc15'
+                });
+            }
+            while (item.infoRowCells.length > newCount) item.infoRowCells.pop();
+            renderInfoRowCellsEditor();
+            drawFrame();
+            if (window.triggerAutoSave) window.triggerAutoSave();
+        });
+    }
+
+    const infoRowShowIconsCheck = document.getElementById('text-overlay-info-row-show-icons');
+    if (infoRowShowIconsCheck) {
+        infoRowShowIconsCheck.addEventListener('change', () => {
+            const item = getSelectedTextOverlay();
+            if (!item || item.boxStyle !== 'info-row') return;
+            item.infoRowShowIcons = infoRowShowIconsCheck.checked;
+            renderInfoRowCellsEditor();
+            drawFrame();
+            if (window.triggerAutoSave) window.triggerAutoSave();
+        });
+    }
+
     if (textOverlayAnimSpeedSlider) {
         textOverlayAnimSpeedSlider.addEventListener('input', (e) => {
             if (textOverlayAnimSpeedVal) textOverlayAnimSpeedVal.innerText = parseFloat(e.target.value).toFixed(1) + 's';
@@ -16348,13 +16699,23 @@ document.addEventListener('DOMContentLoaded', () => {
     textOverlayBoxSelect.addEventListener('change', (e) => {
         refreshTextOverlayBoxColorVisibility();
         refreshTextOverlaySplitContentVisibility();
+        refreshTextOverlayInfoRowVisibility();
         if (typeof refreshPresetBrushColorVisibility === 'function') {
             refreshPresetBrushColorVisibility(e.target.value);
         }
         const item = getSelectedTextOverlay();
-        if (item) { item.boxStyle = e.target.value; drawFrame(); }
+        if (item) {
+            item.boxStyle = e.target.value;
+            if (e.target.value === 'info-row') {
+                if (!item.infoRowCells || !item.infoRowCells.length) item.infoRowCells = getDefaultInfoRowCells();
+                if (item.infoRowShowIcons === undefined) item.infoRowShowIcons = false;
+                renderInfoRowCellsEditor();
+            }
+            drawFrame();
+        }
     });
     refreshTextOverlaySplitContentVisibility();
+    refreshTextOverlayInfoRowVisibility();
 
     const textOverlayGlowPreset = document.getElementById('text-overlay-glow-preset');
     if (textOverlayGlowPreset) {
@@ -16666,6 +17027,8 @@ document.addEventListener('DOMContentLoaded', () => {
             solidTextColor: '#ffffff',
             glassBoxColor: '#ffffff',
             solidBoxColor: '#0ea5e9',
+            infoRowCells: textOverlayBoxSelect.value === 'info-row' ? getDefaultInfoRowCells() : null,
+            infoRowShowIcons: false,
             textAnimStyle: textOverlayAnimSelect.value || 'none',
             animStyle: textOverlayAnimSelect.value || 'none', // legacy fallback field, kept in sync
             textAnimSpeedSec: textOverlayAnimSpeedSlider ? parseFloat(textOverlayAnimSpeedSlider.value) || 0.5 : 0.5,
@@ -16748,6 +17111,7 @@ document.addEventListener('DOMContentLoaded', () => {
             if (textOverlayEditInput) textOverlayEditInput.value = '';
             if (textOverlayInput) textOverlayInput.value = '';
             if (activeBadge) activeBadge.style.display = 'none';
+            refreshTextOverlayInfoRowVisibility();
             return;
         }
         textOverlayTimingContainer.style.display = 'block';
@@ -16777,6 +17141,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         textOverlayBoxSelect.value = item.boxStyle || 'none';
         refreshTextOverlaySplitContentVisibility();
+        refreshTextOverlayInfoRowVisibility();
         if (typeof refreshPresetBrushColorVisibility === 'function') {
             refreshPresetBrushColorVisibility(item.boxStyle || 'none');
         }

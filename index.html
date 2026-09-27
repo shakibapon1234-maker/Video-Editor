@@ -1927,6 +1927,30 @@
                                     <p class="help-text mt-1">প্রথম ঘরের লেখা গ্লাস অংশে, দ্বিতীয় ঘরের লেখা নিচের সলিড অংশে যাবে।</p>
                                 </div>
 
+                                <!-- Info Row (ইনফো রো) Dedicated Settings Panel -->
+                                <div class="control-group mt-3" id="text-overlay-info-row-group" style="display:none; border:1px solid rgba(250,204,21,.38); border-radius:8px; padding:12px; background:rgba(250,204,21,.05);">
+                                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+                                        <label style="margin:0; font-weight:700; color:#fbbf24; font-size:13px; display:flex; align-items:center; gap:6px;">
+                                            <i class="fa-solid fa-table-columns" style="color:#fbbf24;"></i>
+                                            ইনফো রো সেটিংস (Info Row Settings)
+                                        </label>
+                                    </div>
+                                    <label style="font-size:12px; font-weight:600; margin-bottom:4px; display:block;">সেল সংখ্যা (কয় ভাগ করবেন)</label>
+                                    <select id="text-overlay-info-row-count" class="form-select" style="font-size:13px; font-weight:600; margin-bottom:8px;">
+                                        <option value="2">২ ভাগ (2 Cells)</option>
+                                        <option value="3" selected>৩ ভাগ (3 Cells - ডিফল্ট)</option>
+                                        <option value="4">৪ ভাগ (4 Cells)</option>
+                                    </select>
+                                    <label class="field-inline mt-1 mb-1" style="display:flex; align-items:center; gap:8px; padding:8px; background:rgba(255,255,255,0.06); border-radius:6px; cursor:pointer;">
+                                        <input type="checkbox" id="text-overlay-info-row-show-icons" style="cursor:pointer; width:16px; height:16px;">
+                                        <span style="font-size:12px; font-weight:600; color:#e2e8f0;">🔵 গোলাকার আইকন দেখাবে (Show Icons)</span>
+                                    </label>
+                                    <p class="help-text" style="font-size:11px; margin:4px 0 8px 0; color:#94a3b8;">
+                                        আনচেক করলে আইকন ছাড়া পুরো সেলজুড়ে বড় বড় লেখা থাকবে।
+                                    </p>
+                                    <div id="text-overlay-info-row-cells-container"></div>
+                                </div>
+
                                 <!-- 1-Click Design Presets — Dropdown -->
                                 <div class="control-group mt-3" id="text-overlay-presets-section" style="position:relative;">
                                     <label>
@@ -1939,6 +1963,13 @@
                                     </button>
                                     <!-- Dropdown popup -->
                                     <div id="preset-dropdown-menu" class="preset-dropdown-menu" style="display:none;">
+                                        <button type="button" class="preset-dropdown-item" data-preset="info-row" style="background:rgba(250,204,21,0.08); border-left:3px solid #fbbf24;">
+                                            <span class="preset-chip-badge" style="background:linear-gradient(135deg,#1a4730,#1a3a5c); color:#facc15; font-weight:bold;">▤</span>
+                                            <div class="preset-chip-info">
+                                                <strong style="color:#fbbf24;">Info Row Banner (ইনফো রো)</strong>
+                                                <small>২/৩/৪ ভাগে বিভক্ত মাল্টি-সেল ব্যানার (চাকরি/বিজ্ঞাপন স্টাইল)</small>
+                                            </div>
+                                        </button>
                                         <button type="button" class="preset-dropdown-item" data-preset="red-outline">
                                             <span class="preset-chip-badge" style="background:#ef4444; color:#fff; font-weight:900; border:1.5px solid #fff;">T</span>
                                             <div class="preset-chip-info">
@@ -2400,6 +2431,7 @@
                                     <select id="text-overlay-box-select" class="form-select">
                                         <option value="none">None (কোনো বক্স নেই)</option>
                                         <optgroup label="── 🖌️ পেইন্ট ও আর্টিস্টিক ব্যাকগ্রাউন্ড ──">
+                                            <option value="info-row">▤ Info Row (ইনফো রো - মাল্টি-সেল ব্যানার)</option>
                                             <option value="brush-stroke">🖌️ Artistic Paint Brush (রংতুলি ব্রাশ ব্যাকগ্রাউন্ড)</option>
                                             <option value="brush-glow">✨ Glowing Paint Brush (গ্লোয়িং ব্রাশ স্ট্রোক)</option>
                                             <option value="paint-splash">🎨 Watercolor Splash (রঙের ছিটা / স্প্ল্যাশ)</option>
@@ -5019,7 +5051,7 @@
     <script src="audio-silence-generator.js?v=1"></script>
     <script src="smoke-effect.js?v=5"></script>
     <script src="glitter-effect.js?v=4"></script>
-    <script src="editor.js?v=20"></script>
+    <script src="editor.js?v=21"></script>
     <script src="keyframes.js?v=1"></script>
     <script src="render-engine.js?v=2"></script>
     <script src="exporter.js?v=4"></script>
