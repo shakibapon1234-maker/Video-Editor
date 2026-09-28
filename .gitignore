@@ -6,3 +6,4 @@ apk-out/
 temp_addaudio/
 temp_mute/
 temp_whisper/
+*.log
