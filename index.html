@@ -4350,16 +4350,83 @@
                         <div class="card mt-4">
                             <div class="card-header">
                                 <i class="fa-solid fa-clone card-icon"></i>
-                                <h3>Multi-Aspect Batch Export (একাধিক রেশিও)</h3>
+                                <h3>Multi-Aspect Batch Export (একাধিক রেশিও এক ক্লিকে)</h3>
                             </div>
                             <div class="card-body">
-                                <p class="help-text">একই এডিট করা টাইমলাইন থেকে 1:1, 4:5, 9:16, 16:9 — একাধিক aspect ratio-তে একসাথে এক্সপোর্ট করুন। প্রতিটা আলাদা ফাইল হিসেবে ডাউনলোড হবে। রেন্ডার সময় কয়েকগুণ বেশি লাগতে পারে — প্রয়োজনীয় রেশিওগুলোই সিলেক্ট করুন।</p>
-                                <div id="multi-aspect-options" class="multi-aspect-options">
-                                    <label class="multi-aspect-item"><input type="checkbox" class="multi-aspect-checkbox" value="1-1"> <span>1:1 (Square)</span></label>
-                                    <label class="multi-aspect-item"><input type="checkbox" class="multi-aspect-checkbox" value="4-5"> <span>4:5 (FB Feed)</span></label>
-                                    <label class="multi-aspect-item"><input type="checkbox" class="multi-aspect-checkbox" value="9-16"> <span>9:16 (Reels/Shorts)</span></label>
-                                    <label class="multi-aspect-item"><input type="checkbox" class="multi-aspect-checkbox" value="16-9"> <span>16:9 (Landscape)</span></label>
+                                <p class="help-text">একই এডিট করা ভিডিও থেকে 9:16, 16:9, 1:1 ও 4:5 সাইজে একসাথে আলাদা আলাদা ফাইল এক্সপোর্ট করুন। কালো বার এড়াতে ব্লার ব্যাকগ্রাউন্ড বা ক্রপ মোড বেছে নিন।</p>
+                                
+                                <div class="multi-aspect-quality-wrap mb-3">
+                                    <label for="multi-aspect-quality" class="multi-aspect-label">
+                                        <span><i class="fa-solid fa-gauge-high"></i> রেন্ডার কোয়ালিটি ও স্পিড:</span>
+                                    </label>
+                                    <select id="multi-aspect-quality" class="form-select multi-aspect-quality-select">
+                                        <option value="720p" selected>⚡ Fast HD (720p) — পিসিতে চাপ পড়বে না, সুপার ফাস্ট (রিকমেন্ডেড)</option>
+                                        <option value="1080p">💎 Full HD (1080p) — সর্বোচ্চ কোয়ালিটি (রেন্ডারে বেশি সময় লাগবে)</option>
+                                    </select>
                                 </div>
+
+                                <div id="multi-aspect-options" class="multi-aspect-list">
+                                    <!-- 9:16 Reel -->
+                                    <div class="multi-aspect-row">
+                                        <label class="multi-aspect-item">
+                                            <input type="checkbox" class="multi-aspect-checkbox" value="9-16" checked>
+                                            <span class="multi-aspect-name"><strong>9:16</strong> Reel / Shorts</span>
+                                        </label>
+                                        <div class="multi-aspect-fit-wrap">
+                                            <select class="multi-aspect-fit-mode form-select" data-ratio="9-16" title="ফিট মোড বেছে নিন">
+                                                <option value="fit-blur" selected>Fit + Blur Background (ব্লার)</option>
+                                                <option value="crop">Crop to Fill (ফুল স্ক্রিন)</option>
+                                                <option value="fit-black">Fit + Black Bars (কালো বার)</option>
+                                            </select>
+                                        </div>
+                                    </div>
+
+                                    <!-- 16:9 YouTube -->
+                                    <div class="multi-aspect-row">
+                                        <label class="multi-aspect-item">
+                                            <input type="checkbox" class="multi-aspect-checkbox" value="16-9">
+                                            <span class="multi-aspect-name"><strong>16:9</strong> Landscape / YouTube</span>
+                                        </label>
+                                        <div class="multi-aspect-fit-wrap">
+                                            <select class="multi-aspect-fit-mode form-select" data-ratio="16-9" title="ফিট মোড বেছে নিন">
+                                                <option value="fit-blur" selected>Fit + Blur Background (ব্লার)</option>
+                                                <option value="crop">Crop to Fill (ফুল স্ক্রিন)</option>
+                                                <option value="fit-black">Fit + Black Bars (কালো বার)</option>
+                                            </select>
+                                        </div>
+                                    </div>
+
+                                    <!-- 1:1 Square -->
+                                    <div class="multi-aspect-row">
+                                        <label class="multi-aspect-item">
+                                            <input type="checkbox" class="multi-aspect-checkbox" value="1-1">
+                                            <span class="multi-aspect-name"><strong>1:1</strong> Square / Post</span>
+                                        </label>
+                                        <div class="multi-aspect-fit-wrap">
+                                            <select class="multi-aspect-fit-mode form-select" data-ratio="1-1" title="ফিট মোড বেছে নিন">
+                                                <option value="fit-blur" selected>Fit + Blur Background (ব্লার)</option>
+                                                <option value="crop">Crop to Fill (ফুল স্ক্রিন)</option>
+                                                <option value="fit-black">Fit + Black Bars (কালো বার)</option>
+                                            </select>
+                                        </div>
+                                    </div>
+
+                                    <!-- 4:5 Feed -->
+                                    <div class="multi-aspect-row">
+                                        <label class="multi-aspect-item">
+                                            <input type="checkbox" class="multi-aspect-checkbox" value="4-5">
+                                            <span class="multi-aspect-name"><strong>4:5</strong> Portrait / FB Feed</span>
+                                        </label>
+                                        <div class="multi-aspect-fit-wrap">
+                                            <select class="multi-aspect-fit-mode form-select" data-ratio="4-5" title="ফিট মোড বেছে নিন">
+                                                <option value="crop" selected>Crop to Fill (ফুল স্ক্রিন)</option>
+                                                <option value="fit-blur">Fit + Blur Background (ব্লার)</option>
+                                                <option value="fit-black">Fit + Black Bars (কালো বার)</option>
+                                            </select>
+                                        </div>
+                                    </div>
+                                </div>
+
                                 <button id="multi-aspect-export-btn" class="btn btn-primary btn-block mt-3" type="button" disabled>
                                     <i class="fa-solid fa-layer-group"></i> Export Selected Ratios (<span id="multi-aspect-count">0</span>)
                                 </button>

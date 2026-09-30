@@ -6997,7 +6997,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // frame), so whatever mode is picked here is baked into the exported file.
     function drawCanvasBackground(canvasW, canvasH, mediaSource, videoW, videoH) {
         const activeBgButton = document.querySelector('#bg-mode-selector .aspect-btn.active');
-        const mode = activeBgButton?.dataset.bgmode || state.backgroundMode || 'none';
+        const mode = state.backgroundMode || activeBgButton?.dataset.bgmode || 'none';
         state.ctx.save();
         state.ctx.filter = 'none';
         state.ctx.globalAlpha = 1;
@@ -23772,7 +23772,33 @@ document.addEventListener('DOMContentLoaded', () => {
         if (shapeCtrl) shapeCtrl.style.display = 'none';
         state.voiceoverUrl = null;
         state.voiceoverRecorded = false;
-        
+
+        // --- Reset Logo UI ---
+        // state.logoImg/logoFile already set to null above; now sync the DOM
+        if (typeof logoPreviewBox !== 'undefined' && logoPreviewBox) logoPreviewBox.style.display = 'none';
+        if (typeof logoDropzone !== 'undefined' && logoDropzone) logoDropzone.style.display = 'flex';
+        if (typeof logoControlCard !== 'undefined' && logoControlCard) logoControlCard.style.display = 'none';
+        if (typeof logoInput !== 'undefined' && logoInput) logoInput.value = '';
+        // Fallback via getElementById in case the closured vars aren't visible here
+        const _logoPreview = document.getElementById('logo-preview-box');
+        if (_logoPreview) _logoPreview.style.display = 'none';
+        const _logoDropzone = document.getElementById('logo-dropzone');
+        if (_logoDropzone) _logoDropzone.style.display = 'flex';
+        const _logoCard = document.getElementById('logo-control-card');
+        if (_logoCard) _logoCard.style.display = 'none';
+        const _logoInput = document.getElementById('logo-input');
+        if (_logoInput) _logoInput.value = '';
+
+        // --- Clear text overlay input area ---
+        const _textInput = document.getElementById('text-overlay-input');
+        if (_textInput) _textInput.value = '';
+        const _textEditInput = document.getElementById('text-overlay-edit-input');
+        if (_textEditInput) _textEditInput.value = '';
+        const _textTimingContainer = document.getElementById('text-overlay-timing-container');
+        if (_textTimingContainer) _textTimingContainer.style.display = 'none';
+        const _textActiveBadge = document.getElementById('text-overlay-active-badge');
+        if (_textActiveBadge) _textActiveBadge.style.display = 'none';
+
         if (fullReset) {
             state.clips = [];
             state.activeClipId = null;
@@ -23782,9 +23808,13 @@ document.addEventListener('DOMContentLoaded', () => {
             state.currentTime = 0;
             state.activeProjectId = null;
         }
-        
+
+        // BUG FIX: was calling 'renderTextOverlaysList' (with plural 's') which
+        // doesn't exist — the real function is 'renderTextOverlayList' (no 's').
+        // This meant text overlays were never cleared from the sidebar list when
+        // switching to a new video.
         if (typeof renderBrollList === 'function') renderBrollList();
-        if (typeof renderTextOverlaysList === 'function') renderTextOverlaysList();
+        if (typeof renderTextOverlayList === 'function') renderTextOverlayList();
         if (typeof renderStickerList === 'function') renderStickerList();
         if (typeof renderSymbolList === 'function') renderSymbolList();
         if (typeof renderShapeList === 'function') renderShapeList();

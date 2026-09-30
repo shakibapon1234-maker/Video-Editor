@@ -2045,32 +2045,97 @@ input:checked + .slider:before {
 }
 
 .btn-sm {
+    padding: 6px 12px;
+    font-size: 11px;
+}
 
-.multi-aspect-options {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 8px 12px;
-    margin-top: 8px;
+/* Multi-Aspect Batch Export Styling */
+.multi-aspect-quality-wrap {
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    padding: 10px 12px;
+}
+
+.multi-aspect-label {
+    display: block;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text-secondary);
+    margin-bottom: 6px;
+}
+
+.multi-aspect-quality-select {
+    width: 100%;
+    background: var(--bg-surface, #1e1e24);
+    color: var(--text-primary, #fff);
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    padding: 7px 10px;
+    font-size: 13px;
+    cursor: pointer;
+}
+
+.multi-aspect-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin-top: 10px;
+}
+
+.multi-aspect-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 8px 12px;
+    background: rgba(255, 255, 255, 0.02);
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    border-radius: 6px;
+    transition: all 0.2s ease;
+}
+
+.multi-aspect-row:hover {
+    background: rgba(255, 255, 255, 0.04);
+    border-color: rgba(255, 255, 255, 0.12);
 }
 
 .multi-aspect-item {
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: 10px;
     font-size: 13px;
-    color: var(--text-secondary);
+    color: var(--text-primary);
     cursor: pointer;
+    flex: 1;
+    margin-bottom: 0;
 }
 
 .multi-aspect-item input {
-    width: 16px;
-    height: 16px;
+    width: 17px;
+    height: 17px;
     accent-color: var(--primary);
     cursor: pointer;
 }
 
-    padding: 6px 12px;
-    font-size: 11px;
+.multi-aspect-fit-wrap {
+    min-width: 180px;
+}
+
+.multi-aspect-fit-mode {
+    width: 100%;
+    background: var(--bg-surface, #1e1e24);
+    color: var(--text-secondary);
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    padding: 5px 8px;
+    font-size: 12px;
+    cursor: pointer;
+}
+
+.multi-aspect-fit-mode:focus {
+    color: var(--text-primary);
+    border-color: var(--primary);
 }
 
 .btn-lg {

@@ -1,4 +1,4 @@
-﻿/**
+/**
  * Studio Flow — Phase 9 feature module
  * Split/Freeze/PIP were implemented earlier in editor.js.
  * This module adds the remaining Phase 9 plan items.
@@ -2005,29 +2005,35 @@ document.addEventListener('DOMContentLoaded', () => {
     if (trimRangeEnd) trimRangeEnd.addEventListener('change', () => recordEditorHistory('Trim changed'));
 
     // --- Multi-Aspect Batch Export (plan 9-6) ---
-    function computeCanvasDimsForRatio(ratio) {
-        const videoWidth = state.video ? state.video.videoWidth : 640;
-        const videoHeight = state.video ? state.video.videoHeight : 360;
-        const cw = (state.cropW || 1) * videoWidth;
-        const ch = (state.cropH || 1) * videoHeight;
-        let targetWidth = 640, targetHeight = 480;
+    function computeCanvasDimsForRatio(ratio, quality = '720p') {
+        const is1080p = quality === '1080p';
         switch (ratio) {
-            case 'original': targetWidth = cw; targetHeight = ch; break;
-            case '1-1': targetWidth = Math.max(cw, ch); targetHeight = targetWidth; break;
-            case '4-5': targetHeight = Math.max(cw, ch); targetWidth = (targetHeight * 4) / 5; break;
-            case '9-16': targetHeight = Math.max(cw, ch); targetWidth = (targetHeight * 9) / 16; break;
-            case '16-9': targetWidth = Math.max(cw, ch); targetHeight = (targetWidth * 9) / 16; break;
+            case '9-16':
+                return is1080p ? { w: 1080, h: 1920 } : { w: 720, h: 1280 };
+            case '16-9':
+                return is1080p ? { w: 1920, h: 1080 } : { w: 1280, h: 720 };
+            case '1-1':
+                return is1080p ? { w: 1080, h: 1080 } : { w: 720, h: 720 };
+            case '4-5':
+                return is1080p ? { w: 1080, h: 1350 } : { w: 720, h: 900 };
+            case 'original':
+            default: {
+                const videoWidth = state.video ? state.video.videoWidth : 640;
+                const videoHeight = state.video ? state.video.videoHeight : 360;
+                const cw = (state.cropW || 1) * videoWidth;
+                const ch = (state.cropH || 1) * videoHeight;
+                const maxDim = is1080p ? 1920 : 1280;
+                let w = cw, h = ch;
+                if (w > maxDim || h > maxDim) {
+                    if (w > h) { h = Math.round((h * maxDim) / w); w = maxDim; }
+                    else { w = Math.round((w * maxDim) / h); h = maxDim; }
+                }
+                return { w: Math.round(w), h: Math.round(h) };
+            }
         }
-        const maxBoundary = 1080;
-        if (targetWidth > maxBoundary || targetHeight > maxBoundary) {
-            const r = targetWidth / targetHeight;
-            if (targetWidth > targetHeight) { targetWidth = maxBoundary; targetHeight = maxBoundary / r; }
-            else { targetHeight = maxBoundary; targetWidth = maxBoundary * r; }
-        }
-        return { w: Math.round(targetWidth), h: Math.round(targetHeight) };
     }
 
-    async function runMultiAspectExport(ratios) {
+    async function runMultiAspectExport(items, quality = '720p') {
         if (typeof window.runExportPipeline !== 'function') {
             alert('রেন্ডার পাইপলাইন লোড হয়নি। পেজ রিফ্রেশ করুন।');
             return;
@@ -2041,37 +2047,60 @@ document.addEventListener('DOMContentLoaded', () => {
         const savedCanvasW = state.canvas.width;
         const savedCanvasH = state.canvas.height;
         const savedActiveClipId = state.activeClipId;
-        const savedClipCount = state.clips.length;
+        const savedLayoutMode = state.layoutMode;
+        const savedBackgroundMode = state.backgroundMode;
 
-        for (let i = 0; i < ratios.length; i++) {
-            const ratio = ratios[i];
-            state.aspectRatio = ratio;
-            const dims = computeCanvasDimsForRatio(ratio);
-            state.canvas.width = dims.w;
-            state.canvas.height = dims.h;
+        try {
+            for (let i = 0; i < items.length; i++) {
+                const item = items[i];
+                const ratio = item.ratio;
+                const fitMode = item.fitMode || 'fit-blur';
+
+                state.aspectRatio = ratio;
+                const dims = computeCanvasDimsForRatio(ratio, quality);
+                state.canvas.width = dims.w;
+                state.canvas.height = dims.h;
+
+                if (fitMode === 'crop') {
+                    state.layoutMode = 'fill';
+                    state.backgroundMode = 'none';
+                } else if (fitMode === 'fit-blur') {
+                    state.layoutMode = 'fit';
+                    state.backgroundMode = 'blur';
+                } else if (fitMode === 'fit-black') {
+                    state.layoutMode = 'fit';
+                    state.backgroundMode = 'none';
+                }
+
+                if (window.syncPhase9ClipUI) window.syncPhase9ClipUI();
+                if (window.drawEditorFrame) window.drawEditorFrame();
+                else if (window.drawFrame) window.drawFrame();
+
+                const modeLabel = fitMode === 'crop' ? 'Crop' : (fitMode === 'fit-blur' ? 'Blur' : 'Black Bars');
+                const statusEl = document.getElementById('multi-aspect-current');
+                if (statusEl) {
+                    statusEl.style.display = 'block';
+                    statusEl.innerText = `রেন্ডার হচ্ছে (${i + 1}/${items.length}): ${ratio} (${modeLabel}) — ${dims.w}x${dims.h}`;
+                }
+                setProgressSafe(10 + Math.round((i / items.length) * 80));
+
+                const totalDuration = state.clips.reduce((sum, c) => sum + getClipOutputDuration(c), 0);
+                await window.runExportPipeline(totalDuration, true, `video_${ratio}`, i + 1, items.length);
+            }
+        } finally {
+            // Restore editor layout
+            state.aspectRatio = savedAspect;
+            state.canvas.width = savedCanvasW;
+            state.canvas.height = savedCanvasH;
+            state.activeClipId = savedActiveClipId;
+            state.layoutMode = savedLayoutMode;
+            state.backgroundMode = savedBackgroundMode;
             if (window.syncPhase9ClipUI) window.syncPhase9ClipUI();
             if (window.drawEditorFrame) window.drawEditorFrame();
-
+            else if (window.drawFrame) window.drawFrame();
             const statusEl = document.getElementById('multi-aspect-current');
-            if (statusEl) {
-                statusEl.style.display = 'block';
-                statusEl.innerText = `রেন্ডার হচ্ছে (${i + 1}/${ratios.length}): ${ratio} — ${dims.w}x${dims.h}`;
-            }
-            setProgressSafe(10 + Math.round((i / ratios.length) * 80));
-
-            const totalDuration = state.clips.reduce((sum, c) => sum + getClipOutputDuration(c), 0);
-            await window.runExportPipeline(totalDuration, true, `video_${ratio}`, i + 1, ratios.length);
+            if (statusEl) statusEl.style.display = 'none';
         }
-
-        // Restore editor layout
-        state.aspectRatio = savedAspect;
-        state.canvas.width = savedCanvasW;
-        state.canvas.height = savedCanvasH;
-        state.activeClipId = savedActiveClipId;
-        if (window.syncPhase9ClipUI) window.syncPhase9ClipUI();
-        if (window.drawEditorFrame) window.drawEditorFrame();
-        const statusEl = document.getElementById('multi-aspect-current');
-        if (statusEl) statusEl.style.display = 'none';
     }
 
     function setProgressSafe(pct) {
@@ -2091,12 +2120,23 @@ document.addEventListener('DOMContentLoaded', () => {
         multiAspectBtn.disabled = n === 0;
     }
     multiAspectCheckboxes.forEach(c => c.addEventListener('change', updateMultiAspectCount));
+    updateMultiAspectCount();
+
     if (multiAspectBtn) {
         multiAspectBtn.addEventListener('click', () => {
-            const ratios = [...multiAspectCheckboxes].filter(c => c.checked).map(c => c.value);
-            if (ratios.length === 0) return;
+            const items = [];
+            const quality = document.getElementById('multi-aspect-quality')?.value || '720p';
+            multiAspectCheckboxes.forEach(cb => {
+                if (cb.checked) {
+                    const ratio = cb.value;
+                    const row = cb.closest('.multi-aspect-row');
+                    const fitMode = row ? (row.querySelector('.multi-aspect-fit-mode')?.value || 'fit-blur') : 'fit-blur';
+                    items.push({ ratio, fitMode });
+                }
+            });
+            if (items.length === 0) return;
             multiAspectBtn.disabled = true;
-            runMultiAspectExport(ratios).finally(() => {
+            runMultiAspectExport(items, quality).finally(() => {
                 updateMultiAspectCount();
             });
         });
