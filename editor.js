@@ -24334,15 +24334,23 @@ document.addEventListener('DOMContentLoaded', () => {
     let isProjectSwitching = false;
     let isVideoLoading = false;
 
-    async function saveProjectToBrowserStorage(forcedId) {
+    // Serialize autosaves so rapid UI changes cannot start overlapping
+    // IndexedDB transactions for the same project.
+    let projectSaveQueue = Promise.resolve();
+    const persistedProjectMedia = new Map();
+    function saveProjectToBrowserStorage(forcedId) {
+        const save = projectSaveQueue.catch(() => {}).then(() => saveProjectToBrowserStorageNow(forcedId));
+        projectSaveQueue = save;
+        return save;
+    }
+
+    async function saveProjectToBrowserStorageNow(forcedId) {
         if (editorIsResetting) return;
         try {
             const projId = forcedId || getCurrentProjectId();
             state.activeProjectId = projId;
             const primaryClip = state.clips && state.clips[0];
             const projName = primaryClip ? primaryClip.name : 'Untitled Project';
-
-            const db = await getDB();
             
             // Prepare clean JSON metadata
             const settingsToSave = {
@@ -24488,33 +24496,63 @@ document.addEventListener('DOMContentLoaded', () => {
                 redoLabels: (state.redoLabels || []).slice(-50)
             };
 
+            // Persist the lightweight project metadata and edit history first.
+            // Waiting for large video blobs before doing this meant a refresh
+            // could lose both settings and history if IndexedDB was still busy.
+            try {
+                localStorage.setItem('studio_flow_active_project_id', projId);
+                localStorage.setItem(`studio_flow_project_${projId}`, JSON.stringify(settingsToSave));
+            } catch (storageErr) {
+                try {
+                    for (let i = localStorage.length - 1; i >= 0; i--) {
+                        const key = localStorage.key(i);
+                        if (key && key.startsWith('studio_flow_project_') && key !== `studio_flow_project_${projId}`) {
+                            localStorage.removeItem(key);
+                        }
+                    }
+                    localStorage.setItem('studio_flow_active_project_id', projId);
+                    localStorage.setItem(`studio_flow_project_${projId}`, JSON.stringify(settingsToSave));
+                } catch (e) {
+                    console.warn('Local project snapshot could not be written:', e);
+                }
+            }
+            registerProjectMetadata(projId, projName);
+
+            const db = await getDB();
+
             // Write settings and files to IndexedDB first
             const tx = db.transaction(STORE_NAME, 'readwrite');
             const store = tx.objectStore(STORE_NAME);
+            const mediaWrittenThisSave = [];
+            const putMediaIfChanged = (key, blob) => {
+                if (!blob || persistedProjectMedia.get(key) === blob) return;
+                store.put(blob, key);
+                mediaWrittenThisSave.push([key, blob]);
+            };
 
             store.put(settingsToSave, `${projId}_project_settings`);
 
             if (state.logoFile) {
-                store.put(state.logoFile, `${projId}_logo`);
+                putMediaIfChanged(`${projId}_logo`, state.logoFile);
             }
 
             if (state.voiceoverBlob) {
-                store.put(state.voiceoverBlob, `${projId}_voiceover`);
+                putMediaIfChanged(`${projId}_voiceover`, state.voiceoverBlob);
             }
 
             if (state.backgroundImgFile) {
-                store.put(state.backgroundImgFile, `${projId}_backgroundImg`);
+                putMediaIfChanged(`${projId}_backgroundImg`, state.backgroundImgFile);
             }
 
             state.bgMusicTracks.forEach(t => {
                 if (t.blob) {
-                    store.put(t.blob, `${projId}_bgmusic_${t.id}`);
+                    putMediaIfChanged(`${projId}_bgmusic_${t.id}`, t.blob);
                 }
             });
 
             state.clips.forEach(c => {
                 if (c.file) {
-                    store.put(c.file, `${projId}_clip_${c.id}`);
+                    putMediaIfChanged(`${projId}_clip_${c.id}`, c.file);
                 }
             });
 
@@ -24524,14 +24562,14 @@ document.addEventListener('DOMContentLoaded', () => {
                 // video file must be available here to recreate its <video>
                 // element after a page refresh.
                 if ((b.type === 'image' || b.type === 'gif' || b.type === 'video') && b.file) {
-                    store.put(b.file, `${projId}_broll_${b.id}`);
+                    putMediaIfChanged(`${projId}_broll_${b.id}`, b.file);
                 }
             });
 
             (state.extraTracks || []).forEach(t => {
                 (t.clips || []).forEach(c => {
                     if (c.file) {
-                        store.put(c.file, `${projId}_track_${t.id}_${c.id}`);
+                        putMediaIfChanged(`${projId}_track_${t.id}_${c.id}`, c.file);
                     }
                 });
             });
@@ -24540,29 +24578,10 @@ document.addEventListener('DOMContentLoaded', () => {
                 tx.oncomplete = () => res();
                 tx.onerror = () => rej(tx.error);
             });
+            mediaWrittenThisSave.forEach(([key, blob]) => persistedProjectMedia.set(key, blob));
 
             console.log(`IndexedDB Auto-save completed for project ${projId}.`);
 
-            // Safe localStorage mirror (non-blocking, automatically cleans stale keys if full)
-            try {
-                localStorage.setItem('studio_flow_active_project_id', projId);
-                localStorage.setItem(`studio_flow_project_${projId}`, JSON.stringify(settingsToSave));
-            } catch (storageErr) {
-                try {
-                    // Free up space by removing older project snapshots from localStorage
-                    for (let i = localStorage.length - 1; i >= 0; i--) {
-                        const k = localStorage.key(i);
-                        if (k && k.startsWith('studio_flow_project_') && k !== `studio_flow_project_${projId}`) {
-                            localStorage.removeItem(k);
-                        }
-                    }
-                    // Always save at minimum the active project pointer so restore can find it
-                    try { localStorage.setItem('studio_flow_active_project_id', projId); } catch (e) {}
-                    // Try once more to save the full JSON (may now fit after cleanup)
-                    try { localStorage.setItem(`studio_flow_project_${projId}`, JSON.stringify(settingsToSave)); } catch (e) {}
-                } catch (e) {}
-            }
-            registerProjectMetadata(projId, projName);
         } catch (e) {
             console.error("Auto-save storage failed:", e);
         }
@@ -24613,19 +24632,16 @@ document.addEventListener('DOMContentLoaded', () => {
             }
 
             let savedData = await getFileFromDBWithFallback('project_settings', projId);
-            if (!savedData) {
-                let savedSettingsRaw = null;
-                try {
-                    savedSettingsRaw = localStorage.getItem(`studio_flow_project_${projId}`);
-                    if (!savedSettingsRaw && !targetProjectId) {
-                        savedSettingsRaw = localStorage.getItem('studio_flow_project_settings');
-                    }
-                } catch (e) {}
-                if (savedSettingsRaw) {
-                    try {
-                        savedData = JSON.parse(savedSettingsRaw);
-                    } catch (e) {}
-                }
+            let localSnapshot = null;
+            try {
+                const savedSettingsRaw = localStorage.getItem(`studio_flow_project_${projId}`) ||
+                    (!targetProjectId ? localStorage.getItem('studio_flow_project_settings') : null);
+                if (savedSettingsRaw) localSnapshot = JSON.parse(savedSettingsRaw);
+            } catch (e) {}
+            // A local snapshot is written before the IndexedDB media transaction.
+            // Prefer it when newer so refresh cannot restore an older edit state.
+            if (localSnapshot && (!savedData || (localSnapshot.timestamp || 0) > (savedData.timestamp || 0))) {
+                savedData = localSnapshot;
             }
             if (!savedData) return false;
             const activeProjId = savedData.projectId || projId;
@@ -24878,6 +24894,15 @@ document.addEventListener('DOMContentLoaded', () => {
         }, 1200);
     }
     window.triggerAutoSave = triggerAutoSave;
+
+    // A periodic checkpoint protects edits made through canvas/timeline
+    // controls that do not emit input/change events, and reduces reliance on
+    // the asynchronous unload event when the user refreshes or closes Electron.
+    const autoSaveCheckpoint = setInterval(() => {
+        if (!state.isPlaying && !editorIsResetting && !isProjectSwitching && !isVideoLoading && state.activeProjectId) {
+            saveProjectToBrowserStorage(state.activeProjectId);
+        }
+    }, 15000);
 
     // Bind triggerAutoSave on input changes
     document.addEventListener('input', (e) => {
