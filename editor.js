@@ -22561,11 +22561,15 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // Helper functions for Base64 conversion
-    function blobToBase64(blob) {
+    function blobToBase64(blob, onProgress) {
         return new Promise((resolve, reject) => {
             const reader = new FileReader();
-            reader.onloadend = () => resolve(reader.result);
+            reader.onloadend = () => {
+                if (onProgress && reader.result) onProgress(1);
+                resolve(reader.result);
+            };
             reader.onerror = reject;
+            if (onProgress) reader.onprogress = event => onProgress(event.total ? event.loaded / event.total : 0);
             reader.readAsDataURL(blob);
         });
     }
@@ -22875,10 +22879,51 @@ document.addEventListener('DOMContentLoaded', () => {
     // --- Save project to download file (Settings vs Full) ---
     async function exportProject(mode) {
         const prevConfirmText = saveModalConfirm.innerHTML;
+        const filename = `studio-flow-project-${mode === 'full' ? 'full' : 'settings'}-${Date.now()}.json`;
+        const progressBox = document.getElementById('project-save-progress');
+        const progressText = document.getElementById('project-save-progress-text');
+        const progressPercent = document.getElementById('project-save-progress-percent');
+        const progressFill = document.getElementById('project-save-progress-fill');
+        const setSaveProgress = (percent, message) => {
+            const value = Math.max(0, Math.min(100, Math.round(percent)));
+            if (progressBox) progressBox.style.display = 'block';
+            if (progressText) progressText.textContent = message;
+            if (progressPercent) progressPercent.textContent = `${value}%`;
+            if (progressFill) progressFill.style.width = `${value}%`;
+        };
+        const blobsToEmbed = [state.logoFile, state.voiceoverBlob, state.backgroundImgFile].filter(Boolean);
+        (state.brollOverlays || []).forEach(item => {
+            if ((item.type === 'image' || item.type === 'gif') && item.file && !(item.imageUrl && item.imageUrl.startsWith('data:image/'))) blobsToEmbed.push(item.file);
+        });
+        if (mode === 'full') {
+            (state.clips || []).forEach(item => { if (item.file) blobsToEmbed.push(item.file); });
+            (state.bgMusicTracks || []).forEach(item => { if (item.blob) blobsToEmbed.push(item.blob); });
+            (state.extraTracks || []).forEach(track => (track.clips || []).forEach(item => { if (item.file) blobsToEmbed.push(item.file); }));
+        }
+        const totalEmbedBytes = Math.max(1, blobsToEmbed.reduce((sum, blob) => sum + blob.size, 0));
+        let convertedBytes = 0;
+        const embedBlobAsBase64 = blob => {
+            let previousLoaded = 0;
+            return blobToBase64(blob, fraction => {
+                convertedBytes += Math.max(0, fraction - previousLoaded) * blob.size;
+                previousLoaded = fraction;
+                const pct = totalEmbedBytes ? 5 + (convertedBytes / totalEmbedBytes) * 65 : 70;
+                setSaveProgress(pct, 'Preparing project media...');
+            });
+        };
         try {
-            // Show custom loading feedback
             saveModalConfirm.disabled = true;
             saveModalConfirm.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Exporting...';
+            setSaveProgress(0, 'Choose a name and save location...');
+            // The picker must be opened directly from the Save button gesture.
+            const saveHandle = typeof window.showSaveFilePicker === 'function'
+                ? await window.showSaveFilePicker({
+                    suggestedName: filename,
+                    types: [{ description: 'Studio Flow Project', accept: { 'application/json': ['.json'] } }]
+                })
+                : null;
+            if (saveModalCancel) saveModalCancel.disabled = true;
+            setSaveProgress(2, 'Preparing project media...');
 
             const data = {
                 version: "1.0",
@@ -22979,18 +23024,18 @@ document.addEventListener('DOMContentLoaded', () => {
 
             // Convert logo to Base64 (always, since it is small)
             if (state.logoFile) {
-                data.logoBase64 = await blobToBase64(state.logoFile);
+                data.logoBase64 = await embedBlobAsBase64(state.logoFile);
                 data.logoName = state.logoFile.name;
             }
 
             // Convert voiceover to Base64 (always, since it's small)
             if (state.voiceoverBlob) {
-                data.voiceoverBase64 = await blobToBase64(state.voiceoverBlob);
+                data.voiceoverBase64 = await embedBlobAsBase64(state.voiceoverBlob);
             }
 
             // Convert background image to Base64 (always, since it is a static picture)
             if (state.backgroundImgFile) {
-                data.backgroundImgBase64 = await blobToBase64(state.backgroundImgFile);
+                data.backgroundImgBase64 = await embedBlobAsBase64(state.backgroundImgFile);
                 data.backgroundImgName = state.backgroundImgFile.name;
             }
 
@@ -23006,7 +23051,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     if (broll.imageUrl && broll.imageUrl.startsWith('data:image/')) {
                         brollCopy.imageBase64 = broll.imageUrl;
                     } else if (broll.file) {
-                        brollCopy.imageBase64 = await blobToBase64(broll.file);
+                        brollCopy.imageBase64 = await embedBlobAsBase64(broll.file);
                     }
                 }
                 data.brollOverlays.push(brollCopy);
@@ -23022,7 +23067,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
                 if (mode === 'full') {
                     if (clip.file) {
-                        clipCopy.videoBase64 = await blobToBase64(clip.file);
+                        clipCopy.videoBase64 = await embedBlobAsBase64(clip.file);
                         clipCopy.fileType = clip.file.type;
                     }
                 }
@@ -23038,7 +23083,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
                 if (mode === 'full') {
                     if (track.blob) {
-                        trackCopy.audioBase64 = await blobToBase64(track.blob);
+                        trackCopy.audioBase64 = await embedBlobAsBase64(track.blob);
                         trackCopy.fileType = track.blob.type;
                     }
                 }
@@ -23064,7 +23109,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
                     if (mode === 'full') {
                         if (eclip.file) {
-                            clipCopy.mediaBase64 = await blobToBase64(eclip.file);
+                            clipCopy.mediaBase64 = await embedBlobAsBase64(eclip.file);
                             clipCopy.fileType = eclip.file.type;
                         }
                     }
@@ -23073,25 +23118,45 @@ document.addEventListener('DOMContentLoaded', () => {
                 data.extraTracks.push(trackCopy);
             }
 
-            // Trigger JSON file download
-            const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(data));
-            const downloadAnchor = document.createElement('a');
-            const filename = `studio-flow-project-${mode === 'full' ? 'full' : 'settings'}-${Date.now()}.json`;
-            downloadAnchor.setAttribute("href", dataStr);
-            downloadAnchor.setAttribute("download", filename);
-            document.body.appendChild(downloadAnchor);
-            downloadAnchor.click();
-            downloadAnchor.remove();
-            
-            // Reset confirm button
-            saveModalConfirm.disabled = false;
-            saveModalConfirm.innerHTML = prevConfirmText;
+            setSaveProgress(72, 'Building project file...');
+            const projectBlob = new Blob([JSON.stringify(data)], { type: 'application/json' });
+            if (saveHandle) {
+                const writable = await saveHandle.createWritable();
+                const reader = projectBlob.stream().getReader();
+                let writtenBytes = 0;
+                setSaveProgress(75, 'Saving file...');
+                while (true) {
+                    const { done, value } = await reader.read();
+                    if (done) break;
+                    await writable.write(value);
+                    writtenBytes += value.byteLength;
+                    setSaveProgress(75 + (writtenBytes / projectBlob.size) * 25, 'Saving file...');
+                }
+                await writable.close();
+            } else {
+                const downloadUrl = URL.createObjectURL(projectBlob);
+                const downloadAnchor = document.createElement('a');
+                downloadAnchor.href = downloadUrl;
+                downloadAnchor.download = filename;
+                document.body.appendChild(downloadAnchor);
+                downloadAnchor.click();
+                downloadAnchor.remove();
+                setTimeout(() => URL.revokeObjectURL(downloadUrl), 60000);
+            }
+            setSaveProgress(100, `Saved: ${saveHandle ? saveHandle.name : filename}`);
             console.log("Project exported successfully.");
         } catch (e) {
+            if (e && e.name === 'AbortError') {
+                if (progressBox) progressBox.style.display = 'none';
+                return;
+            }
             console.error("Export failed:", e);
             alert("প্রজেক্ট এক্সপোর্ট করতে ব্যর্থ হয়েছে। অনুগ্রহ করে আবার চেষ্টা করুন।");
+            setSaveProgress(0, 'Could not save project file. Please try again.');
+        } finally {
             saveModalConfirm.disabled = false;
             saveModalConfirm.innerHTML = prevConfirmText;
+            if (saveModalCancel) saveModalCancel.disabled = false;
         }
     }
 
@@ -24202,10 +24267,10 @@ document.addEventListener('DOMContentLoaded', () => {
                     })
                 }))
             ,
-                historyLabels: (state.historyLabels || []).slice(-35),
-                undoStack: (state.undoStack || []).slice(-35),
-                redoStack: (state.redoStack || []).slice(-20),
-                redoLabels: (state.redoLabels || []).slice(-20)
+                historyLabels: (state.historyLabels || []).slice(-50),
+                undoStack: (state.undoStack || []).slice(-50),
+                redoStack: (state.redoStack || []).slice(-50),
+                redoLabels: (state.redoLabels || []).slice(-50)
             };
 
             // Write settings and files to IndexedDB first
@@ -24679,7 +24744,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
     if (saveModalConfirm) {
         saveModalConfirm.addEventListener('click', async () => {
-            closeSaveModal();
             await exportProject(selectedSaveMode);
         });
     }
@@ -24824,10 +24888,10 @@ document.addEventListener('DOMContentLoaded', () => {
             const playPauseBtnEl = document.getElementById('play-pause-btn');
             if (playPauseBtnEl) playPauseBtnEl.innerHTML = '<i class="fa-solid fa-play"></i>';
 
-            state.historyLabels = (savedData && savedData.historyLabels) ? savedData.historyLabels : [];
-            state.undoStack = (savedData && savedData.undoStack) ? savedData.undoStack : [];
-            state.redoStack = (savedData && savedData.redoStack) ? savedData.redoStack : [];
-            state.redoLabels = (savedData && savedData.redoLabels) ? savedData.redoLabels : [];
+            state.historyLabels = (savedData && savedData.historyLabels ? savedData.historyLabels : []).slice(-50);
+            state.undoStack = (savedData && savedData.undoStack ? savedData.undoStack : []).slice(-50);
+            state.redoStack = (savedData && savedData.redoStack ? savedData.redoStack : []).slice(-50);
+            state.redoLabels = (savedData && savedData.redoLabels ? savedData.redoLabels : []).slice(-50);
             if (typeof window.updateHistoryUI === 'function') {
                 window.updateHistoryUI();
             } else if (typeof updateHistoryUI === 'function') {

@@ -2204,6 +2204,10 @@ input:checked + .slider:before {
     transition: width 0.1s linear;
 }
 
+.project-save-progress {
+    margin-top: 16px;
+}
+
 .render-eta-row {
     display: flex;
     justify-content: flex-end;

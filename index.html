@@ -5057,10 +5057,14 @@
                     <i class="fa-solid fa-triangle-exclamation"></i>
                     <span>আপনার বর্তমান প্রজেক্টে বড় ভিডিও ফাইল থাকায় এই মোডে ফাইল সাইজ বড় হবে এবং এক্সপোর্ট করতে কিছুটা লোডিং টাইম লাগবে।</span>
                 </div>
+                <div id="project-save-progress" class="project-save-progress" style="display:none" role="status" aria-live="polite">
+                    <div class="progress-info"><span id="project-save-progress-text">Preparing project file...</span><span id="project-save-progress-percent">0%</span></div>
+                    <div class="progress-bar-container"><div class="progress-bar-fill" id="project-save-progress-fill"></div></div>
+                </div>
             </div>
             <div class="modal-footer">
                 <button class="btn btn-secondary" id="save-modal-cancel">Cancel</button>
-                <button class="btn btn-primary" id="save-modal-confirm"><i class="fa-solid fa-download"></i> Download Project File</button>
+                <button class="btn btn-primary" id="save-modal-confirm"><i class="fa-solid fa-floppy-disk"></i> Choose Location &amp; Save</button>
             </div>
         </div>
     </div>

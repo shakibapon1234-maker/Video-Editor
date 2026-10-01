@@ -168,7 +168,9 @@ document.addEventListener('DOMContentLoaded', () => {
     state.redoStack = state.redoStack || [];
     state.historyLabels = state.historyLabels || [];
     state.redoLabels = state.redoLabels || [];
-    const MAX_HISTORY = 40;
+    // Keep the same number of undo snapshots and visible history entries, and
+    // persist that complete window with the project on each history change.
+    const MAX_HISTORY = 50;
     let historySuspended = false;
     let cachedLogoImg = null;
     let cachedLogoFile = null;
