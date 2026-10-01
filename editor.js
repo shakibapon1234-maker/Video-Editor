@@ -1654,7 +1654,26 @@ document.addEventListener('DOMContentLoaded', () => {
         const originalText = videoDropzone.querySelector('h3').innerText;
         videoDropzone.querySelector('h3').innerText = "Loading File...";
         
-        const isRestoredProj = await switchProjectForVideo(file);
+        let isRestoredProj = false;
+        const previousProjectId = state.activeProjectId;
+        try {
+            isRestoredProj = await switchProjectForVideo(file);
+        } catch (error) {
+            // Project lookup/restore runs before media decoding. If IndexedDB or
+            // a saved-project read fails here, never leave the dropzone stuck on
+            // "Loading File..." with no video loaded.
+            console.error('Saved project lookup failed while importing media:', error);
+            state.activeProjectId = previousProjectId;
+            isProjectSwitching = false;
+            videoDropzone.querySelector('h3').innerText = originalText;
+            isVideoLoading = false;
+            if (typeof showToast === 'function') {
+                showToast('Could not check the saved project. Loading stopped. Please select the video again.', 'error');
+            } else {
+                alert('Could not check the saved project. Please select the video again.');
+            }
+            return;
+        }
         if (isRestoredProj) {
             videoDropzone.querySelector('h3').innerText = originalText;
             document.getElementById('timeline-controls').style.display = 'flex';
@@ -1741,6 +1760,13 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
                 isVideoLoading = false;
                 triggerAutoSave();
+            };
+            img.onerror = (error) => {
+                console.error('Image import failed:', error);
+                videoDropzone.querySelector('h3').innerText = originalText;
+                isVideoLoading = false;
+                if (typeof showToast === 'function') showToast('Could not load this image. Try a valid PNG, JPG, or WebP file.', 'error');
+                else alert('Could not load this image. Try a valid PNG, JPG, or WebP file.');
             };
             img.src = fileURL;
         } else {
@@ -1898,6 +1924,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 reader.onerror = (err) => {
                     console.error("FileReader error: ", err);
                     videoDropzone.querySelector('h3').innerText = originalText;
+                    isVideoLoading = false;
                     alert("ফাইলটি পড়তে সমস্যা হয়েছে।");
                 };
                 reader.readAsDataURL(file);
@@ -3499,12 +3526,41 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
     
+    // The media element clock is source time (for example 171.3s into the
+    // original file), while the editor playhead is output-timeline time (4.4s
+    // into a clip trimmed to start at 166.9s). Keep those clocks distinct so
+    // audio tracks, seek bars, and exported duration all share the same origin.
+    function getEditorTimelineClock() {
+        const clips = state.clips || [];
+        if (!clips.length) {
+            const total = Math.max(0, state.duration || 0);
+            return { current: Math.max(0, Math.min(total, state.currentTime || 0)), total };
+        }
+
+        const getClipDuration = (clip) => window.getClipOutputDuration
+            ? window.getClipOutputDuration(clip)
+            : Math.max(0, (clip.end || 0) - (clip.start || 0)) / Math.max(0.5, Math.min(2, Number(clip.speed) || 1));
+        const total = clips.reduce((sum, clip) => sum + getClipDuration(clip), 0);
+        const activeIndex = clips.findIndex(clip => clip.id === state.activeClipId);
+        if (activeIndex < 0) return { current: 0, total };
+
+        let current = 0;
+        for (let i = 0; i < activeIndex; i++) current += getClipDuration(clips[i]);
+        const active = clips[activeIndex];
+        const activeElapsed = window.getClipOutputElapsedForSourceTime
+            ? window.getClipOutputElapsedForSourceTime(active, state.currentTime || 0)
+            : Math.max(0, (state.currentTime - (active.start || 0))) / Math.max(0.5, Math.min(2, Number(active.speed) || 1));
+        current += activeElapsed;
+        return { current: Math.max(0, Math.min(total, current)), total };
+    }
+
     // Update playhead UI position
     function updatePlayhead() {
         const current = state.currentTime;
         const total = state.duration;
+        const timelineClock = getEditorTimelineClock();
         
-        document.getElementById('canvas-time-display').innerText = `${formatTime(current)} / ${formatTime(total)}`;
+        document.getElementById('canvas-time-display').innerText = `${formatTime(timelineClock.current)} / ${formatTime(timelineClock.total)}`;
         
         const percent = (current / total) * 100;
         playhead.style.left = percent + '%';
@@ -3517,12 +3573,64 @@ document.addEventListener('DOMContentLoaded', () => {
 
         // Dedicated seek/scrub bar
         if (seekSlider && !state.isDraggingSeek) {
-            seekSlider.max = total || 0;
-            seekSlider.value = current;
+            seekSlider.max = timelineClock.total || 0;
+            seekSlider.value = timelineClock.current;
         }
-        if (seekFill) seekFill.style.width = Math.max(0, Math.min(100, percent)) + '%';
-        if (seekCurrentTimeEl) seekCurrentTimeEl.innerHTML = formatTimeDual(current);
-        if (seekTotalTimeEl) seekTotalTimeEl.innerHTML = formatTimeDual(total);
+        if (seekFill) seekFill.style.width = (timelineClock.total > 0 ? Math.max(0, Math.min(100, (timelineClock.current / timelineClock.total) * 100)) : 0) + '%';
+        if (seekCurrentTimeEl) seekCurrentTimeEl.innerHTML = formatTimeDual(timelineClock.current);
+        if (seekTotalTimeEl) seekTotalTimeEl.innerHTML = formatTimeDual(timelineClock.total);
+    }
+
+    let pendingTimelineSeek = null;
+    function applyPendingTimelineSeek(clip) {
+        if (!pendingTimelineSeek || pendingTimelineSeek.clipId !== clip.id) return;
+        const sourceTime = pendingTimelineSeek.sourceTime;
+        pendingTimelineSeek = null;
+        state.currentTime = sourceTime;
+        if (clip.type !== 'image') state.video.currentTime = sourceTime;
+    }
+
+    function seekEditorTimelineTo(outputTime) {
+        const clips = state.clips || [];
+        if (!clips.length) {
+            state.currentTime = Math.max(0, Math.min(state.duration || 0, outputTime));
+            updatePlayhead();
+            drawFrame();
+            return;
+        }
+
+        const getClipDuration = (clip) => window.getClipOutputDuration
+            ? window.getClipOutputDuration(clip)
+            : Math.max(0, (clip.end || 0) - (clip.start || 0)) / Math.max(0.5, Math.min(2, Number(clip.speed) || 1));
+        const total = clips.reduce((sum, clip) => sum + getClipDuration(clip), 0);
+        let remaining = Math.max(0, Math.min(total, Number(outputTime) || 0));
+        let target = clips[clips.length - 1];
+        let targetElapsed = getClipDuration(target);
+        for (const clip of clips) {
+            const duration = getClipDuration(clip);
+            if (remaining <= duration) {
+                target = clip;
+                targetElapsed = remaining;
+                break;
+            }
+            remaining -= duration;
+        }
+
+        const sourceTime = window.getClipSourceTimeForOutputElapsed
+            ? window.getClipSourceTimeForOutputElapsed(target, targetElapsed)
+            : (target.start || 0) + targetElapsed * Math.max(0.5, Math.min(2, Number(target.speed) || 1));
+        if (target.id !== state.activeClipId) {
+            // While scrubbing across a clip boundary, keep the displayed
+            // timeline position moving but switch media only once on release.
+            if (state.isDraggingSeek) return;
+            pendingTimelineSeek = { clipId: target.id, sourceTime };
+            switchActiveClip(target.id);
+            return;
+        }
+        state.currentTime = sourceTime;
+        if (target.type !== 'image') state.video.currentTime = sourceTime;
+        updatePlayhead();
+        drawFrame();
     }
     
     // Trim Slider Interaction
@@ -3692,6 +3800,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 updateCanvasDimensions();
                 state.currentTime = state.startTime;
                 state.video.currentTime = state.startTime;
+                applyPendingTimelineSeek(clip);
                 updatePlayhead();
                 updateCropDimensionsDisplay();
                 drawFrame();
@@ -3729,6 +3838,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 updateCanvasDimensions();
                 state.currentTime = state.startTime;
                 state.video.currentTime = state.startTime;
+                applyPendingTimelineSeek(clip);
                 updatePlayhead();
                 updateCropDimensionsDisplay();
                 state.video.playbackRate = Math.max(0.5, Math.min(2, Number(clip.speed) || 1));
@@ -3850,6 +3960,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (window.updateSilenceTrimmerVisibility) {
             window.updateSilenceTrimmerVisibility();
         }
+        updatePlayhead();
     }
 
     window.renderClipTimeline = renderClipTimeline;
@@ -3903,34 +4014,29 @@ document.addEventListener('DOMContentLoaded', () => {
 
         seekSlider.addEventListener('input', (e) => {
             const val = parseFloat(e.target.value) || 0;
-            if (seekFill && state.duration) {
-                seekFill.style.width = Math.max(0, Math.min(100, (val / state.duration) * 100)) + '%';
+            const timelineTotal = parseFloat(seekSlider.max) || 0;
+            if (seekFill && timelineTotal) {
+                seekFill.style.width = Math.max(0, Math.min(100, (val / timelineTotal) * 100)) + '%';
             }
             if (seekCurrentTimeEl) seekCurrentTimeEl.innerHTML = formatTimeDual(val);
 
-            const activeClip = state.clips.find(c => c.id === state.activeClipId);
-            if (activeClip && activeClip.type === 'image') {
-                state.currentTime = val;
-            } else {
-                state.imagePlayheadTime = val;
-                pendingSeekTime = val;
-                if (!isSeekingThrottled) {
-                    isSeekingThrottled = true;
-                    requestAnimationFrame(() => {
-                        if (pendingSeekTime !== null) {
-                            state.video.currentTime = pendingSeekTime;
-                            pendingSeekTime = null;
-                        }
-                        isSeekingThrottled = false;
-                    });
-                }
+            pendingSeekTime = val;
+            if (!isSeekingThrottled) {
+                isSeekingThrottled = true;
+                requestAnimationFrame(() => {
+                    if (pendingSeekTime !== null) {
+                        seekEditorTimelineTo(pendingSeekTime);
+                        pendingSeekTime = null;
+                    }
+                    isSeekingThrottled = false;
+                });
             }
         });
 
         function finishSeekDrag() {
             state.isDraggingSeek = false;
             if (pendingSeekTime !== null) {
-                state.video.currentTime = pendingSeekTime;
+                seekEditorTimelineTo(pendingSeekTime);
                 pendingSeekTime = null;
             }
             updatePlayhead();
@@ -24057,6 +24163,7 @@ document.addEventListener('DOMContentLoaded', () => {
     async function switchProjectForVideo(file) {
         if (!file) return false;
         isProjectSwitching = true;
+        const hadPendingAutoSave = !!autoSaveTimeout;
         if (autoSaveTimeout) {
             clearTimeout(autoSaveTimeout);
             autoSaveTimeout = null;
@@ -24066,40 +24173,33 @@ document.addEventListener('DOMContentLoaded', () => {
         const videoFingerprint = getVideoFingerprint(file);
 
         try {
-            if (state.clips && state.clips.length > 0 && state.activeProjectId && state.activeProjectId !== targetProjId) {
+            // Autosave already writes settled edits to IndexedDB. Only force a
+            // synchronous save when the debounce is still pending; saving every
+            // large project again before loading the next source made imports
+            // appear stuck on slower PCs.
+            if (hadPendingAutoSave && state.clips && state.clips.length > 0 && state.activeProjectId && state.activeProjectId !== targetProjId) {
                 console.log(`Auto-saving previous project ${state.activeProjectId} before switching to ${targetProjId}...`);
                 await saveProjectToBrowserStorage(state.activeProjectId);
             }
 
             state.activeProjectId = targetProjId;
 
-            // --- BUG FIX: Check IndexedDB *and* localStorage for saved project ---
-            // Previously only localStorage mirror was checked, which silently failed
-            // whenever the browser cleared or quota-exceeded localStorage. Now we
-            // also probe IndexedDB directly so the restore always works.
-            const _dbForCheck = await getDB();
-            const _hasInDB = (key) => new Promise(res => {
-                try {
-                    const tx = _dbForCheck.transaction(STORE_NAME, 'readonly');
-                    const req = tx.objectStore(STORE_NAME).get(key);
-                    req.onsuccess = () => res(req.result !== undefined && req.result !== null);
-                    req.onerror = () => res(false);
-                } catch(e) { res(false); }
-            });
-
-            // Check targetProjId in IndexedDB first, then localStorage
+            // Keep media import independent from IndexedDB. An IndexedDB open
+            // here can stay pending in Electron and block both image and video
+            // imports before their source is assigned. The project manager can
+            // still restore projects explicitly; this auto-detect path uses the
+            // localStorage mirror only, as it did before the recent regression.
             let savedProjectId = null;
-            if (localStorage.getItem(`studio_flow_project_${targetProjId}`) || await _hasInDB(`${targetProjId}_project_settings`)) {
+            const registryProjects = getProjectsRegistry()
+                .filter(p => p.videoFingerprint === videoFingerprint)
+                .sort((a, b) => b.lastModified - a.lastModified);
+            if (localStorage.getItem(`studio_flow_project_${targetProjId}`)) {
                 savedProjectId = targetProjId;
-            } else if (localStorage.getItem(`studio_flow_project_${legacyProjId}`) || await _hasInDB(`${legacyProjId}_project_settings`)) {
+            } else if (localStorage.getItem(`studio_flow_project_${legacyProjId}`)) {
                 savedProjectId = legacyProjId;
             } else {
-                // Check registry for fingerprint-matched projects (also probe IndexedDB)
-                const registryProjects = getProjectsRegistry()
-                    .filter(p => p.videoFingerprint === videoFingerprint)
-                    .sort((a, b) => b.lastModified - a.lastModified);
                 for (const project of registryProjects) {
-                    if (localStorage.getItem(`studio_flow_project_${project.id}`) || await _hasInDB(`${project.id}_project_settings`)) {
+                    if (localStorage.getItem(`studio_flow_project_${project.id}`)) {
                         savedProjectId = project.id;
                         break;
                     }

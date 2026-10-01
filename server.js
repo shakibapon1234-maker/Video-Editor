@@ -626,6 +626,97 @@ app.post('/api/remove-audio', express.raw({ type: '*/*', limit: '2gb' }), (req, 
 const ADDAUDIO_TEMP_DIR = path.join(DATA_DIR, 'temp_addaudio');
 if (!fs.existsSync(ADDAUDIO_TEMP_DIR)) fs.mkdirSync(ADDAUDIO_TEMP_DIR);
 
+// Fast joining for already-rendered chunks. Files are streamed to disk and
+// FFmpeg uses stream copy, so no frames are decoded or re-encoded.
+const FASTJOIN_TEMP_DIR = path.join(DATA_DIR, 'temp_fastjoin');
+if (!fs.existsSync(FASTJOIN_TEMP_DIR)) fs.mkdirSync(FASTJOIN_TEMP_DIR, { recursive: true });
+const fastJoinSessions = new Map();
+function safeJoinName(name) {
+    const safe = path.basename(String(name || 'video.mp4')).replace(/[<>:"/\\|?*\x00-\x1f]/g, '_').slice(0, 150);
+    return !safe || safe === '.' || safe === '..' ? 'video.mp4' : safe;
+}
+function fastJoinSession(req, res) {
+    const session = fastJoinSessions.get(req.params.sessionId);
+    if (!session) res.status(404).json({ error: 'Joining session expired. Please select the files again.' });
+    return session;
+}
+app.post('/api/fast-join/init', (req, res) => {
+    try {
+        const names = req.body && req.body.files;
+        if (!Array.isArray(names) || names.length < 2 || names.length > 50) return res.status(400).json({ error: 'Select between 2 and 50 video files.' });
+        const sessionId = `fastjoin_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+        const tempDir = path.join(FASTJOIN_TEMP_DIR, sessionId);
+        fs.mkdirSync(tempDir);
+        const session = { tempDir, files: names.map(safeJoinName), uploaded: new Set(), status: 'uploading', percent: 0 };
+        session.expiryTimer = setTimeout(() => {
+            if (fastJoinSessions.get(sessionId) === session && session.status !== 'joining') {
+                cleanupDir(tempDir);
+                fastJoinSessions.delete(sessionId);
+            }
+        }, 6 * 60 * 60 * 1000);
+        if (session.expiryTimer.unref) session.expiryTimer.unref();
+        fastJoinSessions.set(sessionId, session);
+        res.json({ sessionId });
+    } catch (error) { res.status(500).json({ error: error.message }); }
+});
+app.post('/api/fast-join/:sessionId/upload/:index', (req, res) => {
+    const session = fastJoinSession(req, res);
+    if (!session) return;
+    const index = Number(req.params.index);
+    if (!Number.isInteger(index) || index < 0 || index >= session.files.length || session.status !== 'uploading') return res.status(400).json({ error: 'Invalid upload request.' });
+    const ext = path.extname(session.files[index]).toLowerCase();
+    if (!['.mp4', '.m4v', '.mov', '.webm', '.mkv'].includes(ext)) return res.status(400).json({ error: 'Unsupported video file type.' });
+    const out = fs.createWriteStream(path.join(session.tempDir, `part_${String(index).padStart(3, '0')}${ext}`));
+    req.on('error', (error) => out.destroy(error));
+    out.on('error', (error) => { if (!res.headersSent) res.status(500).json({ error: error.message }); });
+    out.on('finish', () => { session.uploaded.add(index); res.json({ ok: true }); });
+    req.pipe(out);
+});
+app.post('/api/fast-join/:sessionId/compile', (req, res) => {
+    const session = fastJoinSession(req, res);
+    if (!session) return;
+    if (session.uploaded.size !== session.files.length || session.status !== 'uploading') return res.status(400).json({ error: 'Upload all selected videos first.' });
+    const ext = path.extname(session.files[0]).toLowerCase();
+    if (session.files.some((name) => path.extname(name).toLowerCase() !== ext)) return res.status(400).json({ error: 'All clips must use the same container format (for example, all MP4).' });
+    session.outputName = safeJoinName((req.body && req.body.outputName) || `joined-video${ext}`);
+    if (path.extname(session.outputName).toLowerCase() !== ext) session.outputName = `${path.basename(session.outputName, path.extname(session.outputName))}${ext}`;
+    session.outputPath = path.join(session.tempDir, session.outputName);
+    session.status = 'joining';
+    const listPath = path.join(session.tempDir, 'concat.txt');
+    const list = session.files.map((name, i) => {
+        const inputPath = path.join(session.tempDir, `part_${String(i).padStart(3, '0')}${ext}`);
+        return `file '${inputPath.replace(/\\/g, '/').replace(/'/g, "'\\''")}'`;
+    }).join('\n');
+    fs.writeFileSync(listPath, list, 'utf8');
+    ffmpeg()
+        .input(listPath).inputOptions(['-f concat', '-safe 0'])
+        .outputOptions(['-c copy', ...(ext === '.mp4' || ext === '.m4v' || ext === '.mov' ? ['-movflags +faststart'] : [])])
+        .output(session.outputPath)
+        .on('progress', (progress) => { session.percent = Math.max(0, Math.min(99, Math.round(progress.percent || 0))); })
+        .on('end', () => { session.percent = 100; session.status = 'done'; })
+        .on('error', (error, stdout, stderr) => {
+            session.status = 'error';
+            session.error = /codec|parameter|stream/i.test(stderr || '') ? 'এই ক্লিপগুলোর encoding/stream এক নয়, তাই দ্রুত জোড়া লাগানো যায়নি। একই export settings-এ আবার export করুন।' : error.message;
+            clearTimeout(session.expiryTimer);
+            setTimeout(() => { cleanupDir(session.tempDir); fastJoinSessions.delete(req.params.sessionId); }, 10 * 60 * 1000).unref?.();
+        });
+    res.json({ ok: true });
+});
+app.get('/api/fast-join/:sessionId/status', (req, res) => {
+    const session = fastJoinSession(req, res);
+    if (!session) return;
+    res.json({ status: session.status, percent: session.percent, error: session.error || null, downloadUrl: session.status === 'done' ? `/api/fast-join/${encodeURIComponent(req.params.sessionId)}/download` : null, filename: session.outputName || null });
+});
+app.get('/api/fast-join/:sessionId/download', (req, res) => {
+    const session = fastJoinSession(req, res);
+    if (!session) return;
+    if (session.status !== 'done' || !fs.existsSync(session.outputPath)) return res.status(409).send('Joined video is not ready.');
+    res.download(session.outputPath, session.outputName, () => setTimeout(() => {
+        cleanupDir(session.tempDir);
+        fastJoinSessions.delete(req.params.sessionId);
+    }, 30000));
+});
+
 // In-memory session registry: sessionId -> { tempDir, videoPath, audioPath, videoOriginalName }
 const addAudioSessions = new Map();
 

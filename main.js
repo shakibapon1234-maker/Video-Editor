@@ -1,6 +1,8 @@
 const { app, BrowserWindow, session, dialog, ipcMain, clipboard, nativeImage } = require('electron');
 const path = require('path');
 const fs = require('fs');
+const http = require('http');
+const { pipeline } = require('stream/promises');
 
 try {
     app.setAppUserModelId('com.shakib.videoeditor');
@@ -81,6 +83,46 @@ if (!gotLock) {
             console.error('Native image clipboard copy failed:', error);
             return false;
         }
+    });
+
+    // Download a completed fast-join result straight to the path selected by
+    // the user. Streaming keeps large 30–40 minute videos out of renderer RAM.
+    ipcMain.handle('save-fast-join-video', async (event, downloadUrl, filename) => {
+        if (typeof downloadUrl !== 'string' || !/^\/api\/fast-join\/fastjoin_[a-zA-Z0-9_-]+\/download$/.test(downloadUrl)) {
+            throw new Error('Invalid fast-join download request.');
+        }
+        const cleanName = path.basename(String(filename || 'joined-video.mp4')).replace(/[<>:"/\\|?*\x00-\x1f]/g, '_');
+        const extension = path.extname(cleanName).replace('.', '').toLowerCase() || 'mp4';
+        const choice = await dialog.showSaveDialog(mainWindow, {
+            title: 'Save joined video',
+            defaultPath: path.join(app.getPath('videos'), cleanName || 'joined-video.mp4'),
+            filters: [{ name: 'Video', extensions: [extension] }, { name: 'All Files', extensions: ['*'] }]
+        });
+        if (choice.canceled || !choice.filePath) return { canceled: true };
+
+        await new Promise((resolve, reject) => {
+            const request = http.get(`http://127.0.0.1:4000${downloadUrl}`, (response) => {
+                if (response.statusCode !== 200) {
+                    response.resume();
+                    reject(new Error(`Download failed (HTTP ${response.statusCode}).`));
+                    return;
+                }
+                const total = Number(response.headers['content-length']) || 0;
+                let received = 0;
+                response.on('data', (chunk) => {
+                    received += chunk.length;
+                    event.sender.send('fast-join-save-progress', { loaded: received, total, percent: total ? Math.round(received / total * 100) : 0 });
+                });
+                pipeline(response, fs.createWriteStream(choice.filePath))
+                    .then(resolve)
+                    .catch(async (error) => {
+                        await fs.promises.unlink(choice.filePath).catch(() => {});
+                        reject(error);
+                    });
+            });
+            request.on('error', reject);
+        });
+        return { canceled: false, filePath: choice.filePath };
     });
 
     app.whenReady().then(() => {
