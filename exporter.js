@@ -4,6 +4,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
     async function serverLog(message) {
         console.log(message);
+        // Static HTTPS hosts (for example GitHub Pages) have no /api/log
+        // endpoint; avoid waiting on a doomed POST during browser rendering.
+        if (window.location.protocol === 'https:') return;
         try {
             await fetch('/api/log', {
                 method: 'POST',
@@ -582,12 +585,24 @@ document.addEventListener('DOMContentLoaded', () => {
         let mode = 'ws';
         if (isCapacitorApp()) {
             mode = 'wasm';
+        } else if (window.location.protocol === 'https:') {
+            // The built-in render server uses plain ws://, which HTTPS pages
+            // cannot access. Hosted HTTPS builds must use bundled FFmpeg WASM.
+            if (!window.MobileRenderEngine) {
+                throw new Error('This HTTPS page cannot connect to the local render server, and the in-browser render engine is unavailable. Open the editor from the desktop app or reload the page.');
+            }
+            renderStatusText.innerText = 'Using the in-browser render engine...';
+            setProgress(2);
+            mode = 'wasm';
         } else {
             renderStatusText.innerText = 'সার্ভারের সাথে কানেক্ট করা হচ্ছে... (Connecting to render server...)';
             setProgress(2);
             const wsUrl = `ws://${window.location.hostname || 'localhost'}:4000`;
-            const wsTemp = new WebSocket(wsUrl);
+            let wsTemp;
             try {
+                // WebSocket construction itself may throw synchronously for
+                // an insecure connection from a secure page.
+                wsTemp = new WebSocket(wsUrl);
                 await new Promise((resolve, reject) => {
                     const timeout = setTimeout(() => {
                         wsTemp.close();
