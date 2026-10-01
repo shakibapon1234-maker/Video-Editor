@@ -1639,6 +1639,7 @@ document.addEventListener('DOMContentLoaded', () => {
     
     // --- Video Source Loading ---
     // --- Video/Image Source Loading ---
+    let pendingMissingClipRelinkId = null;
     function isCapacitorApp() {
         return typeof window !== 'undefined' &&
             window.Capacitor &&
@@ -1915,6 +1916,13 @@ document.addEventListener('DOMContentLoaded', () => {
     videoInput.addEventListener('change', (e) => {
         const files = Array.from(e.target.files || []);
         if (!files.length) return;
+        if (pendingMissingClipRelinkId !== null) {
+            const clipId = pendingMissingClipRelinkId;
+            pendingMissingClipRelinkId = null;
+            relinkMissingClipFile(files[0], clipId);
+            videoInput.value = '';
+            return;
+        }
         handleVideoFile(files[0]);
         if (files.length > 1) {
             setTimeout(() => {
@@ -3150,8 +3158,76 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
     
+    async function relinkMissingClipFile(file, clipId) {
+        const clip = (state.clips || []).find(item => item.id === clipId);
+        if (!clip || !file || !file.type.startsWith('video/')) return;
+
+        const videoUrl = URL.createObjectURL(file);
+        const video = state.video;
+        try {
+            const loaded = await new Promise(resolve => {
+                let settled = false;
+                const finish = ok => {
+                    if (settled) return;
+                    settled = true;
+                    clearTimeout(timeout);
+                    video.removeEventListener('loadedmetadata', onLoaded);
+                    video.removeEventListener('error', onError);
+                    resolve(ok);
+                };
+                const onLoaded = () => finish(video.videoWidth > 0 && video.videoHeight > 0 && isFinite(video.duration) && video.duration > 0);
+                const onError = () => finish(false);
+                const timeout = setTimeout(() => finish(false), 15000);
+                video.addEventListener('loadedmetadata', onLoaded);
+                video.addEventListener('error', onError);
+                video.src = videoUrl;
+                video.load();
+                if (video.readyState >= 1 && video.videoWidth > 0) onLoaded();
+            });
+            if (!loaded) throw new Error('The selected file could not be opened as a video.');
+
+            clip.file = file;
+            clip.url = videoUrl;
+            clip.name = file.name;
+            clip.size = file.size || 0;
+            clip.lastModified = file.lastModified || 0;
+            clip.duration = video.duration;
+            clip.videoWidth = video.videoWidth;
+            clip.videoHeight = video.videoHeight;
+            clip.start = Math.min(Math.max(0, Number(clip.start) || 0), video.duration);
+            clip.end = Math.min(Math.max(clip.start, Number(clip.end) || video.duration), video.duration);
+            if (state.activeClipId === clip.id) {
+                state.duration = video.duration;
+                state.startTime = clip.start;
+                state.endTime = clip.end;
+                state.currentTime = clip.start;
+                video.currentTime = clip.start;
+            }
+            if (window.renderClipTimeline) window.renderClipTimeline();
+            syncUIFromState();
+            drawFrame();
+            triggerAutoSave();
+            if (typeof showToast === 'function') showToast(`Video reconnected: ${file.name}`, 'success');
+        } catch (error) {
+            URL.revokeObjectURL(videoUrl);
+            console.error('Video relink failed:', error);
+            alert(`Could not reconnect this video: ${error.message}`);
+        }
+    }
+
     function playVideo() {
         const activeClip = state.clips && state.clips.find(c => c.id === state.activeClipId);
+
+        if (activeClip && activeClip.type !== 'image' && (!activeClip.file || !activeClip.url)) {
+            pendingMissingClipRelinkId = activeClip.id;
+            if (typeof showToast === 'function') {
+                showToast('Original video file is missing. Select it again to restore playback.', 'warning');
+            } else {
+                alert('Original video file is missing. Select it again to restore playback.');
+            }
+            if (videoInput) videoInput.click();
+            return;
+        }
         
         // Recover duration if not set or zero
         if (!state.duration || isNaN(state.duration) || state.duration <= 0) {
@@ -3181,9 +3257,12 @@ document.addEventListener('DOMContentLoaded', () => {
             state.isPlaying = true;
             state.lastImageTickTime = performance.now();
         } else {
-            if (activeClip && activeClip.url && (!state.video.src || state.video.src === 'about:blank' || state.video.src === location.href)) {
-                state.video.src = activeClip.url;
-                state.video.load();
+            if (activeClip && activeClip.url) {
+                const desiredVideoSrc = new URL(activeClip.url, window.location.href).href;
+                if (state.video.src !== desiredVideoSrc) {
+                    state.video.src = desiredVideoSrc;
+                    state.video.load();
+                }
             }
             if (state.video) {
                 if (Math.abs(state.video.currentTime - state.currentTime) > 0.15) {
@@ -22884,6 +22963,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const progressText = document.getElementById('project-save-progress-text');
         const progressPercent = document.getElementById('project-save-progress-percent');
         const progressFill = document.getElementById('project-save-progress-fill');
+        let usedDownloadFallback = false;
         const setSaveProgress = (percent, message) => {
             const value = Math.max(0, Math.min(100, Math.round(percent)));
             if (progressBox) progressBox.style.display = 'block';
@@ -23121,18 +23201,37 @@ document.addEventListener('DOMContentLoaded', () => {
             setSaveProgress(72, 'Building project file...');
             const projectBlob = new Blob([JSON.stringify(data)], { type: 'application/json' });
             if (saveHandle) {
-                const writable = await saveHandle.createWritable();
-                const reader = projectBlob.stream().getReader();
-                let writtenBytes = 0;
-                setSaveProgress(75, 'Saving file...');
-                while (true) {
-                    const { done, value } = await reader.read();
-                    if (done) break;
-                    await writable.write(value);
-                    writtenBytes += value.byteLength;
-                    setSaveProgress(75 + (writtenBytes / projectBlob.size) * 25, 'Saving file...');
+                let writable = null;
+                try {
+                    writable = await saveHandle.createWritable({ keepExistingData: false });
+                    const chunkSize = 4 * 1024 * 1024;
+                    setSaveProgress(75, 'Saving file...');
+                    for (let offset = 0; offset < projectBlob.size; offset += chunkSize) {
+                        const chunk = projectBlob.slice(offset, Math.min(offset + chunkSize, projectBlob.size));
+                        await writable.write(chunk);
+                        setSaveProgress(75 + (Math.min(offset + chunk.size, projectBlob.size) / projectBlob.size) * 25, 'Saving file...');
+                    }
+                    await writable.close();
+                    writable = null;
+                    const savedFile = await saveHandle.getFile();
+                    if (savedFile.size !== projectBlob.size) {
+                        throw new Error(`Saved file size mismatch (${savedFile.size} of ${projectBlob.size} bytes).`);
+                    }
+                } catch (writeError) {
+                    if (writable) {
+                        try { await writable.abort(); } catch (_) {}
+                    }
+                    console.error('Save As write failed; falling back to browser download:', writeError);
+                    usedDownloadFallback = true;
+                    const downloadUrl = URL.createObjectURL(projectBlob);
+                    const downloadAnchor = document.createElement('a');
+                    downloadAnchor.href = downloadUrl;
+                    downloadAnchor.download = filename;
+                    document.body.appendChild(downloadAnchor);
+                    downloadAnchor.click();
+                    downloadAnchor.remove();
+                    setTimeout(() => URL.revokeObjectURL(downloadUrl), 60000);
                 }
-                await writable.close();
             } else {
                 const downloadUrl = URL.createObjectURL(projectBlob);
                 const downloadAnchor = document.createElement('a');
@@ -23143,7 +23242,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 downloadAnchor.remove();
                 setTimeout(() => URL.revokeObjectURL(downloadUrl), 60000);
             }
-            setSaveProgress(100, `Saved: ${saveHandle ? saveHandle.name : filename}`);
+            setSaveProgress(100, usedDownloadFallback
+                ? `Selected location failed. Download started; check Downloads for ${filename}.`
+                : (saveHandle ? `Saved: ${saveHandle.name}` : `Download started: ${filename}`));
             console.log("Project exported successfully.");
         } catch (e) {
             if (e && e.name === 'AbortError') {
@@ -24455,6 +24556,10 @@ document.addEventListener('DOMContentLoaded', () => {
                         clipMeta.imageImg = new Image();
                         await loadSafeImagePromise(clipMeta.imageImg, clipMeta.url);
                     }
+                } else if (clipMeta.type !== 'image') {
+                    // A persisted blob: URL is invalid after a page reload.
+                    // Do not let playback silently use that stale source.
+                    delete clipMeta.url;
                 }
             }
 
