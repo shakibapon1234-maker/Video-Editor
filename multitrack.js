@@ -1706,6 +1706,7 @@
 
         card.appendChild(body);
         mount.appendChild(card);
+        updateMultiTrackProgress();
     }
 
     window.renderMultiTrackPanel = render;
@@ -1743,22 +1744,6 @@
         });
     }
 
-    function startMultiTrackProgressLoop() {
-        // Throttle to ~10 fps so repeated document.querySelector calls inside
-        // updateMultiTrackProgress() don't compete with the 60-fps video
-        // playback loop (editor.js updateLoop + drawFrame) and cause stuttering.
-        var _lastProgressTick = 0;
-        var _PROGRESS_INTERVAL = 100; // ms between DOM updates (~10 fps)
-        function tick(now) {
-            if (now - _lastProgressTick >= _PROGRESS_INTERVAL) {
-                _lastProgressTick = now;
-                updateMultiTrackProgress();
-            }
-            requestAnimationFrame(tick);
-        }
-        requestAnimationFrame(tick);
-    }
-
     function init() {
         if (!ve()) {
             setTimeout(init, 200);
@@ -1766,7 +1751,14 @@
         }
         if (!ve().extraTracks) ve().extraTracks = [];
         render();
-        startMultiTrackProgressLoop();
+        // Track progress only needs updating when the playhead actually moves.
+        // A permanent requestAnimationFrame loop was waking the renderer 60x/s
+        // even when the editor was idle, which wasted CPU on slower laptops.
+        var video = ve().video;
+        if (video) {
+            video.addEventListener('timeupdate', updateMultiTrackProgress);
+            video.addEventListener('seeked', updateMultiTrackProgress);
+        }
     }
 
     if (document.readyState === 'loading') {
