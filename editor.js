@@ -23099,7 +23099,11 @@ document.addEventListener('DOMContentLoaded', () => {
                 symbolOverlays: state.symbolOverlays,
                 shapeOverlays: state.shapeOverlays,
                 blurRegions: state.blurRegions,
-                subtitles: state.subtitles
+                subtitles: state.subtitles,
+                historyLabels: (state.historyLabels || []).slice(-50),
+                undoStack: (state.undoStack || []).slice(-50),
+                redoStack: (state.redoStack || []).slice(-50),
+                redoLabels: (state.redoLabels || []).slice(-50)
             };
 
             // Convert logo to Base64 (always, since it is small)
@@ -23602,6 +23606,11 @@ document.addEventListener('DOMContentLoaded', () => {
             state.clips = data.clips || [];
             state.bgMusicTracks = data.bgMusicTracks || [];
             state.extraTracks = data.extraTracks || [];
+            state.historyLabels = (data.historyLabels || []).slice(-50);
+            state.undoStack = (data.undoStack || []).slice(-50);
+            state.redoStack = (data.redoStack || []).slice(-50);
+            state.redoLabels = (data.redoLabels || []).slice(-50);
+            if (typeof window.updateHistoryUI === 'function') window.updateHistoryUI();
 
             sanitizeLoadedProjectIds();
 
@@ -23806,6 +23815,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function clearWorkspaceState(fullReset = true) {
         state.isPlaying = false;
+        state.historyLabels = [];
+        state.undoStack = [];
+        state.redoStack = [];
+        state.redoLabels = [];
+        if (typeof window.updateHistoryUI === 'function') window.updateHistoryUI();
         if (state.video) {
             state.video.pause();
             if (fullReset) {

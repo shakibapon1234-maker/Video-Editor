@@ -685,6 +685,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 state.redoLabels = [];
                 if (historyPanelToggle) historyPanelToggle.classList.remove('open');
                 updateHistoryUI();
+                if (typeof window.triggerAutoSave === 'function') window.triggerAutoSave();
             }
         });
         footer.appendChild(clearBtn);
