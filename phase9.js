@@ -170,7 +170,9 @@ document.addEventListener('DOMContentLoaded', () => {
     state.redoLabels = state.redoLabels || [];
     // Keep the same number of undo snapshots and visible history entries, and
     // persist that complete window with the project on each history change.
-    const MAX_HISTORY = 50;
+    // Keep more than the promised 50 actions.  The project store persists this
+    // same window, so restart does not silently shorten the undo history.
+    const MAX_HISTORY = 100;
     let historySuspended = false;
     let cachedLogoImg = null;
     let cachedLogoFile = null;

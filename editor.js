@@ -23712,10 +23712,10 @@ document.addEventListener('DOMContentLoaded', () => {
             state.clips = data.clips || [];
             state.bgMusicTracks = data.bgMusicTracks || [];
             state.extraTracks = data.extraTracks || [];
-            state.historyLabels = (data.historyLabels || []).slice(-50);
-            state.undoStack = (data.undoStack || []).slice(-50);
-            state.redoStack = (data.redoStack || []).slice(-50);
-            state.redoLabels = (data.redoLabels || []).slice(-50);
+            state.historyLabels = (data.historyLabels || []).slice(-100);
+            state.undoStack = (data.undoStack || []).slice(-100);
+            state.redoStack = (data.redoStack || []).slice(-100);
+            state.redoLabels = (data.redoLabels || []).slice(-100);
             if (typeof window.updateHistoryUI === 'function') window.updateHistoryUI();
 
             sanitizeLoadedProjectIds();
@@ -23916,6 +23916,9 @@ document.addEventListener('DOMContentLoaded', () => {
         } else {
             list.unshift(meta);
         }
+        // The registry is also the recovery fallback when the active-project
+        // pointer is unavailable.  It must therefore be newest-first.
+        list.sort((a, b) => (b.lastModified || 0) - (a.lastModified || 0));
         saveProjectsRegistry(list);
     }
 
@@ -24485,18 +24488,30 @@ document.addEventListener('DOMContentLoaded', () => {
                     })
                 }))
             ,
-                historyLabels: (state.historyLabels || []).slice(-50),
-                undoStack: (state.undoStack || []).slice(-50),
-                redoStack: (state.redoStack || []).slice(-50),
-                redoLabels: (state.redoLabels || []).slice(-50)
+                historyLabels: (state.historyLabels || []).slice(-100),
+                undoStack: (state.undoStack || []).slice(-100),
+                redoStack: (state.redoStack || []).slice(-100),
+                redoLabels: (state.redoLabels || []).slice(-100)
             };
 
-            // Persist the lightweight project metadata and edit history first.
-            // Waiting for large video blobs before doing this meant a refresh
-            // could lose both settings and history if IndexedDB was still busy.
+            // localStorage is the fast restart-recovery copy. Undo snapshots
+            // can be very large, so keep their durable copy in IndexedDB; a
+            // quota failure here used to leave the active-project pointer on
+            // an old project and caused that old project to open after restart.
+            const recoverySnapshot = {
+                ...settingsToSave,
+                historyLabels: [],
+                undoStack: [],
+                redoStack: [],
+                redoLabels: []
+            };
+
+            // Persist the lightweight project metadata first. Waiting for
+            // large video blobs before doing this meant a refresh could lose
+            // the latest project settings if IndexedDB was still busy.
             try {
                 localStorage.setItem('studio_flow_active_project_id', projId);
-                localStorage.setItem(`studio_flow_project_${projId}`, JSON.stringify(settingsToSave));
+                localStorage.setItem(`studio_flow_project_${projId}`, JSON.stringify(recoverySnapshot));
             } catch (storageErr) {
                 try {
                     for (let i = localStorage.length - 1; i >= 0; i--) {
@@ -24506,7 +24521,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         }
                     }
                     localStorage.setItem('studio_flow_active_project_id', projId);
-                    localStorage.setItem(`studio_flow_project_${projId}`, JSON.stringify(settingsToSave));
+                    localStorage.setItem(`studio_flow_project_${projId}`, JSON.stringify(recoverySnapshot));
                 } catch (e) {
                     console.warn('Local project snapshot could not be written:', e);
                 }
@@ -24644,7 +24659,16 @@ document.addEventListener('DOMContentLoaded', () => {
             // A local snapshot is written before the IndexedDB media transaction.
             // Prefer it when newer so refresh cannot restore an older edit state.
             if (localSnapshot && (!savedData || (localSnapshot.timestamp || 0) > (savedData.timestamp || 0))) {
+                // The local recovery copy intentionally excludes bulky history.
+                // Retain the newest IndexedDB history when using its newer
+                // project settings for an immediate restart recovery.
+                const databaseSnapshot = savedData;
                 savedData = localSnapshot;
+                ['historyLabels', 'undoStack', 'redoStack', 'redoLabels'].forEach((key) => {
+                    if ((!savedData[key] || savedData[key].length === 0) && databaseSnapshot && databaseSnapshot[key]) {
+                        savedData[key] = databaseSnapshot[key];
+                    }
+                });
             }
             if (!savedData) return false;
             const activeProjId = savedData.projectId || projId;
@@ -24816,6 +24840,13 @@ document.addEventListener('DOMContentLoaded', () => {
             state.clips = savedData.clips || [];
             state.bgMusicTracks = savedData.bgMusicTracks || [];
             state.extraTracks = savedData.extraTracks || [];
+            // History was persisted but was never copied back into state on
+            // startup, making it appear to vanish after every app restart.
+            state.historyLabels = (savedData.historyLabels || []).slice(-100);
+            state.undoStack = (savedData.undoStack || []).slice(-100);
+            state.redoStack = (savedData.redoStack || []).slice(-100);
+            state.redoLabels = (savedData.redoLabels || []).slice(-100);
+            if (typeof window.updateHistoryUI === 'function') window.updateHistoryUI();
 
             if (savedData.settings && typeof savedData.settings.duration !== 'undefined') {
                 state.duration = savedData.settings.duration;

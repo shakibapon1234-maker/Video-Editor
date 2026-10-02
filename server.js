@@ -699,7 +699,10 @@ app.post('/api/fast-join/:sessionId/compile', (req, res) => {
             session.error = /codec|parameter|stream/i.test(stderr || '') ? 'এই ক্লিপগুলোর encoding/stream এক নয়, তাই দ্রুত জোড়া লাগানো যায়নি। একই export settings-এ আবার export করুন।' : error.message;
             clearTimeout(session.expiryTimer);
             setTimeout(() => { cleanupDir(session.tempDir); fastJoinSessions.delete(req.params.sessionId); }, 10 * 60 * 1000).unref?.();
-        });
+        })
+        // fluent-ffmpeg only starts after run(). Without this the session stays
+        // in "joining" forever and the UI remains at 50%.
+        .run();
     res.json({ ok: true });
 });
 app.get('/api/fast-join/:sessionId/status', (req, res) => {
