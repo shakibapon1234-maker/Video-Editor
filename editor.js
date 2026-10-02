@@ -24338,14 +24338,9 @@ document.addEventListener('DOMContentLoaded', () => {
     // IndexedDB transactions for the same project.
     let projectSaveQueue = Promise.resolve();
     const persistedProjectMedia = new Map();
-    function saveProjectToBrowserStorage(forcedId) {
-        const save = projectSaveQueue.catch(() => {}).then(() => saveProjectToBrowserStorageNow(forcedId));
-        projectSaveQueue = save;
-        return save;
-    }
-
-    async function saveProjectToBrowserStorageNow(forcedId) {
+    async function saveProjectToBrowserStorage(forcedId) {
         if (editorIsResetting) return;
+        let releaseSaveSlot = null;
         try {
             const projId = forcedId || getCurrentProjectId();
             state.activeProjectId = projId;
@@ -24518,6 +24513,12 @@ document.addEventListener('DOMContentLoaded', () => {
             }
             registerProjectMetadata(projId, projName);
 
+            // Snapshot above is synchronous, including during beforeunload.
+            // Only the slower IndexedDB media writes need serialization.
+            const precedingSave = projectSaveQueue;
+            projectSaveQueue = new Promise((resolve) => { releaseSaveSlot = resolve; });
+            await precedingSave;
+
             const db = await getDB();
 
             // Write settings and files to IndexedDB first
@@ -24584,6 +24585,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
         } catch (e) {
             console.error("Auto-save storage failed:", e);
+        } finally {
+            if (releaseSaveSlot) releaseSaveSlot();
         }
     }
 
@@ -24887,7 +24890,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // --- Debounced Auto-Save trigger ---
     let autoSaveTimeout = null;
     function triggerAutoSave() {
-        if (state.isPlaying || editorIsResetting || isProjectSwitching || isVideoLoading) return;
+        if (editorIsResetting || isProjectSwitching || isVideoLoading) return;
         if (autoSaveTimeout) clearTimeout(autoSaveTimeout);
         autoSaveTimeout = setTimeout(() => {
             saveProjectToBrowserStorage();
@@ -24899,7 +24902,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // controls that do not emit input/change events, and reduces reliance on
     // the asynchronous unload event when the user refreshes or closes Electron.
     const autoSaveCheckpoint = setInterval(() => {
-        if (!state.isPlaying && !editorIsResetting && !isProjectSwitching && !isVideoLoading && state.activeProjectId) {
+        if (!editorIsResetting && !isProjectSwitching && !isVideoLoading && state.activeProjectId) {
             saveProjectToBrowserStorage(state.activeProjectId);
         }
     }, 15000);

@@ -4,6 +4,64 @@ const fs = require('fs');
 const http = require('http');
 const { pipeline } = require('stream/promises');
 
+// Electron keeps IndexedDB/localStorage under userData (normally on C: on
+// Windows). When that drive fills up, autosaves silently fail and the
+// renderer has nothing to restore after refresh. Keep the existing profile
+// where it is while it has room; otherwise move a complete copy to a drive
+// with space before Chromium's default session is created.
+function configureUserDataStorage() {
+    const currentPath = app.getPath('userData');
+    const currentRoot = path.parse(currentPath).root;
+    const markerName = '.studio-flow-userdata-ready';
+    const roots = process.platform === 'win32'
+        ? Array.from({ length: 26 }, (_, index) => `${String.fromCharCode(65 + index)}:\\`)
+        : [path.parse(currentPath).root];
+    const volumes = roots.map((root) => {
+        try {
+            const stats = fs.statfsSync(root);
+            return { root, free: Number(stats.bavail) * Number(stats.bsize) };
+        } catch (_) { return null; }
+    }).filter(Boolean);
+
+    // Reuse a previously migrated profile first, so each launch stays on the
+    // same drive even if free-space rankings change.
+    const existingProfile = volumes
+        .map(({ root }) => path.join(root, 'StudioFlowData', 'userData'))
+        .find((candidate) => candidate !== currentPath && fs.existsSync(path.join(candidate, markerName)));
+    if (existingProfile) {
+        app.setPath('userData', existingProfile);
+        return existingProfile;
+    }
+
+    const currentVolume = volumes.find(({ root }) => root.toLowerCase() === currentRoot.toLowerCase());
+    if (currentVolume && currentVolume.free >= 3 * 1024 ** 3) return currentPath;
+
+    const destinationVolume = volumes
+        .filter(({ root, free }) => root.toLowerCase() !== currentRoot.toLowerCase() && free >= 1024 ** 3)
+        .sort((a, b) => b.free - a.free)[0];
+    if (!destinationVolume) return currentPath;
+
+    const destination = path.join(destinationVolume.root, 'StudioFlowData', 'userData');
+    try {
+        fs.mkdirSync(destination, { recursive: true });
+        if (fs.existsSync(currentPath)) {
+            fs.cpSync(currentPath, destination, {
+                recursive: true,
+                force: false,
+                errorOnExist: false,
+                filter: (source) => path.resolve(source) !== path.resolve(destination)
+            });
+        }
+        fs.writeFileSync(path.join(destination, markerName), 'profile copy completed');
+        app.setPath('userData', destination);
+        console.warn(`Studio Flow user data is using ${destination} because ${currentRoot} is low on disk space.`);
+        return destination;
+    } catch (error) {
+        console.error('Could not move Studio Flow storage to a drive with free space:', error);
+        return currentPath;
+    }
+}
+
 try {
     app.setAppUserModelId('com.shakib.videoeditor');
 } catch (_) {}
@@ -23,7 +81,7 @@ if (!gotLock) {
         }
     });
 
-    process.env.SF_DATA_DIR = app.getPath('userData');
+    process.env.SF_DATA_DIR = configureUserDataStorage();
 
     function createWindow() {
         const iconPath = path.join(__dirname, 'icon.png');
