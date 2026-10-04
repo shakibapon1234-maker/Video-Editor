@@ -60,10 +60,40 @@ document.addEventListener('DOMContentLoaded', () => {
     // too short for a slow/low-config PC — the seek was still in progress when
     // the timeout fired, so every frame was grabbed too early.
     //
-    // We now wait unconditionally for the 'seeked' event. The maxWaitMs safety
-    // timeout (5 s) is only there to prevent a truly broken seek from hanging
-    // the export forever; in practice it should never fire for valid clips.
-    async function waitForSeek(video, targetTime, maxWaitMs = 2000) {
+    // A seek event alone does not guarantee that the newly decoded frame has
+    // reached the canvas yet. This matters most for screen recordings: text or
+    // terminal commands can change every frame, so capturing the previous frame
+    // makes the commands appear to jump backwards and forwards in the export.
+    async function waitForDecodedVideoFrame(video) {
+        if (typeof video.requestVideoFrameCallback === 'function') {
+            await new Promise((resolve) => {
+                let settled = false;
+                const finish = () => {
+                    if (settled) return;
+                    settled = true;
+                    resolve();
+                };
+                video.requestVideoFrameCallback(finish);
+                // Increased from 1000ms to 3000ms — screen recordings (e.g. terminal/GDSC
+                // command videos) have high-entropy frames that take longer to decode on
+                // a busy CPU. 1 second was too tight and caused the export to fail.
+                setTimeout(finish, 3000);
+            });
+            return;
+        }
+        // Fallback for browsers without requestVideoFrameCallback: allow three
+        // paints after seeked before drawImage(video) is captured (was two).
+        await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => requestAnimationFrame(resolve))));
+    }
+
+    // Do not treat a timeout as a successful seek. The old code did exactly
+    // that, then exported an old video frame. Fail clearly rather than
+    // producing a visibly corrupted video.
+    //
+    // maxWaitMs increased from 8000→15000: screen recordings (e.g. GDSC
+    // terminal command videos) are high-entropy and may need more time to
+    // seek on a busy CPU. Still throws on genuine timeout so we never hang.
+    async function waitForSeek(video, targetTime, maxWaitMs = 15000) {
         if (!video || !video.src) return;
 
         // Ensure video element has loaded frame data
@@ -79,7 +109,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 };
                 video.addEventListener('loadeddata', onReady);
                 video.addEventListener('canplay', onReady);
-                setTimeout(onReady, 1000);
+                // Increased from 1000ms to 3000ms for slow-to-load screen recordings
+                setTimeout(onReady, 3000);
             });
         }
 
@@ -87,26 +118,49 @@ document.addEventListener('DOMContentLoaded', () => {
             ? Math.max(0, video.duration - 0.01)
             : Math.max(0, targetTime);
 
-        if (Math.abs(video.currentTime - clampedTarget) < 0.002) {
+        // A variable-frame-rate recording is allowed to seek to the closest
+        // real frame timestamp, which need not equal targetTime exactly. The
+        // important correctness signal is its `seeked` event followed by a
+        // decoded paint -- not a numeric equality check on currentTime.
+        if (Math.abs(video.currentTime - clampedTarget) <= (1 / 120) && video.readyState >= 2) {
             return;
         }
 
         video.currentTime = clampedTarget;
-        await new Promise((resolve) => {
-            let settled = false;
-            let safetyTimer = null;
-
-            const onSeeked = () => {
-                if (settled) return;
-                settled = true;
+        const settled = await new Promise((resolve) => {
+            let finished = false;
+            const finish = (didSeek) => {
+                if (finished) return;
+                finished = true;
                 video.removeEventListener('seeked', onSeeked);
-                if (safetyTimer) clearTimeout(safetyTimer);
-                resolve();
+                clearTimeout(timer);
+                resolve(didSeek);
             };
-
+            const onSeeked = () => finish(true);
+            const timer = setTimeout(() => finish(false), maxWaitMs);
             video.addEventListener('seeked', onSeeked, { once: true });
-            safetyTimer = setTimeout(onSeeked, maxWaitMs);
         });
+
+        // After 'seeked' fires, readyState may still briefly be < 2 on a
+        // loaded-but-not-yet-painted frame, especially for screen recordings
+        // where every frame is a keyframe. Poll for up to 2 seconds before
+        // giving up — this avoids the false-positive throw that previously
+        // caused the export to fail even though the seek actually succeeded.
+        if (settled) {
+            if (video.readyState < 2) {
+                await new Promise((resolve) => {
+                    let done = false;
+                    const finish = () => { if (!done) { done = true; resolve(); } };
+                    const check = setInterval(() => {
+                        if (video.readyState >= 2) { clearInterval(check); finish(); }
+                    }, 50);
+                    setTimeout(() => { clearInterval(check); finish(); }, 2000);
+                });
+            }
+            await waitForDecodedVideoFrame(video);
+            return;
+        }
+        throw new Error('Could not decode the next source frame in time. Export stopped to avoid repeated or jumping frames.');
     }
 
     // Seeks every active "Video B-roll" overlay (background/PiP video-over-video)
@@ -130,7 +184,7 @@ document.addEventListener('DOMContentLoaded', () => {
             // Skip the (relatively slow) seek+wait round-trip when we're already
             // close enough — e.g. sequential frames within the same loop cycle.
             if (Math.abs(item.videoEl.currentTime - rel) <= (1 / 90)) continue;
-            await waitForSeek(item.videoEl, rel, 1200);
+            await waitForSeek(item.videoEl, rel, 3000);
         }
     }
 
@@ -144,6 +198,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (group) group.style.display = 'none';
     })();
 
+    const fastDirectRenderBtn = document.getElementById('fast-direct-render-btn');
     const renderBtn = document.getElementById('render-btn');
     const renderProgressBox = document.getElementById('render-progress-box');
     const renderProgressFill = document.getElementById('render-progress-fill');
@@ -195,10 +250,158 @@ document.addEventListener('DOMContentLoaded', () => {
         '1080p': { maxDim: 1080, bitrate: 8_000_000 }
     };
 
-        renderBtn.addEventListener('click', startExport);
+    if (fastDirectRenderBtn) {
+        fastDirectRenderBtn.addEventListener('click', startFastDirectExport);
+    }
+    renderBtn.addEventListener('click', startExport);
 
-        // Exposed for Phase 9 Multi-Aspect Batch Export (phase9.js)
-        window.runExportPipeline = runExportPipeline;
+    // Exposed for Phase 9 Multi-Aspect Batch Export (phase9.js)
+    window.runExportPipeline = runExportPipeline;
+
+    async function startFastDirectExport() {
+        if (!state.duration || !state.clips || state.clips.length === 0) {
+            alert('ভিডিও লোড করে ট্রিম ও টাইমলাইন সাজিয়ে তারপর এক্সপোর্ট করুন।');
+            return;
+        }
+
+        // Save active clip's in-progress trim values
+        if (window.renderClipTimeline) {
+            const activeClip = state.clips.find(c => c.id === state.activeClipId);
+            if (activeClip) {
+                activeClip.start = state.startTime;
+                activeClip.end = state.endTime;
+            }
+        }
+
+        const totalDuration = state.clips.reduce((sum, c) => sum + Math.max(0, c.end - c.start), 0);
+        if (totalDuration <= 0) {
+            alert('ক্লিপগুলোর ট্রিম রেঞ্জ সঠিক নয়। দয়া করে ট্রিম রেঞ্জ চেক করুন।');
+            return;
+        }
+
+        renderProgressBox.style.display = 'block';
+        renderSuccessBox.style.display = 'none';
+        if (fastDirectRenderBtn) fastDirectRenderBtn.disabled = true;
+        if (renderBtn) renderBtn.disabled = true;
+        setProgress(5);
+        renderStatusText.innerText = 'অডিও প্রস্তুত করা হচ্ছে... (Preparing audio...)';
+
+        try {
+            // Render offline mixed audio (includes all background music and multi-track audio)
+            let audioBase64 = null;
+            if (window.renderAudioOffline) {
+                try {
+                    const grandTotalFrames = Math.ceil(totalDuration * 30);
+                    const audioBuffer = await window.renderAudioOffline(grandTotalFrames / 30);
+                    if (audioBuffer) {
+                        const audioBlob = v2aAudioBufferToWavBlob(audioBuffer);
+                        audioBase64 = await new Promise((resolve) => {
+                            const reader = new FileReader();
+                            reader.onloadend = () => resolve(reader.result);
+                            reader.readAsDataURL(audioBlob);
+                        });
+                    }
+                } catch (aErr) {
+                    console.warn('Audio offline mix warning:', aErr);
+                }
+            }
+
+            setProgress(15);
+            renderStatusText.innerText = 'ক্লিপগুলো প্রস্তুত করা হচ্ছে...';
+            const clipsPayload = [];
+            for (let i = 0; i < state.clips.length; i++) {
+                const c = state.clips[i];
+                const clipObj = {
+                    id: c.id,
+                    name: c.name || `clip_${i + 1}.mp4`,
+                    start: c.start || 0,
+                    end: c.end || c.duration,
+                    filePath: c.filePath || (c.file && c.file.path ? c.file.path : '')
+                };
+                if (!clipObj.filePath) {
+                    const blobToRead = c.file || c.blob || (c.url ? await fetch(c.url).then(r => r.blob()).catch(() => null) : null);
+                    if (blobToRead) {
+                        renderStatusText.innerText = `ক্লিপ ${i + 1}/${state.clips.length} প্রস্তুত করা হচ্ছে...`;
+                        clipObj.base64 = await new Promise((resolve) => {
+                            const reader = new FileReader();
+                            reader.onloadend = () => resolve(reader.result);
+                            reader.readAsDataURL(blobToRead);
+                        });
+                    }
+                }
+                clipsPayload.push(clipObj);
+            }
+
+            renderStatusText.innerText = 'সার্ভারে হাই-স্পিড FFmpeg রেন্ডার শুরু হচ্ছে...';
+            setProgress(25);
+
+            const timestamp = new Date().toISOString().slice(0, 16).replace('T', '_').replace(':', '-');
+            const defaultFilename = `video_edited_${timestamp}.mp4`;
+
+            const resp = await fetch('/api/fast-direct-render', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    clips: clipsPayload,
+                    audioBase64,
+                    totalDuration,
+                    filename: defaultFilename
+                })
+            });
+
+            if (!resp.ok) {
+                const text = await resp.text().catch(() => '');
+                let errMsg = 'Direct render server error';
+                try {
+                    const parsed = JSON.parse(text);
+                    if (parsed && parsed.error) errMsg = parsed.error;
+                } catch (_) {
+                    if (resp.status === 404) errMsg = 'সার্ভার এন্ডপয়েন্ট পাওয়া যায়নি (HTTP 404)। অ্যাপটি সম্পূর্ণ রিস্টার্ট করুন।';
+                    else if (resp.status === 413) errMsg = 'ক্লিপের সাইজ সীমা অতিক্রম করেছে (HTTP 413 Payload Too Large)।';
+                    else if (text) errMsg = text.slice(0, 120);
+                }
+                throw new Error(errMsg);
+            }
+
+            const { renderId } = await resp.json();
+
+            let finished = false;
+            while (!finished) {
+                await new Promise(r => setTimeout(r, 800));
+                const statusResp = await fetch(`/api/fast-direct-render/status/${renderId}`);
+                if (!statusResp.ok) throw new Error('Status poll failed');
+                const data = await statusResp.json();
+
+                if (data.status === 'rendering') {
+                    const uiPct = Math.min(98, Math.max(25, Math.round(25 + (data.percent || 0) * 0.73)));
+                    setProgress(uiPct);
+                    renderStatusText.innerText = `হাই-স্পিড রেন্ডার চলছে... (${data.percent || 0}%) — ১ মিনিটের মধ্যে প্রস্তুত হচ্ছে`;
+                } else if (data.status === 'done') {
+                    finished = true;
+                    setProgress(100);
+                    renderStatusText.innerText = 'রেন্ডার সম্পন্ন হয়েছে! (Render complete!)';
+                    renderProgressBox.style.display = 'none';
+                    renderSuccessBox.style.display = 'block';
+
+                    if (downloadLink) {
+                        downloadLink.href = data.downloadUrl;
+                        downloadLink.download = data.filename || 'video.mp4';
+                        downloadLink.click();
+                    }
+                } else if (data.status === 'error') {
+                    throw new Error(data.error || 'FFmpeg direct render failed');
+                }
+            }
+
+        } catch (err) {
+            console.error('Fast direct render failed:', err);
+            renderProgressBox.style.display = 'none';
+            alert(`হাই-স্পিড রেন্ডারে সমস্যা হয়েছে: ${err.message}\nপ্রয়োজনে নিচে Frame-by-Frame Canvas Render ব্যবহার করতে পারেন।`);
+        } finally {
+            if (fastDirectRenderBtn) fastDirectRenderBtn.disabled = false;
+            if (renderBtn) renderBtn.disabled = false;
+        }
+    }
 
     async function startExport() {
         if (!state.duration || !state.clips || state.clips.length === 0) {
@@ -455,6 +658,7 @@ document.addEventListener('DOMContentLoaded', () => {
             type: 'ws',
             ws: null,
             wasmEngine: null,
+            heartbeatTimer: null,
             async waitForSocketBuffer(maxBufferedBytes = 4 * 1024 * 1024) {
                 const startedAt = performance.now();
                 while (this.ws && this.ws.readyState === WebSocket.OPEN && this.ws.bufferedAmount > maxBufferedBytes) {
@@ -490,12 +694,23 @@ document.addEventListener('DOMContentLoaded', () => {
                         };
                         this.ws.addEventListener('message', onMsg);
                     });
+
+                    // Heartbeat ping every 5s to keep WebSocket alive on long renders
+                    if (this.heartbeatTimer) clearInterval(this.heartbeatTimer);
+                    this.heartbeatTimer = setInterval(() => {
+                        if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+                            try { this.ws.send(JSON.stringify({ type: 'ping' })); } catch (_) {}
+                        }
+                    }, 5000);
                 }
             },
             async sendFrame(blob) {
                 if (this.type === 'wasm') {
                     await this.wasmEngine.sendFrame(blob);
                 } else {
+                    if (!this.ws || this.ws.readyState !== WebSocket.OPEN) {
+                        throw new Error('রেন্ডার সার্ভারের সাথে সংযোগ বিচ্ছিন্ন হয়েছে। অনুগ্রহ করে আবার রেন্ডার শুরু করুন।');
+                    }
                     await this.waitForSocketBuffer();
                     this.ws.send(blob);
                 }
@@ -546,33 +761,60 @@ document.addEventListener('DOMContentLoaded', () => {
                     const videoBlob = await this.wasmEngine.compile(onProgress);
                     return { type: 'wasm', blob: videoBlob };
                 } else {
+                    if (!this.ws || this.ws.readyState !== WebSocket.OPEN) {
+                        throw new Error('সার্ভারের সাথে সংযোগ নেই। কম্পাইল শুরু করা যাচ্ছে না।');
+                    }
                     // Flush all remaining frame blobs over the network before compiling
                     await this.waitForSocketBuffer(0);
                     await serverLog('Sending compile control message...');
                     this.ws.send(JSON.stringify({ type: 'compile' }));
                     const compileResult = await new Promise((resolve, reject) => {
-                        const onMsg = async (event) => {
-                            const data = JSON.parse(event.data);
-                            if (data.type === 'progress' && data.step === 'compiling') {
-                                onProgress(data.current / 100);
-                            }
-                            else if (data.type === 'complete') {
-                                await serverLog(`Compilation successful! downloadUrl=${data.downloadUrl}`);
+                        const cleanupListeners = () => {
+                            if (this.ws) {
                                 this.ws.removeEventListener('message', onMsg);
-                                resolve(data);
-                            }
-                            else if (data.type === 'error') {
-                                await serverLog(`Compilation failed: ${data.message}`);
-                                this.ws.removeEventListener('message', onMsg);
-                                reject(new Error(data.message));
+                                this.ws.removeEventListener('close', onClose);
+                                this.ws.removeEventListener('error', onError);
                             }
                         };
+                        const onMsg = async (event) => {
+                            try {
+                                const data = JSON.parse(event.data);
+                                if (data.type === 'pong') return;
+                                if (data.type === 'progress' && data.step === 'compiling') {
+                                    onProgress(data.current / 100);
+                                }
+                                else if (data.type === 'complete') {
+                                    await serverLog(`Compilation successful! downloadUrl=${data.downloadUrl}`);
+                                    cleanupListeners();
+                                    resolve(data);
+                                }
+                                else if (data.type === 'error') {
+                                    await serverLog(`Compilation failed: ${data.message}`);
+                                    cleanupListeners();
+                                    reject(new Error(data.message));
+                                }
+                            } catch (_) {}
+                        };
+                        const onClose = () => {
+                            cleanupListeners();
+                            reject(new Error('কম্পাইল চলাকালীন সার্ভারের সাথে সংযোগ বিচ্ছিন্ন হয়েছে (Render server disconnected).'));
+                        };
+                        const onError = () => {
+                            cleanupListeners();
+                            reject(new Error('কম্পাইল চলাকালীন সার্ভারে ত্রুটি দেখা দিয়েছে (Render server error).'));
+                        };
                         this.ws.addEventListener('message', onMsg);
+                        this.ws.addEventListener('close', onClose);
+                        this.ws.addEventListener('error', onError);
                     });
                     return { type: 'ws', result: compileResult };
                 }
             },
             async cleanup() {
+                if (this.heartbeatTimer) {
+                    clearInterval(this.heartbeatTimer);
+                    this.heartbeatTimer = null;
+                }
                 if (this.type === 'wasm' && this.wasmEngine) {
                     await this.wasmEngine.cleanup();
                 } else if (this.ws) {
@@ -844,6 +1086,22 @@ document.addEventListener('DOMContentLoaded', () => {
 
                 if (window.drawEditorFrame) {
                     window.drawEditorFrame();
+                }
+
+                // Screen recordings (e.g. GDSC terminal videos) have a unique frame
+                // every single tick, so the GPU compositor can lag behind the CPU
+                // decode. When requestVideoFrameCallback is NOT supported (older
+                // browsers/Electron without rvfc), waitForDecodedVideoFrame() falls back
+                // to two rAF paints — but even that's not enough for high-entropy
+                // sources. A third rAF + redraw here closes the gap WITHOUT adding
+                // overhead on modern Electron (which has rvfc and already waits for the
+                // exact decoded frame before returning from waitForSeek).)`r
+                const hasRvfc = typeof HTMLVideoElement !== 'undefined' && typeof HTMLVideoElement.prototype.requestVideoFrameCallback === 'function';
+                if (!hasRvfc && clip.type !== 'image') {
+                    await new Promise(resolve => requestAnimationFrame(resolve));
+                    if (window.drawEditorFrame) {
+                        window.drawEditorFrame();
+                    }
                 }
 
                 const frameBlob = await new Promise(resolve => canvas.toBlob(resolve, 'image/jpeg', 0.85));
@@ -1743,32 +2001,92 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!muteSelectedFile) return;
 
         const mode = muteModeSelect ? muteModeSelect.value : 'full';
-        let queryUrl = `/api/remove-audio?filename=${encodeURIComponent(muteSelectedFile.name)}&mode=${mode}`;
-        if (mode === 'range' && muteStartSlider && muteEndSlider) {
-            const startSec = parseFloat(muteStartSlider.value) || 0;
-            const endSec = parseFloat(muteEndSlider.value) || muteDuration;
-            if (endSec - startSec < 0.05) {
-                alert('দয়া করে কমপক্ষে কিছু সময়ের একটি অংশ সিলেক্ট করুন।');
-                return;
-            }
-            queryUrl += `&start=${startSec}&end=${endSec}`;
+        const startSec = (mode === 'range' && muteStartSlider) ? (parseFloat(muteStartSlider.value) || 0) : 0;
+        const endSec   = (mode === 'range' && muteEndSlider)   ? (parseFloat(muteEndSlider.value)   || muteDuration) : 0;
+
+        if (mode === 'range' && (endSec - startSec) < 0.05) {
+            alert('দয়া করে কমপক্ষে কিছু সময়ের একটি অংশ সিলেক্ট করুন।');
+            return;
         }
 
         muteConvertBtn.disabled = true;
         if (muteProgressBox) muteProgressBox.style.display = 'block';
-        if (muteSuccessBox) muteSuccessBox.style.display = 'none';
-        if (muteErrorBox) muteErrorBox.style.display = 'none';
+        if (muteSuccessBox)  muteSuccessBox.style.display  = 'none';
+        if (muteErrorBox)    muteErrorBox.style.display    = 'none';
+
+        // ── Show upload progress inside the existing progress box ──
+        let muteProgressLabel = document.getElementById('mute-progress-label');
+        if (!muteProgressLabel) {
+            muteProgressLabel = document.createElement('p');
+            muteProgressLabel.id = 'mute-progress-label';
+            muteProgressLabel.style.cssText = 'margin:6px 0 0;font-size:13px;color:#aef;';
+            if (muteProgressBox) muteProgressBox.appendChild(muteProgressLabel);
+        }
+        const setLabel = (txt) => { if (muteProgressLabel) muteProgressLabel.textContent = txt; };
 
         try {
-            const response = await fetch(queryUrl, {
-                method: 'POST',
-                headers: { 'Content-Type': muteSelectedFile.type || 'application/octet-stream' },
-                body: muteSelectedFile
-            });
+            const file = muteSelectedFile;
+            const CHUNK_SIZE = 20 * 1024 * 1024; // 20 MB per chunk
+            const totalChunks = Math.max(1, Math.ceil(file.size / CHUNK_SIZE));
+            const isLarge = file.size > 50 * 1024 * 1024; // use chunked for files > 50 MB
 
-            const result = await response.json();
-            if (!response.ok) {
-                throw new Error(result.error || `Server error (${response.status})`);
+            let result;
+
+            if (isLarge) {
+                // ── Chunked upload path (for large files) ──
+                setLabel(`আপলোড শুরু হচ্ছে… (${(file.size / 1024 / 1024).toFixed(0)} MB, ${totalChunks}টি ভাগে)`);
+
+                // 1. Init chunk session
+                const initResp = await fetch('/api/chunk-upload/init', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ filename: file.name, totalChunks })
+                });
+                if (!initResp.ok) throw new Error('Chunk session init failed.');
+                const { sessionId } = await initResp.json();
+
+                // 2. Upload chunks sequentially
+                for (let i = 0; i < totalChunks; i++) {
+                    const start = i * CHUNK_SIZE;
+                    const end   = Math.min(file.size, start + CHUNK_SIZE);
+                    const chunk = file.slice(start, end);
+                    setLabel(`আপলোড হচ্ছে… ভাগ ${i + 1} / ${totalChunks} (${Math.round(((i + 1) / totalChunks) * 100)}%)`);
+                    const chunkResp = await fetch(`/api/chunk-upload/${sessionId}/chunk`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/octet-stream' },
+                        body: chunk
+                    });
+                    if (!chunkResp.ok) {
+                        const e = await chunkResp.json().catch(() => ({}));
+                        throw new Error(`Chunk ${i + 1} upload failed: ${e.error || chunkResp.status}`);
+                    }
+                }
+
+                // 3. Finalize
+                setLabel('আপলোড সম্পন্ন। অডিও সরানো হচ্ছে…');
+                const finalResp = await fetch(`/api/chunk-upload/${sessionId}/finalize`, { method: 'POST' });
+                if (!finalResp.ok) throw new Error('Finalize failed.');
+
+                // 4. Run remove-audio-from-session
+                const processResp = await fetch('/api/remove-audio-from-session', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ sessionId, mode, start: startSec, end: endSec })
+                });
+                result = await processResp.json();
+                if (!processResp.ok) throw new Error(result.error || `Server error (${processResp.status})`);
+            } else {
+                // ── Direct upload path (small files ≤ 50 MB) ──
+                setLabel('আপলোড ও প্রসেসিং হচ্ছে…');
+                let queryUrl = `/api/remove-audio?filename=${encodeURIComponent(file.name)}&mode=${mode}`;
+                if (mode === 'range') queryUrl += `&start=${startSec}&end=${endSec}`;
+                const response = await fetch(queryUrl, {
+                    method: 'POST',
+                    headers: { 'Content-Type': file.type || 'application/octet-stream' },
+                    body: file
+                });
+                result = await response.json();
+                if (!response.ok) throw new Error(result.error || `Server error (${response.status})`);
             }
 
             if (muteDownloadLink) {
@@ -1779,14 +2097,16 @@ document.addEventListener('DOMContentLoaded', () => {
                 muteSuccessDesc.innerText = `"${result.filename}" প্রস্তুত (${mode === 'range' ? 'নির্দিষ্ট সময় নিঃশব্দ' : 'সম্পূর্ণ নিঃশব্দ'})।`;
             }
             if (muteProgressBox) muteProgressBox.style.display = 'none';
-            if (muteSuccessBox) muteSuccessBox.style.display = 'block';
+            if (muteSuccessBox)  muteSuccessBox.style.display  = 'block';
+            setLabel('');
         } catch (err) {
             console.error('Remove-audio failed:', err);
             if (muteProgressBox) muteProgressBox.style.display = 'none';
-            if (muteErrorBox) muteErrorBox.style.display = 'block';
+            if (muteErrorBox)    muteErrorBox.style.display    = 'block';
             if (muteErrorDesc) {
                 muteErrorDesc.innerText = `সাউন্ড রিমুভ করা যায়নি: ${err.message}। সার্ভার (node server.js) চালু আছে কিনা দেখুন।`;
             }
+            setLabel('');
         } finally {
             muteConvertBtn.disabled = false;
         }

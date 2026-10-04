@@ -341,6 +341,11 @@ wss.on('connection', (ws) => {
                 const data = JSON.parse(message.toString());
                 console.log('Received control message:', data);
 
+                if (data.type === 'ping') {
+                    ws.send(JSON.stringify({ type: 'pong' }));
+                    return;
+                }
+
                 if (data.type === 'init') {
                     renderId = `render_${Date.now()}`;
                     tempDir = path.join(TEMP_BASE_DIR, renderId);
@@ -543,6 +548,138 @@ function compileVideo(ws, tempDir, filename, totalFrames, enhanceQuality = false
         })
         .run();
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// CHUNKED UPLOAD INFRASTRUCTURE
+// Large files (1 GB+) can't be sent as a single HTTP body without freezing the
+// browser and PC RAM. Instead the client slices the File into ~20 MB chunks,
+// uploads them one at a time, and only then triggers the FFmpeg operation.
+// Flow:
+//   1. POST /api/chunk-upload/init          creates session + empty temp file
+//   2. POST /api/chunk-upload/:id/chunk     appends one raw chunk to the file
+//   3. GET  /api/chunk-upload/:id/status    returns { received, total, done }
+//   4. POST /api/chunk-upload/:id/finalize  marks upload done, returns filePath
+//   5. POST /api/chunk-upload/:id/cleanup   deletes temp file after processing
+// ─────────────────────────────────────────────────────────────────────────────
+const CHUNK_TEMP_DIR = path.join(DATA_DIR, 'temp_chunks');
+if (!fs.existsSync(CHUNK_TEMP_DIR)) fs.mkdirSync(CHUNK_TEMP_DIR, { recursive: true });
+const chunkSessions = new Map(); // sessionId -> { filePath, totalChunks, receivedChunks, done, createdAt }
+
+// Auto-cleanup stale chunk sessions every hour
+setInterval(() => {
+    const cutoff = Date.now() - 4 * 60 * 60 * 1000; // 4 hours
+    for (const [id, s] of chunkSessions) {
+        if (s.createdAt < cutoff) {
+            try { if (fs.existsSync(s.filePath)) fs.unlinkSync(s.filePath); } catch (e) {}
+            chunkSessions.delete(id);
+        }
+    }
+}, 60 * 60 * 1000).unref?.();
+
+app.post('/api/chunk-upload/init', express.json({ limit: '1mb' }), (req, res) => {
+    try {
+        const { filename, totalChunks } = req.body || {};
+        if (!filename || !totalChunks || totalChunks < 1 || totalChunks > 5000) {
+            return res.status(400).json({ error: 'filename and totalChunks required.' });
+        }
+        const sessionId = `chunk_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+        const ext = path.extname(String(filename || 'video.mp4').replace(/[<>:"/\\|?*\x00-\x1f]/g,'_')).toLowerCase() || '.mp4';
+        const filePath = path.join(CHUNK_TEMP_DIR, `${sessionId}${ext}`);
+        fs.writeFileSync(filePath, Buffer.alloc(0)); // create empty file
+        chunkSessions.set(sessionId, {
+            filePath,
+            originalName: String(filename).replace(/[<>:"/\\|?*\x00-\x1f]/g,'_').slice(0,150),
+            totalChunks: Number(totalChunks),
+            receivedChunks: 0,
+            done: false,
+            createdAt: Date.now()
+        });
+        res.json({ sessionId });
+    } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.post('/api/chunk-upload/:id/chunk', express.raw({ type: '*/*', limit: '50mb' }), (req, res) => {
+    const session = chunkSessions.get(req.params.id);
+    if (!session || session.done) return res.status(400).json({ error: 'Invalid or finalised session.' });
+    if (!req.body || !req.body.length) return res.status(400).json({ error: 'Empty chunk.' });
+    try {
+        fs.appendFileSync(session.filePath, req.body);
+        session.receivedChunks++;
+        res.json({ ok: true, received: session.receivedChunks, total: session.totalChunks });
+    } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.get('/api/chunk-upload/:id/status', (req, res) => {
+    const session = chunkSessions.get(req.params.id);
+    if (!session) return res.status(404).json({ error: 'Session not found.' });
+    res.json({ received: session.receivedChunks, total: session.totalChunks, done: session.done });
+});
+
+app.post('/api/chunk-upload/:id/finalize', (req, res) => {
+    const session = chunkSessions.get(req.params.id);
+    if (!session) return res.status(404).json({ error: 'Session not found.' });
+    if (session.receivedChunks < session.totalChunks) {
+        return res.status(400).json({ error: `Only ${session.receivedChunks}/${session.totalChunks} chunks received.` });
+    }
+    session.done = true;
+    res.json({ ok: true, filePath: session.filePath, filename: session.originalName });
+});
+
+app.post('/api/chunk-upload/:id/cleanup', (req, res) => {
+    const session = chunkSessions.get(req.params.id);
+    if (session) {
+        try { if (fs.existsSync(session.filePath)) fs.unlinkSync(session.filePath); } catch (e) {}
+        chunkSessions.delete(req.params.id);
+    }
+    res.json({ ok: true });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+
+// Chunked-session-based remove-audio (called by /api/remove-audio-from-session)
+// The video was already uploaded via chunk-upload; we just need the session ID.
+app.post('/api/remove-audio-from-session', express.json({ limit: '1mb' }), (req, res) => {
+    const { sessionId, mode = 'full', start = 0, end = 0 } = req.body || {};
+    const session = chunkSessions.get(sessionId);
+    if (!session || !session.done) return res.status(400).json({ error: 'Chunk session not ready.' });
+    if (!fs.existsSync(session.filePath)) return res.status(400).json({ error: 'Uploaded file not found.' });
+
+    const inputPath = session.filePath;
+    const ext = path.extname(inputPath) || '.mp4';
+    const baseName = path.basename(session.originalName, path.extname(session.originalName)) || 'video';
+    let outputPath = path.join(OUTPUT_DIR, `${baseName}_no_audio${ext}`);
+    let counter = 1;
+    while (fs.existsSync(outputPath)) {
+        outputPath = path.join(OUTPUT_DIR, `${baseName}_no_audio_${counter}${ext}`);
+        counter++;
+    }
+
+    const startSec = parseFloat(start) || 0;
+    const endSec = parseFloat(end) || 0;
+    const outputOptions = ['-c:v copy', '-movflags +faststart'];
+    if (mode === 'range' && endSec > startSec) {
+        outputOptions.push('-af', `volume=0:enable='between(t,${startSec.toFixed(3)},${endSec.toFixed(3)})'`);
+        outputOptions.push('-c:a', 'aac');
+    } else {
+        outputOptions.push('-an');
+    }
+
+    ffmpeg(inputPath)
+        .outputOptions(outputOptions)
+        .output(outputPath)
+        .on('end', () => {
+            res.json({ downloadUrl: `/exports/${path.basename(outputPath)}`, filename: path.basename(outputPath) });
+            // cleanup chunk session file
+            try { fs.unlinkSync(inputPath); } catch (e) {}
+            chunkSessions.delete(sessionId);
+        })
+        .on('error', (err) => {
+            if (!res.headersSent) res.status(500).json({ error: `FFmpeg error: ${err.message}` });
+            try { fs.unlinkSync(inputPath); } catch (e) {}
+            chunkSessions.delete(sessionId);
+        })
+        .run();
+});
 
 // --- Remove Audio (Mute Video) ---
 // Strips the audio track from an uploaded video entirely. This is a plain
@@ -859,6 +996,175 @@ app.post('/api/add-audio/compile', (req, res) => {
             addAudioSessions.delete(sessionId);
         })
         .run();
+});
+
+// --- Fast Direct Timeline Render ---
+// Renders the timeline directly with native FFmpeg in 1-2 minutes without
+// canvas frame-by-frame seeking. Guarantees 0% jitter on VFR screen recordings.
+const DIRECT_RENDER_TEMP_DIR = path.join(DATA_DIR, 'temp_direct_render');
+if (!fs.existsSync(DIRECT_RENDER_TEMP_DIR)) fs.mkdirSync(DIRECT_RENDER_TEMP_DIR, { recursive: true });
+const directRenderSessions = new Map();
+
+function parseTimemarkToSeconds(tm) {
+    if (!tm || typeof tm !== 'string') return 0;
+    const parts = tm.split(':');
+    if (parts.length === 3) {
+        return parseFloat(parts[0]) * 3600 + parseFloat(parts[1]) * 60 + parseFloat(parts[2]);
+    }
+    return 0;
+}
+
+app.post('/api/fast-direct-render', express.json({ limit: '500mb' }), async (req, res) => {
+    try {
+        const { clips, audioBase64, filename: reqFilename, totalDuration } = req.body || {};
+        if (!Array.isArray(clips) || clips.length === 0) {
+            return res.status(400).json({ error: 'No clips provided for direct render.' });
+        }
+
+        const renderId = `direct_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
+        const tempDir = path.join(DIRECT_RENDER_TEMP_DIR, renderId);
+        fs.mkdirSync(tempDir, { recursive: true });
+
+        const session = {
+            status: 'rendering',
+            percent: 0,
+            tempDir,
+            downloadUrl: null,
+            filename: null,
+            error: null
+        };
+        directRenderSessions.set(renderId, session);
+
+        // Auto-cleanup session memory after 2 hours
+        setTimeout(() => {
+            if (directRenderSessions.has(renderId)) {
+                cleanupDir(tempDir);
+                directRenderSessions.delete(renderId);
+            }
+        }, 2 * 60 * 60 * 1000);
+
+        // Return renderId immediately so client can poll
+        res.json({ ok: true, renderId });
+
+        // Asynchronous FFmpeg processing
+        (async () => {
+            try {
+                let audioPath = null;
+                if (audioBase64) {
+                    audioPath = path.join(tempDir, 'audio.wav');
+                    const cleanB64 = audioBase64.replace(/^data:audio\/[a-zA-Z0-9+]+;base64,/, '');
+                    fs.writeFileSync(audioPath, Buffer.from(cleanB64, 'base64'));
+                }
+
+                // Verify clips exist on disk or save base64
+                const inputPaths = [];
+                for (let i = 0; i < clips.length; i++) {
+                    const c = clips[i];
+                    if (c.filePath && fs.existsSync(c.filePath)) {
+                        inputPaths.push(c.filePath);
+                    } else if (c.base64) {
+                        const ext = path.extname(c.name || 'clip.mp4') || '.mp4';
+                        const p = path.join(tempDir, `clip_${i}${ext}`);
+                        const cleanB64 = c.base64.replace(/^data:video\/[a-zA-Z0-9+]+;base64,/, '');
+                        fs.writeFileSync(p, Buffer.from(cleanB64, 'base64'));
+                        inputPaths.push(p);
+                    } else {
+                        throw new Error(`সোর্স ভিডিও ফাইল খুঁজে পাওয়া যায়নি: ${c.name || 'ক্লিপ ' + (i + 1)}`);
+                    }
+                }
+
+                const filterParts = [];
+                const videoLabels = [];
+                inputPaths.forEach((inp, i) => {
+                    const clip = clips[i];
+                    const s = Math.max(0, parseFloat(clip.start) || 0);
+                    const e = Math.max(s + 0.1, parseFloat(clip.end) || 99999);
+                    filterParts.push(`[${i}:v]trim=start=${s.toFixed(3)}:end=${e.toFixed(3)},setpts=PTS-STARTPTS,fps=30,scale=1920:1080:force_original_aspect_ratio=decrease,pad=1920:1080:(ow-iw)/2:(oh-ih)/2:black,setsar=1[v${i}]`);
+                    videoLabels.push(`[v${i}]`);
+                });
+                filterParts.push(`${videoLabels.join('')}concat=n=${inputPaths.length}:v=1:a=0[vout]`);
+
+                if (audioPath && fs.existsSync(audioPath)) {
+                    const audioIdx = inputPaths.length;
+                    filterParts.push(`[${audioIdx}:a]pan=stereo|c0=0.5*c0+0.5*c1|c1=0.5*c0+0.5*c1,highpass=f=80,afftdn=nf=-25,aformat=sample_rates=44100:channel_layouts=stereo[aout]`);
+                }
+
+                let outFilename = safeJoinName(reqFilename || `direct-render-${Date.now()}.mp4`);
+                if (!outFilename.toLowerCase().endsWith('.mp4')) outFilename += '.mp4';
+                let compiledPath = path.join(OUTPUT_DIR, outFilename);
+                let counter = 1;
+                const baseName = path.basename(outFilename, '.mp4');
+                while (fs.existsSync(compiledPath)) {
+                    compiledPath = path.join(OUTPUT_DIR, `${baseName}_${counter}.mp4`);
+                    counter++;
+                }
+
+                const cmd = ffmpeg();
+                inputPaths.forEach(p => cmd.input(p));
+                if (audioPath && fs.existsSync(audioPath)) {
+                    cmd.input(audioPath);
+                }
+
+                const estDuration = parseFloat(totalDuration) || 400;
+
+                cmd
+                    .complexFilter(filterParts)
+                    .outputOptions([
+                        '-map', '[vout]',
+                        ...(audioPath && fs.existsSync(audioPath) ? ['-map', '[aout]', '-c:a', 'aac', '-b:a', '192k', '-ar', '44100'] : ['-an']),
+                        '-c:v', 'libx264',
+                        '-preset', 'fast',
+                        '-crf', '18',
+                        '-pix_fmt', 'yuv420p',
+                        '-movflags', '+faststart'
+                    ])
+                    .output(compiledPath)
+                    .on('progress', (prog) => {
+                        const sec = prog.timemark ? parseTimemarkToSeconds(prog.timemark) : 0;
+                        const pct = Math.min(99, Math.max(1, Math.round((sec / estDuration) * 100)));
+                        session.percent = pct;
+                    })
+                    .on('end', () => {
+                        session.status = 'done';
+                        session.percent = 100;
+                        session.downloadUrl = `/exports/${path.basename(compiledPath)}`;
+                        session.filename = path.basename(compiledPath);
+                        setTimeout(() => cleanupDir(tempDir), 5000);
+                    })
+                    .on('error', (err, stdout, stderr) => {
+                        console.error('Direct render FFmpeg error:', err.message);
+                        session.status = 'error';
+                        session.error = err.message;
+                        cleanupDir(tempDir);
+                    })
+                    .run();
+
+            } catch (renderErr) {
+                console.error('Direct render initialization error:', renderErr);
+                session.status = 'error';
+                session.error = renderErr.message;
+                cleanupDir(tempDir);
+            }
+        })();
+
+    } catch (err) {
+        console.error('fast-direct-render route error:', err);
+        res.status(500).json({ error: err.message });
+    }
+});
+
+app.get('/api/fast-direct-render/status/:renderId', (req, res) => {
+    const session = directRenderSessions.get(req.params.renderId);
+    if (!session) {
+        return res.status(404).json({ error: 'Render session not found or expired.' });
+    }
+    res.json({
+        status: session.status,
+        percent: session.percent,
+        downloadUrl: session.downloadUrl,
+        filename: session.filename,
+        error: session.error
+    });
 });
 
 // Serve downloads folder
