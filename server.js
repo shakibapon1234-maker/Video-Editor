@@ -23,10 +23,10 @@ const PORT = 4000;
 const WHISPER_TEMP_DIR = path.join(process.env.SF_DATA_DIR || __dirname, 'temp_whisper');
 let whisperTranscriberPromise = null;
 
-// Parse JSON bodies for the TTS proxy and AI Thumbnail proxy routes. The
-// limit is higher than the TTS route needs on its own because the AI
-// Thumbnail proxy carries a base64 PNG data URL of the current frame.
-app.use(express.json({ limit: '15mb' }));
+// Parse JSON and URL-encoded bodies. High limit (2048mb / 2GB) prevents HTTP 413
+// (Payload Too Large) when large clips, audio, or frames are transferred.
+app.use(express.json({ limit: '2048mb' }));
+app.use(express.urlencoded({ limit: '2048mb', extended: true }));
 
 app.post('/api/log', (req, res) => {
     try {
@@ -1014,7 +1014,7 @@ function parseTimemarkToSeconds(tm) {
     return 0;
 }
 
-app.post('/api/fast-direct-render', express.json({ limit: '500mb' }), async (req, res) => {
+app.post('/api/fast-direct-render', express.json({ limit: '2048mb' }), async (req, res) => {
     try {
         const { clips, audioBase64, filename: reqFilename, totalDuration } = req.body || {};
         if (!Array.isArray(clips) || clips.length === 0) {

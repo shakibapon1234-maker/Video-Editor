@@ -1853,10 +1853,22 @@ document.addEventListener('DOMContentLoaded', () => {
                 state.startTime = 0;
                 state.endTime = state.duration;
 
+                function getSafeFilePath(f) {
+                    if (!f) return '';
+                    try {
+                        if (window.electronAPI && typeof window.electronAPI.getPathForFile === 'function') {
+                            const p = window.electronAPI.getPathForFile(f);
+                            if (p) return p;
+                        }
+                    } catch (_) {}
+                    return (f && f.path) ? f.path : '';
+                }
+                window.getSafeFilePath = getSafeFilePath;
+
                 const firstClip = {
                     id: Date.now(),
                     file: file,
-                    filePath: (file && file.path) ? file.path : '',
+                    filePath: getSafeFilePath(file),
                     url: urlToLoad,
                     name: file.name,
                     size: file.size || 0,
@@ -2959,6 +2971,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const newClip = {
                 id: Date.now(),
                 file: activeClip.file,
+                filePath: activeClip.filePath || (typeof window.getSafeFilePath === 'function' ? window.getSafeFilePath(activeClip.file) : ''),
                 url: activeClip.url,
                 name: activeClip.name,
                 duration: activeClip.duration,
@@ -3043,6 +3056,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     const secondHalf = {
                         id: Date.now() + 1,
                         file: activeClip.file,
+                        filePath: activeClip.filePath || (typeof window.getSafeFilePath === 'function' ? window.getSafeFilePath(activeClip.file) : ''),
                         url: activeClip.url,
                         name: activeClip.name,
                         duration: activeClip.duration,
@@ -3141,6 +3155,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 newClips.push({
                     id: Date.now(),
                     file: activeClip.file,
+                    filePath: activeClip.filePath || (typeof window.getSafeFilePath === 'function' ? window.getSafeFilePath(activeClip.file) : ''),
                     url: activeClip.url,
                     name: activeClip.name,
                     duration: activeClip.duration,
@@ -3157,6 +3172,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 newClips.push({
                     id: Date.now() + 1,
                     file: activeClip.file,
+                    filePath: activeClip.filePath || (typeof window.getSafeFilePath === 'function' ? window.getSafeFilePath(activeClip.file) : ''),
                     url: activeClip.url,
                     name: activeClip.name,
                     duration: activeClip.duration,
@@ -3729,7 +3745,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 const newClip = {
                     id: Date.now(),
                     file: file,
-                    filePath: (file && file.path) ? file.path : '',
+                    filePath: typeof window.getSafeFilePath === 'function' ? window.getSafeFilePath(file) : ((file && file.path) ? file.path : ''),
                     url: url,
                     name: file.name,
                     duration: probe.duration,
@@ -24717,8 +24733,16 @@ document.addEventListener('DOMContentLoaded', () => {
                     }
                 } else if (clipMeta.type !== 'image') {
                     // A persisted blob: URL is invalid after a page reload.
-                    // Do not let playback silently use that stale source.
-                    delete clipMeta.url;
+                    // If we have the disk filePath, build a file:// URL for it --
+                    // Electron allows this and it avoids loading the whole file into RAM.
+                    if (clipMeta.filePath) {
+                        // Normalize Windows backslashes → forward slashes for URL
+                        const normalizedPath = clipMeta.filePath.replace(/\\/g, '/');
+                        clipMeta.url = `file:///${normalizedPath}`;
+                    } else {
+                        // No disk path either -- clear the stale blob URL.
+                        delete clipMeta.url;
+                    }
                 }
             }
 
@@ -24824,6 +24848,10 @@ document.addEventListener('DOMContentLoaded', () => {
                             c.imageImg = new Image();
                             await loadSafeImagePromise(c.imageImg, c.url);
                         }
+                    } else if (c.type !== 'image' && c.filePath) {
+                        // Large file not in IndexedDB — use the disk path directly.
+                        const normalizedPath = c.filePath.replace(/\\/g, '/');
+                        c.url = `file:///${normalizedPath}`;
                     }
                 }
             }
@@ -25668,6 +25696,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 newClips.push({
                     id: Date.now() + index * 10,
                     file: activeClip.file,
+                    filePath: activeClip.filePath || (typeof window.getSafeFilePath === 'function' ? window.getSafeFilePath(activeClip.file) : ''),
                     url: activeClip.url,
                     name: activeClip.name,
                     duration: activeClip.duration,
@@ -25686,6 +25715,7 @@ document.addEventListener('DOMContentLoaded', () => {
             newClips.push({
                 id: Date.now() + cuts.length * 10,
                 file: activeClip.file,
+                filePath: activeClip.filePath || (typeof window.getSafeFilePath === 'function' ? window.getSafeFilePath(activeClip.file) : ''),
                 url: activeClip.url,
                 name: activeClip.name,
                 duration: activeClip.duration,

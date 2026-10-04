@@ -1,4 +1,4 @@
-const { contextBridge, ipcRenderer } = require('electron');
+const { contextBridge, ipcRenderer, webUtils } = require('electron');
 
 contextBridge.exposeInMainWorld('electronAPI', {
     toggleAlwaysOnTop: () => ipcRenderer.invoke('toggle-always-on-top'),
@@ -10,5 +10,13 @@ contextBridge.exposeInMainWorld('electronAPI', {
         const listener = (_event, progress) => callback(progress);
         ipcRenderer.on('fast-join-save-progress', listener);
         return () => ipcRenderer.removeListener('fast-join-save-progress', listener);
+    },
+    getPathForFile: (file) => {
+        try {
+            if (webUtils && typeof webUtils.getPathForFile === 'function') {
+                return webUtils.getPathForFile(file) || '';
+            }
+        } catch (_) {}
+        return (file && file.path) ? file.path : '';
     }
 });

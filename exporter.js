@@ -311,12 +311,26 @@ document.addEventListener('DOMContentLoaded', () => {
             const clipsPayload = [];
             for (let i = 0; i < state.clips.length; i++) {
                 const c = state.clips[i];
+                let resolvedPath = c.filePath || '';
+                if (!resolvedPath && c.file) {
+                    try {
+                        if (window.electronAPI && typeof window.electronAPI.getPathForFile === 'function') {
+                            resolvedPath = window.electronAPI.getPathForFile(c.file) || '';
+                        }
+                    } catch (_) {}
+                    if (!resolvedPath && c.file.path) resolvedPath = c.file.path;
+                }
+                if (!resolvedPath && state.clips[0] && state.clips[0].filePath) {
+                    resolvedPath = state.clips[0].filePath;
+                }
+                if (resolvedPath) c.filePath = resolvedPath;
+
                 const clipObj = {
                     id: c.id,
                     name: c.name || `clip_${i + 1}.mp4`,
                     start: c.start || 0,
                     end: c.end || c.duration,
-                    filePath: c.filePath || (c.file && c.file.path ? c.file.path : '')
+                    filePath: resolvedPath || ''
                 };
                 if (!clipObj.filePath) {
                     const blobToRead = c.file || c.blob || (c.url ? await fetch(c.url).then(r => r.blob()).catch(() => null) : null);
