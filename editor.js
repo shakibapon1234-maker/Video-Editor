@@ -1568,9 +1568,10 @@ document.addEventListener('DOMContentLoaded', () => {
     // --- Step Navigation System ---
     function updateNavigation() {
         // Toggle step buttons in sidebar
-        for (let i = 1; i <= 5; i++) {
+        for (let i = 1; i <= 6; i++) {
             const btn = document.getElementById(`step-btn-${i}`);
             const panel = document.getElementById(`panel-${i}`);
+            if (!btn || !panel) continue;
             if (i === state.currentStep) {
                 btn.classList.add('active');
                 panel.classList.add('active');
@@ -1592,11 +1593,13 @@ document.addEventListener('DOMContentLoaded', () => {
             2: ["Trim & Layout", "Cut video duration and adjust the canvas format"],
             3: ["Overlays & B-roll", "Add news tickers, text overlays, and B-roll animations"],
             4: ["Audio & Voice", "Enhance audio quality and record background voiceover"],
-            5: ["Export Studio", "Render and download your final video for Facebook"]
+            5: ["Export Studio", "Render and download your final video for Facebook"],
+            6: ["Screen Recorder", "যেকোনো window বা screen রেকর্ড করুন টিউটোরিয়ালের জন্য"]
         };
         
-        document.getElementById('current-step-title').innerText = titles[state.currentStep][0];
-        document.getElementById('current-step-subtitle').innerText = titles[state.currentStep][1];
+        const titleEntry = titles[state.currentStep] || titles[1];
+        document.getElementById('current-step-title').innerText = titleEntry[0];
+        document.getElementById('current-step-subtitle').innerText = titleEntry[1];
         
         // Button states
         prevBtn.disabled = (state.currentStep === 1);
@@ -1605,7 +1608,15 @@ document.addEventListener('DOMContentLoaded', () => {
         if (state.currentStep === 1 && !state.duration) {
             nextBtn.disabled = true;
         } else {
-            nextBtn.disabled = (state.currentStep === 5);
+            nextBtn.disabled = (state.currentStep === 6);
+        }
+
+        // Notify other modules (e.g. screen-recorder.js) that the step changed
+        document.dispatchEvent(new CustomEvent('step-changed', { detail: { step: state.currentStep } }));
+
+        // Init screen recorder when step 6 is first opened
+        if (state.currentStep === 6 && typeof window.initScreenRecorder === 'function') {
+            window.initScreenRecorder();
         }
     }
     
@@ -1617,16 +1628,20 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
     
+    // Extend next button to stop at step 6
     nextBtn.addEventListener('click', () => {
-        if (state.currentStep < 5) {
+        if (state.currentStep < 6) {
             state.currentStep++;
             updateNavigation();
         }
     });
     
-    for (let i = 1; i <= 5; i++) {
-        document.getElementById(`step-btn-${i}`).addEventListener('click', () => {
-            if (state.duration || i === 1) {
+    for (let i = 1; i <= 6; i++) {
+        const stepBtnEl = document.getElementById(`step-btn-${i}`);
+        if (!stepBtnEl) continue;
+        stepBtnEl.addEventListener('click', () => {
+            // Step 6 (Screen Recorder) is always accessible even without a video
+            if (state.duration || i === 1 || i === 6) {
                 state.currentStep = i;
                 state.isDrawingTextCurve = false;
                 state.textCurvePoints = [];
@@ -1636,6 +1651,30 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         });
     }
+
+    // When the screen recorder saves a file, optionally import it as a new clip
+    window.addEventListener('screen-recorder-import', async (e) => {
+        const filePath = e && e.detail && e.detail.filePath;
+        if (!filePath) return;
+        // Build a synthetic File from the disk path using a fetch to local file URL
+        try {
+            const normalizedPath = filePath.replace(/\\/g, '/');
+            const fileUrl = `file:///${normalizedPath}`;
+            const resp = await fetch(fileUrl);
+            if (!resp.ok) throw new Error('Cannot read recorded file');
+            const blob = await resp.blob();
+            const fileName = filePath.split(/[\\/]/).pop();
+            const syntheticFile = new File([blob], fileName, { type: blob.type || 'video/webm' });
+            syntheticFile._filePath = filePath; // keep disk path for fast render
+            if (typeof handleVideoFile === 'function') {
+                await handleVideoFile(syntheticFile);
+            }
+            if (typeof showToast === 'function') showToast('Screen recording imported into editor!', 'success');
+        } catch (importErr) {
+            console.error('Screen recording import failed:', importErr);
+            if (typeof showToast === 'function') showToast('Import failed: ' + importErr.message, 'error');
+        }
+    });
     
     // --- Video Source Loading ---
     // --- Video/Image Source Loading ---

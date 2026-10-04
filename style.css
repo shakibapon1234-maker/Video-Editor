@@ -4810,3 +4810,72 @@ input:checked + .slider:before {
     background: rgba(99,102,241,0.22);
     border-color: #818cf8;
 }
+
+/* ── Screen Recorder (Step 6) ─────────────────────────────────────────── */
+.sr-source-card {
+    cursor: pointer;
+    border-radius: 8px;
+    overflow: hidden;
+    border: 2px solid rgba(255,255,255,0.08);
+    background: rgba(255,255,255,0.03);
+    transition: border-color 0.18s, transform 0.15s, box-shadow 0.18s;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding-bottom: 6px;
+}
+.sr-source-card:hover {
+    border-color: rgba(239,68,68,0.45);
+    transform: translateY(-2px);
+    box-shadow: 0 4px 16px rgba(239,68,68,0.18);
+}
+.sr-source-card.selected {
+    border-color: #ef4444;
+    box-shadow: 0 0 0 2px rgba(239,68,68,0.3), 0 4px 16px rgba(239,68,68,0.25);
+}
+.sr-source-card img {
+    width: 100%;
+    aspect-ratio: 16/9;
+    object-fit: cover;
+    display: block;
+    background: #0f172a;
+}
+.sr-source-card span {
+    font-size: 11px;
+    color: #94a3b8;
+    padding: 5px 6px 0;
+    text-align: center;
+    line-height: 1.3;
+    word-break: break-word;
+}
+.sr-source-card.selected span {
+    color: #fca5a5;
+}
+
+/* Status text */
+.sr-status { font-size: 13px; margin: 0; }
+.sr-status--idle     { color: #94a3b8; }
+.sr-status--recording { color: #ef4444; font-weight: 600; }
+.sr-status--paused   { color: #fbbf24; font-weight: 600; }
+.sr-status--saving   { color: #60a5fa; }
+.sr-status--done     { color: #34d399; font-weight: 600; }
+.sr-status--error    { color: #f87171; }
+
+/* Pulsing REC badge */
+#sr-rec-badge {
+    animation: sr-rec-pulse 1.2s ease-in-out infinite;
+}
+@keyframes sr-rec-pulse {
+    0%, 100% { opacity: 1; }
+    50%       { opacity: 0.45; }
+}
+
+/* Step-6 nav item glow on hover */
+#step-btn-6:hover {
+    background: rgba(239,68,68,0.08);
+}
+#step-btn-6.active {
+    border-left-color: #ef4444 !important;
+    background: rgba(239,68,68,0.12);
+}
+

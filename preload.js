@@ -18,5 +18,13 @@ contextBridge.exposeInMainWorld('electronAPI', {
             }
         } catch (_) {}
         return (file && file.path) ? file.path : '';
-    }
+    },
+    // Screen Recorder — lists all recordable screens and windows
+    getScreenSources: () => ipcRenderer.invoke('get-screen-sources'),
+    // Screen Recorder — set chosen source ID so getDisplayMedia captures it
+    setSelectedScreenSource: (sourceId) => ipcRenderer.invoke('set-selected-screen-source', sourceId),
+    // Screen Recorder — opens a Save dialog and writes the recorded WebM to disk
+    saveScreenRecording: (arrayBuffer, suggestedName) =>
+        ipcRenderer.invoke('save-screen-recording', arrayBuffer, suggestedName),
 });
+

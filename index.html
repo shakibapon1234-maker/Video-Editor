@@ -85,7 +85,15 @@
                         <p>Render & Download</p>
                     </div>
                 </div>
+                <div class="step-item" data-step="6" id="step-btn-6" style="border-left: 2px solid #ef4444;">
+                    <div class="step-number" style="background: linear-gradient(135deg,#ef4444,#b91c1c);">&#9679;</div>
+                    <div class="step-info">
+                        <h3>Screen Recorder</h3>
+                        <p>Tutorial &amp; Demo রেকর্ড</p>
+                    </div>
+                </div>
             </nav>
+
 
             <div class="sidebar-footer">
                 <p>100% Free & Local</p>
@@ -4197,6 +4205,114 @@
                         </div>
                     </div>
 
+                    <!-- Step 6: Screen Recorder -->
+                    <div class="step-panel" id="panel-6">
+                        <div class="card" style="border: 1px solid rgba(239,68,68,0.3);">
+                            <div class="card-header" style="background: linear-gradient(135deg, rgba(239,68,68,0.15), rgba(185,28,28,0.1));">
+                                <i class="fa-solid fa-circle-dot card-icon" style="color:#ef4444;"></i>
+                                <h3 style="color:#fca5a5;">Screen Recorder — টিউটোরিয়াল রেকর্ড করুন</h3>
+                            </div>
+                            <div class="card-body">
+                                <p class="help-text">যেকোনো স্ক্রিন বা উইন্ডো সিলেক্ট করে রেকর্ড করুন। Windows গেম রেকর্ডারের মতো সাইডবার ছাড়াই নির্দিষ্ট উইন্ডো ক্যাপচার হবে।</p>
+
+                                <!-- Source picker -->
+                                <div class="control-group mt-3">
+                                    <label class="form-label" style="display:flex;align-items:center;justify-content:space-between;">
+                                        <span>&#128250; রেকর্ড করার Screen / Window বেছে নিন</span>
+                                        <button id="sr-refresh-sources" class="btn btn-sm btn-outline" type="button" title="Refresh source list">&#8635; Refresh</button>
+                                    </label>
+                                    <div id="sr-source-spinner" style="display:none;text-align:center;padding:12px;color:#94a3b8;">&#9203; লোড হচ্ছে...</div>
+                                    <div id="sr-source-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:10px;max-height:240px;overflow-y:auto;margin-top:10px;"></div>
+                                </div>
+
+                                <!-- Settings row -->
+                                <div class="control-group mt-3" style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+                                    <div>
+                                        <label class="form-label">&#127916; Framerate (FPS)</label>
+                                        <select id="sr-fps-select" class="form-select">
+                                            <option value="24">24 fps (সিনেমাটিক)</option>
+                                            <option value="30" selected>30 fps (স্ট্যান্ডার্ড)</option>
+                                            <option value="60">60 fps (স্মুথ)</option>
+                                        </select>
+                                    </div>
+                                    <div style="display:flex;flex-direction:column;gap:8px;justify-content:center;">
+                                        <label class="toggle-control" style="gap:8px;">
+                                            <input type="checkbox" id="sr-audio-toggle" checked>
+                                            <span style="font-size:13px;">&#128266; System Audio</span>
+                                        </label>
+                                        <label class="toggle-control" style="gap:8px;">
+                                            <input type="checkbox" id="sr-mic-toggle">
+                                            <span style="font-size:13px;">&#127908; Microphone</span>
+                                        </label>
+                                    </div>
+                                </div>
+
+                                <!-- Live preview -->
+                                <div class="control-group mt-3">
+                                    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">
+                                        <label class="form-label" style="margin:0;">&#128247; Preview &amp; Canvas</label>
+                                        <button id="sr-preview-btn" class="btn btn-sm btn-outline" type="button" style="font-size:12px;padding:3px 10px;">&#9654; লাইভ প্রিভিউ দেখুন</button>
+                                    </div>
+                                    <div style="position:relative;background:#000;border-radius:8px;overflow:hidden;border:1px solid rgba(239,68,68,0.3);aspect-ratio:16/9;display:flex;align-items:center;justify-content:center;">
+                                        <img id="sr-preview-thumb" alt="Preview Thumbnail" style="width:100%;height:100%;object-fit:contain;display:none;">
+                                        <video id="sr-preview-video" muted playsinline style="width:100%;height:100%;object-fit:contain;display:none;"></video>
+                                        <div id="sr-preview-placeholder" style="position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;color:#64748b;gap:8px;">
+                                            <i class="fa-solid fa-display" style="font-size:32px;opacity:0.6;"></i>
+                                            <span style="font-size:12px;">উপরে একটি স্ক্রিন বা উইন্ডো সিলেক্ট করুন</span>
+                                        </div>
+                                        <!-- Countdown overlay -->
+                                        <div id="sr-countdown-overlay" style="display:none;position:absolute;inset:0;background:rgba(0,0,0,0.8);align-items:center;justify-content:center;z-index:10;">
+                                            <span id="sr-countdown-text" style="font-size:96px;font-weight:900;color:#ef4444;text-shadow:0 0 40px rgba(239,68,68,0.8);">3</span>
+                                        </div>
+                                        <!-- Recording indicator -->
+                                        <div id="sr-rec-badge" style="position:absolute;top:10px;right:10px;background:rgba(239,68,68,0.9);color:#fff;padding:4px 10px;border-radius:20px;font-size:12px;font-weight:700;display:none;z-index:5;">&#9679; REC</div>
+                                    </div>
+                                </div>
+
+                                <!-- Controls -->
+                                <div class="control-group mt-3" style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
+                                    <button id="sr-start-btn" class="btn btn-primary" type="button" style="background:linear-gradient(135deg,#ef4444,#b91c1c);border-color:#ef4444;flex:1;min-width:120px;">
+                                        &#9679; রেকর্ড শুরু করুন
+                                    </button>
+                                    <button id="sr-pause-btn" class="btn btn-outline" type="button" style="display:none;" disabled>&#9208; পজ</button>
+                                    <button id="sr-stop-btn" class="btn btn-secondary" type="button" style="display:none;" disabled>&#9632; রেকর্ড বন্ধ</button>
+                                    <div style="display:flex;align-items:center;gap:6px;margin-left:auto;">
+                                        <span style="font-size:11px;color:#94a3b8;">সময়:</span>
+                                        <span id="sr-timer" style="font-family:monospace;font-size:18px;font-weight:700;color:#ef4444;">00:00</span>
+                                    </div>
+                                </div>
+
+                                <!-- Status -->
+                                <div class="control-group mt-2">
+                                    <p id="sr-status-text" class="sr-status sr-status--idle" style="font-size:13px;color:#94a3b8;margin:0;">একটি source বেছে নিন।</p>
+                                </div>
+
+                                <!-- Save progress -->
+                                <div id="sr-progress-box" style="display:none;" class="control-group mt-2">
+                                    <p style="color:#fbbf24;font-size:13px;">&#128190; ফাইল সেভ হচ্ছে, একটু অপেক্ষা করুন...</p>
+                                </div>
+
+                                <!-- Success box -->
+                                <div id="sr-success-box" style="display:none;" class="control-group mt-3">
+                                    <div style="background:rgba(16,185,129,0.12);border:1px solid rgba(16,185,129,0.3);border-radius:10px;padding:14px;">
+                                        <p style="color:#34d399;font-weight:600;margin-bottom:8px;">&#9989; রেকর্ডিং সংরক্ষিত হয়েছে!</p>
+                                        <p id="sr-success-path" style="font-size:11px;color:#94a3b8;word-break:break-all;margin-bottom:10px;"></p>
+                                        <video id="sr-result-video" controls style="width:100%;border-radius:6px;max-height:180px;background:#000;margin-bottom:10px;"></video>
+                                        <div style="display:flex;gap:8px;flex-wrap:wrap;">
+                                            <button id="sr-import-btn" class="btn btn-primary" type="button" style="flex:1;">
+                                                &#43; Editor-এ Import করুন
+                                            </button>
+                                            <button type="button" class="btn btn-outline" style="flex:1;"
+                                                onclick="document.getElementById('sr-success-box').style.display='none'; window.initScreenRecorder && window.initScreenRecorder();">
+                                                &#128257; নতুন রেকর্ড
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
                     <!-- Step 5: Export Studio -->
                     <div class="step-panel" id="panel-5">
                         <!-- Intro / Outro Template (Phase 5C) -->
@@ -5423,5 +5539,6 @@
     <script src="punch-zoom-ui.js?v=4"></script>
     <script src="ui-customization.js?v=6"></script>
     <script src="glass-cards.js?v=4"></script>
+    <script src="screen-recorder.js?v=2"></script>
 </body>
 </html>

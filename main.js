@@ -1,4 +1,4 @@
-const { app, BrowserWindow, session, dialog, ipcMain, clipboard, nativeImage } = require('electron');
+const { app, BrowserWindow, session, dialog, ipcMain, clipboard, nativeImage, desktopCapturer } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const http = require('http');
@@ -102,6 +102,9 @@ if (!gotLock) {
         });
 
         mainWindow.loadURL('http://localhost:4000');
+        mainWindow.webContents.on('render-process-gone', (event, details) => {
+            console.error('Renderer process gone:', details);
+        });
         mainWindow.on('closed', () => {
             mainWindow = null;
         });
@@ -140,6 +143,60 @@ if (!gotLock) {
         } catch (error) {
             console.error('Native image clipboard copy failed:', error);
             return false;
+        }
+    });
+
+    // --- Screen Recorder: tracking chosen source for getDisplayMedia ---
+    let pendingCapturerSourceId = null;
+
+    ipcMain.handle('set-selected-screen-source', (event, sourceId) => {
+        pendingCapturerSourceId = sourceId;
+        return true;
+    });
+
+    // --- Screen Recorder: list all capturable sources (screens + windows) ---
+    // The renderer cannot call desktopCapturer.getSources() directly in Electron
+    // 13+ without a privileged main-process bridge. We return a plain array of
+    // { id, name, thumbnailDataUrl } objects that the renderer can display in a
+    // picker UI.
+    ipcMain.handle('get-screen-sources', async () => {
+        try {
+            const sources = await desktopCapturer.getSources({
+                types: ['window', 'screen'],
+                thumbnailSize: { width: 320, height: 180 }
+            });
+            return sources.map(s => ({
+                id: s.id,
+                name: s.name,
+                thumbnailDataUrl: s.thumbnail.toDataURL()
+            }));
+        } catch (err) {
+            console.error('desktopCapturer.getSources error:', err);
+            return [];
+        }
+    });
+
+    // --- Screen Recorder: save the recorded video blob to disk ---
+    // The renderer sends the recorded video as a Uint8Array buffer after
+    // MediaRecorder finishes. We open a native Save-As dialog and write it
+    // to the chosen path so the user can import it directly into the editor.
+    ipcMain.handle('save-screen-recording', async (event, arrayBuffer, suggestedName) => {
+        const safeName = path.basename(String(suggestedName || 'screen-recording.webm'))
+            .replace(/[<>:"/\\|?*\x00-\x1f]/g, '_');
+        const choice = await dialog.showSaveDialog(mainWindow, {
+            title: 'Save Screen Recording',
+            defaultPath: path.join(app.getPath('videos'), safeName),
+            filters: [
+                { name: 'WebM Video', extensions: ['webm'] },
+                { name: 'All Files', extensions: ['*'] }
+            ]
+        });
+        if (choice.canceled || !choice.filePath) return { canceled: true };
+        try {
+            await fs.promises.writeFile(choice.filePath, Buffer.from(arrayBuffer));
+            return { canceled: false, filePath: choice.filePath };
+        } catch (writeErr) {
+            throw new Error(`Could not save recording: ${writeErr.message}`);
         }
     });
 
@@ -184,8 +241,33 @@ if (!gotLock) {
     });
 
     app.whenReady().then(() => {
+        session.defaultSession.setPermissionCheckHandler((webContents, permission) => {
+            return permission === 'media' || permission === 'display-capture';
+        });
+
         session.defaultSession.setPermissionRequestHandler((webContents, permission, callback) => {
-            callback(permission === 'media');
+            callback(permission === 'media' || permission === 'display-capture');
+        });
+
+        session.defaultSession.setDisplayMediaRequestHandler(async (request, callback) => {
+            try {
+                const sources = await desktopCapturer.getSources({ types: ['screen', 'window'] });
+                let chosen = null;
+                if (pendingCapturerSourceId) {
+                    chosen = sources.find(s => s.id === pendingCapturerSourceId);
+                }
+                if (!chosen && sources.length > 0) {
+                    chosen = sources[0];
+                }
+                if (!chosen) {
+                    callback({});
+                    return;
+                }
+                callback({ video: chosen, audio: 'loopback' });
+            } catch (err) {
+                console.error('setDisplayMediaRequestHandler error:', err);
+                callback({});
+            }
         });
 
         let serverModule;
