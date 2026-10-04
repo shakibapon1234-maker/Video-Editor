@@ -1856,6 +1856,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 const firstClip = {
                     id: Date.now(),
                     file: file,
+                    filePath: (file && file.path) ? file.path : '',
                     url: urlToLoad,
                     name: file.name,
                     size: file.size || 0,
@@ -3728,6 +3729,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 const newClip = {
                     id: Date.now(),
                     file: file,
+                    filePath: (file && file.path) ? file.path : '',
                     url: url,
                     name: file.name,
                     duration: probe.duration,

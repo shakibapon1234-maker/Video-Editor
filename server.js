@@ -1167,6 +1167,183 @@ app.get('/api/fast-direct-render/status/:renderId', (req, res) => {
     });
 });
 
+// ============================================================================
+// Audio EQ tool  (/api/audio-eq/*)
+// Standalone: upload any audio/video -> apply EQ (+ optional compressor,
+// de-esser, loudness normalize) with ffmpeg -> download WAV / MP3 / the same
+// video with its audio replaced (video stream is copied, never re-encoded).
+// The filter chain comes from eq-core.js, which the browser uses for the live
+// preview too, so preview and final render use ONE settings object.
+// Flow: init -> upload (streamed to disk) -> render (async) -> status (poll)
+//       -> download via /exports/<file>
+// ============================================================================
+const EQCore = require('./eq-core.js');
+const AUDIOEQ_TEMP_DIR = path.join(DATA_DIR, 'temp_audioeq');
+if (!fs.existsSync(AUDIOEQ_TEMP_DIR)) fs.mkdirSync(AUDIOEQ_TEMP_DIR);
+const audioEqSessions = new Map();
+
+function audioEqSession(req, res) {
+    const id = String(req.query.session || '');
+    const s = audioEqSessions.get(id);
+    if (!s) {
+        res.status(400).json({ error: 'Session expired or invalid. Please upload the file again.' });
+        return null;
+    }
+    s.lastActive = Date.now();
+    return s;
+}
+
+app.post('/api/audio-eq/init', (req, res) => {
+    try {
+        const sessionId = `audioeq_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+        const tempDir = path.join(AUDIOEQ_TEMP_DIR, sessionId);
+        fs.mkdirSync(tempDir);
+        audioEqSessions.set(sessionId, {
+            tempDir, inputPath: null, originalName: 'audio', status: 'idle', percent: 0,
+            downloadUrl: null, filename: null, error: null, command: null,
+            createdAt: Date.now(), lastActive: Date.now()
+        });
+        res.json({ sessionId });
+    } catch (err) {
+        console.error('audio-eq init error:', err);
+        res.status(500).json({ error: String(err && err.message ? err.message : err) });
+    }
+});
+
+// Streamed to disk (no 2 GB RAM buffer) so long tutorial videos are fine.
+app.post('/api/audio-eq/upload', (req, res) => {
+    const session = audioEqSession(req, res);
+    if (!session) return;
+    const originalName = decodeURIComponent(req.query.filename || 'audio.wav');
+    const ext = (path.extname(originalName) || '.bin').replace(/[^\.\w]/g, '').slice(0, 8) || '.bin';
+    const inputPath = path.join(session.tempDir, `input${ext}`);
+    const out = fs.createWriteStream(inputPath);
+    let failed = false;
+    const fail = (err) => {
+        if (failed) return;
+        failed = true;
+        console.error('audio-eq upload error:', err);
+        try { out.destroy(); } catch (_) {}
+        if (!res.headersSent) res.status(500).json({ error: String(err && err.message ? err.message : err) });
+    };
+    req.on('error', fail);
+    out.on('error', fail);
+    out.on('finish', () => {
+        if (failed) return;
+        session.inputPath = inputPath;
+        session.originalName = originalName;
+        session.status = 'uploaded';
+        res.json({ ok: true, bytes: out.bytesWritten });
+    });
+    req.pipe(out);
+});
+
+app.post('/api/audio-eq/render', express.json({ limit: '1mb' }), (req, res) => {
+    const session = audioEqSession(req, res);
+    if (!session) return;
+    if (!session.inputPath || !fs.existsSync(session.inputPath)) return res.status(400).json({ error: 'Upload a file first.' });
+    if (session.status === 'rendering') return res.status(409).json({ error: 'Render already running.' });
+
+    const body = req.body || {};
+    const settings = EQCore.sanitize(body.settings);
+    const outputKind = ['wav', 'mp3', 'video'].includes(body.output) ? body.output : 'wav';
+    const durationSec = Number(body.durationSec) > 0 ? Number(body.durationSec) : 0;
+    const filterStr = EQCore.toFfmpegFilter(settings);
+
+    const base = (path.basename(session.originalName, path.extname(session.originalName)) || 'audio')
+        .replace(/[\\/:*?"<>|\r\n]/g, '_').slice(0, 80);
+    const outExt = outputKind === 'video' ? (path.extname(session.originalName).replace(/[^\.\w]/g, '') || '.mp4') : `.${outputKind}`;
+    let outputPath = path.join(OUTPUT_DIR, `${base}_eq${outExt}`);
+    for (let n = 1; fs.existsSync(outputPath); n++) outputPath = path.join(OUTPUT_DIR, `${base}_eq_${n}${outExt}`);
+
+    const opts = ['-af', filterStr];
+    // loudnorm internally upsamples to 192 kHz -> force a normal rate when it is on
+    if (settings.normalize.enabled) opts.push('-ar', '48000');
+    if (outputKind === 'wav') {
+        opts.push('-vn', '-c:a', 'pcm_s16le');
+    } else if (outputKind === 'mp3') {
+        opts.push('-vn', '-c:a', 'libmp3lame', '-b:a', '192k');
+    } else {
+        opts.push('-map', '0:v:0', '-map', '0:a:0', '-c:v', 'copy', '-c:a', 'aac', '-b:a', '192k', '-movflags', '+faststart');
+        if (!settings.normalize.enabled) opts.push('-ar', '48000');
+    }
+
+    console.log(`Audio EQ render (${outputKind}): ${session.inputPath} -> ${outputPath}\n  -af ${filterStr}`);
+    session.status = 'rendering';
+    session.percent = 0;
+    session.error = null;
+    session.downloadUrl = null;
+
+    session.command = ffmpeg(session.inputPath)
+        .outputOptions(opts)
+        .output(outputPath)
+        .on('progress', (p) => {
+            let pct = Number(p.percent);
+            if (!Number.isFinite(pct) && durationSec && p.timemark) {
+                const [h, m, s] = String(p.timemark).split(':').map(Number);
+                pct = ((h * 3600 + m * 60 + s) / durationSec) * 100;
+            }
+            if (Number.isFinite(pct)) session.percent = Math.max(0, Math.min(99, Math.round(pct)));
+        })
+        .on('end', () => {
+            session.status = 'done';
+            session.percent = 100;
+            session.filename = path.basename(outputPath);
+            session.downloadUrl = `/exports/${encodeURIComponent(session.filename)}`;
+            session.command = null;
+            console.log('Audio EQ render complete:', outputPath);
+        })
+        .on('error', (err, stdout, stderr) => {
+            if (session.status === 'cancelled') return;
+            console.error('Audio EQ ffmpeg error:', err.message);
+            console.error('FFmpeg stderr:', stderr);
+            let message = `FFmpeg error: ${err.message}`;
+            if (/Stream map .*0:(v|a):0.* matches no streams|does not contain any stream/i.test(stderr || '')) {
+                message = outputKind === 'video'
+                    ? 'এই ফাইলে ভিডিও বা অডিও ট্র্যাক নেই, তাই ভিডিও আউটপুট করা যায়নি। WAV/MP3 বেছে নিন।'
+                    : 'ফাইলে কোনো অডিও ট্র্যাক পাওয়া যায়নি।';
+            }
+            session.status = 'error';
+            session.error = message;
+            session.command = null;
+            try { fs.unlinkSync(outputPath); } catch (_) {}
+        })
+        .run();
+
+    res.json({ ok: true });
+});
+
+app.get('/api/audio-eq/status', (req, res) => {
+    const session = audioEqSession(req, res);
+    if (!session) return;
+    res.json({
+        status: session.status, percent: session.percent,
+        downloadUrl: session.downloadUrl, filename: session.filename, error: session.error
+    });
+});
+
+app.post('/api/audio-eq/cancel', (req, res) => {
+    const id = String(req.query.session || '');
+    const session = audioEqSessions.get(id);
+    if (session) {
+        if (session.command) { session.status = 'cancelled'; try { session.command.kill('SIGKILL'); } catch (_) {} }
+        cleanupDir(session.tempDir);
+        audioEqSessions.delete(id);
+    }
+    res.json({ ok: true });
+});
+
+// Drop abandoned sessions (browser closed mid-way) after 3 hours.
+setInterval(() => {
+    const cutoff = Date.now() - 3 * 60 * 60 * 1000;
+    for (const [id, s] of audioEqSessions) {
+        if (s.lastActive < cutoff && s.status !== 'rendering') {
+            cleanupDir(s.tempDir);
+            audioEqSessions.delete(id);
+        }
+    }
+}, 30 * 60 * 1000).unref();
+
 // Serve downloads folder
 app.use('/exports', express.static(OUTPUT_DIR));
 

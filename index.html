@@ -4307,8 +4307,12 @@
                                     <p class="help-text" style="margin-top:4px;">Facebook/WhatsApp থেকে ডাউনলোড করা ঝাপসা ভিডিওতে ব্যবহার করুন — ডিনয়েজ ও শার্পেন করে রেন্ডার হবে। ভালো মানের অরিজিনাল ফুটেজে এটা অন করার দরকার নেই, এতে এক্সপোর্ট সময় একটু বাড়ে।</p>
                                 </div>
 
-                                <button id="render-btn" class="btn btn-primary btn-lg btn-block mt-3">
-                                    <i class="fa-solid fa-wand-magic-sparkles"></i> Render & Export Video
+                                <button id="fast-direct-render-btn" class="btn btn-success btn-lg btn-block mt-3" style="background: linear-gradient(135deg, #10b981 0%, #059669 100%); border: none; font-weight: 700; box-shadow: 0 4px 15px rgba(16, 185, 129, 0.35); font-size: 15px;">
+                                    <i class="fa-solid fa-bolt"></i> ⚡ Ultra-Fast Direct Export (১ মিনিটে রেন্ডার — কোনো কাঁপুনি ছাড়া)
+                                </button>
+
+                                <button id="render-btn" class="btn btn-primary btn-block mt-2" style="font-size: 13px; opacity: 0.85;">
+                                    <i class="fa-solid fa-wand-magic-sparkles"></i> Frame-by-Frame Canvas Render (টেক্সট এনিমেশন ও ওভারলের জন্য)
                                 </button>
 
                                 <!-- Rendering Progress -->
@@ -4912,6 +4916,159 @@
                             </div>
                         </div>
 
+                        <!-- Audio EQ Tool (Equalizer + voice polish) -->
+                        <div class="card mt-4" id="eq-card">
+                            <div class="card-header">
+                                <i class="fa-solid fa-sliders card-icon"></i>
+                                <h3>Audio EQ (অডিও ইকুয়ালাইজার)</h3>
+                            </div>
+                            <div class="card-body">
+                                <p class="help-text">যেকোনো অডিও বা ভিডিও আপলোড করুন, শুনতে শুনতে টোন বাড়ান/কমান (Bass, Voice, Treble), তারপর ফাইনাল রেন্ডার করুন। ভিডিও দিলে ভিডিও আবার রি-এনকোড হয় না — শুধু অডিও বদলায়, তাই ২০–৩০ মিনিটের ভিডিওও দ্রুত হয়। এটি বর্তমান প্রজেক্টের সাথে সম্পর্কহীন।</p>
+
+                                <div class="file-selector-box mt-3" id="eq-dropzone">
+                                    <i class="fa-solid fa-file-audio"></i>
+                                    <span id="eq-dropzone-label">Drag & Drop Audio/Video here or Click to Select</span>
+                                    <button class="btn btn-sm btn-outline" type="button">Select File</button>
+                                    <button id="eq-remove-btn" class="btn btn-sm btn-outline" type="button" style="display: none; border-color: #f87171; color: #f87171;">
+                                        <i class="fa-solid fa-xmark"></i> Remove (সরান)
+                                    </button>
+                                    <input type="file" id="eq-file-input" accept="audio/*,video/*" style="display: none;">
+                                </div>
+                                <div class="control-group mt-2">
+                                    <select id="eq-project-select" class="form-select" title="এডিটরে আগে থেকে যে ভিডিও খোলা আছে সেটাই এখানে নিন">
+                                        <option value="">⬇ অথবা এডিটরের প্রজেক্ট ক্লিপ থেকে নিন (Use project clip)…</option>
+                                    </select>
+                                </div>
+
+                                <div id="eq-editor-box" style="display: none;">
+                                    <video id="eq-player" controls playsinline style="width: 100%; max-height: 260px; margin-top: 14px; background: #000; border-radius: 10px;"></video>
+                                    <p class="help-text mt-1" id="eq-load-hint"></p>
+
+                                    <div class="eq-toolbar mt-3">
+                                        <div class="control-group" style="flex: 1; min-width: 220px;">
+                                            <label>প্রিসেট (Preset)</label>
+                                            <select id="eq-preset-select" class="form-select"></select>
+                                        </div>
+                                        <button id="eq-ab-btn" class="btn btn-outline" type="button" title="আগে বনাম পরে শুনুন (Original vs Edited)">
+                                            <i class="fa-solid fa-ear-listen"></i> <span id="eq-ab-label">Edited শুনছেন</span>
+                                        </button>
+                                        <button id="eq-reset-btn" class="btn btn-outline" type="button" title="সব Flat করুন">
+                                            <i class="fa-solid fa-rotate-left"></i> Reset
+                                        </button>
+                                    </div>
+
+                                    <div class="eq-toolbar mt-2">
+                                        <input type="text" id="eq-preset-name" class="form-input" placeholder="নিজের প্রিসেটের নাম (My preset name)" style="flex: 1; min-width: 180px;" maxlength="40">
+                                        <button id="eq-save-preset-btn" class="btn btn-sm btn-outline" type="button"><i class="fa-solid fa-floppy-disk"></i> Save preset</button>
+                                        <button id="eq-del-preset-btn" class="btn btn-sm btn-outline" type="button" style="border-color: #f87171; color: #f87171;" disabled><i class="fa-solid fa-trash"></i> Delete</button>
+                                        <button id="eq-export-btn" class="btn btn-sm btn-outline" type="button" title="সেটিং JSON ফাইলে সেভ করুন"><i class="fa-solid fa-file-export"></i> Export</button>
+                                        <button id="eq-import-btn" class="btn btn-sm btn-outline" type="button" title="JSON ফাইল থেকে সেটিং আনুন"><i class="fa-solid fa-file-import"></i> Import</button>
+                                        <input type="file" id="eq-import-input" accept=".json,application/json" style="display: none;">
+                                    </div>
+                                    <div class="control-group mt-2">
+                                        <select id="eq-vc-select" class="form-select">
+                                            <option value="">🎙 Voice Changer প্রিসেট থেকে টোন (EQ) আনুন…</option>
+                                        </select>
+                                        <p class="help-text mt-1" id="eq-vc-hint" style="display: none;"></p>
+                                    </div>
+
+                                    <canvas id="eq-canvas" class="eq-canvas" width="900" height="240"></canvas>
+                                    <p class="help-text mt-1">কার্ভ = আপনার EQ সেটিং, পেছনের ঢেউ = লাইভ স্পেকট্রাম (ভিডিও চালালে দেখা যাবে)।</p>
+
+                                    <div class="eq-row mt-2">
+                                        <label class="eq-check"><input type="checkbox" id="eq-loop-on"> প্রিভিউ লুপ (একটা অংশ বারবার শুনুন)</label>
+                                        <input type="text" id="eq-loop-start" class="form-input" value="0:00" style="width: 78px;" title="Start (মিনিট:সেকেন্ড)">
+                                        <span>→</span>
+                                        <input type="text" id="eq-loop-end" class="form-input" value="0:30" style="width: 78px;" title="End (মিনিট:সেকেন্ড)">
+                                        <button id="eq-loop-setstart" class="btn btn-sm btn-outline" type="button">Start = এখন</button>
+                                        <button id="eq-loop-setend" class="btn btn-sm btn-outline" type="button">End = এখন</button>
+                                    </div>
+
+                                    <div id="eq-bands" class="eq-bands mt-2"></div>
+
+                                    <div class="eq-row mt-3">
+                                        <label class="eq-check"><input type="checkbox" id="eq-lowcut-on"> Low Cut (গুনগুন/রুম-রাম্বল কাটুন)</label>
+                                        <input type="range" id="eq-lowcut-freq" min="40" max="250" step="5" value="80">
+                                        <span id="eq-lowcut-val" class="eq-val">80 Hz</span>
+                                    </div>
+                                    <div class="eq-row mt-2">
+                                        <label class="eq-check"><input type="checkbox" id="eq-highcut-on"> High Cut (খুব উঁচু হিস/শিস কাটুন)</label>
+                                        <input type="range" id="eq-highcut-freq" min="3000" max="20000" step="500" value="12000">
+                                        <span id="eq-highcut-val" class="eq-val">12000 Hz</span>
+                                    </div>
+                                    <div class="eq-row mt-2">
+                                        <label class="eq-check" style="cursor: default;">Pre-gain (ভলিউম আগে-পরে)</label>
+                                        <input type="range" id="eq-pregain" min="-12" max="12" step="0.5" value="0">
+                                        <span id="eq-pregain-val" class="eq-val">0 dB</span>
+                                    </div>
+
+                                    <details class="eq-polish mt-3" id="eq-polish">
+                                        <summary>ভয়েস পলিশ (Compressor · De-esser · Loudness) — লম্বা টিউটোরিয়ালের জন্য খুব কাজের</summary>
+                                        <div class="eq-row mt-2">
+                                            <label class="eq-check"><input type="checkbox" id="eq-comp-on"> Compressor (ভলিউম সমান রাখে)</label>
+                                            <input type="range" id="eq-comp-ratio" min="1.5" max="8" step="0.5" value="3">
+                                            <span id="eq-comp-val" class="eq-val">3:1</span>
+                                        </div>
+                                        <div class="eq-row mt-2">
+                                            <label class="eq-check"><input type="checkbox" id="eq-deess-on"> De-esser ("স/শ" এর তীক্ষ্ণ শব্দ কমায়)</label>
+                                            <input type="range" id="eq-deess-amt" min="0.1" max="1" step="0.05" value="0.5">
+                                            <span id="eq-deess-val" class="eq-val">0.5</span>
+                                        </div>
+                                        <div class="eq-row mt-2">
+                                            <label class="eq-check"><input type="checkbox" id="eq-norm-on"> Loudness Normalize (সব ভিডিওতে একই ভলিউম)</label>
+                                            <input type="range" id="eq-norm-lufs" min="-23" max="-12" step="1" value="-16">
+                                            <span id="eq-norm-val" class="eq-val">-16 LUFS</span>
+                                        </div>
+                                        <div class="eq-row mt-2">
+                                            <label class="eq-check"><input type="checkbox" id="eq-lim-on" checked> Limiter (ভলিউম ফেটে/ক্লিপ হওয়া ঠেকায়)</label>
+                                            <input type="range" id="eq-lim-ceil" min="-6" max="-0.5" step="0.5" value="-1">
+                                            <span id="eq-lim-val" class="eq-val">-1 dB</span>
+                                        </div>
+                                        <p class="help-text mt-2">প্রিভিউতে শুধু Compressor আনুমানিক শোনা যায়; De-esser ও Loudness শুধু <strong>ফাইনাল রেন্ডারে</strong> প্রয়োগ হয় (Limiter-ও)।</p>
+                                    </details>
+
+                                    <div class="control-group mt-3">
+                                        <label>আউটপুট (Output)</label>
+                                        <select id="eq-output-select" class="form-select">
+                                            <option value="video">নতুন অডিওসহ ভিডিও (Video, ভিডিও রি-এনকোড হয় না)</option>
+                                            <option value="wav">WAV অডিও (সেরা কোয়ালিটি)</option>
+                                            <option value="mp3">MP3 অডিও (ছোট ফাইল)</option>
+                                        </select>
+                                    </div>
+
+                                    <button id="eq-render-btn" class="btn btn-primary btn-block mt-3" type="button">
+                                        <i class="fa-solid fa-wand-magic-sparkles"></i> EQ প্রয়োগ করে রেন্ডার করুন (Render)
+                                    </button>
+
+                                    <div class="render-progress-box mt-4" id="eq-progress-box" style="display: none;">
+                                        <div class="progress-info">
+                                            <span id="eq-status-text">প্রস্তুত হচ্ছে...</span>
+                                            <span id="eq-percentage">0%</span>
+                                        </div>
+                                        <div class="progress-bar-container">
+                                            <div class="progress-bar-fill" id="eq-progress-fill"></div>
+                                        </div>
+                                        <button id="eq-cancel-btn" class="btn btn-sm btn-outline mt-2" type="button" style="border-color: #f87171; color: #f87171;">
+                                            <i class="fa-solid fa-ban"></i> বাতিল (Cancel)
+                                        </button>
+                                    </div>
+
+                                    <div id="eq-error-box" class="mt-3" style="display: none; color: #f87171;">
+                                        <i class="fa-solid fa-triangle-exclamation"></i> <span id="eq-error-desc"></span>
+                                    </div>
+
+                                    <div id="eq-success-box" class="mt-3" style="display: none;">
+                                        <h3>Audio Ready!</h3>
+                                        <p id="eq-success-desc">আপনার ফাইল প্রস্তুত।</p>
+                                        <a id="eq-download-link" href="#" download class="btn btn-success btn-block mt-3">
+                                            <i class="fa-solid fa-download"></i> Download
+                                        </a>
+                                        <p class="help-text mt-2">সেটিং বদলে আবার রেন্ডার করতে পারেন — আবার আপলোড করতে হবে না।</p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
                         <!-- Add Audio to Video Tool -->
                         <div class="card mt-4">
                             <div class="card-header">
@@ -5156,6 +5313,8 @@
     <script src="keyframes.js?v=1"></script>
     <script src="render-engine.js?v=2"></script>
     <script src="exporter.js?v=5"></script>
+    <script src="eq-core.js?v=1"></script>
+    <script src="audio-eq.js?v=1"></script>
     <script src="fast-join.js?v=1"></script>
     <script src="phase9.js?v=6"></script>
     <script src="transitions-library.js?v=1"></script>
