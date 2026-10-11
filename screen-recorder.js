@@ -24,6 +24,7 @@
     let srElapsedSec     = 0;
     let srCountdownTimer = null;
     let eventsAttached   = false;
+    let srEditorAreaMode = false;     // true = record only editor preview canvas
 
     // ── DOM helpers ──────────────────────────────────────────────────────────
     const $    = (id) => document.getElementById(id);
@@ -83,6 +84,14 @@
     function selectSource(id, thumbUrl, cardEl, notifyMain = true) {
         srSelectedId    = id;
         srSelectedThumb = thumbUrl || null;
+        srEditorAreaMode = false;  // clear editor-area mode
+
+        // Clear editor area card highlight
+        const editorCard  = $('sr-editor-area-card');
+        const editorBadge = $('sr-editor-area-badge');
+        if (editorCard)  editorCard.style.border  = '2px solid rgba(239,68,68,0.5)';
+        if (editorCard)  editorCard.style.background = 'rgba(239,68,68,0.08)';
+        if (editorBadge) editorBadge.style.display = 'none';
 
         document.querySelectorAll('.sr-source-card').forEach(c => c.classList.remove('selected'));
         if (cardEl) cardEl.classList.add('selected');
@@ -102,6 +111,60 @@
             hide(placeholder);
             hide(videoEl);
         }
+    }
+
+    // ── Select Editor Preview Area (canvas capture) ──────────────────────────
+    function selectEditorArea() {
+        srEditorAreaMode = true;
+        srSelectedId     = null;
+        srSelectedThumb  = null;
+
+        // Deselect all normal source cards
+        document.querySelectorAll('.sr-source-card').forEach(c => c.classList.remove('selected'));
+
+        // Highlight the editor area card
+        const editorCard  = $('sr-editor-area-card');
+        const editorBadge = $('sr-editor-area-badge');
+        if (editorCard)  { editorCard.style.border = '2px solid #ef4444'; editorCard.style.background = 'rgba(239,68,68,0.18)'; }
+        if (editorBadge) editorBadge.style.display = 'block';
+
+        // Generate a live canvas snapshot as preview thumbnail
+        const canvas = findEditorCanvas();
+        const thumbImg    = $('sr-preview-thumb');
+        const placeholder = $('sr-preview-placeholder');
+        const videoEl     = $('sr-preview-video');
+
+        if (canvas && thumbImg) {
+            try {
+                thumbImg.src = canvas.toDataURL('image/jpeg', 0.7);
+                show(thumbImg, 'block');
+                hide(placeholder);
+                hide(videoEl);
+                srSelectedThumb = thumbImg.src;
+            } catch (_) {}
+        }
+
+        setStatus('Editor Play Screen সিলেক্ট করা হয়েছে। রেকর্ড শুরু করতে বোতাম চাপুন।', 'idle');
+    }
+
+    // ── Find the editor's main preview canvas element ────────────────────────
+    function findEditorCanvas() {
+        // Try the most likely IDs / class names used in this project
+        const candidates = [
+            document.getElementById('main-canvas'),
+            document.getElementById('editor-canvas'),
+            document.getElementById('preview-canvas'),
+            document.getElementById('playerCanvas'),
+            document.querySelector('canvas.preview-canvas'),
+            document.querySelector('canvas.player-canvas'),
+            document.querySelector('#video-preview canvas'),
+            document.querySelector('.video-preview canvas'),
+            document.querySelector('.player-area canvas'),
+            document.querySelector('.preview-area canvas'),
+            // Broadest fallback: first visible canvas on page
+            Array.from(document.querySelectorAll('canvas')).find(c => c.offsetWidth > 100 && c.offsetHeight > 100)
+        ];
+        return candidates.find(c => c instanceof HTMLCanvasElement) || null;
     }
 
     // ── Optional Live Preview ────────────────────────────────────────────────
@@ -210,21 +273,33 @@
         const previewBtn = $('sr-preview-btn');
 
         try {
-            // Set source selection in main process first
-            if (window.electronAPI && typeof window.electronAPI.setSelectedScreenSource === 'function' && srSelectedId) {
-                await window.electronAPI.setSelectedScreenSource(srSelectedId);
-            }
-
             // Stop existing idle preview if running
             stopStream();
 
-            // 1. Capture screen/window display stream
-            const displayStream = await navigator.mediaDevices.getDisplayMedia({
-                video: true,
-                audio: audioOn
-            });
+            let displayStream;
 
-            // 2. Optional microphone stream
+            if (srEditorAreaMode) {
+                // ── Editor Play Screen mode: capture only the canvas ──────────
+                const canvas = findEditorCanvas();
+                if (!canvas) {
+                    throw new Error('Editor preview canvas পাওয়া যায়নি। প্লেব্যাক চালু আছে কিনা নিশ্চিত করুন।');
+                }
+                const fps = parseInt(($('sr-fps-select') || {}).value || '30', 10);
+                displayStream = canvas.captureStream(fps);
+                setStatus('Editor canvas থেকে stream নেওয়া হচ্ছে...', 'idle');
+
+            } else {
+                // ── Normal mode: OS screen/window picker ──────────────────────
+                if (window.electronAPI && typeof window.electronAPI.setSelectedScreenSource === 'function' && srSelectedId) {
+                    await window.electronAPI.setSelectedScreenSource(srSelectedId);
+                }
+                displayStream = await navigator.mediaDevices.getDisplayMedia({
+                    video: true,
+                    audio: audioOn
+                });
+            }
+
+            // Optional microphone stream
             if (micOn) {
                 try {
                     srMicStream = await navigator.mediaDevices.getUserMedia({
@@ -239,7 +314,7 @@
             // Combine tracks safely
             const combinedTracks = [
                 ...displayStream.getVideoTracks(),
-                ...displayStream.getAudioTracks()
+                ...(!srEditorAreaMode ? displayStream.getAudioTracks() : [])
             ];
             if (srMicStream) {
                 srMicStream.getAudioTracks().forEach(t => combinedTracks.push(t));
@@ -283,10 +358,12 @@
             srPaused     = false;
             srElapsedSec = 0;
 
-            // Stop if user stops sharing from OS banner
-            displayStream.getVideoTracks()[0].onended = () => {
-                if (srRecording) stopRecording();
-            };
+            // Stop if user stops sharing from OS banner (only in normal mode)
+            if (!srEditorAreaMode) {
+                displayStream.getVideoTracks()[0].onended = () => {
+                    if (srRecording) stopRecording();
+                };
+            }
 
             startTimer();
             setStatus('\u25CF রেকর্ডিং চলছে...', 'recording');
@@ -440,6 +517,12 @@
         if (thumbImg && srSelectedThumb) {
             show(thumbImg, 'block');
             hide(videoEl);
+        } else if (srEditorAreaMode) {
+            // Refresh canvas snapshot as thumbnail
+            const canvas = findEditorCanvas();
+            if (canvas && thumbImg) {
+                try { thumbImg.src = canvas.toDataURL('image/jpeg', 0.7); show(thumbImg, 'block'); hide(videoEl); } catch (_) {}
+            }
         }
     }
 
@@ -459,6 +542,10 @@
         if (pauseBtn)   pauseBtn.addEventListener('click',   togglePause);
         if (refreshBtn) refreshBtn.addEventListener('click', loadSources);
         if (previewBtn) previewBtn.addEventListener('click', toggleLivePreview);
+
+        // ★ Editor Play Screen card
+        const editorAreaCard = $('sr-editor-area-card');
+        if (editorAreaCard) editorAreaCard.addEventListener('click', selectEditorArea);
 
         // "Import into Editor" button
         const importBtn = $('sr-import-btn');

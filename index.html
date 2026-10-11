@@ -4269,8 +4269,31 @@
                                         <span>&#128250; রেকর্ড করার Screen / Window বেছে নিন</span>
                                         <button id="sr-refresh-sources" class="btn btn-sm btn-outline" type="button" title="Refresh source list">&#8635; Refresh</button>
                                     </label>
+
+                                    <!-- ★ Special: Editor Preview Area option -->
+                                    <div id="sr-editor-area-card"
+                                         style="display:flex;align-items:center;gap:12px;margin-top:10px;padding:10px 14px;border-radius:10px;cursor:pointer;
+                                                border:2px solid rgba(239,68,68,0.5);background:rgba(239,68,68,0.08);transition:all 0.2s;"
+                                         title="শুধু Video Editor-এর Play Screen রেকর্ড করুন">
+                                        <div style="width:52px;height:36px;background:linear-gradient(135deg,#1e293b,#0f172a);border-radius:6px;display:flex;align-items:center;justify-content:center;flex-shrink:0;border:1px solid rgba(239,68,68,0.4);">
+                                            <i class="fa-solid fa-film" style="color:#ef4444;font-size:18px;"></i>
+                                        </div>
+                                        <div style="flex:1;min-width:0;">
+                                            <div style="font-size:13px;font-weight:700;color:#fca5a5;">&#127909; Editor Play Screen</div>
+                                            <div style="font-size:11px;color:#94a3b8;margin-top:2px;">শুধু ভিডিও এডিটরের প্রিভিউ এরিয়া রেকর্ড করুন</div>
+                                        </div>
+                                        <div id="sr-editor-area-badge" style="font-size:10px;padding:3px 8px;border-radius:20px;background:rgba(239,68,68,0.2);color:#ef4444;font-weight:600;display:none;">✓ Selected</div>
+                                    </div>
+
+                                    <!-- Divider -->
+                                    <div style="display:flex;align-items:center;gap:8px;margin:10px 0 4px;">
+                                        <div style="flex:1;height:1px;background:rgba(255,255,255,0.08);"></div>
+                                        <span style="font-size:11px;color:#475569;">অথবা নিচের যেকোনো Screen / Window বেছে নিন</span>
+                                        <div style="flex:1;height:1px;background:rgba(255,255,255,0.08);"></div>
+                                    </div>
+
                                     <div id="sr-source-spinner" style="display:none;text-align:center;padding:12px;color:#94a3b8;">&#9203; লোড হচ্ছে...</div>
-                                    <div id="sr-source-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:10px;max-height:240px;overflow-y:auto;margin-top:10px;"></div>
+                                    <div id="sr-source-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:10px;max-height:200px;overflow-y:auto;"></div>
                                 </div>
 
                                 <!-- Settings row -->
