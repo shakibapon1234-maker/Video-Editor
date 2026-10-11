@@ -4581,6 +4581,34 @@
                                     <i class="fa-solid fa-layer-group"></i> Export Selected Ratios (<span id="multi-aspect-count">0</span>)
                                 </button>
                                 <p class="help-text mt-2" id="multi-aspect-current" style="display: none;"></p>
+
+                                <!-- Multi-Aspect Progress Box -->
+                                <div class="render-progress-box mt-3" id="multi-aspect-progress-box" style="display: none; background: rgba(99, 102, 241, 0.08); border: 1px solid rgba(99, 102, 241, 0.3); border-radius: 8px; padding: 12px;">
+                                    <div class="progress-info" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+                                        <span id="multi-aspect-status-text" style="font-size: 13px; font-weight: 600; color: #e2e8f0;">রেন্ডার প্রস্তুত হচ্ছে...</span>
+                                        <span id="multi-aspect-percentage" style="font-size: 14px; font-weight: 700; color: #818cf8;">0%</span>
+                                    </div>
+                                    <div class="progress-bar-container" style="height: 10px; border-radius: 6px; background: rgba(0, 0, 0, 0.4); overflow: hidden; border: 1px solid rgba(255, 255, 255, 0.1);">
+                                        <div class="progress-bar-fill" id="multi-aspect-progress-fill" style="width: 0%; height: 100%; background: linear-gradient(90deg, #6366f1, #10b981); transition: width 0.15s ease;"></div>
+                                    </div>
+                                    <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 8px; font-size: 11px; color: #94a3b8;">
+                                        <span id="multi-aspect-ratio-detail">বর্তমান ফাইল: —</span>
+                                        <span id="multi-aspect-batch-summary">রেশিও: 0/0</span>
+                                    </div>
+                                </div>
+
+                                <!-- Multi-Aspect Success Box -->
+                                <div class="render-success-box mt-3" id="multi-aspect-success-box" style="display: none; background: rgba(16, 185, 129, 0.1); border: 1px solid rgba(16, 185, 129, 0.35); border-radius: 8px; padding: 12px; text-align: center;">
+                                    <div style="color: #34d399; font-size: 14px; font-weight: 600; margin-bottom: 4px;">
+                                        <i class="fa-solid fa-circle-check"></i> সব রেশিও এক্সপোর্ট সম্পন্ন হয়েছে!
+                                    </div>
+                                    <p id="multi-aspect-success-desc" style="font-size: 12px; color: #cbd5e1; margin: 0;">সবগুলো ভিডিও ডাউনলোড বা সেভ হয়ে গেছে।</p>
+                                </div>
+
+                                <!-- Multi-Aspect Error Box -->
+                                <div class="render-error-box mt-3" id="multi-aspect-error-box" style="display: none; background: rgba(239, 68, 68, 0.1); border: 1px solid rgba(239, 68, 68, 0.35); border-radius: 8px; padding: 10px; color: #f87171; font-size: 12px;">
+                                    <i class="fa-solid fa-circle-exclamation"></i> <span id="multi-aspect-error-desc">এক্সপোর্ট ব্যর্থ হয়েছে।</span>
+                                </div>
                             </div>
                         </div>
 
@@ -4917,91 +4945,7 @@
                                         </button>
                                     </div>
 
-                                    <!-- Add Audio (combine two audio files) -->
-                                    <div id="acropadd-section" style="border-top: 1px solid rgba(255,255,255,0.1); padding-top: 15px; margin-top: 18px;">
-                                        <h4 style="margin: 0 0 4px;"><i class="fa-solid fa-layer-group"></i> Add Audio (দুইটা অডিও এক করুন)</h4>
-                                        <p class="help-text">আরেকটি অডিও ফাইল যোগ করুন — এটিকে উপরের অডিওর সাথে জোড়া লাগিয়ে (একটার পর একটা) অথবা একসাথে মিশিয়ে (Overlay) একটি নতুন ফাইল হিসেবে ডাউনলোড করুন।</p>
-
-                                        <div class="file-selector-box mt-2" id="acropadd-dropzone">
-                                            <i class="fa-solid fa-file-audio"></i>
-                                            <span id="acropadd-dropzone-label">Drag & Drop 2nd Audio here or Click to Select</span>
-                                            <button class="btn btn-sm btn-outline" type="button">Select 2nd Audio</button>
-                                            <button id="acropadd-remove-btn" class="btn btn-sm btn-outline" type="button" style="display: none; border-color: #f87171; color: #f87171;">
-                                                <i class="fa-solid fa-xmark"></i> Remove (সরান)
-                                            </button>
-                                            <input type="file" id="acropadd-file-input" accept="audio/*" style="display: none;">
-                                        </div>
-
-                                        <div id="acropadd-options-box" style="display: none;">
-                                            <div class="control-group mt-3">
-                                                <label>মোড (Mode)</label>
-                                                <select id="acropadd-mode-select" class="form-select">
-                                                    <option value="concat">Join One After Another (একটার পর একটা জোড়া লাগান)</option>
-                                                    <option value="mix">Mix / Overlay Together (একসাথে মিশিয়ে দিন)</option>
-                                                </select>
-                                            </div>
-
-                                            <div id="acropadd-order-box" class="control-group mt-3">
-                                                <label>কোনটা আগে বাজবে? (Order)</label>
-                                                <select id="acropadd-order-select" class="form-select">
-                                                    <option value="first-second">1st Audio → 2nd Audio</option>
-                                                    <option value="second-first">2nd Audio → 1st Audio</option>
-                                                </select>
-                                            </div>
-
-                                            <div id="acropadd-mix-volumes" style="display: none;">
-                                                <div class="control-group mt-3">
-                                                    <label>1st Audio Volume</label>
-                                                    <div class="slider-val-container">
-                                                        <input type="range" id="acropadd-vol1-slider" min="0" max="200" value="100">
-                                                        <span id="acropadd-vol1-val">100%</span>
-                                                    </div>
-                                                </div>
-                                                <div class="control-group mt-3">
-                                                    <label>2nd Audio Volume</label>
-                                                    <div class="slider-val-container">
-                                                        <input type="range" id="acropadd-vol2-slider" min="0" max="200" value="100">
-                                                        <span id="acropadd-vol2-val">100%</span>
-                                                    </div>
-                                                </div>
-                                            </div>
-
-                                            <button id="acropadd-combine-btn" class="btn btn-primary btn-block mt-3" type="button">
-                                                <i class="fa-solid fa-layer-group"></i> Combine Audio
-                                            </button>
-                                        </div>
-
-                                        <!-- Combine Progress -->
-                                        <div class="render-progress-box mt-4" id="acropadd-progress-box" style="display: none;">
-                                            <div class="progress-info">
-                                                <span id="acropadd-status-text">Processing...</span>
-                                                <span id="acropadd-percentage">0%</span>
-                                            </div>
-                                            <div class="progress-bar-container">
-                                                <div class="progress-bar-fill" id="acropadd-progress-fill"></div>
-                                            </div>
-                                        </div>
-
-                                        <!-- Combine Success -->
-                                        <div class="render-success-box mt-4" id="acropadd-success-box" style="display: none;">
-                                            <div class="success-icon-container">
-                                                <i class="fa-solid fa-circle-check"></i>
-                                            </div>
-                                            <h3>Audio Combined!</h3>
-                                            <p id="acropadd-success-desc">আপনার একত্রিত অডিও ফাইল প্রস্তুত।</p>
-                                            <a id="acropadd-download-link" href="#" download="combined_audio.wav" class="btn btn-success btn-block mt-3">
-                                                <i class="fa-solid fa-download"></i> Download Audio
-                                            </a>
-                                            <button id="acropadd-remove-result-btn" class="btn btn-sm btn-outline mt-2" type="button" style="border-color: #f87171; color: #f87171;">
-                                                <i class="fa-solid fa-xmark"></i> রেজাল্ট সরান (Remove Result)
-                                            </button>
-                                        </div>
-
-                                        <!-- Combine Error -->
-                                        <div class="render-success-box mt-4" id="acropadd-error-box" style="display: none; border-color: #f87171;">
-                                            <p id="acropadd-error-desc" style="color: #f87171;"></p>
-                                        </div>
-                                    </div>
+                                    
                                 </div>
 
                                 <!-- Crop Progress -->
@@ -5028,6 +4972,130 @@
                                     <button id="acrop-remove-result-btn" class="btn btn-sm btn-outline mt-2" type="button" style="border-color: #f87171; color: #f87171;">
                                         <i class="fa-solid fa-xmark"></i> রেজাল্ট সরান (Remove Result)
                                     </button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Add Audio to Audio Tool (Combine Two Audio Files) -->
+                        <div class="card mt-4" id="audio-to-audio-card">
+                            <div class="card-header">
+                                <i class="fa-solid fa-layer-group card-icon"></i>
+                                <h3>Add Audio to Audio (অডিওর সাথে অডিও যোগ / দুইটি অডিও এক করুন)</h3>
+                            </div>
+                            <div class="card-body">
+                                <p class="help-text">যেকোনো দুটি অডিও ফাইল যোগ করুন — এগুলোকে একটার পর একটা জোড়া লাগিয়ে (একটানা বাজবে) অথবা একসাথে মিশিয়ে (Overlay/Mix) নতুন একটি অডিও ফাইল (WAV বা MP3) হিসেবে ডাউনলোড করুন।</p>
+
+                                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 14px; margin-top: 14px;">
+                                    <!-- 1st Audio Dropzone -->
+                                    <div style="background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.08); border-radius: 8px; padding: 12px;">
+                                        <label style="font-size: 13px; font-weight: 600; color: #cbd5e1; margin-bottom: 8px; display: flex; align-items: center; gap: 6px;">
+                                            <i class="fa-solid fa-1" style="color: var(--primary);"></i> ১ম অডিও ফাইল (1st Audio)
+                                        </label>
+                                        <div class="file-selector-box" id="acropadd-dropzone-1" style="min-height: 95px; padding: 12px; cursor: pointer;">
+                                            <i class="fa-solid fa-file-audio"></i>
+                                            <span id="acropadd-dropzone-label-1" style="font-size: 12px; word-break: break-all;">Drag & Drop 1st Audio or Click</span>
+                                            <button class="btn btn-sm btn-outline mt-1" type="button" style="pointer-events: none;">Select 1st Audio</button>
+                                            <button id="acropadd-remove-btn-1" class="btn btn-sm btn-outline mt-1" type="button" style="display: none; border-color: #f87171; color: #f87171; pointer-events: auto;">
+                                                <i class="fa-solid fa-xmark"></i> Remove
+                                            </button>
+                                            <input type="file" id="acropadd-file-input-1" accept="audio/*" style="display: none;">
+                                        </div>
+                                    </div>
+
+                                    <!-- 2nd Audio Dropzone -->
+                                    <div style="background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.08); border-radius: 8px; padding: 12px;">
+                                        <label style="font-size: 13px; font-weight: 600; color: #cbd5e1; margin-bottom: 8px; display: flex; align-items: center; gap: 6px;">
+                                            <i class="fa-solid fa-2" style="color: #10b981;"></i> ২য় অডিও ফাইল (2nd Audio)
+                                        </label>
+                                        <div class="file-selector-box" id="acropadd-dropzone-2" style="min-height: 95px; padding: 12px; cursor: pointer;">
+                                            <i class="fa-solid fa-file-audio"></i>
+                                            <span id="acropadd-dropzone-label-2" style="font-size: 12px; word-break: break-all;">Drag & Drop 2nd Audio or Click</span>
+                                            <button class="btn btn-sm btn-outline mt-1" type="button" style="pointer-events: none;">Select 2nd Audio</button>
+                                            <button id="acropadd-remove-btn-2" class="btn btn-sm btn-outline mt-1" type="button" style="display: none; border-color: #f87171; color: #f87171; pointer-events: auto;">
+                                                <i class="fa-solid fa-xmark"></i> Remove
+                                            </button>
+                                            <input type="file" id="acropadd-file-input-2" accept="audio/*" style="display: none;">
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div id="acropadd-options-box" class="mt-3">
+                                    <div class="control-group">
+                                        <label>মোড (Mode)</label>
+                                        <select id="acropadd-mode-select" class="form-select">
+                                            <option value="concat">Join One After Another (একটার পর একটা জোড়া লাগান)</option>
+                                            <option value="mix">Mix / Overlay Together (একসাথে মিশিয়ে দিন)</option>
+                                        </select>
+                                    </div>
+
+                                    <div id="acropadd-order-box" class="control-group mt-3">
+                                        <label>কোনটা আগে বাজবে? (Order)</label>
+                                        <select id="acropadd-order-select" class="form-select">
+                                            <option value="first-second">1st Audio → 2nd Audio</option>
+                                            <option value="second-first">2nd Audio → 1st Audio</option>
+                                        </select>
+                                    </div>
+
+                                    <div id="acropadd-mix-volumes" style="display: none;">
+                                        <div class="control-group mt-3">
+                                            <label>1st Audio Volume</label>
+                                            <div class="slider-val-container">
+                                                <input type="range" id="acropadd-vol1-slider" min="0" max="200" value="100">
+                                                <span id="acropadd-vol1-val">100%</span>
+                                            </div>
+                                        </div>
+                                        <div class="control-group mt-3">
+                                            <label>2nd Audio Volume</label>
+                                            <div class="slider-val-container">
+                                                <input type="range" id="acropadd-vol2-slider" min="0" max="200" value="100">
+                                                <span id="acropadd-vol2-val">100%</span>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <div class="control-group mt-3">
+                                        <label>আউটপুট ফরম্যাট (Output Format)</label>
+                                        <select id="acropadd-format-select" class="form-select">
+                                            <option value="wav">WAV (লসলেস কোয়ালিটি, ফাইল সাইজ বড়)</option>
+                                            <option value="mp3">MP3 (ছোট সাইজ, সব ডিভাইসে চলবে)</option>
+                                        </select>
+                                    </div>
+
+                                    <button id="acropadd-combine-btn" class="btn btn-primary btn-block mt-3" type="button" disabled>
+                                        <i class="fa-solid fa-layer-group"></i> Combine Audio (অডিও একত্রিত করুন)
+                                    </button>
+                                </div>
+
+                                <!-- Combine Progress -->
+                                <div class="render-progress-box mt-4" id="acropadd-progress-box" style="display: none;">
+                                    <div class="progress-info">
+                                        <span id="acropadd-status-text">Processing...</span>
+                                        <span id="acropadd-percentage">0%</span>
+                                    </div>
+                                    <div class="progress-bar-container">
+                                        <div class="progress-bar-fill" id="acropadd-progress-fill"></div>
+                                    </div>
+                                </div>
+
+                                <!-- Combine Success -->
+                                <div class="render-success-box mt-4" id="acropadd-success-box" style="display: none;">
+                                    <div class="success-icon-container">
+                                        <i class="fa-solid fa-circle-check"></i>
+                                    </div>
+                                    <h3>Audio Combined!</h3>
+                                    <p id="acropadd-success-desc">আপনার একত্রিত অডিও ফাইল প্রস্তুত।</p>
+                                    <audio id="acropadd-preview-player" controls style="width: 100%; margin-top: 10px;"></audio>
+                                    <a id="acropadd-download-link" href="#" download="combined_audio.wav" class="btn btn-success btn-block mt-3">
+                                        <i class="fa-solid fa-download"></i> Download Audio
+                                    </a>
+                                    <button id="acropadd-remove-result-btn" class="btn btn-sm btn-outline mt-2" type="button" style="border-color: #f87171; color: #f87171;">
+                                        <i class="fa-solid fa-xmark"></i> রেজাল্ট সরান (Remove Result)
+                                    </button>
+                                </div>
+
+                                <!-- Combine Error -->
+                                <div class="render-success-box mt-4" id="acropadd-error-box" style="display: none; border-color: #f87171;">
+                                    <p id="acropadd-error-desc" style="color: #f87171;"></p>
                                 </div>
                             </div>
                         </div>

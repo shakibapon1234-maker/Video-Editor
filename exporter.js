@@ -1260,6 +1260,9 @@ document.addEventListener('DOMContentLoaded', () => {
         renderProgressFill.style.width = percent + '%';
         renderPercentage.innerText = percent + '%';
         updateEta(percent);
+        if (typeof window.onExportPipelineProgress === 'function') {
+            try { window.onExportPipelineProgress(percent); } catch (_) {}
+        }
     }
 
     // --- Batch Processing (Phase 7E) ---
@@ -2574,19 +2577,19 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    // --- Add Audio (combine two audio files) ---
-    // Lives inside the Audio Crop/Trim card. Once the primary audio file is
-    // loaded above, the user can pick a second audio file here and combine
-    // it with the first entirely client-side (Web Audio API decode + manual
-    // buffer join/mix), then encode the result with the same WAV/MP3
-    // helpers used by the crop tool. Two modes:
-    //   - concat: lay the two buffers end-to-end (pick which plays first)
-    //   - mix:    overlay both buffers from time 0, each with its own
-    //             volume gain, summed and soft-clamped to avoid clipping
-    const acropaddDropzone = document.getElementById('acropadd-dropzone');
-    const acropaddFileInput = document.getElementById('acropadd-file-input');
-    const acropaddDropzoneLabel = document.getElementById('acropadd-dropzone-label');
-    const acropaddRemoveBtn = document.getElementById('acropadd-remove-btn');
+    // --- Add Audio to Audio (combine two audio files) ---
+    // Dedicated standalone card: Pick 1st audio & 2nd audio, combine client-side
+    // with Web Audio API decode + join/mix, and export to WAV or MP3.
+    const acropaddDropzone1 = document.getElementById('acropadd-dropzone-1');
+    const acropaddFileInput1 = document.getElementById('acropadd-file-input-1');
+    const acropaddDropzoneLabel1 = document.getElementById('acropadd-dropzone-label-1');
+    const acropaddRemoveBtn1 = document.getElementById('acropadd-remove-btn-1');
+
+    const acropaddDropzone2 = document.getElementById('acropadd-dropzone-2') || document.getElementById('acropadd-dropzone');
+    const acropaddFileInput2 = document.getElementById('acropadd-file-input-2') || document.getElementById('acropadd-file-input');
+    const acropaddDropzoneLabel2 = document.getElementById('acropadd-dropzone-label-2') || document.getElementById('acropadd-dropzone-label');
+    const acropaddRemoveBtn2 = document.getElementById('acropadd-remove-btn-2') || document.getElementById('acropadd-remove-btn');
+
     const acropaddRemoveResultBtn = document.getElementById('acropadd-remove-result-btn');
     const acropaddOptionsBox = document.getElementById('acropadd-options-box');
     const acropaddModeSelect = document.getElementById('acropadd-mode-select');
@@ -2597,6 +2600,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const acropaddVol1Val = document.getElementById('acropadd-vol1-val');
     const acropaddVol2Slider = document.getElementById('acropadd-vol2-slider');
     const acropaddVol2Val = document.getElementById('acropadd-vol2-val');
+    const acropaddFormatSelect = document.getElementById('acropadd-format-select') || document.getElementById('acrop-format-select');
     const acropaddCombineBtn = document.getElementById('acropadd-combine-btn');
     const acropaddProgressBox = document.getElementById('acropadd-progress-box');
     const acropaddStatusText = document.getElementById('acropadd-status-text');
@@ -2605,74 +2609,110 @@ document.addEventListener('DOMContentLoaded', () => {
     const acropaddSuccessBox = document.getElementById('acropadd-success-box');
     const acropaddSuccessDesc = document.getElementById('acropadd-success-desc');
     const acropaddDownloadLink = document.getElementById('acropadd-download-link');
+    const acropaddPreviewPlayer = document.getElementById('acropadd-preview-player');
     const acropaddErrorBox = document.getElementById('acropadd-error-box');
     const acropaddErrorDesc = document.getElementById('acropadd-error-desc');
 
-    let acropaddSelectedFile = null;
+    let acropaddFile1 = null;
+    let acropaddFile2 = null;
     let acropaddLastDownloadURL = null;
 
-    if (acropaddDropzone && acropaddFileInput) {
-        acropaddDropzone.addEventListener('click', () => acropaddFileInput.click());
-        acropaddFileInput.addEventListener('change', (e) => {
-            if (e.target.files && e.target.files[0]) handleAcropaddFile(e.target.files[0]);
-            acropaddFileInput.value = '';
+    function checkCombineBtnState() {
+        const has1 = !!(acropaddFile1 || acropSelectedFile);
+        const has2 = !!acropaddFile2;
+        if (acropaddCombineBtn) {
+            acropaddCombineBtn.disabled = !(has1 && has2);
+        }
+        if (acropaddOptionsBox) {
+            acropaddOptionsBox.style.display = 'block';
+        }
+    }
+
+    function setupDropzoneHelper(dropzoneEl, inputEl, onFile) {
+        if (!dropzoneEl || !inputEl) return;
+        dropzoneEl.addEventListener('click', (e) => {
+            if (e.target.closest('button[id*="remove"]')) return;
+            inputEl.click();
         });
-        acropaddDropzone.addEventListener('dragover', (e) => {
+        inputEl.addEventListener('change', (e) => {
+            if (e.target.files && e.target.files[0]) onFile(e.target.files[0]);
+            inputEl.value = '';
+        });
+        dropzoneEl.addEventListener('dragover', (e) => {
             e.preventDefault();
-            acropaddDropzone.classList.add('drag-over');
+            dropzoneEl.classList.add('drag-over');
         });
-        acropaddDropzone.addEventListener('dragleave', () => {
-            acropaddDropzone.classList.remove('drag-over');
+        dropzoneEl.addEventListener('dragleave', () => {
+            dropzoneEl.classList.remove('drag-over');
         });
-        acropaddDropzone.addEventListener('drop', (e) => {
+        dropzoneEl.addEventListener('drop', (e) => {
             e.preventDefault();
-            acropaddDropzone.classList.remove('drag-over');
-            if (e.dataTransfer.files && e.dataTransfer.files[0]) handleAcropaddFile(e.dataTransfer.files[0]);
+            dropzoneEl.classList.remove('drag-over');
+            if (e.dataTransfer.files && e.dataTransfer.files[0]) onFile(e.dataTransfer.files[0]);
         });
     }
 
-    function handleAcropaddFile(file) {
-        if (!acropSelectedFile) {
-            alert('প্রথমে উপরে প্রাইমারি অডিও ফাইলটি আপলোড করুন। (Please upload the primary audio file above first.)');
-            return;
-        }
+    setupDropzoneHelper(acropaddDropzone1, acropaddFileInput1, (file) => {
         if (!file.type.startsWith('audio/')) {
-            alert('দয়া করে একটি অডিও ফাইল নির্বাচন করুন। (Please select an audio file.)');
+            alert('দয়া করে একটি অডিও ফাইল নির্বাচন করুন।');
             return;
         }
-        acropaddSelectedFile = file;
-        if (acropaddDropzoneLabel) acropaddDropzoneLabel.innerText = file.name;
-        if (acropaddRemoveBtn) acropaddRemoveBtn.style.display = 'inline-flex';
-        if (acropaddSuccessBox) acropaddSuccessBox.style.display = 'none';
-        if (acropaddErrorBox) acropaddErrorBox.style.display = 'none';
-        if (acropaddOptionsBox) acropaddOptionsBox.style.display = 'block';
+        acropaddFile1 = file;
+        if (acropaddDropzoneLabel1) acropaddDropzoneLabel1.innerText = file.name;
+        if (acropaddRemoveBtn1) acropaddRemoveBtn1.style.display = 'inline-flex';
+        checkCombineBtnState();
+    });
+
+    setupDropzoneHelper(acropaddDropzone2, acropaddFileInput2, (file) => {
+        if (!file.type.startsWith('audio/')) {
+            alert('দয়া করে একটি অডিও ফাইল নির্বাচন করুন।');
+            return;
+        }
+        acropaddFile2 = file;
+        if (acropaddDropzoneLabel2) acropaddDropzoneLabel2.innerText = file.name;
+        if (acropaddRemoveBtn2) acropaddRemoveBtn2.style.display = 'inline-flex';
+        checkCombineBtnState();
+    });
+
+    if (acropaddRemoveBtn1) {
+        acropaddRemoveBtn1.addEventListener('click', (e) => {
+            e.stopPropagation();
+            acropaddFile1 = null;
+            if (acropaddDropzoneLabel1) acropaddDropzoneLabel1.innerText = 'Drag & Drop 1st Audio or Click';
+            acropaddRemoveBtn1.style.display = 'none';
+            checkCombineBtnState();
+        });
     }
 
-    // Clears just the 2nd-audio side of the Add Audio section (the primary
-    // file loaded above stays untouched). Also called by resetAcropAll()
-    // above when the primary file itself is removed.
+    if (acropaddRemoveBtn2) {
+        acropaddRemoveBtn2.addEventListener('click', (e) => {
+            e.stopPropagation();
+            acropaddFile2 = null;
+            if (acropaddDropzoneLabel2) acropaddDropzoneLabel2.innerText = 'Drag & Drop 2nd Audio or Click';
+            acropaddRemoveBtn2.style.display = 'none';
+            checkCombineBtnState();
+        });
+    }
+
     function resetAcropaddAll() {
-        acropaddSelectedFile = null;
+        acropaddFile1 = null;
+        acropaddFile2 = null;
         if (acropaddLastDownloadURL) { URL.revokeObjectURL(acropaddLastDownloadURL); acropaddLastDownloadURL = null; }
-        if (acropaddDropzoneLabel) acropaddDropzoneLabel.innerText = 'Drag & Drop 2nd Audio here or Click to Select';
-        if (acropaddRemoveBtn) acropaddRemoveBtn.style.display = 'none';
-        if (acropaddOptionsBox) acropaddOptionsBox.style.display = 'none';
+        if (acropaddDropzoneLabel1) acropaddDropzoneLabel1.innerText = 'Drag & Drop 1st Audio or Click';
+        if (acropaddDropzoneLabel2) acropaddDropzoneLabel2.innerText = 'Drag & Drop 2nd Audio or Click';
+        if (acropaddRemoveBtn1) acropaddRemoveBtn1.style.display = 'none';
+        if (acropaddRemoveBtn2) acropaddRemoveBtn2.style.display = 'none';
         if (acropaddProgressBox) acropaddProgressBox.style.display = 'none';
         if (acropaddSuccessBox) acropaddSuccessBox.style.display = 'none';
         if (acropaddErrorBox) acropaddErrorBox.style.display = 'none';
-    }
-
-    if (acropaddRemoveBtn) {
-        acropaddRemoveBtn.addEventListener('click', (e) => {
-            e.stopPropagation();
-            resetAcropaddAll();
-        });
+        if (acropaddCombineBtn) acropaddCombineBtn.disabled = true;
     }
 
     if (acropaddRemoveResultBtn) {
         acropaddRemoveResultBtn.addEventListener('click', () => {
             if (acropaddLastDownloadURL) { URL.revokeObjectURL(acropaddLastDownloadURL); acropaddLastDownloadURL = null; }
             if (acropaddSuccessBox) acropaddSuccessBox.style.display = 'none';
+            if (acropaddPreviewPlayer) acropaddPreviewPlayer.src = '';
         });
     }
 
@@ -2706,13 +2746,19 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     async function runAcropaddCombine() {
-        if (!acropSelectedFile || !acropaddSelectedFile) return;
+        const file1 = acropaddFile1 || acropSelectedFile;
+        const file2 = acropaddFile2;
+
+        if (!file1 || !file2) {
+            alert('দয়া করে ১ম ও ২য় উভয় অডিও ফাইল সিলেক্ট করুন।');
+            return;
+        }
 
         const mode = acropaddModeSelect ? acropaddModeSelect.value : 'concat';
         const order = acropaddOrderSelect ? acropaddOrderSelect.value : 'first-second';
         const vol1 = acropaddVol1Slider ? (parseInt(acropaddVol1Slider.value, 10) / 100) : 1;
         const vol2 = acropaddVol2Slider ? (parseInt(acropaddVol2Slider.value, 10) / 100) : 1;
-        const format = acropFormatSelect ? acropFormatSelect.value : 'wav';
+        const format = (document.getElementById('acropadd-format-select') || acropFormatSelect)?.value || 'wav';
 
         acropaddCombineBtn.disabled = true;
         acropaddProgressBox.style.display = 'block';
@@ -2720,9 +2766,6 @@ document.addEventListener('DOMContentLoaded', () => {
         acropaddErrorBox.style.display = 'none';
         setAcropaddProgress(0, 'ফাইল পড়া হচ্ছে... (Reading files...)');
 
-        // Dedicated AudioContext, kept separate from the main editor's audio
-        // graph — both files are decoded through the SAME context so the
-        // browser resamples them to a common sample rate automatically.
         let decodeCtx = null;
 
         try {
@@ -2730,8 +2773,8 @@ document.addEventListener('DOMContentLoaded', () => {
             decodeCtx = new AudioCtx();
 
             const [buf1ArrayBuf, buf2ArrayBuf] = await Promise.all([
-                acropSelectedFile.arrayBuffer(),
-                acropaddSelectedFile.arrayBuffer()
+                file1.arrayBuffer(),
+                file2.arrayBuffer()
             ]);
 
             setAcropaddProgress(20, 'অডিও ডিকোড হচ্ছে... (Decoding audio...)');
@@ -2755,8 +2798,6 @@ document.addEventListener('DOMContentLoaded', () => {
             const sampleRate = decodeCtx.sampleRate;
             const numChannels = Math.max(bufferA.numberOfChannels, bufferB.numberOfChannels);
 
-            // channelData(buf, ch) reuses channel 0 for any buffer with fewer
-            // channels than the combined output (e.g. mono source, stereo output).
             function channelData(buf, ch) {
                 return buf.getChannelData(Math.min(ch, buf.numberOfChannels - 1));
             }
@@ -2771,8 +2812,6 @@ document.addEventListener('DOMContentLoaded', () => {
                     const dataB = channelData(bufferB, ch);
                     for (let i = 0; i < length; i++) {
                         let sample = (i < dataA.length ? dataA[i] * vol1 : 0) + (i < dataB.length ? dataB[i] * vol2 : 0);
-                        // Soft-clamp to avoid harsh digital clipping when both
-                        // tracks peak at the same time.
                         if (sample > 1) sample = 1;
                         if (sample < -1) sample = -1;
                         out[i] = sample;
@@ -2813,8 +2852,14 @@ document.addEventListener('DOMContentLoaded', () => {
 
             if (acropaddLastDownloadURL) URL.revokeObjectURL(acropaddLastDownloadURL);
             acropaddLastDownloadURL = URL.createObjectURL(blob);
-            acropaddDownloadLink.href = acropaddLastDownloadURL;
-            acropaddDownloadLink.download = `combined_audio.${ext}`;
+            if (acropaddDownloadLink) {
+                acropaddDownloadLink.href = acropaddLastDownloadURL;
+                acropaddDownloadLink.download = `combined_audio.${ext}`;
+            }
+            if (acropaddPreviewPlayer) {
+                acropaddPreviewPlayer.src = acropaddLastDownloadURL;
+                acropaddPreviewPlayer.load();
+            }
             if (acropaddSuccessDesc) {
                 acropaddSuccessDesc.innerText = mode === 'mix'
                     ? `${mimeLabel} ফাইল প্রস্তুত — দুটি অডিও একসাথে মিশিয়ে "combined_audio.${ext}" তৈরি হয়েছে।`
@@ -2835,7 +2880,6 @@ document.addEventListener('DOMContentLoaded', () => {
             } else if (err && err.message === 'MP3_UNAVAILABLE') {
                 acropaddErrorBox.style.display = 'block';
                 if (acropaddErrorDesc) acropaddErrorDesc.innerText = 'MP3 এনকোডার লোড করা যায়নি (ইন্টারনেট সংযোগ প্রয়োজন)। দয়া করে WAV ফরম্যাট বেছে আবার চেষ্টা করুন।';
-                if (acropFormatSelect) acropFormatSelect.value = 'wav';
             } else {
                 acropaddErrorBox.style.display = 'block';
                 if (acropaddErrorDesc) acropaddErrorDesc.innerText = 'অডিও একত্রিত করতে সমস্যা হয়েছে। ফাইলগুলো অন্য কিছু দিয়ে আবার চেষ্টা করুন।';
@@ -2847,6 +2891,7 @@ document.addEventListener('DOMContentLoaded', () => {
             acropaddCombineBtn.disabled = false;
         }
     }
+
     // Same reasoning as Remove Audio above: the browser can't remux/mix a full
     // audio track into an existing video container on its own, so the two raw
     // files are streamed to the local Node server (server.js's /api/add-audio

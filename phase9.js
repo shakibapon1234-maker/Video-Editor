@@ -2047,6 +2047,30 @@ document.addEventListener('DOMContentLoaded', () => {
             alert('এক্সপোর্ট করার আগে একটি ভিডিও লোড করুন।');
             return;
         }
+
+        const progressBox = document.getElementById('multi-aspect-progress-box');
+        const statusText = document.getElementById('multi-aspect-status-text');
+        const pctText = document.getElementById('multi-aspect-percentage');
+        const progressFill = document.getElementById('multi-aspect-progress-fill');
+        const ratioDetail = document.getElementById('multi-aspect-ratio-detail');
+        const batchSummary = document.getElementById('multi-aspect-batch-summary');
+        const successBox = document.getElementById('multi-aspect-success-box');
+        const successDesc = document.getElementById('multi-aspect-success-desc');
+        const errorBox = document.getElementById('multi-aspect-error-box');
+        const errorDesc = document.getElementById('multi-aspect-error-desc');
+        const exportBtn = document.getElementById('multi-aspect-export-btn');
+
+        if (progressBox) progressBox.style.display = 'block';
+        if (successBox) successBox.style.display = 'none';
+        if (errorBox) errorBox.style.display = 'none';
+        if (progressFill) progressFill.style.width = '0%';
+        if (pctText) pctText.innerText = '0%';
+        if (statusText) statusText.innerText = 'রেন্ডার শুরু হচ্ছে... (Starting batch render)';
+        if (exportBtn) {
+            exportBtn.disabled = true;
+            exportBtn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> রেন্ডার হচ্ছে...';
+        }
+
         // Save editor layout so we can restore afterward
         const savedAspect = state.aspectRatio;
         const savedCanvasW = state.canvas.width;
@@ -2082,18 +2106,63 @@ document.addEventListener('DOMContentLoaded', () => {
                 else if (window.drawFrame) window.drawFrame();
 
                 const modeLabel = fitMode === 'crop' ? 'Crop' : (fitMode === 'fit-blur' ? 'Blur' : 'Black Bars');
-                const statusEl = document.getElementById('multi-aspect-current');
-                if (statusEl) {
-                    statusEl.style.display = 'block';
-                    statusEl.innerText = `রেন্ডার হচ্ছে (${i + 1}/${items.length}): ${ratio} (${modeLabel}) — ${dims.w}x${dims.h}`;
+                const curRatioTitle = `${ratio} (${modeLabel}) — ${dims.w}x${dims.h}`;
+                if (statusText) {
+                    statusText.innerText = `রেন্ডার হচ্ছে (${i + 1}/${items.length}): ${curRatioTitle}`;
                 }
-                setProgressSafe(10 + Math.round((i / items.length) * 80));
+                if (batchSummary) {
+                    batchSummary.innerText = `রেশিও: ${i + 1}/${items.length}`;
+                }
+
+                // Attach real-time per-frame progress listener
+                window.onExportPipelineProgress = (percent) => {
+                    const currentVideoPct = Math.min(100, Math.max(0, Math.round(percent || 0)));
+                    const overallPct = Math.min(99, Math.round(((i + (currentVideoPct / 100)) / items.length) * 100));
+
+                    if (progressFill) progressFill.style.width = overallPct + '%';
+                    if (pctText) pctText.innerText = overallPct + '%';
+                    if (ratioDetail) {
+                        ratioDetail.innerText = `বর্তমান ফাইল (${ratio}): ${currentVideoPct}% সম্পন্ন`;
+                    }
+                    if (batchSummary) {
+                        batchSummary.innerText = `সর্বমোট: ${overallPct}% (${i + 1}/${items.length})`;
+                    }
+                    setProgressSafe(overallPct);
+                };
 
                 const totalDuration = state.clips.reduce((sum, c) => sum + getClipOutputDuration(c), 0);
                 await window.runExportPipeline(totalDuration, true, `video_${ratio}`, i + 1, items.length);
+
+                const ratioDonePct = Math.round(((i + 1) / items.length) * 100);
+                if (progressFill) progressFill.style.width = ratioDonePct + '%';
+                if (pctText) pctText.innerText = ratioDonePct + '%';
+            }
+
+            if (progressFill) progressFill.style.width = '100%';
+            if (pctText) pctText.innerText = '100%';
+            if (statusText) statusText.innerText = 'সব রেন্ডার সম্পন্ন হয়েছে!';
+            if (progressBox) {
+                setTimeout(() => {
+                    progressBox.style.display = 'none';
+                }, 1000);
+            }
+            if (successBox) {
+                successBox.style.display = 'block';
+                if (successDesc) {
+                    const ratioNames = items.map(it => it.ratio).join(', ');
+                    successDesc.innerText = `সবগুলো (${items.length}টি: ${ratioNames}) রেশিওর ভিডিও ফাইল সফলভাবে ডাউনলোড বা সেভ হয়েছে!`;
+                }
+            }
+        } catch (err) {
+            console.error('Multi-Aspect export error:', err);
+            if (errorBox) {
+                errorBox.style.display = 'block';
+                if (errorDesc) {
+                    errorDesc.innerText = `রেন্ডারে সমস্যা হয়েছে: ${err.message || err}`;
+                }
             }
         } finally {
-            // Restore editor layout
+            window.onExportPipelineProgress = null;
             state.aspectRatio = savedAspect;
             state.canvas.width = savedCanvasW;
             state.canvas.height = savedCanvasH;
@@ -2103,8 +2172,12 @@ document.addEventListener('DOMContentLoaded', () => {
             if (window.syncPhase9ClipUI) window.syncPhase9ClipUI();
             if (window.drawEditorFrame) window.drawEditorFrame();
             else if (window.drawFrame) window.drawFrame();
+
             const statusEl = document.getElementById('multi-aspect-current');
             if (statusEl) statusEl.style.display = 'none';
+            if (exportBtn) {
+                exportBtn.innerHTML = '<i class="fa-solid fa-layer-group"></i> Export Selected Ratios (<span id="multi-aspect-count">' + items.length + '</span>)';
+            }
         }
     }
 
