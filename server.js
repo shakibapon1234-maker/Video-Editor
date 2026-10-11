@@ -16,6 +16,18 @@ const wss = new WebSocket.Server({
     maxPayload: 2048 * 1024 * 1024 // 2 GB limit (default ws limit is 100MB)
 });
 
+wss.on('error', (err) => {
+    console.warn('[server.js] WebSocketServer error:', err.message);
+});
+
+server.on('error', (err) => {
+    if (err.code === 'EADDRINUSE') {
+        console.warn(`[server.js] Port 4000 is already in use.`);
+    } else {
+        console.error('[server.js] Server error:', err);
+    }
+});
+
 const PORT = 4000;
 
 // Local, offline speech-to-text. The Whisper model is downloaded once on its

@@ -22,6 +22,7 @@ if not exist "node_modules\electron\dist\electron.exe" (
 )
 
 echo Starting Studio Flow Video Editor...
+powershell -NoProfile -Command "$c = Get-NetTCPConnection -LocalPort 4000 -ErrorAction SilentlyContinue; if ($c) { $c | ForEach-Object { Stop-Process -Id $_.OwningProcess -Force -ErrorAction SilentlyContinue }; Start-Sleep -Milliseconds 300 }"
 "%CD%\node_modules\electron\dist\electron.exe" .
 set "START_EXIT=%ERRORLEVEL%"
 

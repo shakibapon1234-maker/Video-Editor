@@ -270,6 +270,15 @@ if (!gotLock) {
             }
         });
 
+        if (process.platform === 'win32') {
+            try {
+                require('child_process').execSync(
+                    'powershell -NoProfile -Command "$c = Get-NetTCPConnection -LocalPort 4000 -ErrorAction SilentlyContinue; if ($c) { $c | ForEach-Object { Stop-Process -Id $_.OwningProcess -Force -ErrorAction SilentlyContinue }; Start-Sleep -Milliseconds 200 }"',
+                    { stdio: 'ignore', timeout: 3000 }
+                );
+            } catch (_) {}
+        }
+
         let serverModule;
         try {
             serverModule = require('./server.js');
@@ -285,11 +294,17 @@ if (!gotLock) {
         } else {
             server.once('listening', createWindow);
             server.once('error', (error) => {
-                const message = error.code === 'EADDRINUSE'
-                    ? 'Another copy of Studio Flow (or something else) is already using port 4000. Close it and try again.'
-                    : String(error && error.stack || error);
-                dialog.showErrorBox(error.code === 'EADDRINUSE' ? 'Studio Flow is already running' : 'Studio Flow server error', message);
-                app.quit();
+                if (error.code === 'EADDRINUSE') {
+                    http.get('http://127.0.0.1:4000', () => {
+                        createWindow();
+                    }).on('error', () => {
+                        dialog.showErrorBox('Studio Flow is already running', 'Another copy of Studio Flow (or another app) is already using port 4000. Close it and try again.');
+                        app.quit();
+                    });
+                } else {
+                    dialog.showErrorBox('Studio Flow server error', String(error && error.stack || error));
+                    app.quit();
+                }
             });
         }
     });
