@@ -4879,3 +4879,47 @@ input:checked + .slider:before {
     background: rgba(239,68,68,0.12);
 }
 
+
+
+/* Multi-Clip Timeline Status & B-Roll Dual Timing */
+#seek-clip-status {
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+    backdrop-filter: blur(8px);
+    transition: all 0.2s ease;
+}
+
+.clip-timeline-block {
+    transition: background 0.15s ease, border-color 0.15s ease, transform 0.1s ease;
+}
+
+.clip-timeline-block:hover {
+    background: rgba(255, 255, 255, 0.08) !important;
+}
+
+.clip-timeline-block.active {
+    background: rgba(99, 102, 241, 0.18) !important;
+    border-color: var(--primary, #6366f1) !important;
+    box-shadow: 0 0 12px rgba(99, 102, 241, 0.2);
+}
+
+#clip-active-live-time {
+    animation: livePulse 2s ease-in-out infinite;
+}
+
+@keyframes livePulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.7; }
+}
+
+#broll-target-clip-box {
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.15);
+}
+
+.broll-list-item {
+    transition: all 0.2s ease;
+}
+
+.broll-list-item:hover {
+    background: rgba(255, 255, 255, 0.07) !important;
+    border-color: rgba(99, 102, 241, 0.4) !important;
+}

@@ -3586,6 +3586,34 @@ document.addEventListener('DOMContentLoaded', () => {
     // original file), while the editor playhead is output-timeline time (4.4s
     // into a clip trimmed to start at 166.9s). Keep those clocks distinct so
     // audio tracks, seek bars, and exported duration all share the same origin.
+        function getClipsTimelineSlots() {
+        const clips = state.clips || [];
+        let cumulative = 0;
+        return clips.map((clip, index) => {
+            const dur = window.getClipOutputDuration
+                ? window.getClipOutputDuration(clip)
+                : Math.max(0, (clip.end || 0) - (clip.start || 0)) / Math.max(0.5, Math.min(2, Number(clip.speed) || 1));
+            const slot = {
+                clip,
+                index,
+                clipId: clip.id,
+                name: clip.name || `Clip ${index + 1}`,
+                start: cumulative,
+                end: cumulative + dur,
+                duration: dur
+            };
+            cumulative += dur;
+            return slot;
+        });
+    }
+    window.getClipsTimelineSlots = getClipsTimelineSlots;
+
+    function getClipSlot(clipId) {
+        const slots = getClipsTimelineSlots();
+        return slots.find(s => s.clipId === clipId) || slots[0] || { start: 0, end: 0, duration: 0, clipId: null, index: 0, name: '' };
+    }
+    window.getClipSlot = getClipSlot;
+
     function getEditorTimelineClock() {
         const clips = state.clips || [];
         if (!clips.length) {
@@ -3616,7 +3644,32 @@ document.addEventListener('DOMContentLoaded', () => {
         const total = state.duration;
         const timelineClock = getEditorTimelineClock();
         
-        document.getElementById('canvas-time-display').innerText = `${formatTime(timelineClock.current)} / ${formatTime(timelineClock.total)}`;
+        const clips = state.clips || [];
+        const activeIndex = clips.findIndex(clip => clip.id === state.activeClipId);
+        const activeClip = activeIndex >= 0 ? clips[activeIndex] : null;
+
+        let activeClipElapsed = 0;
+        let activeClipDuration = total || 0;
+        let activeSlot = { start: 0, end: total || 0, duration: total || 0 };
+
+        if (activeClip) {
+            const slots = getClipsTimelineSlots();
+            activeSlot = slots[activeIndex] || activeSlot;
+            activeClipDuration = activeSlot.duration;
+            activeClipElapsed = window.getClipOutputElapsedForSourceTime
+                ? window.getClipOutputElapsedForSourceTime(activeClip, state.currentTime || 0)
+                : Math.max(0, (state.currentTime - (activeClip.start || 0))) / Math.max(0.5, Math.min(2, Number(activeClip.speed) || 1));
+            activeClipElapsed = Math.max(0, Math.min(activeClipDuration, activeClipElapsed));
+        }
+
+        const canvasTimeDisplay = document.getElementById('canvas-time-display');
+        if (canvasTimeDisplay) {
+            if (clips.length > 1 && activeClip) {
+                canvasTimeDisplay.innerText = `${formatTime(timelineClock.current)} / ${formatTime(timelineClock.total)} (ক্লিপ ${activeIndex + 1}: ${formatTime(activeClipElapsed)})`;
+            } else {
+                canvasTimeDisplay.innerText = `${formatTime(timelineClock.current)} / ${formatTime(timelineClock.total)}`;
+            }
+        }
         
         const percent = (current / total) * 100;
         playhead.style.left = percent + '%';
@@ -3635,6 +3688,39 @@ document.addEventListener('DOMContentLoaded', () => {
         if (seekFill) seekFill.style.width = (timelineClock.total > 0 ? Math.max(0, Math.min(100, (timelineClock.current / timelineClock.total) * 100)) : 0) + '%';
         if (seekCurrentTimeEl) seekCurrentTimeEl.innerHTML = formatTimeDual(timelineClock.current);
         if (seekTotalTimeEl) seekTotalTimeEl.innerHTML = formatTimeDual(timelineClock.total);
+
+        // Update seek-clip-status
+        const seekClipStatus = document.getElementById('seek-clip-status');
+        if (seekClipStatus) {
+            if (clips.length > 1 && activeClip) {
+                seekClipStatus.style.display = 'flex';
+                const nameBadge = document.getElementById('seek-clip-name-badge');
+                if (nameBadge) {
+                    const shortName = activeClip.name.length > 18 ? activeClip.name.slice(0, 18) + '…' : activeClip.name;
+                    nameBadge.innerText = `ক্লিপ ${activeIndex + 1}/${clips.length}: ${shortName}`;
+                }
+                const timeBadge = document.getElementById('seek-clip-time-badge');
+                if (timeBadge) {
+                    timeBadge.innerText = `${formatTime(activeClipElapsed)} (${activeClipElapsed.toFixed(1)}s)`;
+                }
+                const totalBadge = document.getElementById('seek-clip-total-badge');
+                if (totalBadge) {
+                    totalBadge.innerText = `${formatTime(activeClipDuration)} (${activeClipDuration.toFixed(1)}s)`;
+                }
+                const slotBadge = document.getElementById('seek-clip-slot-badge');
+                if (slotBadge) {
+                    slotBadge.innerText = `স্লট: ${formatTime(activeSlot.start)} – ${formatTime(activeSlot.end)}`;
+                }
+            } else {
+                seekClipStatus.style.display = 'none';
+            }
+        }
+
+        // Live time inside active clip row in clip list
+        const activeRowLiveTime = document.getElementById('clip-active-live-time');
+        if (activeRowLiveTime && activeClip) {
+            activeRowLiveTime.innerText = `বর্তমান: ${formatTime(activeClipElapsed)} (${activeClipElapsed.toFixed(1)}s)`;
+        }
     }
 
     let pendingTimelineSeek = null;
@@ -3959,13 +4045,49 @@ document.addEventListener('DOMContentLoaded', () => {
             block.style.background = clip.id === state.activeClipId ? 'rgba(79, 70, 229, 0.15)' : 'rgba(255,255,255,0.04)';
             block.style.border = clip.id === state.activeClipId ? '1px solid var(--primary)' : '1px solid transparent';
 
-            const label = document.createElement('span');
-            const trimmedDuration = (clip.end - clip.start).toFixed(1);
-            label.innerText = `${idx + 1}. ${clip.name.length > 22 ? clip.name.slice(0, 22) + '…' : clip.name} (${trimmedDuration}s)`;
-            label.style.fontSize = '13px';
-            label.style.flex = '1';
-            label.style.overflow = 'hidden';
-            label.style.whiteSpace = 'nowrap';
+            const slots = getClipsTimelineSlots();
+            const slot = slots[idx] || { start: 0, end: 0, duration: 0 };
+
+            const label = document.createElement("div");
+            label.style.display = "flex";
+            label.style.alignItems = "center";
+            label.style.gap = "8px";
+            label.style.flex = "1";
+            label.style.overflow = "hidden";
+
+            const nameSpan = document.createElement("span");
+            nameSpan.innerText = `${idx + 1}. ${clip.name.length > 18 ? clip.name.slice(0, 18) + "…" : clip.name}`;
+            nameSpan.style.fontSize = "13px";
+            nameSpan.style.fontWeight = clip.id === state.activeClipId ? "600" : "normal";
+            nameSpan.style.whiteSpace = "nowrap";
+
+            const slotPill = document.createElement("span");
+            slotPill.innerHTML = `<span style="color:#818cf8; font-weight:600;">[${formatTime(slot.start)} – ${formatTime(slot.end)}]</span> <span style="opacity:0.75;">(${slot.duration.toFixed(1)}s)</span>`;
+            slotPill.style.fontSize = "11px";
+            slotPill.style.background = "rgba(255, 255, 255, 0.06)";
+            slotPill.style.padding = "2px 6px";
+            slotPill.style.borderRadius = "4px";
+            slotPill.style.whiteSpace = "nowrap";
+            slotPill.title = `এই ক্লিপটি পুরো ভিডিওর ${formatTime(slot.start)} থেকে ${formatTime(slot.end)} সময় পর্যন্ত চলবে`;
+
+            label.appendChild(nameSpan);
+            label.appendChild(slotPill);
+
+            if (clip.id === state.activeClipId) {
+                const liveBadge = document.createElement("span");
+                liveBadge.id = "clip-active-live-time";
+                liveBadge.style.fontSize = "11px";
+                liveBadge.style.color = "#38bdf8";
+                liveBadge.style.fontWeight = "600";
+                liveBadge.style.marginLeft = "auto";
+                liveBadge.style.marginRight = "4px";
+                liveBadge.style.whiteSpace = "nowrap";
+                const clipElapsed = window.getClipOutputElapsedForSourceTime
+                    ? window.getClipOutputElapsedForSourceTime(clip, state.currentTime || 0)
+                    : Math.max(0, (state.currentTime - (clip.start || 0)));
+                liveBadge.innerText = `বর্তমান: ${formatTime(clipElapsed)} (${clipElapsed.toFixed(1)}s)`;
+                label.appendChild(liveBadge);
+            }
 
             block.addEventListener('click', () => switchActiveClip(clip.id));
 
@@ -7837,7 +7959,17 @@ document.addEventListener('DOMContentLoaded', () => {
 
         // --- Step A2: Draw Blur/Mosaic Regions (Phase 4B) ---
         if (state.blurRegions && state.blurRegions.length > 0) {
+            // Get current timeline time for time-gated blur regions
+            const _blurTimelineClock = getEditorTimelineClock();
+            const _blurCurrentTime = state.isExportingVideo
+                ? (state.exportTickerTime ?? _blurTimelineClock.current)
+                : _blurTimelineClock.current;
             state.blurRegions.forEach((region) => {
+                // Skip region if current time is outside its time window
+                const blurStart = (region.startSec !== undefined && region.startSec !== null) ? region.startSec : 0;
+                const blurEnd   = (region.endSec   !== undefined && region.endSec   !== null) ? region.endSec   : Infinity;
+                if (_blurCurrentTime < blurStart || _blurCurrentTime > blurEnd) return;
+
                 const rx = drawX + region.x * drawW;
                 const ry = drawY + region.y * drawH;
                 const rw = region.w * drawW;
@@ -12601,13 +12733,17 @@ document.addEventListener('DOMContentLoaded', () => {
             state.blurDrawDrawW = drawW;
             state.blurDrawDrawH = drawH;
 
+            // Get total timeline duration for default endSec
+            const _blurClock = getEditorTimelineClock ? getEditorTimelineClock() : { current: 0, total: Infinity };
             const newRegion = {
                 id: Date.now(),
                 x: (coords.x - drawX) / drawW,
                 y: (coords.y - drawY) / drawH,
                 w: 0,
                 h: 0,
-                intensity: 15
+                intensity: 15,
+                startSec: 0,
+                endSec: Math.ceil(_blurClock.total) || 999
             };
             state.blurRegions.push(newRegion);
             state.selectedBlurId = newRegion.id;
@@ -15512,21 +15648,25 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!blurRegionListEl) return;
         blurRegionListEl.innerHTML = '';
         state.blurRegions.forEach((region, idx) => {
+            const isSelected = region.id === state.selectedBlurId;
+            const wrapper = document.createElement('div');
+            wrapper.style.marginBottom = '10px';
+
             const row = document.createElement('div');
-            row.className = 'blur-region-list-item' + (region.id === state.selectedBlurId ? ' active' : '');
+            row.className = 'blur-region-list-item' + (isSelected ? ' active' : '');
             row.style.display = 'flex';
             row.style.alignItems = 'center';
             row.style.justifyContent = 'space-between';
             row.style.padding = '8px 12px';
             row.style.borderRadius = '6px';
-            row.style.marginBottom = '6px';
             row.style.cursor = 'pointer';
-            row.style.background = region.id === state.selectedBlurId ? 'rgba(79, 70, 229, 0.12)' : 'rgba(255,255,255,0.04)';
-            row.style.border = region.id === state.selectedBlurId ? '1px solid var(--primary)' : '1px solid transparent';
+            row.style.background = isSelected ? 'rgba(79, 70, 229, 0.12)' : 'rgba(255,255,255,0.04)';
+            row.style.border = isSelected ? '1px solid var(--primary)' : '1px solid rgba(255,255,255,0.08)';
 
             const label = document.createElement('span');
             label.innerText = `Blur Region ${idx + 1}`;
             label.style.fontSize = '13px';
+            label.style.fontWeight = '500';
 
             row.appendChild(label);
             row.addEventListener('click', () => {
@@ -15537,8 +15677,71 @@ document.addEventListener('DOMContentLoaded', () => {
                 deleteBlurRegionBtn.style.display = 'inline-block';
                 drawFrame();
             });
+            wrapper.appendChild(row);
 
-            blurRegionListEl.appendChild(row);
+            // --- Time slot controls (always visible) ---
+            const timeRow = document.createElement('div');
+            timeRow.style.display = 'flex';
+            timeRow.style.alignItems = 'center';
+            timeRow.style.gap = '6px';
+            timeRow.style.padding = '6px 10px';
+            timeRow.style.background = 'rgba(255,255,255,0.03)';
+            timeRow.style.borderRadius = '0 0 6px 6px';
+            timeRow.style.borderTop = '1px solid rgba(255,255,255,0.06)';
+            timeRow.style.marginTop = '0';
+
+            const makeTimeInput = (labelText, value, onChange) => {
+                const grp = document.createElement('div');
+                grp.style.display = 'flex';
+                grp.style.flexDirection = 'column';
+                grp.style.flex = '1';
+                const lbl = document.createElement('label');
+                lbl.innerText = labelText;
+                lbl.style.fontSize = '10px';
+                lbl.style.color = 'rgba(255,255,255,0.45)';
+                lbl.style.marginBottom = '3px';
+                const inp = document.createElement('input');
+                inp.type = 'number';
+                inp.min = '0';
+                inp.step = '0.1';
+                inp.value = value !== undefined ? Number(value).toFixed(1) : '0.0';
+                inp.style.width = '100%';
+                inp.style.padding = '4px 6px';
+                inp.style.borderRadius = '4px';
+                inp.style.border = '1px solid rgba(255,255,255,0.15)';
+                inp.style.background = 'rgba(0,0,0,0.3)';
+                inp.style.color = '#fff';
+                inp.style.fontSize = '12px';
+                inp.style.boxSizing = 'border-box';
+                inp.addEventListener('change', (e) => onChange(parseFloat(e.target.value) || 0));
+                // Prevent row click from triggering when editing input
+                inp.addEventListener('click', (e) => e.stopPropagation());
+                grp.appendChild(lbl);
+                grp.appendChild(inp);
+                return grp;
+            };
+
+            const startGrp = makeTimeInput('শুরু (সেকেন্ড)', region.startSec ?? 0, (val) => {
+                region.startSec = Math.max(0, val);
+                drawFrame();
+            });
+            const endGrp = makeTimeInput('শেষ (সেকেন্ড)', region.endSec ?? 999, (val) => {
+                region.endSec = Math.max(0, val);
+                drawFrame();
+            });
+
+            const arrow = document.createElement('span');
+            arrow.innerText = '→';
+            arrow.style.color = 'rgba(255,255,255,0.3)';
+            arrow.style.fontSize = '12px';
+            arrow.style.marginTop = '14px';
+
+            timeRow.appendChild(startGrp);
+            timeRow.appendChild(arrow);
+            timeRow.appendChild(endGrp);
+            wrapper.appendChild(timeRow);
+
+            blurRegionListEl.appendChild(wrapper);
         });
 
         if (state.blurRegions.length === 0) {
@@ -17326,10 +17529,22 @@ document.addEventListener('DOMContentLoaded', () => {
             label.innerText = item.text.length > 28 ? item.text.slice(0, 28) + '…' : item.text;
             label.style.fontSize = '13px';
 
-            const timeLabel = document.createElement('span');
-            timeLabel.innerText = `${item.startSec.toFixed(1)}s–${item.endSec.toFixed(1)}s`;
-            timeLabel.style.fontSize = '11px';
-            timeLabel.style.opacity = '0.6';
+            const timeLabel = document.createElement("div");
+            timeLabel.style.display = "flex";
+            timeLabel.style.flexDirection = "column";
+            timeLabel.style.gap = "2px";
+            timeLabel.style.marginTop = "2px";
+
+            const brollSlot = getClipSlot(item.clipId);
+            const totalStart = brollSlot.start + (item.startSec || 0);
+            const totalEnd = brollSlot.start + (item.endSec || 0);
+            const clipObj = (state.clips || []).find(c => c.id === item.clipId);
+            const clipIdx = (state.clips || []).findIndex(c => c.id === item.clipId);
+            const clipName = clipObj ? (clipIdx >= 0 ? `ক্লিপ ${clipIdx + 1}: ${clipObj.name}` : clipObj.name) : "ক্লিপ";
+
+            const clipTag = `<span style="font-size:10px; color:#c7d2fe; background:rgba(99,102,241,0.25); border:1px solid rgba(99,102,241,0.3); padding:1px 5px; border-radius:3px; display:inline-block; width:fit-content; margin-bottom:2px;"><i class="fa-solid fa-film"></i> ${clipName.length > 20 ? clipName.slice(0, 20) + "…" : clipName}</span>`;
+
+            timeLabel.innerHTML = `${clipTag}<span style="color:#38bdf8; font-size:11px; font-weight:600;">ক্লিপ সময়: ${item.startSec.toFixed(1)}s – ${item.endSec.toFixed(1)}s</span><span style="color:#94a3b8; font-size:10px;"><i class="fa-regular fa-clock"></i> মোট ভিডিওতে: ${formatTime(totalStart)} – ${formatTime(totalEnd)} (${totalStart.toFixed(1)}s – ${totalEnd.toFixed(1)}s)</span>`;
 
             row.appendChild(label);
             row.appendChild(timeLabel);
@@ -19242,8 +19457,33 @@ document.addEventListener('DOMContentLoaded', () => {
         // timing controls, bind that legacy overlay to the currently selected
         // clip so its local 1–4s range cannot leak into every other clip.
         if (!item.clipId && state.activeClipId) item.clipId = state.activeClipId;
-        const maxVal = state.endTime || state.duration || 1000;
-        if (brollTimingContainer) brollTimingContainer.style.display = 'block';
+        const slot = getClipSlot(item.clipId);
+        const maxVal = slot.duration || state.endTime || state.duration || 1000;
+        if (brollTimingContainer) brollTimingContainer.style.display = "block";
+
+        // Target Clip Select & Slot info
+        const brollTargetClipSelect = document.getElementById("broll-target-clip-select");
+        const brollClipSlotText = document.getElementById("broll-clip-slot-text");
+        if (brollTargetClipSelect) {
+            brollTargetClipSelect.innerHTML = "";
+            const allSlots = getClipsTimelineSlots();
+            allSlots.forEach(s => {
+                const opt = document.createElement("option");
+                opt.value = s.clipId;
+                opt.textContent = `${s.index + 1}. ${s.name} [স্লট: ${formatTime(s.start)} – ${formatTime(s.end)}] (${s.duration.toFixed(1)}s)`;
+                if (s.clipId === item.clipId) opt.selected = true;
+                brollTargetClipSelect.appendChild(opt);
+            });
+        }
+        if (brollClipSlotText) {
+            brollClipSlotText.innerText = `স্লট: ${formatTime(slot.start)} – ${formatTime(slot.end)} (${slot.duration.toFixed(1)}s)`;
+        }
+
+        const brollStartSlotIndicator = document.getElementById("broll-start-slot-indicator");
+        const brollEndSlotIndicator = document.getElementById("broll-end-slot-indicator");
+        if (brollStartSlotIndicator) brollStartSlotIndicator.innerText = `ক্লিপের ভেতর (০.০ – ${slot.duration.toFixed(1)}s)`;
+        if (brollEndSlotIndicator) brollEndSlotIndicator.innerText = `ক্লিপের ভেতর (০.০ – ${slot.duration.toFixed(1)}s)`;
+
         if (brollStartInput) {
             brollStartInput.max = maxVal;
             brollStartInput.value = item.startSec;
@@ -19252,6 +19492,19 @@ document.addEventListener('DOMContentLoaded', () => {
             brollEndInput.max = maxVal;
             brollEndInput.value = item.endSec;
         }
+
+        const brollStartTotal = document.getElementById("broll-start-total");
+        const brollStartTotalVal = document.getElementById("broll-start-total-val");
+        const brollEndTotal = document.getElementById("broll-end-total");
+        const brollEndTotalVal = document.getElementById("broll-end-total-val");
+
+        const totalStartSec = slot.start + item.startSec;
+        const totalEndSec = slot.start + item.endSec;
+
+        if (brollStartTotal) brollStartTotal.value = totalStartSec.toFixed(1);
+        if (brollStartTotalVal) brollStartTotalVal.innerText = formatTime(totalStartSec);
+        if (brollEndTotal) brollEndTotal.value = totalEndSec.toFixed(1);
+        if (brollEndTotalVal) brollEndTotalVal.innerText = formatTime(totalEndSec);
         if (brollModeSelect) brollModeSelect.value = item.mode;
         // Older items saved before this toggle existed have no transparentBg
         // property at all — treat that as "transparent" (the new default) so
@@ -19767,17 +20020,44 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
+    const brollTargetClipSelect = document.getElementById('broll-target-clip-select');
+    const brollStartTotal = document.getElementById('broll-start-total');
+    const brollStartTotalVal = document.getElementById('broll-start-total-val');
+    const brollEndTotal = document.getElementById('broll-end-total');
+    const brollEndTotalVal = document.getElementById('broll-end-total-val');
+
+    if (brollTargetClipSelect) {
+        brollTargetClipSelect.addEventListener('change', (e) => {
+            const item = state.brollOverlays.find(b => b.id === state.selectedBrollId);
+            if (!item) return;
+            const newClipId = e.target.value;
+            item.clipId = newClipId;
+            const newSlot = getClipSlot(newClipId);
+            const maxVal = newSlot.duration || 1000;
+            if (item.startSec > maxVal) item.startSec = 0;
+            if (item.endSec > maxVal) item.endSec = Math.min(maxVal, item.startSec + 3);
+            switchActiveClip(newClipId);
+            renderBrollList();
+            showBrollTimingFor(item.id);
+            drawFrame();
+        });
+    }
+
     if (brollStartInput) {
         brollStartInput.addEventListener('input', (e) => {
             const item = state.brollOverlays.find(b => b.id === state.selectedBrollId);
             if (item) {
-                const maxVal = state.endTime || state.duration || 1000;
+                const slot = getClipSlot(item.clipId);
+                const maxVal = slot.duration || state.endTime || state.duration || 1000;
                 let val = parseFloat(e.target.value) || 0;
                 if (val > maxVal) {
                     val = maxVal;
                     brollStartInput.value = val;
                 }
                 item.startSec = Math.max(0, val);
+                const totalStartSec = slot.start + item.startSec;
+                if (brollStartTotal) brollStartTotal.value = totalStartSec.toFixed(1);
+                if (brollStartTotalVal) brollStartTotalVal.innerText = formatTime(totalStartSec);
                 renderBrollList();
             }
         });
@@ -19787,29 +20067,75 @@ document.addEventListener('DOMContentLoaded', () => {
         brollEndInput.addEventListener('input', (e) => {
             const item = state.brollOverlays.find(b => b.id === state.selectedBrollId);
             if (item) {
-                const maxVal = state.endTime || state.duration || 1000;
+                const slot = getClipSlot(item.clipId);
+                const maxVal = slot.duration || state.endTime || state.duration || 1000;
                 let val = parseFloat(e.target.value) || 0;
                 if (val > maxVal) {
                     val = maxVal;
                     brollEndInput.value = val;
                 }
                 item.endSec = Math.max(item.startSec + 0.1, val);
+                const totalEndSec = slot.start + item.endSec;
+                if (brollEndTotal) brollEndTotal.value = totalEndSec.toFixed(1);
+                if (brollEndTotalVal) brollEndTotalVal.innerText = formatTime(totalEndSec);
                 renderBrollList();
             }
         });
     }
 
-    // "Use current playhead time" buttons for the Show From / Show Until
-    // fields -- reuses the existing input listeners above (clamping,
-    // item.startSec/endSec assignment, renderBrollList) by just writing the
-    // value and dispatching a real 'input' event, instead of duplicating
-    // that logic here.
+    if (brollStartTotal) {
+        brollStartTotal.addEventListener('input', (e) => {
+            const item = state.brollOverlays.find(b => b.id === state.selectedBrollId);
+            if (!item) return;
+            const slot = getClipSlot(item.clipId);
+            let totalVal = parseFloat(e.target.value) || 0;
+            let clipSec = Math.max(0, totalVal - slot.start);
+            clipSec = Math.min(slot.duration || 1000, clipSec);
+            item.startSec = clipSec;
+            if (brollStartInput) brollStartInput.value = clipSec.toFixed(1);
+            if (brollStartTotalVal) brollStartTotalVal.innerText = formatTime(slot.start + clipSec);
+            renderBrollList();
+            drawFrame();
+        });
+    }
+
+    if (brollEndTotal) {
+        brollEndTotal.addEventListener('input', (e) => {
+            const item = state.brollOverlays.find(b => b.id === state.selectedBrollId);
+            if (!item) return;
+            const slot = getClipSlot(item.clipId);
+            let totalVal = parseFloat(e.target.value) || 0;
+            let clipSec = Math.max(item.startSec + 0.1, totalVal - slot.start);
+            clipSec = Math.min(slot.duration || 1000, clipSec);
+            item.endSec = clipSec;
+            if (brollEndInput) brollEndInput.value = clipSec.toFixed(1);
+            if (brollEndTotalVal) brollEndTotalVal.innerText = formatTime(slot.start + clipSec);
+            renderBrollList();
+            drawFrame();
+        });
+    }
+
     const brollStartFromPlayheadBtn = document.getElementById('broll-start-from-playhead');
     const brollEndFromPlayheadBtn = document.getElementById('broll-end-from-playhead');
 
     function setBrollTimeFromPlayhead(inputEl) {
         if (!inputEl) return;
-        const current = (state.currentTime || 0).toFixed(1);
+        const item = state.brollOverlays.find(b => b.id === state.selectedBrollId);
+        if (!item) return;
+        
+        // If playhead is in active clip and differs from item.clipId, sync to active clip
+        if (state.activeClipId && item.clipId !== state.activeClipId) {
+            item.clipId = state.activeClipId;
+            if (brollTargetClipSelect) brollTargetClipSelect.value = state.activeClipId;
+        }
+
+        const slot = getClipSlot(item.clipId);
+        const active = (state.clips || []).find(c => c.id === item.clipId);
+        const clipElapsed = active && window.getClipOutputElapsedForSourceTime
+            ? window.getClipOutputElapsedForSourceTime(active, state.currentTime || 0)
+            : Math.max(0, (state.currentTime - (active ? (active.start || 0) : 0)));
+
+        const current = Math.max(0, Math.min(slot.duration || 1000, clipElapsed)).toFixed(1);
         inputEl.value = current;
         inputEl.dispatchEvent(new Event('input', { bubbles: true }));
     }

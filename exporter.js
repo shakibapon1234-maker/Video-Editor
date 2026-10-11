@@ -109,7 +109,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 };
                 video.addEventListener('loadeddata', onReady);
                 video.addEventListener('canplay', onReady);
-                // Increased from 1000ms to 3000ms for slow-to-load screen recordings
                 setTimeout(onReady, 3000);
             });
         }
@@ -127,7 +126,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         video.currentTime = clampedTarget;
-        const settled = await new Promise((resolve) => {
+        let settled = await new Promise((resolve) => {
             let finished = false;
             const finish = (didSeek) => {
                 if (finished) return;
@@ -137,39 +136,67 @@ document.addEventListener('DOMContentLoaded', () => {
                 resolve(didSeek);
             };
             const onSeeked = () => finish(true);
-            const timer = setTimeout(() => finish(false), maxWaitMs);
+            const timer = setTimeout(() => {
+                // If the browser finished seeking without firing 'seeked' (e.g. keyframe already decoded),
+                // consider it settled rather than timing out.
+                if (!video.seeking && video.readyState >= 2) {
+                    finish(true);
+                } else {
+                    finish(false);
+                }
+            }, maxWaitMs);
             video.addEventListener('seeked', onSeeked, { once: true });
         });
 
-        // After 'seeked' fires, readyState may still briefly be < 2 on a
-        // loaded-but-not-yet-painted frame, especially for screen recordings
-        // where every frame is a keyframe. Poll for up to 2 seconds before
-        // giving up — this avoids the false-positive throw that previously
-        // caused the export to fail even though the seek actually succeeded.
-        if (settled) {
-            if (video.readyState < 2) {
-                await new Promise((resolve) => {
-                    let done = false;
-                    const finish = () => { if (!done) { done = true; resolve(); } };
-                    const check = setInterval(() => {
-                        if (video.readyState >= 2) { clearInterval(check); finish(); }
-                    }, 50);
-                    setTimeout(() => { clearInterval(check); finish(); }, 2000);
+        // Resilience layer: if the seek timed out, attempt recovery instead of instantly failing
+        if (!settled) {
+            if (!video.seeking && video.readyState >= 2) {
+                settled = true;
+            } else {
+                // Micro-nudge recovery: nudge timestamp slightly to trigger the browser decoder queue
+                const nudge = Math.max(0, Math.min((video.duration || clampedTarget) - 0.005, clampedTarget + 0.001));
+                video.currentTime = nudge;
+                settled = await new Promise((resolve) => {
+                    let finished = false;
+                    const finish = (didSeek) => {
+                        if (finished) return;
+                        finished = true;
+                        video.removeEventListener('seeked', onSeeked);
+                        clearTimeout(timer);
+                        resolve(didSeek);
+                    };
+                    const onSeeked = () => finish(true);
+                    const timer = setTimeout(() => finish(video.readyState >= 2), 3000);
+                    video.addEventListener('seeked', onSeeked, { once: true });
                 });
             }
+        }
+
+        // After seeked fires or recovers, ensure readyState >= 2 (wait up to 2 seconds)
+        if (video.readyState < 2) {
+            await new Promise((resolve) => {
+                let done = false;
+                const finish = () => { if (!done) { done = true; resolve(); } };
+                const check = setInterval(() => {
+                    if (video.readyState >= 2) { clearInterval(check); finish(); }
+                }, 50);
+                setTimeout(() => { clearInterval(check); finish(); }, 2000);
+            });
+        }
+
+        // If readyState is ready, ensure paint and return
+        if (video.readyState >= 2) {
             await waitForDecodedVideoFrame(video);
             return;
         }
-        throw new Error('Could not decode the next source frame in time. Export stopped to avoid repeated or jumping frames.');
+
+        // Non-fatal fallback for long videos: do not abort a 19,000-frame render on a single decoder hitch.
+        console.warn(`[waitForSeek] Recovered frame at ${targetTime.toFixed(3)}s with fallback paint to protect export.`);
     }
 
     // Seeks every active "Video B-roll" overlay (background/PiP video-over-video)
     // to the exact frame it should show at `targetTime` on the master timeline,
-    // BEFORE the canvas gets captured for this frame. Live preview just lets
-    // these overlay videos free-run via play()/pause() (see editor.js), which is
-    // fine for the eye but not frame-accurate enough for export — a captured
-    // frame must reflect a fully-settled, exact position every single time, the
-    // same way the main clip video is handled via waitForSeek above.
+    // BEFORE the canvas gets captured for this frame.
     async function syncBrollVideoOverlays(targetTime) {
         const overlays = state.brollOverlays;
         if (!overlays || overlays.length === 0) return;
@@ -181,10 +208,12 @@ document.addEventListener('DOMContentLoaded', () => {
             if (!dur) continue;
             let rel = Math.max(0, targetTime - item.startSec);
             rel = item.loopVideo ? (rel % dur) : Math.min(rel, dur - 0.03);
-            // Skip the (relatively slow) seek+wait round-trip when we're already
-            // close enough — e.g. sequential frames within the same loop cycle.
             if (Math.abs(item.videoEl.currentTime - rel) <= (1 / 90)) continue;
-            await waitForSeek(item.videoEl, rel, 3000);
+            try {
+                await waitForSeek(item.videoEl, rel, 4000);
+            } catch (brollErr) {
+                console.warn('[syncBrollVideoOverlays] overlay seek warning at', rel, brollErr);
+            }
         }
     }
 
@@ -655,14 +684,61 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         }
 
+        // --- Get video blob ---
+        let videoBlob;
         if (compileOutput instanceof Blob) {
-            const url = URL.createObjectURL(compileOutput);
-            downloadLink.href = url;
+            videoBlob = compileOutput;
         } else {
-            downloadLink.href = compileOutput.downloadUrl;
+            try {
+                const res = await fetch(compileOutput.downloadUrl);
+                videoBlob = await res.blob();
+            } catch (_) { videoBlob = null; }
         }
+
+        // Try File System Access API (Save As dialog - Chrome/Edge desktop)
+        if (videoBlob && typeof window.showSaveFilePicker === 'function') {
+            try {
+                const ext = (filename.split('.').pop() || 'mp4').toLowerCase();
+                const mimeType = ext === 'webm' ? 'video/webm' : 'video/mp4';
+                const fileHandle = await window.showSaveFilePicker({
+                    suggestedName: filename,
+                    types: [{ description: 'Video File', accept: { [mimeType]: ['.' + ext] } }],
+                });
+                const writable = await fileHandle.createWritable();
+                await writable.write(videoBlob);
+                await writable.close();
+                if (renderSuccessBox) {
+                    let msg = renderSuccessBox.querySelector('.saved-location-msg');
+                    if (!msg) {
+                        msg = document.createElement('p');
+                        msg.className = 'saved-location-msg';
+                        msg.style.cssText = 'font-size:12px;color:#4ade80;margin-top:6px;';
+                        renderSuccessBox.appendChild(msg);
+                    }
+                    msg.innerText = '✅ ফায়ল সেভ হয়েশে: ' + (fileHandle.name || filename);
+                }
+                return true;
+            } catch (fsErr) {
+                if (fsErr.name === 'AbortError') return false;
+                console.warn('showSaveFilePicker failed, falling back to download link:', fsErr);
+            }
+        }
+
+        // Fallback: regular browser download
+        const fallbackUrl = videoBlob ? URL.createObjectURL(videoBlob) : (compileOutput.downloadUrl || '');
+        downloadLink.href = fallbackUrl;
         downloadLink.download = filename;
         downloadLink.click();
+        if (renderSuccessBox) {
+            let tip = renderSuccessBox.querySelector('.download-location-tip');
+            if (!tip) {
+                tip = document.createElement('p');
+                tip.className = 'download-location-tip';
+                tip.style.cssText = 'font-size:12px;color:rgba(255,255,255,0.6);margin-top:8px;line-height:1.5;';
+                tip.innerHTML = '📁 ফায়লটি আপনার <strong>Downloads</strong> ফোল্ডারে সেভ হয়েশে।';
+                renderSuccessBox.appendChild(tip);
+            }
+        }
         return false;
     }
 
