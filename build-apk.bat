@@ -13,10 +13,13 @@ REM ============================================================
 setlocal EnableDelayedExpansion
 cd /d "%~dp0"
 
-REM Point Gradle/Android tools at the D: install (no need for Android Studio)
+REM Point Gradle/Android tools at the correct SDK and JDK
 set "ANDROID_HOME=D:\Android\Sdk"
 set "ANDROID_SDK_ROOT=D:\Android\Sdk"
 set "JAVA_HOME=C:\Program Files\Eclipse Adoptium\jdk-17.0.19.10-hotspot"
+set "GRADLE_USER_HOME=C:\Users\Lenovo\.gradle"
+set "PATH=%JAVA_HOME%\bin;%PATH%"
+
 
 echo [0/5] Refreshing www\ from latest source (auto-sync)...
 if not exist "www" mkdir "www"
