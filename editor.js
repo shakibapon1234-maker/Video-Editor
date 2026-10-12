@@ -7488,6 +7488,17 @@ document.addEventListener('DOMContentLoaded', () => {
         const videoH = (rawH && rawH > 0) ? rawH : (activeClip?.videoHeight || 720);
 
         const mediaSource = isImageClip ? activeClip.imageImg : state.video;
+
+        // Android WebView guard: video must have at least one decoded frame
+        // before drawImage() will paint anything visible. readyState < 2
+        // (HAVE_CURRENT_DATA) means no pixel data is available yet — skip
+        // this frame rather than drawing a transparent/black rectangle.
+        if (!isImageClip && state.video && state.video.readyState < 2) {
+            // Still paint the background so the canvas isn't empty
+            state.ctx.fillStyle = '#000000';
+            state.ctx.fillRect(0, 0, canvasW, canvasH);
+            return;
+        }
         
         // Clear canvas / paint letterbox background (solid black by default,
         // or blur/image/color if the user picked one under the Background card)

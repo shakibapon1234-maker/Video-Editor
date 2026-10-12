@@ -14,9 +14,9 @@ setlocal EnableDelayedExpansion
 cd /d "%~dp0"
 
 REM Point Gradle/Android tools at the correct SDK and JDK
-set "ANDROID_HOME=D:\Android\Sdk"
-set "ANDROID_SDK_ROOT=D:\Android\Sdk"
-set "JAVA_HOME=C:\Program Files\Eclipse Adoptium\jdk-17.0.19.10-hotspot"
+set "ANDROID_HOME=C:\Users\Lenovo\AppData\Local\Android\Sdk"
+set "ANDROID_SDK_ROOT=C:\Users\Lenovo\AppData\Local\Android\Sdk"
+set "JAVA_HOME=C:\Program Files\Eclipse Adoptium\jdk-21.0.12.101-hotspot"
 set "GRADLE_USER_HOME=C:\Users\Lenovo\.gradle"
 set "PATH=%JAVA_HOME%\bin;%PATH%"
 
@@ -42,10 +42,10 @@ if not exist "android" (
 echo [2/5] Syncing latest code into Android project...
 call npx cap sync android
 
-echo [2.5/5] Pointing Gradle to the D: Android SDK and JDK 21...
-echo sdk.dir=D:/Android/Sdk>android\local.properties
+echo [2.5/5] Pointing Gradle to the correct Android SDK and JDK...
+echo sdk.dir=C:/Users/Lenovo/AppData/Local/Android/Sdk>android\local.properties
 set "GRADLE_PROP=android\gradle.properties"
-findstr /C:"org.gradle.java.home" "%GRADLE_PROP%" >nul 2>&1 || echo org.gradle.java.home=C:/Program Files/Eclipse Adoptium/jdk-17.0.19.10-hotspot>>"%GRADLE_PROP%"
+findstr /C:"org.gradle.java.home" "%GRADLE_PROP%" >nul 2>&1 || echo org.gradle.java.home=C:/Program Files/Eclipse Adoptium/jdk-21.0.12.101-hotspot>>"%GRADLE_PROP%"
 
 echo [3/5] Building debug APK (this can take a few minutes)...
 cd android
