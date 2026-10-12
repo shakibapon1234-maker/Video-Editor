@@ -1967,24 +1967,11 @@ document.addEventListener('DOMContentLoaded', () => {
                 triggerAutoSave();
             };
 
-            if (isCapacitor) {
-                // Use Base64 Data URL to bypass WebView blob restrictions for video tags
-                const reader = new FileReader();
-                reader.onload = (e) => {
-                    setupVideoAndMetadata(e.target.result);
-                };
-                reader.onerror = (err) => {
-                    console.error("FileReader error: ", err);
-                    videoDropzone.querySelector('h3').innerText = originalText;
-                    isVideoLoading = false;
-                    alert("ফাইলটি পড়তে সমস্যা হয়েছে।");
-                };
-                reader.readAsDataURL(file);
-            } else {
-                // PC: Use efficient object URL
-                const fileURL = URL.createObjectURL(file);
-                setupVideoAndMetadata(fileURL);
-            }
+            // Modern Android WebView (API 21+) and Capacitor 4+ support blob: URLs
+            // for <video> natively. Base64 DataURL crashed on files >20MB because
+            // the entire file was read into JS heap memory as a string.
+            const fileURL = URL.createObjectURL(file);
+            setupVideoAndMetadata(fileURL);
         }
     }
     
@@ -7489,17 +7476,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
         const mediaSource = isImageClip ? activeClip.imageImg : state.video;
 
-        // Android WebView guard: video must have at least one decoded frame
-        // before drawImage() will paint anything visible. readyState < 2
-        // (HAVE_CURRENT_DATA) means no pixel data is available yet — skip
-        // this frame rather than drawing a transparent/black rectangle.
-        if (!isImageClip && state.video && state.video.readyState < 2) {
-            // Still paint the background so the canvas isn't empty
-            state.ctx.fillStyle = '#000000';
-            state.ctx.fillRect(0, 0, canvasW, canvasH);
-            return;
-        }
-        
         // Clear canvas / paint letterbox background (solid black by default,
         // or blur/image/color if the user picked one under the Background card)
         drawCanvasBackground(canvasW, canvasH, mediaSource, videoW, videoH);
