@@ -4481,8 +4481,8 @@
                                     <label>Export Quality (এক্সপোর্ট কোয়ালিটি)</label>
                                     <select id="quality-select" class="form-select">
                                         <option value="480p">480p (ছোট সাইজ, দ্রুত)</option>
-                                        <option value="720p" selected>720p (স্ট্যান্ডার্ড)</option>
-                                        <option value="1080p">1080p (সর্বোচ্চ কোয়ালিটি)</option>
+                                        <option value="720p">720p (স্ট্যান্ডার্ড)</option>
+                                        <option value="1080p" selected>1080p (সর্বোচ্চ কোয়ালিটি - Full HD)</option>
                                     </select>
                                 </div>
 
@@ -4518,9 +4518,14 @@
                                         <i class="fa-solid fa-triangle-exclamation"></i>
                                         <span id="render-health-warning-text"></span>
                                     </div>
-                                    <button id="cancel-render-btn" class="btn btn-danger btn-block mt-3" type="button">
-                                        <i class="fa-solid fa-xmark"></i> Cancel Render (বাতিল করুন)
-                                    </button>
+                                    <div style="display: flex; gap: 8px; margin-top: 12px;">
+                                        <button id="pause-render-btn" class="btn btn-warning" style="flex: 1; font-weight: 600; padding: 10px; background: #eab308; border-color: #ca8a04; color: #000;" type="button">
+                                            <i class="fa-solid fa-pause"></i> Pause (পজ করুন)
+                                        </button>
+                                        <button id="cancel-render-btn" class="btn btn-danger" style="flex: 1; font-weight: 600; padding: 10px;" type="button">
+                                            <i class="fa-solid fa-xmark"></i> Cancel (বাতিল)
+                                        </button>
+                                    </div>
                                 </div>
 
                                 <!-- Success & Download -->
@@ -4665,6 +4670,14 @@
                                     <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 8px; font-size: 11px; color: #94a3b8;">
                                         <span id="multi-aspect-ratio-detail">বর্তমান ফাইল: —</span>
                                         <span id="multi-aspect-batch-summary">রেশিও: 0/0</span>
+                                    </div>
+                                    <div style="display: flex; gap: 8px; margin-top: 10px;">
+                                        <button id="multi-aspect-pause-btn" class="btn btn-warning btn-sm" style="flex: 1; font-weight: 600; padding: 7px; background: #eab308; border-color: #ca8a04; color: #000;" type="button">
+                                            <i class="fa-solid fa-pause"></i> Pause (পজ করুন)
+                                        </button>
+                                        <button id="multi-aspect-cancel-btn" class="btn btn-danger btn-sm" style="flex: 1; font-weight: 600; padding: 7px;" type="button">
+                                            <i class="fa-solid fa-xmark"></i> Cancel (বাতিল)
+                                        </button>
                                     </div>
                                 </div>
 

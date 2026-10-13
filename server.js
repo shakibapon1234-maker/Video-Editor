@@ -484,7 +484,7 @@ function compileVideo(ws, tempDir, filename, totalFrames, enhanceQuality = false
     const hasAudio = fs.existsSync(audioPath);
     const inputPattern = path.join(tempDir, 'frame_%05d.jpg').replace(/\\/g, '/');
     const videoFilterChain = enhanceQuality
-        ? 'hqdn3d=1.5:1.5:4:4,scale=1920:-2:flags=lanczos,unsharp=5:5:0.8:5:5:0.4,scale=trunc(iw/16)*16:trunc(ih/16)*16,setsar=1'
+        ? 'hqdn3d=1.5:1.5:4:4,scale=trunc(iw/16)*16:trunc(ih/16)*16,unsharp=5:5:0.8:5:5:0.4,setsar=1'
         : 'scale=trunc(iw/16)*16:trunc(ih/16)*16,setsar=1';
 
     let command = ffmpeg()
@@ -507,11 +507,13 @@ function compileVideo(ws, tempDir, filename, totalFrames, enhanceQuality = false
     command
         .outputOptions([
             ...encodeOptions,
+            '-r 30',
+            '-fps_mode cfr',
             '-g 60',
             '-keyint_min 30',
             '-sc_threshold 0',
             '-movflags +faststart',
-            `-t ${duration}`
+            `-t ${duration.toFixed(3)}`
         ])
         .output(compiledPath.replace(/\\/g, '/'));
 
@@ -1026,9 +1028,45 @@ function parseTimemarkToSeconds(tm) {
     return 0;
 }
 
+function computeDirectRenderDimensions(aspectRatio, quality = '1080p') {
+    const is1080p = quality === '1080p';
+    const is480p = quality === '480p';
+    const ratioStr = String(aspectRatio || 'original').replace(':', '-').trim().toLowerCase();
+
+    switch (ratioStr) {
+        case '9-16':
+            if (is480p) return { w: 480, h: 854 };
+            return is1080p ? { w: 1080, h: 1920 } : { w: 720, h: 1280 };
+        case '16-9':
+            if (is480p) return { w: 854, h: 480 };
+            return is1080p ? { w: 1920, h: 1080 } : { w: 1280, h: 720 };
+        case '1-1':
+            if (is480p) return { w: 480, h: 480 };
+            return is1080p ? { w: 1080, h: 1080 } : { w: 720, h: 720 };
+        case '4-5':
+            if (is480p) return { w: 480, h: 600 };
+            return is1080p ? { w: 1080, h: 1350 } : { w: 720, h: 900 };
+        case 'original':
+        default: {
+            return is1080p ? { w: 1920, h: 1080 } : (is480p ? { w: 854, h: 480 } : { w: 1280, h: 720 });
+        }
+    }
+}
+
 app.post('/api/fast-direct-render', express.json({ limit: '2048mb' }), async (req, res) => {
     try {
-        const { clips, audioBase64, filename: reqFilename, totalDuration } = req.body || {};
+        const {
+            clips,
+            audioBase64,
+            filename: reqFilename,
+            totalDuration,
+            quality,
+            aspectRatio,
+            layoutMode,
+            backgroundMode,
+            targetWidth: reqTargetWidth,
+            targetHeight: reqTargetHeight
+        } = req.body || {};
         if (!Array.isArray(clips) || clips.length === 0) {
             return res.status(400).json({ error: 'No clips provided for direct render.' });
         }
@@ -1061,10 +1099,23 @@ app.post('/api/fast-direct-render', express.json({ limit: '2048mb' }), async (re
         // Asynchronous FFmpeg processing
         (async () => {
             try {
+                let targetW = parseInt(reqTargetWidth) || 0;
+                let targetH = parseInt(reqTargetHeight) || 0;
+                if (!targetW || !targetH) {
+                    const dims = computeDirectRenderDimensions(aspectRatio, quality || '1080p');
+                    targetW = dims.w;
+                    targetH = dims.h;
+                }
+                targetW = Math.round(targetW / 2) * 2;
+                targetH = Math.round(targetH / 2) * 2;
+
+                const effectiveLayout = layoutMode || 'fit';
+                const effectiveBg = backgroundMode || 'blur';
+
                 let audioPath = null;
                 if (audioBase64) {
                     audioPath = path.join(tempDir, 'audio.wav');
-                    const cleanB64 = audioBase64.replace(/^data:audio\/[a-zA-Z0-9+]+;base64,/, '');
+                    const cleanB64 = audioBase64.replace(/^data:[^;]+;base64,/, '');
                     fs.writeFileSync(audioPath, Buffer.from(cleanB64, 'base64'));
                 }
 
@@ -1077,7 +1128,7 @@ app.post('/api/fast-direct-render', express.json({ limit: '2048mb' }), async (re
                     } else if (c.base64) {
                         const ext = path.extname(c.name || 'clip.mp4') || '.mp4';
                         const p = path.join(tempDir, `clip_${i}${ext}`);
-                        const cleanB64 = c.base64.replace(/^data:video\/[a-zA-Z0-9+]+;base64,/, '');
+                        const cleanB64 = c.base64.replace(/^data:[^;]+;base64,/, '');
                         fs.writeFileSync(p, Buffer.from(cleanB64, 'base64'));
                         inputPaths.push(p);
                     } else {
@@ -1090,15 +1141,37 @@ app.post('/api/fast-direct-render', express.json({ limit: '2048mb' }), async (re
                 inputPaths.forEach((inp, i) => {
                     const clip = clips[i];
                     const s = Math.max(0, parseFloat(clip.start) || 0);
-                    const e = Math.max(s + 0.1, parseFloat(clip.end) || 99999);
-                    filterParts.push(`[${i}:v]trim=start=${s.toFixed(3)}:end=${e.toFixed(3)},setpts=PTS-STARTPTS,fps=30,scale=1920:1080:force_original_aspect_ratio=decrease,pad=1920:1080:(ow-iw)/2:(oh-ih)/2:black,setsar=1[v${i}]`);
+                    const e = Math.max(s + 0.05, parseFloat(clip.end) || 99999);
+                    const spd = Math.max(0.25, Math.min(4, parseFloat(clip.speed) || 1));
+
+                    let cropFilter = '';
+                    const cx = parseFloat(clip.cropX) || 0;
+                    const cy = parseFloat(clip.cropY) || 0;
+                    const cw = parseFloat(clip.cropW) || 1;
+                    const ch = parseFloat(clip.cropH) || 1;
+                    if ((cw > 0 && cw < 0.999) || (ch > 0 && ch < 0.999) || cx > 0.001 || cy > 0.001) {
+                        cropFilter = `crop=trunc(iw*${cw.toFixed(4)}/2)*2:trunc(ih*${ch.toFixed(4)}/2)*2:trunc(iw*${cx.toFixed(4)}/2)*2:trunc(ih*${cy.toFixed(4)}/2)*2,`;
+                    }
+
+                    const baseTrim = `[${i}:v]${cropFilter}trim=start=${s.toFixed(3)}:end=${e.toFixed(3)},setpts=(PTS-STARTPTS)/${spd.toFixed(3)},fps=30`;
+
+                    if (effectiveLayout === 'fit' && effectiveBg === 'blur') {
+                        filterParts.push(`${baseTrim},split=2[fg${i}][bg${i}]`);
+                        filterParts.push(`[bg${i}]scale=${targetW}:${targetH}:force_original_aspect_ratio=increase,crop=${targetW}:${targetH},boxblur=25:5[blurred${i}]`);
+                        filterParts.push(`[fg${i}]scale=${targetW}:${targetH}:force_original_aspect_ratio=decrease[fgscaled${i}]`);
+                        filterParts.push(`[blurred${i}][fgscaled${i}]overlay=(W-w)/2:(H-h)/2,setsar=1[v${i}]`);
+                    } else if (effectiveLayout === 'fill') {
+                        filterParts.push(`${baseTrim},scale=${targetW}:${targetH}:force_original_aspect_ratio=increase,crop=${targetW}:${targetH},setsar=1[v${i}]`);
+                    } else {
+                        filterParts.push(`${baseTrim},scale=${targetW}:${targetH}:force_original_aspect_ratio=decrease,pad=${targetW}:${targetH}:(ow-iw)/2:(oh-ih)/2:black,setsar=1[v${i}]`);
+                    }
                     videoLabels.push(`[v${i}]`);
                 });
                 filterParts.push(`${videoLabels.join('')}concat=n=${inputPaths.length}:v=1:a=0[vout]`);
 
                 if (audioPath && fs.existsSync(audioPath)) {
                     const audioIdx = inputPaths.length;
-                    filterParts.push(`[${audioIdx}:a]pan=stereo|c0=0.5*c0+0.5*c1|c1=0.5*c0+0.5*c1,highpass=f=80,afftdn=nf=-25,aformat=sample_rates=44100:channel_layouts=stereo[aout]`);
+                    filterParts.push(`[${audioIdx}:a]aformat=sample_rates=48000:channel_layouts=stereo[aout]`);
                 }
 
                 let outFilename = safeJoinName(reqFilename || `direct-render-${Date.now()}.mp4`);
@@ -1117,19 +1190,31 @@ app.post('/api/fast-direct-render', express.json({ limit: '2048mb' }), async (re
                     cmd.input(audioPath);
                 }
 
-                const estDuration = parseFloat(totalDuration) || 400;
+                const estDuration = Math.max(0.1, parseFloat(totalDuration) || 0);
+
+                const outputOptions = [
+                    '-map', '[vout]',
+                    ...(audioPath && fs.existsSync(audioPath)
+                        ? ['-map', '[aout]', '-c:a', 'aac', '-b:a', '192k', '-ar', '48000']
+                        : ['-an']),
+                    '-c:v', 'libx264',
+                    '-preset', 'fast',
+                    '-crf', '18',
+                    '-r', '30',
+                    '-fps_mode', 'cfr',
+                    '-g', '60',
+                    '-keyint_min', '30',
+                    '-sc_threshold', '0',
+                    '-pix_fmt', 'yuv420p',
+                    '-movflags', '+faststart'
+                ];
+                if (estDuration > 0) {
+                    outputOptions.push('-t', estDuration.toFixed(3));
+                }
 
                 cmd
                     .complexFilter(filterParts)
-                    .outputOptions([
-                        '-map', '[vout]',
-                        ...(audioPath && fs.existsSync(audioPath) ? ['-map', '[aout]', '-c:a', 'aac', '-b:a', '192k', '-ar', '44100'] : ['-an']),
-                        '-c:v', 'libx264',
-                        '-preset', 'fast',
-                        '-crf', '18',
-                        '-pix_fmt', 'yuv420p',
-                        '-movflags', '+faststart'
-                    ])
+                    .outputOptions(outputOptions)
                     .output(compiledPath)
                     .on('progress', (prog) => {
                         const sec = prog.timemark ? parseTimemarkToSeconds(prog.timemark) : 0;

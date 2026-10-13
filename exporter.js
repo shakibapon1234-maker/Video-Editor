@@ -244,7 +244,77 @@ document.addEventListener('DOMContentLoaded', () => {
     // render tick loop (intro / clips / outro), plus wall-clock timestamps
     // used to estimate remaining time.
     let exportCancelled = false;
+    let exportPaused = false;
     let exportStartTimestamp = 0;
+    let pauseStartTimestamp = 0;
+    let totalPausedMs = 0;
+
+    const pauseRenderBtn = document.getElementById('pause-render-btn');
+    const multiAspectPauseBtn = document.getElementById('multi-aspect-pause-btn');
+    const multiAspectCancelBtn = document.getElementById('multi-aspect-cancel-btn');
+
+    function toggleRenderPause() {
+        exportPaused = !exportPaused;
+        if (exportPaused) {
+            pauseStartTimestamp = performance.now();
+            const btnHtml = '<i class="fa-solid fa-play"></i> Resume (চালু করুন)';
+            if (pauseRenderBtn) {
+                pauseRenderBtn.innerHTML = btnHtml;
+                pauseRenderBtn.style.background = '#10b981';
+                pauseRenderBtn.style.borderColor = '#059669';
+                pauseRenderBtn.style.color = '#fff';
+            }
+            if (multiAspectPauseBtn) {
+                multiAspectPauseBtn.innerHTML = btnHtml;
+                multiAspectPauseBtn.style.background = '#10b981';
+                multiAspectPauseBtn.style.borderColor = '#059669';
+                multiAspectPauseBtn.style.color = '#fff';
+            }
+            if (renderStatusText) renderStatusText.innerText = '⏸️ রেন্ডার পজ করা হয়েছে (Render Paused)';
+            const multiStatusText = document.getElementById('multi-aspect-status-text');
+            if (multiStatusText) multiStatusText.innerText = '⏸️ রেন্ডার পজ করা হয়েছে (Render Paused)';
+        } else {
+            if (pauseStartTimestamp > 0) {
+                totalPausedMs += (performance.now() - pauseStartTimestamp);
+                pauseStartTimestamp = 0;
+            }
+            const btnHtml = '<i class="fa-solid fa-pause"></i> Pause (পজ করুন)';
+            if (pauseRenderBtn) {
+                pauseRenderBtn.innerHTML = btnHtml;
+                pauseRenderBtn.style.background = '#eab308';
+                pauseRenderBtn.style.borderColor = '#ca8a04';
+                pauseRenderBtn.style.color = '#000';
+            }
+            if (multiAspectPauseBtn) {
+                multiAspectPauseBtn.innerHTML = btnHtml;
+                multiAspectPauseBtn.style.background = '#eab308';
+                multiAspectPauseBtn.style.borderColor = '#ca8a04';
+                multiAspectPauseBtn.style.color = '#000';
+            }
+            if (renderStatusText) renderStatusText.innerText = 'রেন্ডার পুনরায় শুরু হচ্ছে... (Resuming render...)';
+            const multiStatusText = document.getElementById('multi-aspect-status-text');
+            if (multiStatusText) multiStatusText.innerText = 'রেন্ডার পুনরায় চলছে... (Resuming...)';
+        }
+    }
+
+    if (pauseRenderBtn) {
+        pauseRenderBtn.addEventListener('click', toggleRenderPause);
+    }
+    if (multiAspectPauseBtn) {
+        multiAspectPauseBtn.addEventListener('click', toggleRenderPause);
+    }
+    if (multiAspectCancelBtn) {
+        multiAspectCancelBtn.addEventListener('click', () => {
+            exportCancelled = true;
+            multiAspectCancelBtn.disabled = true;
+            const multiStatusText = document.getElementById('multi-aspect-status-text');
+            if (multiStatusText) multiStatusText.innerText = 'বাতিল করা হচ্ছে... (Cancelling...)';
+        });
+    }
+
+    window.pauseCurrentExport = () => { if (!exportPaused) toggleRenderPause(); };
+    window.resumeCurrentExport = () => { if (exportPaused) toggleRenderPause(); };
+    window.cancelCurrentExport = () => { exportCancelled = true; };
 
     if (cancelRenderBtn) {
         cancelRenderBtn.addEventListener('click', () => {
@@ -259,11 +329,11 @@ document.addEventListener('DOMContentLoaded', () => {
     // few percent since the estimate is unreliable that early.
     function updateEta(uiProgress) {
         if (!renderEtaText) return;
-        if (!exportStartTimestamp || uiProgress < 4 || uiProgress >= 100) {
-            renderEtaText.innerText = '';
+        if (!exportStartTimestamp || uiProgress < 4 || uiProgress >= 100 || exportPaused) {
+            if (!exportPaused) renderEtaText.innerText = '';
             return;
         }
-        const elapsedSec = (performance.now() - exportStartTimestamp) / 1000;
+        const elapsedSec = (performance.now() - exportStartTimestamp - totalPausedMs) / 1000;
         const estimatedTotalSec = elapsedSec / (uiProgress / 100);
         const remainingSec = Math.max(0, Math.round(estimatedTotalSec - elapsedSec));
         const mins = Math.floor(remainingSec / 60);
@@ -359,6 +429,11 @@ document.addEventListener('DOMContentLoaded', () => {
                     name: c.name || `clip_${i + 1}.mp4`,
                     start: c.start || 0,
                     end: c.end || c.duration,
+                    speed: c.speed || 1,
+                    cropX: c.cropX !== undefined ? c.cropX : (state.cropX || 0),
+                    cropY: c.cropY !== undefined ? c.cropY : (state.cropY || 0),
+                    cropW: c.cropW !== undefined ? c.cropW : (state.cropW || 1),
+                    cropH: c.cropH !== undefined ? c.cropH : (state.cropH || 1),
                     filePath: resolvedPath || ''
                 };
                 if (!clipObj.filePath) {
@@ -375,7 +450,45 @@ document.addEventListener('DOMContentLoaded', () => {
                 clipsPayload.push(clipObj);
             }
 
-            renderStatusText.innerText = 'সার্ভারে হাই-স্পিড FFmpeg রেন্ডার শুরু হচ্ছে...';
+            const selectedQuality = qualitySelect ? qualitySelect.value : '1080p';
+            const selectedAspectRatio = state.aspectRatio || 'original';
+            const selectedLayoutMode = state.layoutMode || 'fit';
+            const selectedBackgroundMode = state.backgroundMode || 'blur';
+
+            // Calculate precise dimensions to preserve correct aspect ratio & resolution
+            const is1080 = selectedQuality === '1080p';
+            const is480 = selectedQuality === '480p';
+            const normRatio = String(selectedAspectRatio).replace(':', '-').trim();
+            let targetW = 1080, targetH = 1920;
+            if (normRatio === '9-16') {
+                targetW = is480 ? 480 : (is1080 ? 1080 : 720);
+                targetH = is480 ? 854 : (is1080 ? 1920 : 1280);
+            } else if (normRatio === '16-9') {
+                targetW = is480 ? 854 : (is1080 ? 1920 : 1280);
+                targetH = is480 ? 480 : (is1080 ? 1080 : 720);
+            } else if (normRatio === '1-1') {
+                targetW = is480 ? 480 : (is1080 ? 1080 : 720);
+                targetH = targetW;
+            } else if (normRatio === '4-5') {
+                targetW = is480 ? 480 : (is1080 ? 1080 : 720);
+                targetH = is480 ? 600 : (is1080 ? 1350 : 900);
+            } else {
+                // original aspect ratio
+                const srcW = (state.video && state.video.videoWidth) || 1280;
+                const srcH = (state.video && state.video.videoHeight) || 720;
+                const maxBound = is480 ? 854 : (is1080 ? 1920 : 1280);
+                if (srcW >= srcH) {
+                    targetW = Math.min(srcW, maxBound);
+                    targetH = Math.round((targetW * srcH) / srcW);
+                } else {
+                    targetH = Math.min(srcH, maxBound);
+                    targetW = Math.round((targetH * srcW) / srcH);
+                }
+                targetW = Math.round(targetW / 2) * 2;
+                targetH = Math.round(targetH / 2) * 2;
+            }
+
+            renderStatusText.innerText = `সার্ভারে হাই-স্পিড FFmpeg রেন্ডার শুরু হচ্ছে (${selectedQuality} - ${targetW}x${targetH})...`;
             setProgress(25);
 
             const timestamp = new Date().toISOString().slice(0, 16).replace('T', '_').replace(':', '-');
@@ -388,7 +501,13 @@ document.addEventListener('DOMContentLoaded', () => {
                     clips: clipsPayload,
                     audioBase64,
                     totalDuration,
-                    filename: defaultFilename
+                    filename: defaultFilename,
+                    quality: selectedQuality,
+                    aspectRatio: selectedAspectRatio,
+                    layoutMode: selectedLayoutMode,
+                    backgroundMode: selectedBackgroundMode,
+                    targetWidth: targetW,
+                    targetHeight: targetH
                 })
             });
 
@@ -443,6 +562,40 @@ document.addEventListener('DOMContentLoaded', () => {
         } finally {
             if (fastDirectRenderBtn) fastDirectRenderBtn.disabled = false;
             if (renderBtn) renderBtn.disabled = false;
+        }
+    }
+
+    function computeCanvasDimsForExport(ratio, quality = '1080p') {
+        const is1080p = quality === '1080p';
+        const is480p = quality === '480p';
+        const norm = String(ratio || 'original').replace(':', '-').trim().toLowerCase();
+        switch (norm) {
+            case '9-16':
+                if (is480p) return { w: 480, h: 854 };
+                return is1080p ? { w: 1080, h: 1920 } : { w: 720, h: 1280 };
+            case '16-9':
+                if (is480p) return { w: 854, h: 480 };
+                return is1080p ? { w: 1920, h: 1080 } : { w: 1280, h: 720 };
+            case '1-1':
+                if (is480p) return { w: 480, h: 480 };
+                return is1080p ? { w: 1080, h: 1080 } : { w: 720, h: 720 };
+            case '4-5':
+                if (is480p) return { w: 480, h: 600 };
+                return is1080p ? { w: 1080, h: 1350 } : { w: 720, h: 900 };
+            case 'original':
+            default: {
+                const videoWidth = state.video ? state.video.videoWidth : 640;
+                const videoHeight = state.video ? state.video.videoHeight : 360;
+                const cw = (state.cropW || 1) * videoWidth;
+                const ch = (state.cropH || 1) * videoHeight;
+                const maxDim = is480p ? 854 : (is1080p ? 1920 : 1280);
+                let w = cw, h = ch;
+                if (w > maxDim || h > maxDim) {
+                    if (w > h) { h = Math.round((h * maxDim) / w); w = maxDim; }
+                    else { w = Math.round((w * maxDim) / h); h = maxDim; }
+                }
+                return { w: Math.round(w / 2) * 2, h: Math.round(h / 2) * 2 };
+            }
         }
     }
 
@@ -520,6 +673,23 @@ document.addEventListener('DOMContentLoaded', () => {
 
         // Show progress box
         exportCancelled = false;
+        exportPaused = false;
+        totalPausedMs = 0;
+        pauseStartTimestamp = 0;
+        if (pauseRenderBtn) {
+            pauseRenderBtn.innerHTML = '<i class="fa-solid fa-pause"></i> Pause (পজ করুন)';
+            pauseRenderBtn.style.background = '#eab308';
+            pauseRenderBtn.style.borderColor = '#ca8a04';
+            pauseRenderBtn.style.color = '#000';
+            pauseRenderBtn.disabled = false;
+        }
+        if (multiAspectPauseBtn) {
+            multiAspectPauseBtn.innerHTML = '<i class="fa-solid fa-pause"></i> Pause (পজ করুন)';
+            multiAspectPauseBtn.style.background = '#eab308';
+            multiAspectPauseBtn.style.borderColor = '#ca8a04';
+            multiAspectPauseBtn.style.color = '#000';
+            multiAspectPauseBtn.disabled = false;
+        }
         exportStartTimestamp = performance.now();
         if (cancelRenderBtn) cancelRenderBtn.disabled = false;
         renderBtn.disabled = true;
@@ -565,6 +735,18 @@ document.addEventListener('DOMContentLoaded', () => {
             renderStatusText.innerText = 'Setting up render pipeline...';
         }
 
+        // Save current canvas dimensions so we can restore them for the preview after export finishes
+        const savedCanvasW = state.canvas ? state.canvas.width : 1280;
+        const savedCanvasH = state.canvas ? state.canvas.height : 720;
+        const currentQuality = qualitySelect ? qualitySelect.value : '1080p';
+        const exportDims = computeCanvasDimsForExport(state.aspectRatio, currentQuality);
+        if (state.canvas) {
+            state.canvas.width = exportDims.w;
+            state.canvas.height = exportDims.h;
+            if (window.drawEditorFrame) window.drawEditorFrame();
+            else if (window.drawFrame) window.drawFrame();
+        }
+
         try {
             await runExportPipeline(totalDuration);
         } catch (err) {
@@ -578,6 +760,13 @@ document.addEventListener('DOMContentLoaded', () => {
             if (enhanceCheckboxEl) enhanceCheckboxEl.disabled = false;
             renderBtn.innerHTML = '<i class="fa-solid fa-wand-magic-sparkles"></i> Render & Export Video';
         } finally {
+            if (state.canvas) {
+                state.canvas.width = savedCanvasW;
+                state.canvas.height = savedCanvasH;
+                if (window.updateCanvasDimensions) window.updateCanvasDimensions();
+                if (window.drawEditorFrame) window.drawEditorFrame();
+                else if (window.drawFrame) window.drawFrame();
+            }
             stopTickerWorker();
             document.removeEventListener('visibilitychange', handleVisibilityChange);
             // Ensure the overlay clock override never leaks back into the editor.
@@ -1063,6 +1252,9 @@ document.addEventListener('DOMContentLoaded', () => {
         if (state.introEnabled && introDur > 0) {
             const introFrames = Math.ceil(introDur * 30);
             for (let f = 0; f < introFrames; f++) {
+                while (exportPaused && !exportCancelled) {
+                    await new Promise(r => setTimeout(r, 200));
+                }
                 if (exportCancelled) break;
 
                 const t = f / (introFrames - 1 || 1);
@@ -1147,6 +1339,9 @@ document.addEventListener('DOMContentLoaded', () => {
             clipsFramesEmitted += clipFrames;
             
             for (let f = 0; f < clipFrames; f++) {
+                while (exportPaused && !exportCancelled) {
+                    await new Promise(r => setTimeout(r, 200));
+                }
                 if (exportCancelled) break;
 
                 const elapsedSecInClip = f / 30;
@@ -1225,6 +1420,9 @@ document.addEventListener('DOMContentLoaded', () => {
         if (state.outroEnabled && outroDur > 0 && !exportCancelled) {
             const outroFrames = Math.ceil(outroDur * 30);
             for (let f = 0; f < outroFrames; f++) {
+                while (exportPaused && !exportCancelled) {
+                    await new Promise(r => setTimeout(r, 200));
+                }
                 if (exportCancelled) break;
 
                 const t = f / (outroFrames - 1 || 1);
