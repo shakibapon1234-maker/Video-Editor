@@ -1586,6 +1586,17 @@ document.addEventListener('DOMContentLoaded', () => {
         if (sidebar) {
             sidebar.setAttribute('data-current-step', state.currentStep);
         }
+        // Update mobile bottom nav buttons active state
+        for (let i = 1; i <= 5; i++) {
+            const mBtn = document.getElementById('mobile-step-btn-' + i);
+            if (mBtn) {
+                if (i === state.currentStep) {
+                    mBtn.classList.add('active');
+                } else {
+                    mBtn.classList.remove('active');
+                }
+            }
+        }
         
         // Update Title & Subtitle
         const titles = {
@@ -1648,6 +1659,28 @@ document.addEventListener('DOMContentLoaded', () => {
                 state.canvas.style.cursor = 'default';
                 if (window.updateCurveButtonVisibility) window.updateCurveButtonVisibility();
                 updateNavigation();
+            }
+        });
+    }
+
+    // Wire Mobile Bottom Navigation buttons
+    for (let i = 1; i <= 5; i++) {
+        const mBtn = document.getElementById('mobile-step-btn-' + i);
+        if (!mBtn) continue;
+        mBtn.addEventListener('click', () => {
+            if (state.duration || i === 1) {
+                state.currentStep = i;
+                state.isDrawingTextCurve = false;
+                state.textCurvePoints = [];
+                state.canvas.style.cursor = 'default';
+                if (window.updateCurveButtonVisibility) window.updateCurveButtonVisibility();
+                updateNavigation();
+            } else {
+                if (typeof showToast === 'function') {
+                    showToast('আগে একটি ভিডিও বা ছবি যুক্ত করুন', 'warning');
+                } else {
+                    alert('আগে একটি ভিডিও বা ছবি যুক্ত করুন');
+                }
             }
         });
     }
