@@ -2881,13 +2881,12 @@ input:checked + .slider:before {
         display: flex !important;
         flex-direction: column !important;
         height: calc(100% - 50px - 60px) !important;
-        overflow-y: auto !important;
-        -webkit-overflow-scrolling: touch !important;
+        overflow: hidden !important;
         grid-template-columns: unset !important;
         grid-template-rows: unset !important;
     }
 
-    /* Preview Panel fixed at top with video canvas clearly visible */
+    /* Preview Panel — Step 1 (full view) */
     .preview-panel {
         flex: 0 0 auto !important;
         width: 100% !important;
@@ -2902,9 +2901,10 @@ input:checked + .slider:before {
         border-bottom: 1px solid var(--border-color) !important;
         border-right: none !important;
         overflow: visible !important;
+        transition: min-height 0.25s ease !important;
     }
 
-    /* Fixed height canvas container so it NEVER collapses to 0 height */
+    /* Fixed height canvas container */
     .canvas-container {
         width: 100% !important;
         max-width: 100% !important;
@@ -2922,6 +2922,7 @@ input:checked + .slider:before {
         position: relative !important;
         overflow: hidden !important;
         box-shadow: 0 6px 20px rgba(0, 0, 0, 0.6) !important;
+        transition: height 0.25s ease, flex 0.25s ease, min-height 0.25s ease !important;
     }
 
     #editor-canvas {
@@ -2936,16 +2937,78 @@ input:checked + .slider:before {
         outline: none !important;
     }
 
-    /* Control Panel scrolls smoothly below preview */
+    /* Control Panel: fills remaining height and scrolls independently */
     .control-panel {
         flex: 1 1 auto !important;
-        height: auto !important;
-        max-height: unset !important;
+        min-height: 0 !important;
         overflow-y: auto !important;
+        -webkit-overflow-scrolling: touch !important;
         padding: 12px 12px 85px 12px !important;
         width: 100% !important;
         border-left: none !important;
-        -webkit-overflow-scrolling: touch !important;
+    }
+
+    /* ─── Compact editing mode (step 2–5) ─── */
+    /* JS adds .mobile-editing to .workspace-body when currentStep > 1 on mobile */
+
+    .workspace-body.mobile-editing .preview-panel {
+        min-height: 0 !important;
+        padding: 4px 8px !important;
+    }
+
+    .workspace-body.mobile-editing .canvas-container {
+        height: 120px !important;
+        min-height: 100px !important;
+        max-height: 140px !important;
+        flex: 0 0 120px !important;
+    }
+
+    /* Timeline ও clip list step 2-5 তে লুকানো */
+    .workspace-body.mobile-editing .timeline-bar,
+    .workspace-body.mobile-editing .clip-timeline-container,
+    .workspace-body.mobile-editing #multitrack-mount {
+        display: none !important;
+    }
+
+    /* preview-expanded toggle class দিলে timeline ও বড় canvas ফেরে */
+    .workspace-body.mobile-editing.preview-expanded .canvas-container {
+        height: 190px !important;
+        min-height: 170px !important;
+        max-height: 220px !important;
+        flex: 0 0 190px !important;
+    }
+
+    .workspace-body.mobile-editing.preview-expanded .timeline-bar {
+        display: flex !important;
+    }
+
+    .workspace-body.mobile-editing.preview-expanded .clip-timeline-container {
+        display: block !important;
+    }
+
+    /* Toggle strip: preview ছোট/বড় করার বাটন */
+    .mobile-preview-toggle {
+        width: 100%;
+        background: rgba(30, 41, 59, 0.95);
+        border: none;
+        border-bottom: 1px solid rgba(99, 102, 241, 0.25);
+        color: #818cf8;
+        font-size: 11px;
+        font-weight: 600;
+        padding: 5px 0;
+        display: none;
+        align-items: center;
+        justify-content: center;
+        gap: 5px;
+        cursor: pointer;
+        flex-shrink: 0;
+        min-height: 28px;
+        -webkit-tap-highlight-color: transparent;
+        user-select: none;
+    }
+
+    .workspace-body.mobile-editing .mobile-preview-toggle {
+        display: flex !important;
     }
 }
 
@@ -5058,8 +5121,7 @@ input:checked + .slider:before {
     /* Control panel — scrollable with space at bottom for mobile nav */
     .control-panel {
         flex: 1 1 auto !important;
-        height: auto !important;
-        max-height: unset !important;
+        min-height: 0 !important;
         padding: 10px 10px 85px 10px !important;
         overflow-y: auto !important;
         -webkit-overflow-scrolling: touch !important;
