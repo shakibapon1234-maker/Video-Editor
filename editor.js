@@ -18015,10 +18015,14 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     if (brollGifDropzone && brollGifInput) {
-        brollGifDropzone.addEventListener('click', () => brollGifInput.click());
+        brollGifDropzone.addEventListener('click', () => {
+            brollGifInput.value = '';
+            brollGifInput.click();
+        });
         brollGifInput.addEventListener('change', (e) => {
-            const file = e.target.files[0];
+            const file = e.target.files && e.target.files[0];
             if (file) loadBrollImage(file);
+            e.target.value = '';
         });
         brollGifDropzone.addEventListener('dragover', (e) => {
             e.preventDefault();
@@ -18312,11 +18316,15 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     if (brollDropzone) {
-        brollDropzone.addEventListener('click', () => brollInput.click());
+        brollDropzone.addEventListener('click', () => {
+            if (brollInput) brollInput.value = '';
+            brollInput.click();
+        });
 
         brollInput.addEventListener('change', (e) => {
-            const file = e.target.files[0];
+            const file = e.target.files && e.target.files[0];
             if (file) loadBrollImage(file);
+            e.target.value = '';
         });
 
         brollDropzone.addEventListener('dragover', (e) => {
@@ -18329,17 +18337,21 @@ document.addEventListener('DOMContentLoaded', () => {
         brollDropzone.addEventListener('drop', (e) => {
             e.preventDefault();
             brollDropzone.classList.remove('drag-over');
-            const file = e.dataTransfer.files[0];
+            const file = e.dataTransfer.files && e.dataTransfer.files[0];
             if (file && file.type.startsWith('image/')) loadBrollImage(file);
         });
     }
 
     if (brollVideoDropzone) {
-        brollVideoDropzone.addEventListener('click', () => brollVideoInput.click());
+        brollVideoDropzone.addEventListener('click', () => {
+            if (brollVideoInput) brollVideoInput.value = '';
+            brollVideoInput.click();
+        });
 
         brollVideoInput.addEventListener('change', (e) => {
-            const file = e.target.files[0];
+            const file = e.target.files && e.target.files[0];
             if (file) loadBrollVideo(file);
+            e.target.value = '';
         });
 
         brollVideoDropzone.addEventListener('dragover', (e) => {
@@ -18352,7 +18364,7 @@ document.addEventListener('DOMContentLoaded', () => {
         brollVideoDropzone.addEventListener('drop', (e) => {
             e.preventDefault();
             brollVideoDropzone.classList.remove('drag-over');
-            const file = e.dataTransfer.files[0];
+            const file = e.dataTransfer.files && e.dataTransfer.files[0];
             if (file && file.type.startsWith('video/')) loadBrollVideo(file);
         });
     }
@@ -18773,8 +18785,36 @@ document.addEventListener('DOMContentLoaded', () => {
                 y: 0.6,
                 rotation: 0, // manual tilt angle in degrees, set via the rotate handle
                 clipId: state.activeClipId,
-                startSec: Math.min(state.endTime || state.duration || 5, state.currentTime || 0),
-                endSec: Math.min(state.endTime || state.duration || 5, (state.currentTime || 0) + 3),
+                startSec: (() => {
+                    const slot = (typeof getClipSlot === 'function') ? getClipSlot(state.activeClipId) : { duration: 1000 };
+                    const maxVal = slot.duration || state.endTime || state.duration || 1000;
+                    let initialStart = (state.currentTime != null && state.currentTime > 0) ? state.currentTime : 0;
+                    if (initialStart === 0 && state.brollOverlays.length > 0) {
+                        const sameNamed = state.brollOverlays.filter(b => b.name === file.name);
+                        if (sameNamed.length > 0) {
+                            const lastSame = sameNamed[sameNamed.length - 1];
+                            if (lastSame && lastSame.endSec != null) {
+                                initialStart = lastSame.endSec + 1;
+                            }
+                        }
+                    }
+                    return Math.min(Math.max(0, maxVal - 1), initialStart);
+                })(),
+                endSec: (() => {
+                    const slot = (typeof getClipSlot === 'function') ? getClipSlot(state.activeClipId) : { duration: 1000 };
+                    const maxVal = slot.duration || state.endTime || state.duration || 1000;
+                    let initialStart = (state.currentTime != null && state.currentTime > 0) ? state.currentTime : 0;
+                    if (initialStart === 0 && state.brollOverlays.length > 0) {
+                        const sameNamed = state.brollOverlays.filter(b => b.name === file.name);
+                        if (sameNamed.length > 0) {
+                            const lastSame = sameNamed[sameNamed.length - 1];
+                            if (lastSame && lastSame.endSec != null) {
+                                initialStart = lastSame.endSec + 1;
+                            }
+                        }
+                    }
+                    return Math.min(maxVal, initialStart + 3);
+                })(),
                 // Each B-roll clip enters from a different side so a sequence
                 // of images doesn't always pop in from the same corner. This is
                 // just the starting default — fully editable from the panel.
@@ -18937,12 +18977,37 @@ document.addEventListener('DOMContentLoaded', () => {
                     : 100,
                 x: 0.05,
                 y: 0.6,
-                rotation: 0,
                 clipId: state.activeClipId,
-                startSec: Math.min(state.endTime || state.duration || 5, state.currentTime || 0),
-                // Default display window matches the overlay video's own length
-                // (capped at 8s so it doesn't swallow the whole timeline by default).
-                endSec: Math.min(state.endTime || state.duration || 5, (state.currentTime || 0) + Math.min(vid.duration || 3, 8)),
+                startSec: (() => {
+                    const slot = (typeof getClipSlot === 'function') ? getClipSlot(state.activeClipId) : { duration: 1000 };
+                    const maxVal = slot.duration || state.endTime || state.duration || 1000;
+                    let initialStart = (state.currentTime != null && state.currentTime > 0) ? state.currentTime : 0;
+                    if (initialStart === 0 && state.brollOverlays.length > 0) {
+                        const sameNamed = state.brollOverlays.filter(b => b.name === file.name);
+                        if (sameNamed.length > 0) {
+                            const lastSame = sameNamed[sameNamed.length - 1];
+                            if (lastSame && lastSame.endSec != null) {
+                                initialStart = lastSame.endSec + 1;
+                            }
+                        }
+                    }
+                    return Math.min(Math.max(0, maxVal - 1), initialStart);
+                })(),
+                endSec: (() => {
+                    const slot = (typeof getClipSlot === 'function') ? getClipSlot(state.activeClipId) : { duration: 1000 };
+                    const maxVal = slot.duration || state.endTime || state.duration || 1000;
+                    let initialStart = (state.currentTime != null && state.currentTime > 0) ? state.currentTime : 0;
+                    if (initialStart === 0 && state.brollOverlays.length > 0) {
+                        const sameNamed = state.brollOverlays.filter(b => b.name === file.name);
+                        if (sameNamed.length > 0) {
+                            const lastSame = sameNamed[sameNamed.length - 1];
+                            if (lastSame && lastSame.endSec != null) {
+                                initialStart = lastSame.endSec + 1;
+                            }
+                        }
+                    }
+                    return Math.min(maxVal, initialStart + Math.min(vid.duration || 3, 8));
+                })(),
                 entryDirection: ['left', 'right', 'top', 'bottom'][Math.floor(Math.random() * 4)],
                 exitDirection: 'same',
                 animationStyle: brollModeSelect && brollModeSelect.value === 'pip' ? 'slide-pop' : 'zoom',
@@ -19350,6 +19415,59 @@ document.addEventListener('DOMContentLoaded', () => {
 
 
 
+    function duplicateBrollItem(original) {
+        if (!original) return;
+        const dur = Math.max(0.5, (original.endSec - original.startSec) || 3);
+        const clock = (typeof getEditorTimelineClock === 'function') ? getEditorTimelineClock() : { current: state.currentTime || 0, total: state.duration || 100 };
+        const slot = (typeof getClipSlot === 'function') ? getClipSlot(original.clipId) : { duration: 100 };
+        const maxVal = (original.clipId === 'all') ? (clock.total || state.duration || 100) : (slot.duration || state.endTime || state.duration || 100);
+        
+        let newStart = (state.currentTime != null && state.currentTime > 0)
+            ? state.currentTime
+            : (original.endSec + 1);
+        if (newStart >= maxVal) newStart = Math.max(0, maxVal - dur);
+        let newEnd = Math.min(maxVal, newStart + dur);
+
+        const clone = Object.assign({}, original, {
+            id: generateBrollId(),
+            startSec: newStart,
+            endSec: newEnd,
+            name: original.name ? (original.name + ' (Copy)') : 'Image B-roll (Copy)'
+        });
+
+        if (original.type === 'video' && original.file) {
+            const url = URL.createObjectURL(original.file);
+            const vid = document.createElement('video');
+            vid.muted = true;
+            vid.playsInline = true;
+            vid.preload = 'auto';
+            vid.style.position = 'absolute';
+            vid.style.width = '1px';
+            vid.style.height = '1px';
+            vid.style.opacity = '0';
+            vid.style.pointerEvents = 'none';
+            document.body.appendChild(vid);
+            Object.defineProperty(vid, 'naturalWidth', { get: () => vid.videoWidth });
+            Object.defineProperty(vid, 'naturalHeight', { get: () => vid.videoHeight });
+            clone.videoEl = vid;
+            clone.imageImg = vid;
+            clone.videoUrl = url;
+        }
+
+        state.brollOverlays.push(clone);
+        state.selectedBrollId = clone.id;
+        renderBrollList();
+        showBrollTimingFor(clone.id);
+        drawFrame();
+        if (typeof ensureAnimatedGifPreview === 'function') ensureAnimatedGifPreview();
+        if (window.recordEditorHistory) {
+            window.recordEditorHistory('B-roll item duplicated');
+        }
+        if (typeof showToast === 'function') {
+            showToast('একই ইমেজ সফলভাবে ডুপ্লিকেট করা হয়েছে! নতুন সময় সেট করুন।', 'success');
+        }
+    }
+
     function renderBrollList() {
         if (!brollListEl) return;
         brollListEl.innerHTML = '';
@@ -19460,6 +19578,21 @@ document.addEventListener('DOMContentLoaded', () => {
             rightActions.style.gap = '6px';
             rightActions.style.flexShrink = '0';
 
+            const cloneBtn = document.createElement('button');
+            cloneBtn.type = 'button';
+            cloneBtn.className = 'btn btn-outline btn-sm';
+            cloneBtn.style.padding = '2px 6px';
+            cloneBtn.style.color = '#38bdf8';
+            cloneBtn.style.borderColor = 'rgba(56,189,248,0.3)';
+            cloneBtn.style.fontSize = '11px';
+            cloneBtn.title = 'একই ইমেজ/ওভারলে আবার কপি করুন (Duplicate / Reuse)';
+            cloneBtn.innerHTML = '<i class="fa-solid fa-copy"></i>';
+
+            cloneBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                duplicateBrollItem(item);
+            });
+
             const deleteBtn = document.createElement('button');
             deleteBtn.type = 'button';
             deleteBtn.className = 'btn btn-outline btn-sm';
@@ -19488,6 +19621,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
             });
 
+            rightActions.appendChild(cloneBtn);
             rightActions.appendChild(deleteBtn);
 
             row.appendChild(leftContent);
@@ -20312,6 +20446,16 @@ document.addEventListener('DOMContentLoaded', () => {
             drawFrame();
             if (window.recordEditorHistory) {
                 window.recordEditorHistory('B-roll removed');
+            }
+        });
+    }
+
+    const duplicateBrollBtn = document.getElementById('duplicate-broll-btn');
+    if (duplicateBrollBtn) {
+        duplicateBrollBtn.addEventListener('click', () => {
+            const item = state.brollOverlays.find(b => b.id === state.selectedBrollId);
+            if (item && typeof duplicateBrollItem === 'function') {
+                duplicateBrollItem(item);
             }
         });
     }
