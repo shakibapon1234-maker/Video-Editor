@@ -13,6 +13,7 @@
     const progressPercent = document.getElementById('fast-join-percent');
     const statusText = document.getElementById('fast-join-status');
     const result = document.getElementById('fast-join-result');
+    const clearButton = document.getElementById('fast-join-clear');
     if (!fileInput || !startButton) return;
 
     let files = [];
@@ -56,6 +57,7 @@
             queue.appendChild(row);
         });
         pickerLabel.textContent = files.length ? `${files.length} clip(s) selected — choose more to add` : 'Select 2 or more finished video clips';
+        if (clearButton) clearButton.style.display = files.length && !busy ? 'inline-block' : 'none';
         startButton.disabled = busy || files.length < 2;
     }
 
@@ -179,5 +181,15 @@
         renderQueue();
     });
     startButton.addEventListener('click', run);
+    if (clearButton) {
+        clearButton.addEventListener('click', (e) => {
+            e.stopPropagation();
+            if (busy) return;
+            files = [];
+            renderQueue();
+            result.textContent = '';
+            progressWrap.hidden = true;
+        });
+    }
     renderQueue();
 })();

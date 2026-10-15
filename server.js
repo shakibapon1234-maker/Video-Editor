@@ -3,6 +3,7 @@ const http = require('http');
 const WebSocket = require('ws');
 const path = require('path');
 const fs = require('fs');
+const cp = require('child_process');
 const ffmpeg = require('fluent-ffmpeg');
 const ffmpegPath = require('ffmpeg-static');
 
@@ -832,7 +833,77 @@ app.post('/api/fast-join/:sessionId/upload/:index', (req, res) => {
     out.on('finish', () => { session.uploaded.add(index); res.json({ ok: true }); });
     req.pipe(out);
 });
-app.post('/api/fast-join/:sessionId/compile', (req, res) => {
+function probeFastJoinClip(filePath) {
+    return new Promise((resolve) => {
+        cp.execFile(ffmpegPath, ['-i', filePath], (err, stdout, stderr) => {
+            const out = stderr || '';
+            const durMatch = out.match(/Duration:\s*(\d+):(\d+):([\d.]+)/);
+            let duration = 0;
+            if (durMatch) {
+                duration = parseInt(durMatch[1], 10) * 3600 + parseInt(durMatch[2], 10) * 60 + parseFloat(durMatch[3]);
+            }
+            const vLine = (out.match(/Stream #\d+:\d+.*?Video:[^\n]+/i) || [''])[0];
+            const resMatch = vLine.match(/,\s*(\d{2,5})x(\d{2,5})/);
+            const fpsMatch = vLine.match(/([\d.]+)\s*fps/);
+            const tbnMatch = vLine.match(/([\d.]+(?:k)?)\s*tbn/);
+            
+            const aLine = (out.match(/Stream #\d+:\d+.*?Audio:[^\n]+/i) || [''])[0];
+            const srMatch = aLine.match(/(\d{4,6})\s*Hz/i);
+            const chMatch = aLine.match(/(mono|stereo|\d+\.?\d?\s*channels)/i);
+
+            let tbn = 15360;
+            if (tbnMatch) {
+                const s = tbnMatch[1];
+                tbn = s.endsWith('k') ? Math.round(parseFloat(s) * 1000) : parseInt(s, 10);
+            }
+
+            resolve({
+                filePath,
+                duration,
+                hasVideo: !!vLine,
+                width: resMatch ? parseInt(resMatch[1], 10) : 1920,
+                height: resMatch ? parseInt(resMatch[2], 10) : 1080,
+                fps: fpsMatch ? parseFloat(fpsMatch[1]) : 30,
+                tbn,
+                hasAudio: !!aLine,
+                sampleRate: srMatch ? parseInt(srMatch[1], 10) : 44100,
+                channels: chMatch ? (chMatch[1].toLowerCase().includes('stereo') ? 2 : (chMatch[1].toLowerCase().includes('mono') ? 1 : 2)) : 2
+            });
+        });
+    });
+}
+
+function normalizeFastJoinClip(srcPath, outPath, target, clipProbe) {
+    return new Promise((resolve, reject) => {
+        const args = ['-i', srcPath];
+        if (!clipProbe.hasAudio) {
+            args.push('-f', 'lavfi', '-i', `anullsrc=channel_layout=stereo:sample_rate=${target.sampleRate}`);
+        }
+        const vf = `scale=${target.width}:${target.height}:force_original_aspect_ratio=decrease,pad=${target.width}:${target.height}:(ow-iw)/2:(oh-ih)/2,setsar=1,fps=${target.fps}`;
+        args.push(
+            '-vf', vf,
+            '-video_track_timescale', String(target.tbn),
+            '-c:v', 'libx264',
+            '-preset', 'ultrafast',
+            '-crf', '18',
+            '-c:a', 'aac',
+            '-b:a', '192k',
+            '-ar', String(target.sampleRate),
+            '-ac', String(target.channels)
+        );
+        if (!clipProbe.hasAudio) args.push('-shortest');
+        args.push('-movflags', '+faststart', '-y', outPath);
+
+        const child = cp.spawn(ffmpegPath, args);
+        child.on('close', (code) => {
+            if (code === 0) resolve();
+            else reject(new Error(`Normalizing clip failed with code ${code}`));
+        });
+        child.on('error', reject);
+    });
+}
+
+app.post('/api/fast-join/:sessionId/compile', async (req, res) => {
     const session = fastJoinSession(req, res);
     if (!session) return;
     if (session.uploaded.size !== session.files.length || session.status !== 'uploading') return res.status(400).json({ error: 'Upload all selected videos first.' });
@@ -842,28 +913,71 @@ app.post('/api/fast-join/:sessionId/compile', (req, res) => {
     if (path.extname(session.outputName).toLowerCase() !== ext) session.outputName = `${path.basename(session.outputName, path.extname(session.outputName))}${ext}`;
     session.outputPath = path.join(session.tempDir, session.outputName);
     session.status = 'joining';
-    const listPath = path.join(session.tempDir, 'concat.txt');
-    const list = session.files.map((name, i) => {
-        const inputPath = path.join(session.tempDir, `part_${String(i).padStart(3, '0')}${ext}`);
-        return `file '${inputPath.replace(/\\/g, '/').replace(/'/g, "'\\''")}'`;
-    }).join('\n');
-    fs.writeFileSync(listPath, list, 'utf8');
-    ffmpeg()
-        .input(listPath).inputOptions(['-f concat', '-safe 0'])
-        .outputOptions(['-c copy', ...(ext === '.mp4' || ext === '.m4v' || ext === '.mov' ? ['-movflags +faststart'] : [])])
-        .output(session.outputPath)
-        .on('progress', (progress) => { session.percent = Math.max(0, Math.min(99, Math.round(progress.percent || 0))); })
-        .on('end', () => { session.percent = 100; session.status = 'done'; })
-        .on('error', (error, stdout, stderr) => {
-            session.status = 'error';
-            session.error = /codec|parameter|stream/i.test(stderr || '') ? 'এই ক্লিপগুলোর encoding/stream এক নয়, তাই দ্রুত জোড়া লাগানো যায়নি। একই export settings-এ আবার export করুন।' : error.message;
-            clearTimeout(session.expiryTimer);
-            setTimeout(() => { cleanupDir(session.tempDir); fastJoinSessions.delete(req.params.sessionId); }, 10 * 60 * 1000).unref?.();
-        })
-        // fluent-ffmpeg only starts after run(). Without this the session stays
-        // in "joining" forever and the UI remains at 50%.
-        .run();
-    res.json({ ok: true });
+    session.percent = 10;
+
+    try {
+        const inputPaths = session.files.map((name, i) => path.join(session.tempDir, `part_${String(i).padStart(3, '0')}${ext}`));
+        const probes = await Promise.all(inputPaths.map(probeFastJoinClip));
+
+        // Target specs: select the longest clip (main video)
+        let target = probes[0];
+        for (const p of probes) {
+            if (p.duration > target.duration) target = p;
+        }
+
+        const readyPaths = [];
+        for (let i = 0; i < probes.length; i++) {
+            const p = probes[i];
+            const matches = (
+                p.width === target.width &&
+                p.height === target.height &&
+                Math.abs(p.fps - target.fps) < 0.2 &&
+                p.tbn === target.tbn &&
+                p.hasAudio &&
+                p.sampleRate === target.sampleRate &&
+                p.channels === target.channels
+            );
+
+            if (matches) {
+                readyPaths.push(p.filePath);
+            } else {
+                session.percent = Math.min(80, 10 + Math.round(((i + 1) / probes.length) * 60));
+                const normPath = path.join(session.tempDir, `norm_${String(i).padStart(3, '0')}${ext}`);
+                await normalizeFastJoinClip(p.filePath, normPath, target, p);
+                readyPaths.push(normPath);
+            }
+        }
+
+        session.percent = 80;
+        const listPath = path.join(session.tempDir, 'concat.txt');
+        const list = readyPaths.map((p) => `file '${p.replace(/\\/g, '/').replace(/'/g, "'\\''")}'`).join('\n');
+        fs.writeFileSync(listPath, list, 'utf8');
+
+        ffmpeg()
+            .input(listPath).inputOptions(['-f concat', '-safe 0'])
+            .outputOptions(['-c copy', ...(ext === '.mp4' || ext === '.m4v' || ext === '.mov' ? ['-movflags +faststart'] : [])])
+            .output(session.outputPath)
+            .on('progress', (progress) => {
+                session.percent = Math.min(99, 80 + Math.round((progress.percent || 0) * 0.19));
+            })
+            .on('end', () => {
+                session.percent = 100;
+                session.status = 'done';
+            })
+            .on('error', (error, stdout, stderr) => {
+                session.status = 'error';
+                session.error = error.message;
+                clearTimeout(session.expiryTimer);
+                setTimeout(() => { cleanupDir(session.tempDir); fastJoinSessions.delete(req.params.sessionId); }, 10 * 60 * 1000).unref?.();
+            })
+            .run();
+
+        res.json({ ok: true });
+    } catch (err) {
+        session.status = 'error';
+        session.error = err.message || 'Error processing clips for join';
+        res.status(500).json({ error: session.error });
+    }
 });
 app.get('/api/fast-join/:sessionId/status', (req, res) => {
     const session = fastJoinSession(req, res);
