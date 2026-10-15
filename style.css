@@ -648,7 +648,13 @@ body {
     min-height: 0;
 }
 
-/* --- Preview Panel Area --- */
+/* Mobile-only toggle button — always hidden on desktop; only shown inside
+   @media (max-width: 860px) + .mobile-editing via the rule below */
+.mobile-preview-toggle {
+    display: none !important;
+}
+
+
 .preview-panel {
     min-width: 0;
     padding: 28px;
