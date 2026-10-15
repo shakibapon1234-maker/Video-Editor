@@ -23,12 +23,17 @@ set "PATH=%JAVA_HOME%\bin;%PATH%"
 
 echo [0/5] Refreshing www\ from latest source (auto-sync)...
 if not exist "www" mkdir "www"
-for %%i in (index.html style.css audio.js editor.js exporter.js render-engine.js phase9.js package.json capacitor.config.json multitrack.js punch-zoom-ui.js audio-waveform-track.js transitions-library.js theme.js color-scopes.js keyframes.js) do (
-    if exist "%%i" copy /Y "%%i" "www\%%i" >nul
-)
+copy /Y *.js www\ >nul
+copy /Y *.css www\ >nul
+copy /Y *.html www\ >nul
+copy /Y *.json www\ >nul
 if exist "public" (
     if not exist "www\public" mkdir "www\public"
     robocopy "public" "www\public" /E /R:1 /W:1 /NFL /NDL /NJH /NJS >nul
+)
+if exist "assets" (
+    if not exist "www\assets" mkdir "www\assets"
+    robocopy "assets" "www\assets" /E /R:1 /W:1 /NFL /NDL /NJH /NJS >nul
 )
 
 REM Make sure Capacitor android platform exists (only first time)
@@ -54,7 +59,6 @@ if errorlevel 1 (
     echo.
     echo BUILD FAILED. See errors above.
     cd ..
-    pause
     exit /b 1
 )
 cd ..
