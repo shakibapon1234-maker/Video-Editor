@@ -126,7 +126,10 @@ window.MobileRenderEngine = class MobileRenderEngine {
             // running everything in WASM (no hardware encoder access) need the
             // speed far more than they need the smaller file.
             '-preset', 'ultrafast',
-            '-crf', '26'
+            '-crf', '20',
+            '-b:v', '4.5M',
+            '-maxrate', '8M',
+            '-bufsize', '8M'
         );
         if (this.hasAudio) args.push('-c:a', 'aac', '-b:a', '192k');
         args.push('-t', duration, 'output.mp4');

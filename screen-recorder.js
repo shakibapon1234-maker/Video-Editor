@@ -345,7 +345,11 @@
             }) || 'video/webm';
 
             srChunks   = [];
-            srRecorder = new MediaRecorder(srStream, { mimeType });
+            srRecorder = new MediaRecorder(srStream, {
+                mimeType,
+                videoBitsPerSecond: 6_000_000,
+                audioBitsPerSecond: 192_000
+            });
 
             srRecorder.ondataavailable = (e) => {
                 if (e.data && e.data.size > 0) srChunks.push(e.data);
