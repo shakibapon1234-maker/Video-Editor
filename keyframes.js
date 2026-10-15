@@ -263,13 +263,32 @@
         // Start collapsed until the user explicitly asks to animate an item.
         if (!item.keyframeEditorOpen) {
             mountEl.innerHTML =
-                '<button class="keyframe-disclosure" id="kf-open-btn" type="button" title="সময় অনুযায়ী position, size, rotation বা opacity পরিবর্তন করুন">' +
-                    '<i class="fa-solid fa-wand-magic-sparkles"></i> Animate this ' + cfg.label + ' (optional)' +
-                '</button>';
+                '<div style="display:flex; align-items:center; justify-content:center; gap:8px; flex-wrap:wrap;">' +
+                    '<button class="keyframe-disclosure" id="kf-open-btn" type="button" title="সময় অনুযায়ী position, size, rotation বা opacity পরিবর্তন করুন">' +
+                        '<i class="fa-solid fa-wand-magic-sparkles"></i> Animate this ' + cfg.label + ' (optional)' +
+                    '</button>' +
+                    '<button class="keyframe-disclosure" id="kf-delete-btn" type="button" title="সিলেক্ট করা এই টেক্সট/ওভারলে মুছে ফেলুন (Delete this item)" style="background:rgba(239,68,68,0.18); border-color:rgba(239,68,68,0.5); color:#fca5a5;">' +
+                        '<i class="fa-solid fa-trash-can"></i> Delete ' + cfg.label + ' (মুছুন)' +
+                    '</button>' +
+                '</div>';
             var openBtn = document.getElementById('kf-open-btn');
             if (openBtn) openBtn.addEventListener('click', function () {
                 item.keyframeEditorOpen = true;
                 renderPanel();
+            });
+            var delBtn = document.getElementById('kf-delete-btn');
+            if (delBtn) delBtn.addEventListener('click', function () {
+                var delOriginal = document.getElementById('delete-text-overlay-btn');
+                if (delOriginal) {
+                    delOriginal.click();
+                } else if (editor.selectedTextOverlayId) {
+                    if (window.captureUndoCheckpoint) window.captureUndoCheckpoint();
+                    editor.textOverlays = (editor.textOverlays || []).filter(function (t) { return t.id !== editor.selectedTextOverlayId; });
+                    editor.selectedTextOverlayId = null;
+                    if (typeof window.renderTextOverlayList === 'function') window.renderTextOverlayList();
+                    if (typeof window.drawEditorFrame === 'function') window.drawEditorFrame();
+                    if (typeof window.triggerAutoSave === 'function') window.triggerAutoSave();
+                }
             });
             return;
         }

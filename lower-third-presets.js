@@ -27,6 +27,96 @@
     // keys, see editor.js's text-overlay-add-btn handler) so nothing is
     // missing that the render code expects.
     var LOWER_THIRD_PRESETS = {
+        'preset-gds-social-strip': {
+            label: '🌟 GDS Hub 3-in-1 Social Bar (ওয়েবসাইট + হোয়াটসঅ্যাপ + ফেসবুক/ইউটিউব)',
+            font: 'Hind Siliguri',
+            isMultiBox: true,
+            box1: {
+                defaultText: '🌐 gdstraininghub.com',
+                fontSize: 22, color: '#38bdf8', colorMode: 'solid',
+                boxStyle: 'solid', boxColor: '#0a192f',
+                animStyle: 'slide-up', x: 0.22, y: 0.89
+            },
+            box2: {
+                defaultText: '💬 01674091748\n(WhatsApp)',
+                fontSize: 22, color: '#4ade80', colorMode: 'solid',
+                boxStyle: 'solid', boxColor: '#064e3b',
+                animStyle: 'slide-up', x: 0.52, y: 0.89
+            },
+            box3: {
+                defaultText: '📘 fb/gdstraininghub\n🔴 yt/@gdstraininghubbd',
+                fontSize: 20, color: '#ffffff', colorMode: 'gradient',
+                gradientColor1: '#ffffff', gradientColor2: '#cbd5e1', gradientDirection: 'horizontal',
+                boxStyle: 'solid', boxColor: '#0f172a',
+                animStyle: 'slide-up', x: 0.82, y: 0.89
+            }
+        },
+        'preset-gds-reels-card': {
+            label: '✈️ GDS Hub Reels Contact Card (ব্র্যান্ডিং কার্ড + গোল্ড আন্ডারলাইন)',
+            font: 'Hind Siliguri',
+            isMultiBox: true,
+            box1: {
+                defaultText: '✈️ GDS TRAINING HUB',
+                fontSize: 26, color: '#fbbf24', colorMode: 'solid',
+                boxStyle: 'solid', boxColor: '#071827',
+                animStyle: 'spring-pop', x: 0.5, y: 0.81,
+                accentBar: true, accentBarEnabled: true,
+                accentBarColor: '#38bdf8', accentBarHeight: 4, accentBarAnim: 'draw-left'
+            },
+            box2: {
+                defaultText: '🌐 gdstraininghub.com  |  💬 WhatsApp: 01674091748',
+                fontSize: 22, color: '#ffffff', colorMode: 'solid',
+                boxStyle: 'solid', boxColor: '#0f2744',
+                animStyle: 'slide-up', x: 0.5, y: 0.88
+            }
+        },
+        'preset-gds-helpline-pill': {
+            label: '🟢 GDS Hub WhatsApp Helpline Pill (কল/হোয়াটসঅ্যাপ পিল ব্যাজ)',
+            font: 'Hind Siliguri',
+            name: {
+                defaultText: '💬 WhatsApp: 01674091748',
+                fontSize: 28, color: '#ffffff', colorMode: 'solid',
+                boxStyle: 'pill', boxColor: '#059669',
+                animStyle: 'pill-unfold', x: 0.5, y: 0.88
+            },
+            title: null
+        },
+        'preset-gds-pinned-cta': {
+            label: '📌 GDS Hub Pinned Comment CTA (ফুল ভিডিও: পিন করা কমেন্টে 👇)',
+            font: 'Hind Siliguri',
+            name: {
+                defaultText: 'ফুল ভিডিও: পিন করা কমেন্টে 👇 | WhatsApp: 01674091748',
+                fontSize: 24, color: '#ffffff', colorMode: 'solid',
+                boxStyle: 'solid', boxColor: '#881337',
+                animStyle: 'spring-pop', x: 0.5, y: 0.88,
+                accentBar: true, accentBarEnabled: true,
+                accentBarColor: '#fbbf24', accentBarHeight: 4, accentBarAnim: 'draw-left'
+            },
+            title: null
+        },
+        'preset-gds-outro-banner': {
+            label: '🎬 GDS Hub Promo Outro (ভিডিওর শেষ সোশ্যাল আউটরো)',
+            font: 'Hind Siliguri',
+            isMultiBox: true,
+            box1: {
+                defaultText: '🎓 ঘরে বসেই শিখুন এয়ার টিকেটিং GDS সিস্টেম',
+                fontSize: 24, color: '#facc15', colorMode: 'solid',
+                boxStyle: 'solid', boxColor: '#071827',
+                animStyle: 'slide-up', x: 0.5, y: 0.76
+            },
+            box2: {
+                defaultText: '🌐 gdstraininghub.com  •  💬 01674091748',
+                fontSize: 24, color: '#38bdf8', colorMode: 'solid',
+                boxStyle: 'solid', boxColor: '#0b2447',
+                animStyle: 'slide-up', x: 0.5, y: 0.83
+            },
+            box3: {
+                defaultText: '📘 facebook.com/gdstraininghub  •  🔴 youtube.com/@gdstraininghubbd',
+                fontSize: 20, color: '#ffffff', colorMode: 'solid',
+                boxStyle: 'solid', boxColor: '#020617',
+                animStyle: 'slide-up', x: 0.5, y: 0.90
+            }
+        },
         'preset-creator-headline-underline': {
             label: '🔥 Creator Headline + Growing Underline',
             font: 'Hind Siliguri',
@@ -308,9 +398,15 @@
         });
     }
 
+    // Expose for external modules (e.g. gds-branding.js) without coupling
+    window.LOWER_THIRD_PRESETS = LOWER_THIRD_PRESETS;
+    window.addLowerThird = addLowerThird;
+    window.buildOverlayItem = buildOverlayItem;
+
     if (document.readyState === 'loading') {
         document.addEventListener('DOMContentLoaded', init);
     } else {
         init();
     }
 })();
+

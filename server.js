@@ -791,6 +791,15 @@ function fastJoinSession(req, res) {
     if (!session) res.status(404).json({ error: 'Joining session expired. Please select the files again.' });
     return session;
 }
+function checkFileHasAudio(filePath) {
+    return new Promise((resolve) => {
+        const cp = require('child_process').spawn(ffmpegPath, ['-i', filePath]);
+        let stderr = '';
+        cp.stderr.on('data', (d) => { stderr += d; });
+        cp.on('close', () => resolve(/Stream #\d+:\d+.*Audio:/.test(stderr)));
+        cp.on('error', () => resolve(false));
+    });
+}
 app.post('/api/fast-join/init', (req, res) => {
     try {
         const names = req.body && req.body.files;
@@ -823,7 +832,7 @@ app.post('/api/fast-join/:sessionId/upload/:index', (req, res) => {
     out.on('finish', () => { session.uploaded.add(index); res.json({ ok: true }); });
     req.pipe(out);
 });
-app.post('/api/fast-join/:sessionId/compile', (req, res) => {
+app.post('/api/fast-join/:sessionId/compile', async (req, res) => {
     const session = fastJoinSession(req, res);
     if (!session) return;
     if (session.uploaded.size !== session.files.length || session.status !== 'uploading') return res.status(400).json({ error: 'Upload all selected videos first.' });
@@ -833,28 +842,78 @@ app.post('/api/fast-join/:sessionId/compile', (req, res) => {
     if (path.extname(session.outputName).toLowerCase() !== ext) session.outputName = `${path.basename(session.outputName, path.extname(session.outputName))}${ext}`;
     session.outputPath = path.join(session.tempDir, session.outputName);
     session.status = 'joining';
-    const listPath = path.join(session.tempDir, 'concat.txt');
-    const list = session.files.map((name, i) => {
-        const inputPath = path.join(session.tempDir, `part_${String(i).padStart(3, '0')}${ext}`);
-        return `file '${inputPath.replace(/\\/g, '/').replace(/'/g, "'\\''")}'`;
-    }).join('\n');
-    fs.writeFileSync(listPath, list, 'utf8');
-    ffmpeg()
-        .input(listPath).inputOptions(['-f concat', '-safe 0'])
-        .outputOptions(['-c copy', ...(ext === '.mp4' || ext === '.m4v' || ext === '.mov' ? ['-movflags +faststart'] : [])])
-        .output(session.outputPath)
-        .on('progress', (progress) => { session.percent = Math.max(0, Math.min(99, Math.round(progress.percent || 0))); })
-        .on('end', () => { session.percent = 100; session.status = 'done'; })
-        .on('error', (error, stdout, stderr) => {
-            session.status = 'error';
-            session.error = /codec|parameter|stream/i.test(stderr || '') ? 'এই ক্লিপগুলোর encoding/stream এক নয়, তাই দ্রুত জোড়া লাগানো যায়নি। একই export settings-এ আবার export করুন।' : error.message;
-            clearTimeout(session.expiryTimer);
-            setTimeout(() => { cleanupDir(session.tempDir); fastJoinSessions.delete(req.params.sessionId); }, 10 * 60 * 1000).unref?.();
-        })
-        // fluent-ffmpeg only starts after run(). Without this the session stays
-        // in "joining" forever and the UI remains at 50%.
-        .run();
-    res.json({ ok: true });
+
+    try {
+        const inputPaths = session.files.map((name, i) => path.join(session.tempDir, `part_${String(i).padStart(3, '0')}${ext}`));
+        const audioPresence = await Promise.all(inputPaths.map((p) => checkFileHasAudio(p)));
+        const anyHasAudio = audioPresence.some(Boolean);
+        const allHaveAudio = audioPresence.every(Boolean);
+
+        // If some clips have audio while others are silent (e.g. intro/outro without audio),
+        // add a silent audio track to the silent ones so stream mapping does not break or desync.
+        if (anyHasAudio && !allHaveAudio) {
+            for (let i = 0; i < inputPaths.length; i++) {
+                if (!audioPresence[i]) {
+                    const fixedPath = path.join(session.tempDir, `part_${String(i).padStart(3, '0')}_audio${ext}`);
+                    await new Promise((resolve, reject) => {
+                        ffmpeg()
+                            .input(inputPaths[i])
+                            .input('anullsrc=channel_layout=stereo:sample_rate=48000')
+                            .inputOptions(['-f lavfi'])
+                            .outputOptions(['-c:v copy', '-c:a aac', '-b:a 192k', '-shortest'])
+                            .output(fixedPath)
+                            .on('end', () => {
+                                inputPaths[i] = fixedPath;
+                                resolve();
+                            })
+                            .on('error', reject)
+                            .run();
+                    });
+                }
+            }
+        }
+
+        const listPath = path.join(session.tempDir, 'concat.txt');
+        const list = inputPaths.map((inputPath) => {
+            return `file '${inputPath.replace(/\\/g, '/').replace(/'/g, "'\\''")}'`;
+        }).join('\n');
+        fs.writeFileSync(listPath, list, 'utf8');
+
+        // Keeping video as stream copy (-c:v copy) ensures lightning-fast join without frame re-encoding.
+        // Re-encoding and normalizing audio (AAC 48kHz stereo with aresample=async=1) prevents audio clicks,
+        // pops, severe distortion, and pitch shift caused by concatenating raw mismatched AAC packets.
+        const outputOptions = ['-c:v copy'];
+        if (anyHasAudio) {
+            if (ext === '.webm') {
+                outputOptions.push('-c:a', 'libopus', '-b:a', '128k', '-ar', '48000', '-ac', '2', '-af', 'aresample=async=1');
+            } else {
+                outputOptions.push('-c:a', 'aac', '-b:a', '192k', '-ar', '48000', '-ac', '2', '-af', 'aresample=async=1');
+            }
+        }
+        if (ext === '.mp4' || ext === '.m4v' || ext === '.mov') {
+            outputOptions.push('-movflags', '+faststart');
+        }
+
+        ffmpeg()
+            .input(listPath).inputOptions(['-f concat', '-safe 0'])
+            .outputOptions(outputOptions)
+            .output(session.outputPath)
+            .on('progress', (progress) => { session.percent = Math.max(0, Math.min(99, Math.round(progress.percent || 0))); })
+            .on('end', () => { session.percent = 100; session.status = 'done'; })
+            .on('error', (error, stdout, stderr) => {
+                session.status = 'error';
+                session.error = /codec|parameter|stream/i.test(stderr || '') ? 'এই ক্লিপগুলোর encoding/stream এক নয়, তাই দ্রুত জোড়া লাগানো যায়নি। একই export settings-এ আবার export করুন।' : error.message;
+                clearTimeout(session.expiryTimer);
+                setTimeout(() => { cleanupDir(session.tempDir); fastJoinSessions.delete(req.params.sessionId); }, 10 * 60 * 1000).unref?.();
+            })
+            .run();
+
+        res.json({ ok: true });
+    } catch (err) {
+        session.status = 'error';
+        session.error = err.message || 'ক্লিপগুলোর অডিও ট্র্যাক প্রসেস করার সময় সমস্যা হয়েছে।';
+        res.status(500).json({ error: session.error });
+    }
 });
 app.get('/api/fast-join/:sessionId/status', (req, res) => {
     const session = fastJoinSession(req, res);

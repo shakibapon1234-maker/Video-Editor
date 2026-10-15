@@ -611,6 +611,7 @@
         const addTextBoxBtn = document.getElementById('add-glass-text-box-btn');
 
         const STYLE_PRESETS = {
+            'gds-training-hub': { bgColor: '#061626', themeColor: '#38bdf8', glowIntensity: 100, cards: ['#38bdf8', '#22c55e', '#3b82f6', '#ef4444'] },
             'electric-cyan': { bgColor: '#071827', themeColor: '#22d3ee', glowIntensity: 100, cards: ['#22d3ee', '#38bdf8', '#06b6d4', '#67e8f9'] },
             'neon-pink': { bgColor: '#21091d', themeColor: '#f472b6', glowIntensity: 100, cards: ['#fb7185', '#f472b6', '#e879f9', '#f9a8d4'] },
             'laser-lime': { bgColor: '#101d0b', themeColor: '#a3e635', glowIntensity: 100, cards: ['#a3e635', '#4ade80', '#bef264', '#22c55e'] },
@@ -635,6 +636,66 @@
             if (window.triggerCanvasRedraw) window.triggerCanvasRedraw();
             if (window.triggerAutoSave) window.triggerAutoSave();
         }
+
+        window.loadGdsSocialStack = function () {
+            if (!state.glassCardStack) state.glassCardStack = JSON.parse(JSON.stringify(DEFAULT_CONFIG));
+            const cfg = state.glassCardStack;
+            cfg.enabled = true;
+            cfg.position = 'bottom-right';
+            cfg.animation = 'spring-shimmer';
+            cfg.bgColor = '#071827';
+            cfg.bgOpacity = 90;
+            cfg.glowIntensity = 95;
+            cfg.themeColor = '#38bdf8';
+            cfg.textColor = '#ffffff';
+            cfg.subTextColor = '#94a3b8';
+            cfg.scale = 100;
+            cfg.textScale = 115;
+            cfg.cards = [
+                {
+                    id: 'gds_card_1',
+                    icon: '🌐',
+                    iconType: 'globe',
+                    title: 'gdstraininghub.com',
+                    subtitle: 'অফিসিয়াল ওয়েবসাইট ও সিমুলেটর',
+                    badge: 'WEBSITE',
+                    color: '#38bdf8'
+                },
+                {
+                    id: 'gds_card_2',
+                    icon: '💬',
+                    iconType: 'chat',
+                    title: '01674091748',
+                    subtitle: 'WhatsApp হেল্পলাইন ও সাপোর্ট',
+                    badge: 'WHATSAPP',
+                    color: '#22c55e'
+                },
+                {
+                    id: 'gds_card_3',
+                    icon: '📘',
+                    iconType: 'star',
+                    title: 'fb.com/gdstraininghub',
+                    subtitle: 'ফেসবুক পেজ লাইক ও ফলো করুন',
+                    badge: 'FACEBOOK',
+                    color: '#3b82f6'
+                },
+                {
+                    id: 'gds_card_4',
+                    icon: '🔴',
+                    iconType: 'fire',
+                    title: '@gdstraininghubbd',
+                    subtitle: 'ইউটিউবে ফ্রি ভিডিও টিউটোরিয়াল',
+                    badge: 'YOUTUBE',
+                    color: '#ef4444'
+                }
+            ];
+            syncUIFromState();
+            renderCardsListUI();
+            if (stylePresetSelect) stylePresetSelect.value = 'gds-training-hub';
+            if (window.triggerCanvasRedraw) window.triggerCanvasRedraw();
+            if (window.triggerAutoSave) window.triggerAutoSave();
+            if (window.recordEditorHistory) window.recordEditorHistory('GDS Glass Stack Added');
+        };
 
         function syncUIFromState() {
             const cfg = state.glassCardStack || DEFAULT_CONFIG;
