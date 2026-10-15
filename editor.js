@@ -3530,14 +3530,14 @@ document.addEventListener('DOMContentLoaded', () => {
     // overlay set to 1–4 seconds on an image clip also appears at 1–4 seconds
     // of every other clip, because each clip has its own local playhead.
     function brollBelongsToActiveClip(item) {
-        return !item.clipId || item.clipId === state.activeClipId;
+        return !item.clipId || item.clipId === 'all' || item.clipId === state.activeClipId;
     }
 
     // Text overlays must be local to the clip they were created on too —
     // otherwise a text set on image 1 leaks into every other clip's preview
     // and export, since they all share the same currentTime range.
     function textOverlayBelongsToActiveClip(item) {
-        return !item.clipId || item.clipId === state.activeClipId;
+        return !item.clipId || item.clipId === 'all' || item.clipId === state.activeClipId;
     }
     window.textOverlayBelongsToActiveClip = textOverlayBelongsToActiveClip;
 
@@ -3545,22 +3545,24 @@ document.addEventListener('DOMContentLoaded', () => {
     // a sticker placed on one video/image shows up on every clip and blocks
     // clicks meant for that other clip's own content.
     function stickerBelongsToActiveClip(item) {
-        return !item.clipId || item.clipId === state.activeClipId;
+        return !item.clipId || item.clipId === 'all' || item.clipId === state.activeClipId;
     }
     window.stickerBelongsToActiveClip = stickerBelongsToActiveClip;
 
     // Same rule for the Shape + Text overlays (plane/badge symbols).
     function shapeOverlayBelongsToActiveClip(item) {
-        return !item.clipId || item.clipId === state.activeClipId;
+        return !item.clipId || item.clipId === 'all' || item.clipId === state.activeClipId;
     }
     window.shapeOverlayBelongsToActiveClip = shapeOverlayBelongsToActiveClip;
 
     function refreshAnimatedGifPreview() {
         const hasVisibleGif = state.brollOverlays.some((item) => {
-            if (item.type !== 'gif' || !item.imageImg) return false;
+            if (item.type !== 'gif' || (!item.imageImg && !item.gifParsed)) return false;
             const isBeingEdited = state.currentStep === 3 && !state.isPlaying && item.id === state.selectedBrollId;
+            const _clock = getEditorTimelineClock ? getEditorTimelineClock() : { current: state.currentTime || 0, total: 1000 };
+            const effTime = (item.clipId === 'all') ? _clock.current : (state.currentTime || 0);
             return brollBelongsToActiveClip(item) &&
-                (isBeingEdited || (state.currentTime >= item.startSec && state.currentTime <= item.endSec));
+                (isBeingEdited || (effTime >= item.startSec && effTime <= item.endSec));
         });
 
         if (!hasVisibleGif || state.isPlaying || state.customExportTime !== undefined) {
@@ -3646,6 +3648,10 @@ document.addEventListener('DOMContentLoaded', () => {
     window.getClipsTimelineSlots = getClipsTimelineSlots;
 
     function getClipSlot(clipId) {
+        if (clipId === 'all') {
+            const clock = getEditorTimelineClock ? getEditorTimelineClock() : { current: 0, total: state.duration || 1000 };
+            return { start: 0, end: clock.total, duration: clock.total, clipId: 'all', index: -1, name: 'পুরো ভিডিও (All Clips)' };
+        }
         const slots = getClipsTimelineSlots();
         return slots.find(s => s.clipId === clipId) || slots[0] || { start: 0, end: 0, duration: 0, clipId: null, index: 0, name: '' };
     }
@@ -8366,9 +8372,15 @@ document.addEventListener('DOMContentLoaded', () => {
                 // already-exported item's box can sit on top of the one you're trying
                 // to place). Once playing (in any step), everything respects real timing.
                 const isBeingEdited = state.currentStep === 3 && !state.isPlaying && item.id === state.selectedBrollId;
+                const _brollClock = getEditorTimelineClock ? getEditorTimelineClock() : { current: currentTime, total: 1000 };
+                const _brollTimelineTime = state.isExportingVideo
+                    ? (state.exportTickerTime ?? _brollClock.current)
+                    : _brollClock.current;
+                const isAllClips = !item.clipId || item.clipId === 'all';
+                const effectiveCurrentTime = isAllClips ? _brollTimelineTime : currentTime;
                 const inRange = brollBelongsToActiveClip(item) && (isBeingEdited
                     ? true
-                    : (currentTime >= item.startSec && currentTime <= item.endSec));
+                    : (effectiveCurrentTime >= item.startSec && effectiveCurrentTime <= item.endSec));
                 if (!inRange) {
                     // Pause an overlay video the moment it's no longer on screen so it
                     // doesn't keep decoding/playing in the background. Skipped during
@@ -8379,8 +8391,8 @@ document.addEventListener('DOMContentLoaded', () => {
                     return;
                 }
 
-                const tIn = currentTime - item.startSec;
-                const tOut = item.endSec - currentTime;
+                const tIn = effectiveCurrentTime - item.startSec;
+                const tOut = item.endSec - effectiveCurrentTime;
                 const animDur = item.animationSpeedSec || 0.4;
                 const repeatSec = parseFloat(item.autoRepeatSec) || 0;
                 const cycleElapsed = (repeatSec > 0) ? (tIn % repeatSec) : tIn;
@@ -9546,7 +9558,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     // nothing gets cropped off — letterbox bars fill the rest instead.
                     const isContainFitMode = item.fitMode === 'contain' || item.fitMode === 'contain-color' || item.fitMode === 'contain-frame';
                     const fsSmall = item.mode === 'fullscreen' && (((item.size !== undefined ? item.size : 100) < 99.9) || isContainFitMode);
-                    const imgDrawable = getItemImageDrawable(item, currentTime) || item.imageImg;
+                    const imgDrawable = getItemImageDrawable(item, effectiveCurrentTime) || item.imageImg;
                     const imgDims = getItemImageDimensions(item);
                     const imgAspect = imgDims.width / imgDims.height;
                     const boxAspect = boxW / boxH;
@@ -13179,8 +13191,10 @@ document.addEventListener('DOMContentLoaded', () => {
             if (item.type !== 'text' && item.type !== 'cash' && item.type !== 'built-in' && !item.imageImg && !item.gifParsed) continue;
 
             const isBeingEdited = state.currentStep === 3 && !state.isPlaying && item.id === state.selectedBrollId;
+            const _clock = getEditorTimelineClock ? getEditorTimelineClock() : { current: currentTime, total: 1000 };
+            const effTime = (item.clipId === 'all') ? _clock.current : currentTime;
             const visible = brollBelongsToActiveClip(item) &&
-                (isBeingEdited || (currentTime >= item.startSec && currentTime <= item.endSec));
+                (isBeingEdited || (effTime >= item.startSec && effTime <= item.endSec));
             if (!visible) continue;
 
             const box = getBrollBoxRect(item, canvasW, canvasH);
@@ -18594,10 +18608,17 @@ document.addEventListener('DOMContentLoaded', () => {
 
             let elapsedMs;
             if (state && state.isPlaying) {
-                const t = (currentTime !== undefined) ? currentTime : state.currentTime;
+                const t = (currentTime !== undefined)
+                    ? currentTime
+                    : ((item && item.clipId === 'all' && typeof getEditorTimelineClock === 'function')
+                        ? getEditorTimelineClock().current
+                        : (state.currentTime || 0));
                 elapsedMs = Math.max(0, (t - (item.startSec || 0))) * 1000;
-            } else if (state && state.customExportTime !== undefined) {
-                elapsedMs = Math.max(0, (state.customExportTime - (item.startSec || 0))) * 1000;
+            } else if (state && (state.customExportTime !== undefined || state.exportTickerTime !== undefined)) {
+                const exportTime = (item && item.clipId === 'all')
+                    ? (state.exportTickerTime ?? state.customExportTime ?? 0)
+                    : (currentTime !== undefined ? currentTime : (state.customExportTime ?? 0));
+                elapsedMs = Math.max(0, (exportTime - (item.startSec || 0))) * 1000;
             } else {
                 // While paused, use wall-clock performance.now() so preview keeps animating continuously
                 elapsedMs = performance.now();
@@ -19493,9 +19514,10 @@ document.addEventListener('DOMContentLoaded', () => {
         // Older projects did not store a clip id. Once the user opens their
         // timing controls, bind that legacy overlay to the currently selected
         // clip so its local 1–4s range cannot leak into every other clip.
-        if (!item.clipId && state.activeClipId) item.clipId = state.activeClipId;
+        if (!item.clipId) item.clipId = state.activeClipId || 'all';
         const slot = getClipSlot(item.clipId);
-        const maxVal = slot.duration || state.endTime || state.duration || 1000;
+        const clock = getEditorTimelineClock ? getEditorTimelineClock() : { current: 0, total: state.duration || 1000 };
+        const maxVal = (item.clipId === 'all') ? (clock.total || state.duration || 1000) : (slot.duration || state.endTime || state.duration || 1000);
         if (brollTimingContainer) brollTimingContainer.style.display = "block";
 
         // Target Clip Select & Slot info
@@ -19503,6 +19525,12 @@ document.addEventListener('DOMContentLoaded', () => {
         const brollClipSlotText = document.getElementById("broll-clip-slot-text");
         if (brollTargetClipSelect) {
             brollTargetClipSelect.innerHTML = "";
+            const allOpt = document.createElement("option");
+            allOpt.value = "all";
+            allOpt.textContent = `🌐 পুরো ভিডিও জুড়ে (Entire Video / All Clips) [${formatTime(0)} – ${formatTime(clock.total)}]`;
+            if (item.clipId === 'all') allOpt.selected = true;
+            brollTargetClipSelect.appendChild(allOpt);
+
             const allSlots = getClipsTimelineSlots();
             allSlots.forEach(s => {
                 const opt = document.createElement("option");
@@ -19513,13 +19541,18 @@ document.addEventListener('DOMContentLoaded', () => {
             });
         }
         if (brollClipSlotText) {
-            brollClipSlotText.innerText = `স্লট: ${formatTime(slot.start)} – ${formatTime(slot.end)} (${slot.duration.toFixed(1)}s)`;
+            if (item.clipId === 'all') {
+                brollClipSlotText.innerText = `পুরো ভিডিও: 00:00.0 – ${formatTime(clock.total)} (${clock.total.toFixed(1)}s)`;
+            } else {
+                brollClipSlotText.innerText = `স্লট: ${formatTime(slot.start)} – ${formatTime(slot.end)} (${slot.duration.toFixed(1)}s)`;
+            }
         }
 
         const brollStartSlotIndicator = document.getElementById("broll-start-slot-indicator");
         const brollEndSlotIndicator = document.getElementById("broll-end-slot-indicator");
-        if (brollStartSlotIndicator) brollStartSlotIndicator.innerText = `ক্লিপের ভেতর (০.০ – ${slot.duration.toFixed(1)}s)`;
-        if (brollEndSlotIndicator) brollEndSlotIndicator.innerText = `ক্লিপের ভেতর (০.০ – ${slot.duration.toFixed(1)}s)`;
+        const indicatorText = (item.clipId === 'all') ? `পুরো ভিডিও (০.০ – ${clock.total.toFixed(1)}s)` : `ক্লিপের ভেতর (০.০ – ${slot.duration.toFixed(1)}s)`;
+        if (brollStartSlotIndicator) brollStartSlotIndicator.innerText = indicatorText;
+        if (brollEndSlotIndicator) brollEndSlotIndicator.innerText = indicatorText;
 
         if (brollStartInput) {
             brollStartInput.max = maxVal;
@@ -20070,13 +20103,32 @@ document.addEventListener('DOMContentLoaded', () => {
             const newClipId = e.target.value;
             item.clipId = newClipId;
             const newSlot = getClipSlot(newClipId);
-            const maxVal = newSlot.duration || 1000;
+            const clock = getEditorTimelineClock ? getEditorTimelineClock() : { current: 0, total: state.duration || 1000 };
+            const maxVal = (newClipId === 'all') ? (clock.total || 1000) : (newSlot.duration || 1000);
             if (item.startSec > maxVal) item.startSec = 0;
-            if (item.endSec > maxVal) item.endSec = Math.min(maxVal, item.startSec + 3);
-            switchActiveClip(newClipId);
+            if (item.endSec > maxVal || newClipId === 'all') item.endSec = maxVal;
+            if (newClipId !== 'all') {
+                switchActiveClip(newClipId);
+            }
             renderBrollList();
             showBrollTimingFor(item.id);
             drawFrame();
+        });
+    }
+
+    const brollApplyFullVideoBtn = document.getElementById('broll-apply-full-video-btn');
+    if (brollApplyFullVideoBtn) {
+        brollApplyFullVideoBtn.addEventListener('click', () => {
+            const item = state.brollOverlays.find(b => b.id === state.selectedBrollId);
+            if (!item) return;
+            item.clipId = 'all';
+            const clock = getEditorTimelineClock ? getEditorTimelineClock() : { current: 0, total: state.duration || 1000 };
+            item.startSec = 0;
+            item.endSec = clock.total || state.duration || 1000;
+            showBrollTimingFor(item.id);
+            renderBrollList();
+            drawFrame();
+            if (typeof showToast === 'function') showToast('এই ওভারলে পুরো ভিডিও জুড়ে সেট করা হলো!', 'success');
         });
     }
 
