@@ -501,8 +501,8 @@ function compileVideo(ws, tempDir, filename, totalFrames, enhanceQuality = false
     const duration = actualFrames / 30 + 0.05;
 
     const encodeOptions = enhanceQuality
-        ? ['-c:v libx264', '-pix_fmt yuv420p', '-preset fast', '-crf 16']
-        : ['-c:v libx264', '-pix_fmt yuv420p', '-preset fast', '-crf 23'];
+        ? ['-c:v libx264', '-pix_fmt yuv420p', '-preset fast', '-crf 16', '-b:v 6M', '-minrate 4M', '-maxrate 10M', '-bufsize 10M']
+        : ['-c:v libx264', '-pix_fmt yuv420p', '-preset fast', '-crf 20', '-b:v 4.5M', '-minrate 3M', '-maxrate 8M', '-bufsize 8M'];
 
     command
         .outputOptions([
@@ -880,19 +880,22 @@ app.post('/api/fast-join/:sessionId/compile', async (req, res) => {
         fs.writeFileSync(listPath, list, 'utf8');
 
         // Keeping video as stream copy (-c:v copy) ensures lightning-fast join without frame re-encoding.
-        // Re-encoding and normalizing audio (AAC 48kHz stereo with aresample=async=1) prevents audio clicks,
-        // pops, severe distortion, and pitch shift caused by concatenating raw mismatched AAC packets.
+        // Re-encoding audio to AAC/Opus at a fixed 48kHz stereo normalises mismatched sample rates
+        // (e.g. 44100 Hz vs 48000 Hz) without the aresample=async=1 filter that was corrupting video
+        // timestamps — it caused ffmpeg to miscalculate PTS and report 175 fps, doubling the intro
+        // segment and making the video freeze/stutter during playback.
         const outputOptions = ['-c:v copy'];
         if (anyHasAudio) {
             if (ext === '.webm') {
-                outputOptions.push('-c:a', 'libopus', '-b:a', '128k', '-ar', '48000', '-ac', '2', '-af', 'aresample=async=1');
+                outputOptions.push('-c:a', 'libopus', '-b:a', '128k', '-ar', '48000', '-ac', '2');
             } else {
-                outputOptions.push('-c:a', 'aac', '-b:a', '192k', '-ar', '48000', '-ac', '2', '-af', 'aresample=async=1');
+                outputOptions.push('-c:a', 'aac', '-b:a', '192k', '-ar', '48000', '-ac', '2');
             }
         }
         if (ext === '.mp4' || ext === '.m4v' || ext === '.mov') {
             outputOptions.push('-movflags', '+faststart');
         }
+
 
         ffmpeg()
             .input(listPath).inputOptions(['-f concat', '-safe 0'])
@@ -1259,6 +1262,10 @@ app.post('/api/fast-direct-render', express.json({ limit: '2048mb' }), async (re
                     '-c:v', 'libx264',
                     '-preset', 'fast',
                     '-crf', '18',
+                    '-b:v', '5M',
+                    '-minrate', '3M',
+                    '-maxrate', '8M',
+                    '-bufsize', '8M',
                     '-r', '30',
                     '-fps_mode', 'cfr',
                     '-g', '60',

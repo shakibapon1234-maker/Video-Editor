@@ -1687,42 +1687,17 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    // ── Mobile compact mode helper ──
-    function isMobileLayout() {
-        return window.matchMedia('(max-width: 860px)').matches;
-    }
-
-    function applyMobileEditingMode(step) {
-        if (!isMobileLayout()) return;
+    // ── Mobile compact mode disabled (Electron desktop app — no mobile layout needed) ──
+    // The applyMobileEditingMode / isMobileLayout logic added from the remote commit was
+    // incorrectly activating when the Electron window width was < 860px, hiding the
+    // timeline and collapsing the canvas. Stubbed out to prevent layout breakage.
+    function applyMobileEditingMode(_step) {
+        // No-op: always ensure mobile-editing class is removed on desktop
         const workspaceBody = document.querySelector('.workspace-body');
-        if (!workspaceBody) return;
-
-        if (step > 1) {
-            workspaceBody.classList.add('mobile-editing');
-            workspaceBody.classList.remove('preview-expanded');
-            // Update toggle button label
-            const lbl = document.getElementById('mobile-preview-toggle-label');
-            const ico = document.getElementById('mobile-preview-toggle-icon');
-            if (lbl) lbl.textContent = 'প্রিভিউ বড় করুন';
-            if (ico) { ico.className = 'fa-solid fa-chevron-down'; }
-        } else {
+        if (workspaceBody) {
             workspaceBody.classList.remove('mobile-editing');
             workspaceBody.classList.remove('preview-expanded');
         }
-    }
-
-    // Wire preview toggle button
-    const mobilePreviewToggleBtn = document.getElementById('mobile-preview-toggle');
-    if (mobilePreviewToggleBtn) {
-        mobilePreviewToggleBtn.addEventListener('click', () => {
-            const workspaceBody = document.querySelector('.workspace-body');
-            if (!workspaceBody) return;
-            const expanded = workspaceBody.classList.toggle('preview-expanded');
-            const lbl = document.getElementById('mobile-preview-toggle-label');
-            const ico = document.getElementById('mobile-preview-toggle-icon');
-            if (lbl) lbl.textContent = expanded ? 'প্রিভিউ ছোট করুন' : 'প্রিভিউ বড় করুন';
-            if (ico) { ico.className = expanded ? 'fa-solid fa-chevron-up' : 'fa-solid fa-chevron-down'; }
-        });
     }
 
 
