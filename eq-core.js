@@ -38,26 +38,30 @@
         };
     }
 
-    // Presets: only list what differs from "flat". gains order = BAND_FREQS.
+    // Presets: carefully tuned with audible, distinct character. gains order = BAND_FREQS [100, 250, 500, 1000, 2000, 4000, 8000].
     const PRESET_DEFS = {
-        flat:          { label: 'Flat (কোনো পরিবর্তন নয়)', lowCut: null, gains: [0, 0, 0, 0, 0, 0, 0] },
-        tutorial:      { label: 'Tutorial Voice (টিউটোরিয়াল ভয়েস — সুপারিশকৃত)', lowCut: 90, gains: [-1, -2, -2, 0, 2, 2.5, 1],
-                         compressor: { enabled: true, threshold: -20, ratio: 3, attack: 10, release: 200, makeup: 3 },
+        flat:          { label: 'Flat (স্বাভাবিক / কোনো পরিবর্তন নয়)', lowCut: null, gains: [0, 0, 0, 0, 0, 0, 0] },
+        clarity:       { label: '🎙️ Voice Clarity (স্পষ্ট কণ্ঠস্বর — সেরা)', lowCut: 85, gains: [-2, -5, -2, 2, 6, 7, 4],
+                         compressor: { enabled: true, threshold: -18, ratio: 3.5, attack: 15, release: 180, makeup: 3.5 } },
+        tutorial:      { label: '🎧 Tutorial / Podcast Pro (টিউটোরিয়াল ও পডকাস্ট)', lowCut: 80, gains: [2, -4, -2, 3, 5, 6, 3],
+                         compressor: { enabled: true, threshold: -18, ratio: 3, attack: 12, release: 200, makeup: 3 },
                          normalize: { enabled: true, targetLUFS: -16 } },
-        clarity:       { label: 'Voice Clarity (স্পষ্ট ভয়েস)', lowCut: 80, gains: [0, -2, -1.5, 0, 2.5, 3, 1.5] },
-        warm:          { label: 'Warm / Deep (গাঢ়, ভারী)', lowCut: 60, gains: [4, 2, 0, 0, -1, -1, -2] },
-        bright:        { label: 'Bright (উজ্জ্বল)', lowCut: 80, gains: [-1, -1, 0, 0, 1.5, 2.5, 4] },
-        muddy:         { label: 'Remove Muddy / Boxy (ঘোলা ভাব কমান)', lowCut: 80, gains: [0, -4, -3, 0, 1, 0, 0] },
-        harsh:         { label: 'Reduce Harshness (কর্কশতা কমান)', lowCut: 80, gains: [0, 0, 0, 0, -1, -3, -3] }
+        bass_boost:    { label: '🔊 Deep Bass & Warmth (ভারী বেস ও গভীরতা)', lowCut: null, gains: [8, 6, 2, 0, -1, -2, -3],
+                         compressor: { enabled: true, threshold: -20, ratio: 2.5, attack: 20, release: 250, makeup: 2 } },
+        bright:        { label: '✨ Crystal Bright & Air (উজ্জ্বল ও ঝকঝকে)', lowCut: 80, gains: [-2, -2, 0, 1, 4, 7, 8] },
+        muddy:         { label: '🧹 Remove Mud / Clean Mic (ঘোলা ভাব ও গমগম দূর)', lowCut: 100, gains: [-6, -8, -4, 0, 2, 3, 1] },
+        telephone:     { label: '📻 Telephone / Radio FX (টেলিফোন / পুরোনো রেডিও)', lowCut: 350, highCut: 3500, gains: [-12, -8, 3, 8, 7, -10, -14] },
+        harsh:         { label: '☕ Smooth & De-Harsh (কর্কশ শব্দ দূর / নরম টোন)', lowCut: 70, highCut: 11000, gains: [3, 2, 0, -1, -3, -6, -8] }
     };
 
     function presetSettings(name) {
         const def = PRESET_DEFS[name] || PRESET_DEFS.flat;
         const s = defaultSettings();
         if (def.lowCut) s.lowCut = { enabled: true, freq: def.lowCut };
+        if (def.highCut) s.highCut = { enabled: true, freq: def.highCut };
         def.gains.forEach((g, i) => { s.bands[i].gain = g; });
-        if (def.compressor) s.compressor = Object.assign({}, def.compressor);
-        if (def.normalize) s.normalize = Object.assign({}, def.normalize);
+        if (def.compressor) s.compressor = Object.assign({}, s.compressor, def.compressor);
+        if (def.normalize) s.normalize = Object.assign({}, s.normalize, def.normalize);
         return s;
     }
     function presetList() {
@@ -199,11 +203,11 @@
         const dry = ctx.createGain(); dry.gain.value = 0;
         const wet = ctx.createGain(); wet.gain.value = 1;
         const pre = ctx.createGain();
-        const lowCut = ctx.createBiquadFilter(); lowCut.type = 'highpass'; lowCut.Q.value = -3.01; // Web Audio HP/LP Q is in dB: -3.01 dB = 0.707 (Butterworth), same as ffmpeg highpass
+        const lowCut = ctx.createBiquadFilter(); lowCut.type = 'highpass'; lowCut.Q.value = -3.01;
         const highCut = ctx.createBiquadFilter(); highCut.type = 'lowpass'; highCut.Q.value = -3.01;
-        // fixed pool so the number of bands can change later (voice-changer imports etc.)
         const filters = []; for (let i = 0; i < MAX_BANDS; i++) { const n = ctx.createBiquadFilter(); n.type = 'peaking'; n.frequency.value = 1000; n.gain.value = 0; filters.push(n); }
         const comp = ctx.createDynamicsCompressor();
+        const postComp = ctx.createGain();
         const analyser = ctx.createAnalyser(); analyser.fftSize = 4096; analyser.smoothingTimeConstant = 0.8;
 
         input.connect(dry); dry.connect(output);
@@ -211,14 +215,14 @@
         lowCut.connect(highCut);
         let node = highCut;
         filters.forEach(n => { node.connect(n); node = n; });
-        node.connect(comp); comp.connect(wet); wet.connect(output);
+        node.connect(comp); comp.connect(postComp); postComp.connect(wet); wet.connect(output);
         output.connect(analyser);
 
         function update(next) {
             const v = sanitize(next);
             const t = ctx.currentTime, tc = 0.015;
             pre.gain.setTargetAtTime(dbToLin(v.preGain), t, tc);
-            lowCut.frequency.setTargetAtTime(v.lowCut.enabled ? v.lowCut.freq : 10, t, tc); // 10 Hz ≈ off
+            lowCut.frequency.setTargetAtTime(v.lowCut.enabled ? v.lowCut.freq : 10, t, tc);
             highCut.frequency.setTargetAtTime(v.highCut.enabled ? Math.min(v.highCut.freq, ctx.sampleRate / 2 - 100) : ctx.sampleRate / 2 - 100, t, tc);
             filters.forEach((n, i) => {
                 const b = v.bands[i] || { type: 'peaking', freq: 1000, gain: 0, q: 1 };
@@ -234,18 +238,19 @@
                 comp.attack.setTargetAtTime(Math.min(1, c.attack / 1000), t, tc);
                 comp.release.setTargetAtTime(Math.min(1, c.release / 1000), t, tc);
                 comp.knee.setTargetAtTime(6, t, tc);
-            } else { // transparent
+                postComp.gain.setTargetAtTime(dbToLin(c.makeup || 3), t, tc);
+            } else {
                 comp.threshold.setTargetAtTime(0, t, tc);
                 comp.ratio.setTargetAtTime(1, t, tc);
                 comp.knee.setTargetAtTime(0, t, tc);
+                postComp.gain.setTargetAtTime(1, t, tc);
             }
         }
-        function setBypass(on) { // A/B: true = original (dry)
+        function setBypass(on) {
             const t = ctx.currentTime;
             dry.gain.setTargetAtTime(on ? 1 : 0, t, 0.01);
             wet.gain.setTargetAtTime(on ? 0 : 1, t, 0.01);
         }
-        // Combined magnitude response (dB) of the EQ stage at the given frequencies
         function getResponseDb(freqs) {
             const fArr = Float32Array.from(freqs);
             const mag = new Float32Array(fArr.length), ph = new Float32Array(fArr.length);
@@ -257,7 +262,7 @@
             return Array.from(total, m => 20 * Math.log10(Math.max(m, 1e-6)));
         }
         update(s);
-        return { input, output, analyser, update, setBypass, getResponseDb, filters, lowCut, highCut };
+        return { input, output, analyser, update, setBypass, getResponseDb, filters, lowCut, highCut, postComp };
     }
 
     return {

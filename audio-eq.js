@@ -85,18 +85,30 @@
 
     // ---------- band sliders (built from settings, so imported profiles may have any band count) ----------
     const bandUI = [];
+    const BAND_ROLE_LABELS = {
+        100: 'বেস (Bass)',
+        250: 'গম্ভীর (Warmth)',
+        500: 'বডি (Body)',
+        1000: 'ভয়েস (Voice)',
+        2000: 'স্পষ্টতা (Clarity)',
+        4000: 'তীক্ষ্ণতা (Presence)',
+        8000: 'ট্রেবল (Treble)'
+    };
     function fmtFreq(f) { return f >= 1000 ? (Math.round(f / 100) / 10) + 'k' : String(Math.round(f)); }
-    function bandLabel(b) { return (b.type === 'lowshelf' ? 'LS ' : (b.type === 'highshelf' ? 'HS ' : '')) + fmtFreq(b.freq) + 'Hz'; }
+    function bandLabel(b) {
+        const role = BAND_ROLE_LABELS[Math.round(b.freq)] || '';
+        return (b.type === 'lowshelf' ? 'LS ' : (b.type === 'highshelf' ? 'HS ' : '')) + fmtFreq(b.freq) + 'Hz' + (role ? `<div style="font-size:10px;font-weight:600;color:var(--text-accent,#818cf8);margin-top:2px;line-height:1.1;">${role}</div>` : '');
+    }
     function renderBands() {
         el.bands.innerHTML = ''; bandUI.length = 0;
         settings.bands.forEach((b, i) => {
             const wrap = document.createElement('div'); wrap.className = 'eq-band';
-            const g = document.createElement('div'); g.className = 'eq-gain'; g.textContent = (b.gain > 0 ? '+' : '') + b.gain;
+            const g = document.createElement('div'); g.className = 'eq-gain'; g.textContent = (b.gain > 0 ? '+' : '') + b.gain + ' dB';
             const r = document.createElement('input'); r.type = 'range'; r.min = EQ.GAIN_MIN; r.max = EQ.GAIN_MAX; r.step = 0.5; r.value = b.gain;
             r.setAttribute('orient', 'vertical');
-            const fl = document.createElement('div'); fl.className = 'eq-freq'; fl.textContent = bandLabel(b);
-            r.addEventListener('input', () => { settings.bands[i].gain = parseFloat(r.value); markCustom(); applySettings(); });
-            r.addEventListener('dblclick', () => { r.value = 0; settings.bands[i].gain = 0; markCustom(); applySettings(); });
+            const fl = document.createElement('div'); fl.className = 'eq-freq'; fl.innerHTML = bandLabel(b);
+            r.addEventListener('input', () => { resumeAudioContext(); settings.bands[i].gain = parseFloat(r.value); markCustom(); applySettings(); });
+            r.addEventListener('dblclick', () => { resumeAudioContext(); r.value = 0; settings.bands[i].gain = 0; markCustom(); applySettings(); });
             wrap.append(g, r, fl); el.bands.appendChild(wrap);
             bandUI.push({ r, g });
         });
@@ -118,11 +130,12 @@
     function applySettings() {
         settings = EQ.sanitize(settings);
         if (chain) chain.update(settings);
-        bandUI.forEach((u, i) => { const g = settings.bands[i].gain; u.g.textContent = (g > 0 ? '+' : '') + g; });
+        bandUI.forEach((u, i) => { const g = settings.bands[i].gain; u.g.textContent = (g > 0 ? '+' : '') + g + ' dB'; });
         drawCurve();
     }
 
     el.preset.addEventListener('change', () => {
+        resumeAudioContext();
         const v = el.preset.value;
         if (v === 'custom') return;
         if (v.startsWith('user:')) {
@@ -184,9 +197,9 @@
     })();
 
     function bindRange(inp, fn, valEl, fmt) {
-        inp.addEventListener('input', () => { fn(parseFloat(inp.value)); valEl.textContent = fmt(parseFloat(inp.value)); markCustom(); applySettings(); });
+        inp.addEventListener('input', () => { resumeAudioContext(); fn(parseFloat(inp.value)); valEl.textContent = fmt(parseFloat(inp.value)); markCustom(); applySettings(); });
     }
-    function bindCheck(inp, fn) { inp.addEventListener('change', () => { fn(inp.checked); markCustom(); applySettings(); }); }
+    function bindCheck(inp, fn) { inp.addEventListener('change', () => { resumeAudioContext(); fn(inp.checked); markCustom(); applySettings(); }); }
     bindCheck(el.lcOn, v => settings.lowCut.enabled = v);
     bindCheck(el.hcOn, v => settings.highCut.enabled = v);
     bindRange(el.hcFreq, v => settings.highCut.freq = v, el.hcVal, v => v + ' Hz');
@@ -203,25 +216,37 @@
 
     // ---------- A/B ----------
     el.abBtn.addEventListener('click', () => {
+        resumeAudioContext();
         bypass = !bypass;
         if (chain) chain.setBypass(bypass);
-        el.abLabel.textContent = bypass ? 'Original শুনছেন' : 'Edited শুনছেন';
+        el.abLabel.textContent = bypass ? 'Original শুনছেন (EQ বন্ধ)' : 'Edited শুনছেন (EQ চালু)';
         el.abBtn.classList.toggle('eq-ab-on', bypass);
+        drawCurve();
     });
 
     // ---------- audio graph (created lazily on first user action) ----------
-    function ensureAudioGraph() {
-        if (ctx) { if (ctx.state === 'suspended') ctx.resume(); return; }
-        const AC = window.AudioContext || window.webkitAudioContext;
-        ctx = new AC();
-        sourceNode = ctx.createMediaElementSource(el.player);
-        chain = EQ.buildWebAudioChain(ctx, settings);
-        chain.setBypass(bypass);
-        sourceNode.connect(chain.input);
-        chain.output.connect(ctx.destination);
-        spectrumBuf = new Uint8Array(chain.analyser.frequencyBinCount);
+    async function resumeAudioContext() {
+        if (!ctx) ensureAudioGraph();
+        if (ctx && ctx.state === 'suspended') {
+            try { await ctx.resume(); } catch (_) {}
+        }
     }
-    el.player.addEventListener('play', () => { ensureAudioGraph(); startLoop(); });
+    function ensureAudioGraph() {
+        if (!ctx) {
+            const AC = window.AudioContext || window.webkitAudioContext;
+            ctx = new AC();
+            sourceNode = ctx.createMediaElementSource(el.player);
+            chain = EQ.buildWebAudioChain(ctx, settings);
+            chain.setBypass(bypass);
+            sourceNode.connect(chain.input);
+            chain.output.connect(ctx.destination);
+            spectrumBuf = new Uint8Array(chain.analyser.frequencyBinCount);
+        }
+        if (ctx.state === 'suspended') {
+            ctx.resume().catch(() => {});
+        }
+    }
+    el.player.addEventListener('play', () => { resumeAudioContext(); ensureAudioGraph(); startLoop(); });
     el.player.addEventListener('pause', () => { drawCurve(); });
 
     // ---------- curve + spectrum canvas ----------
@@ -257,20 +282,38 @@
                 g2.lineTo(x, H - (spectrumBuf[idx] / 255) * (H - 20));
             }
             g2.lineTo(W, H); g2.closePath();
-            g2.fillStyle = 'rgba(99,102,241,.28)'; g2.fill();
+            g2.fillStyle = bypass ? 'rgba(245,158,11,.15)' : 'rgba(99,102,241,.28)';
+            g2.fill();
         }
         // EQ response curve
         const freqs = [];
         for (let x = 0; x <= W; x += 4) freqs.push(freqOfX(x));
-        const resp = EQ.responseDb(settings, freqs, ctx ? ctx.sampleRate : 48000);
+        const resp = bypass
+            ? freqs.map(() => 0)
+            : EQ.responseDb(settings, freqs, ctx ? ctx.sampleRate : 48000);
         g2.beginPath();
         resp.forEach((db, i) => { const x = i * 4, y = yOfDb(db); i ? g2.lineTo(x, y) : g2.moveTo(x, y); });
-        g2.strokeStyle = bypass ? 'rgba(245,158,11,.5)' : '#a5b4fc'; g2.lineWidth = 2.5; g2.stroke();
+        g2.strokeStyle = bypass ? 'rgba(245,158,11,.7)' : '#a5b4fc';
+        g2.lineWidth = 2.5;
+        g2.stroke();
+
         // band handles
         settings.bands.forEach(b => {
-            g2.beginPath(); g2.arc(xOfFreq(b.freq), yOfDb(b.gain), 5, 0, Math.PI * 2);
-            g2.fillStyle = '#fff'; g2.fill(); g2.strokeStyle = '#6366f1'; g2.lineWidth = 2; g2.stroke();
+            const y = bypass ? yOfDb(0) : yOfDb(b.gain);
+            g2.beginPath(); g2.arc(xOfFreq(b.freq), y, 5, 0, Math.PI * 2);
+            g2.fillStyle = bypass ? '#f59e0b' : '#fff'; g2.fill();
+            g2.strokeStyle = bypass ? '#78350f' : '#6366f1'; g2.lineWidth = 2; g2.stroke();
         });
+
+        // live status badge
+        g2.font = 'bold 12px sans-serif';
+        if (bypass) {
+            g2.fillStyle = '#f59e0b';
+            g2.fillText('● ORIGINAL (EQ বন্ধ)', W - 155, 22);
+        } else {
+            g2.fillStyle = '#10b981';
+            g2.fillText('● EDITED (EQ চালু)', W - 140, 22);
+        }
     }
     function startLoop() {
         cancelAnimationFrame(raf);
@@ -295,7 +338,7 @@
         const gain = Math.round(Math.max(EQ.GAIN_MIN, Math.min(EQ.GAIN_MAX, dbOfY(y))) * 2) / 2;
         settings.bands[dragBand].gain = gain; bandUI[dragBand].r.value = gain; markCustom(); applySettings();
     }
-    cv.addEventListener('pointerdown', (e) => { dragBand = nearestBand(canvasPos(e).x); cv.setPointerCapture(e.pointerId); dragTo(e); });
+    cv.addEventListener('pointerdown', (e) => { resumeAudioContext(); dragBand = nearestBand(canvasPos(e).x); cv.setPointerCapture(e.pointerId); dragTo(e); });
     cv.addEventListener('pointermove', dragTo);
     cv.addEventListener('pointerup', () => { dragBand = -1; });
     cv.addEventListener('pointercancel', () => { dragBand = -1; });
