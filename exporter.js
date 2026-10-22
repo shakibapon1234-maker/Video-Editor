@@ -740,6 +740,25 @@ document.addEventListener('DOMContentLoaded', () => {
         const savedCanvasH = state.canvas ? state.canvas.height : 720;
         const currentQuality = qualitySelect ? qualitySelect.value : '1080p';
         const exportDims = computeCanvasDimsForExport(state.aspectRatio, currentQuality);
+        // Overlay font sizes and legacy fixed box dimensions are stored in
+        // preview-canvas pixels. The preview canvas is capped at 1080px, while
+        // export may use 1920px, so scale those pixel values for the export
+        // canvas. Normalized positions and normalized fixed boxes are already
+        // resolution independent.
+        const overlayScale = savedCanvasW > 0 ? exportDims.w / savedCanvasW : 1;
+        const originalOverlayMetrics = (state.textOverlays || []).map(item => ({
+            item,
+            fontSize: item.fontSize,
+            fixedBoxW: item.fixedBoxW,
+            fixedBoxH: item.fixedBoxH
+        }));
+        if (overlayScale !== 1) {
+            originalOverlayMetrics.forEach(({ item }) => {
+                if (Number.isFinite(Number(item.fontSize))) item.fontSize *= overlayScale;
+                if (Number(item.fixedBoxW) > 1) item.fixedBoxW *= overlayScale;
+                if (Number(item.fixedBoxH) > 1) item.fixedBoxH *= overlayScale;
+            });
+        }
         if (state.canvas) {
             state.canvas.width = exportDims.w;
             state.canvas.height = exportDims.h;
@@ -760,6 +779,14 @@ document.addEventListener('DOMContentLoaded', () => {
             if (enhanceCheckboxEl) enhanceCheckboxEl.disabled = false;
             renderBtn.innerHTML = '<i class="fa-solid fa-wand-magic-sparkles"></i> Render & Export Video';
         } finally {
+            originalOverlayMetrics.forEach(({ item, fontSize, fixedBoxW, fixedBoxH }) => {
+                if (fontSize === undefined) delete item.fontSize;
+                else item.fontSize = fontSize;
+                if (fixedBoxW === undefined) delete item.fixedBoxW;
+                else item.fixedBoxW = fixedBoxW;
+                if (fixedBoxH === undefined) delete item.fixedBoxH;
+                else item.fixedBoxH = fixedBoxH;
+            });
             if (state.canvas) {
                 state.canvas.width = savedCanvasW;
                 state.canvas.height = savedCanvasH;
