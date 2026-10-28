@@ -3682,18 +3682,21 @@ document.addEventListener('DOMContentLoaded', () => {
             const perClipVol = (clip.volume !== undefined ? clip.volume : 1.0);
             clipGain.gain.setValueAtTime(state.videoVolume * perClipVol, 0);
 
-            // Apply multitrack audio track ducking during export (matches live preview)
+            // Apply multitrack audio & video track ducking during export (matches live preview)
             const savedMtRatio = localStorage.getItem('multitrack_orig_vol');
-            const mtRatio = savedMtRatio !== null ? (parseFloat(savedMtRatio) / 100) : 0;
+            const mtAudioRatio = savedMtRatio !== null ? (parseFloat(savedMtRatio) / 100) : 0;
+            const savedMtVideoRatio = localStorage.getItem('multitrack_video_orig_vol');
+            const mtVideoRatio = savedMtVideoRatio !== null ? (parseFloat(savedMtVideoRatio) / 100) : 0;
             if (state.extraTracks && state.extraTracks.length > 0) {
                 state.extraTracks.forEach(t => {
-                    if (t.type === 'audio' && !t.muted) {
+                    if (!t.muted && (t.type === 'audio' || t.type === 'video')) {
+                        const ratio = (t.type === 'video') ? mtVideoRatio : mtAudioRatio;
                         (t.clips || []).forEach(c => {
                             const cStart = introDur + (c.timelineOffset || 0);
                             const cDur = Math.max(0.1, (c.sourceEnd || 0) - (c.sourceStart || 0));
                             const cEnd = cStart + cDur;
                             if (cStart >= 0 && cEnd > cStart) {
-                                clipGain.gain.setValueAtTime(state.videoVolume * perClipVol * mtRatio, Math.max(0, cStart));
+                                clipGain.gain.setValueAtTime(state.videoVolume * perClipVol * ratio, Math.max(0, cStart));
                                 clipGain.gain.setValueAtTime(state.videoVolume * perClipVol, Math.max(0, cEnd));
                             }
                         });

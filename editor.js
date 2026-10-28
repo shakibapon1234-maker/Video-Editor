@@ -10704,11 +10704,18 @@ document.addEventListener('DOMContentLoaded', () => {
         // Rendered on top of B-roll but BELOW text/symbol/sticker overlays, so a
         // fill box painted behind a caption never covers the text sitting on it.
         if (state.fillRegions && state.fillRegions.length > 0) {
-            const currentTime = state.currentTime || 0;
+            const _fillClock = (typeof getEditorTimelineClock === 'function')
+                ? getEditorTimelineClock()
+                : { current: state.currentTime || 0, total: state.duration || 1000 };
+            const fillCurrentTime = state.isExportingVideo
+                ? (state.exportTickerTime ?? _fillClock.current)
+                : _fillClock.current;
             const canvasW = state.canvas.width;
             const canvasH = state.canvas.height;
             state.fillRegions.forEach(item => {
-                if (currentTime < item.startSec || currentTime > item.endSec) return;
+                const fillStart = (item.startSec !== undefined && item.startSec !== null) ? item.startSec : 0;
+                const fillEnd   = (item.endSec   !== undefined && item.endSec   !== null) ? item.endSec   : Infinity;
+                if (fillCurrentTime < fillStart || fillCurrentTime > fillEnd) return;
                 if (item.w <= 0 || item.h <= 0) return;
                 const rx = item.x * canvasW;
                 const ry = item.y * canvasH;
@@ -10720,7 +10727,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 state.ctx.fillRect(rx, ry, rw, rh);
                 state.ctx.globalAlpha = 1;
                 // Selection outline in edit mode
-                if (state.currentStep === 3 && state.isAddingFill && item.id === state.selectedFillId) {
+                if (state.currentStep === 3 && (state.isAddingFill || item.id === state.selectedFillId) && item.id === state.selectedFillId) {
                     state.ctx.strokeStyle = '#ffffff';
                     state.ctx.lineWidth = 2;
                     state.ctx.setLineDash([6, 4]);
@@ -12830,9 +12837,14 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         // Background Fill tool — drag a rectangle anywhere on the canvas to paint a solid colour block.
-        if (state.isAddingFill) {
+        const hasExistingFills = (state.fillRegions && state.fillRegions.length > 0);
+        if (state.isAddingFill || hasExistingFills) {
             const coords = getCanvasCoords(e);
-            const now = Math.max(0, state.currentTime || 0);
+            const _fillClock = (typeof getEditorTimelineClock === 'function')
+                ? getEditorTimelineClock()
+                : { current: state.currentTime || 0, total: state.duration || 1000 };
+            const now = _fillClock.current;
+            const timelineTotal = Math.max(1, _fillClock.total || state.duration || 5);
             const canvasW = state.canvas.width;
             const canvasH = state.canvas.height;
             const nx = coords.x / canvasW;
@@ -12840,7 +12852,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
             // Check if clicking on an existing fill region for drag/resize
             const hitRegion = [...(state.fillRegions || [])].reverse().find(r => {
-                if (now < r.startSec || now > r.endSec) return false;
+                const rStart = (r.startSec !== undefined && r.startSec !== null) ? r.startSec : 0;
+                const rEnd   = (r.endSec   !== undefined && r.endSec   !== null) ? r.endSec   : Infinity;
+                if (now < rStart || now > rEnd) return false;
                 const rx = r.x * canvasW, ry = r.y * canvasH;
                 const rw = r.w * canvasW, rh = r.h * canvasH;
                 return coords.x >= rx && coords.x <= rx + rw && coords.y >= ry && coords.y <= ry + rh;
@@ -12848,10 +12862,16 @@ document.addEventListener('DOMContentLoaded', () => {
 
             if (hitRegion) {
                 state.selectedFillId = hitRegion.id;
+                state.isAddingFill = true;
+                const fToggle = document.getElementById('fill-tool-toggle');
+                if (fToggle) fToggle.checked = true;
+                const fCont = document.getElementById('fill-actions-container');
+                if (fCont) fCont.style.display = 'block';
+
                 const rx = hitRegion.x * canvasW, ry = hitRegion.y * canvasH;
                 const rw = hitRegion.w * canvasW, rh = hitRegion.h * canvasH;
-                // Bottom-right corner resize handle (20px)
-                if (Math.hypot(coords.x - (rx + rw), coords.y - (ry + rh)) < 20) {
+                // Bottom-right corner resize handle (24px)
+                if (Math.hypot(coords.x - (rx + rw), coords.y - (ry + rh)) < 24) {
                     state.isResizingFill = true;
                 } else {
                     state.isDraggingFill = true;
@@ -12864,27 +12884,29 @@ document.addEventListener('DOMContentLoaded', () => {
                 return;
             }
 
-            // Start drawing a new fill region
-            const fillColor = document.getElementById('fill-region-color')?.value || '#000000';
-            const fillOpacity = parseInt(document.getElementById('fill-region-opacity')?.value || '80');
-            const item = {
-                id: Date.now(),
-                color: fillColor,
-                opacity: fillOpacity,
-                x: nx, y: ny, w: 0, h: 0,
-                startSec: now,
-                endSec: Math.max(now + 1, state.endTime || state.duration || 5)
-            };
-            state.fillRegions = state.fillRegions || [];
-            state.fillRegions.push(item);
-            state.selectedFillId = item.id;
-            state.isDrawingNewFill = true;
-            state.fillDragStartX = nx;
-            state.fillDragStartY = ny;
-            if (window.onFillSelected) window.onFillSelected(item.id);
-            drawFrame();
-            e.preventDefault();
-            return;
+            // Start drawing a new fill region ONLY IF isAddingFill is actively on
+            if (state.isAddingFill) {
+                const fillColor = document.getElementById('fill-region-color')?.value || '#000000';
+                const fillOpacity = parseInt(document.getElementById('fill-region-opacity')?.value || '80');
+                const item = {
+                    id: Date.now(),
+                    color: fillColor,
+                    opacity: fillOpacity,
+                    x: nx, y: ny, w: 0, h: 0,
+                    startSec: 0,
+                    endSec: Math.ceil(timelineTotal)
+                };
+                state.fillRegions = state.fillRegions || [];
+                state.fillRegions.push(item);
+                state.selectedFillId = item.id;
+                state.isDrawingNewFill = true;
+                state.fillDragStartX = nx;
+                state.fillDragStartY = ny;
+                if (window.onFillSelected) window.onFillSelected(item.id);
+                drawFrame();
+                e.preventDefault();
+                return;
+            }
         }
 
         // Video Highlight tool — drag across the live preview to make a callout.
@@ -14954,7 +14976,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         // Background Fill tool — handle draw / drag / resize during mousemove
-        if (state.isAddingFill && (state.isDrawingNewFill || state.isDraggingFill || state.isResizingFill)) {
+        if (state.isDrawingNewFill || state.isDraggingFill || state.isResizingFill) {
             const coords = getCanvasCoords(e);
             const canvasW = state.canvas.width;
             const canvasH = state.canvas.height;
@@ -15838,6 +15860,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 isRemoved = true;
             }
             if (window.onFillSelected) window.onFillSelected(state.selectedFillId);
+            if (typeof renderFillList === 'function') renderFillList();
             if (typeof triggerAutoSave === 'function') triggerAutoSave();
             drawFrame();
             if (!isRemoved && window.recordEditorHistory) {
@@ -16550,12 +16573,98 @@ document.addEventListener('DOMContentLoaded', () => {
     function renderFillList() {
         if (!fillListEl) return;
         fillListEl.innerHTML = '';
+        const _clock = (typeof getEditorTimelineClock === 'function')
+            ? getEditorTimelineClock()
+            : { current: state.currentTime || 0, total: state.duration || 1000 };
+        const totalDur = Math.max(0.1, _clock.total || state.duration || 1000);
+
+        if (!state.fillRegions || state.fillRegions.length === 0) {
+            const emptyEl = document.createElement('div');
+            emptyEl.style.cssText = 'text-align:center; padding:12px 10px; color:#94a3b8; font-size:12px; background:rgba(255,255,255,0.02); border:1px dashed rgba(255,255,255,0.12); border-radius:8px;';
+            emptyEl.innerHTML = '<i class="fa-solid fa-hand-pointer" style="margin-right:6px; color:#fbbf24;"></i> এখনো কোনো ফিল এরিয়া আঁকা হয়নি। প্রিভিউ স্ক্রিনে ড্র্যাগ করে আঁকুন।';
+            fillListEl.appendChild(emptyEl);
+            if (fillTimingContainer) fillTimingContainer.style.display = 'none';
+            return;
+        }
+
         (state.fillRegions || []).forEach((item, index) => {
+            // Auto-heal legacy or out-of-bounds fills created before trimming
+            if (item.endSec > totalDur && totalDur > 0) {
+                if (item.startSec < totalDur) {
+                    item.endSec = Math.min(totalDur, item.endSec);
+                }
+            }
+            if (item.startSec > totalDur && totalDur > 0) {
+                item.startSec = 0;
+                item.endSec = Math.min(totalDur, Math.max(1, totalDur));
+            }
+
+            const isSelected = item.id === state.selectedFillId;
+            const isTimeActive = (_clock.current >= (item.startSec ?? 0) && _clock.current <= (item.endSec ?? Infinity));
+
             const row = document.createElement('div');
-            row.className = 'text-overlay-list-item' + (item.id === state.selectedFillId ? ' active' : '');
-            row.style.cssText = `display:flex;align-items:center;justify-content:space-between;padding:8px 12px;border-radius:6px;margin-bottom:6px;cursor:pointer;background:${item.id === state.selectedFillId ? 'rgba(255,200,0,.12)' : 'rgba(255,255,255,.04)'};border:1px solid ${item.id === state.selectedFillId ? '#ffc800' : 'transparent'};`;
-            row.innerHTML = `<span style="font-size:13px"><i class="fa-solid fa-fill-drip" style="color:${item.color}"></i> Fill ${index + 1}</span><span style="font-size:11px;opacity:.6">${item.startSec.toFixed(1)}s–${item.endSec.toFixed(1)}s</span>`;
-            row.addEventListener('click', () => { state.selectedFillId = item.id; showFillControls(item.id); renderFillList(); drawFrame(); });
+            row.className = 'text-overlay-list-item' + (isSelected ? ' active' : '');
+            row.style.cssText = `display:flex;align-items:center;justify-content:space-between;padding:9px 12px;border-radius:8px;margin-bottom:8px;cursor:pointer;background:${isSelected ? 'rgba(255,200,0,.15)' : 'rgba(255,255,255,.04)'};border:1.5px solid ${isSelected ? '#ffc800' : 'rgba(255,255,255,0.08)'};transition:all 0.2s ease;`;
+
+            const leftBox = document.createElement('div');
+            leftBox.style.cssText = 'display:flex; align-items:center; gap:8px;';
+
+            const activeIndicator = document.createElement('span');
+            activeIndicator.style.cssText = `width:8px; height:8px; border-radius:50%; background:${isTimeActive ? '#22c55e' : '#64748b'}; display:inline-block; flex-shrink:0;`;
+            activeIndicator.title = isTimeActive ? 'বর্তমানে সক্রিয় (Active)' : 'এই সময়ে নিষ্ক্রিয় (Inactive)';
+
+            const colorSquare = document.createElement('span');
+            colorSquare.style.cssText = `display:inline-block; width:14px; height:14px; border-radius:3px; background:${item.color || '#000000'}; border:1px solid rgba(255,255,255,0.3);`;
+
+            const labelBox = document.createElement('div');
+            labelBox.style.cssText = 'display:flex; flex-direction:column;';
+            const label = document.createElement('span');
+            label.style.cssText = 'font-size:12.5px; font-weight:600; color:#f8fafc;';
+            label.innerHTML = `Fill ${index + 1} <span style="font-size:11px; font-weight:normal; opacity:0.7;">(${item.opacity ?? 80}%)</span>`;
+
+            const timeSpan = document.createElement('span');
+            timeSpan.style.cssText = 'font-size:11px; color:#fbbf24; font-weight:500;';
+            timeSpan.innerHTML = `<i class="fa-regular fa-clock" style="font-size:10px; margin-right:3px;"></i>${formatTime(item.startSec)} – ${formatTime(item.endSec)} (${item.startSec.toFixed(1)}s – ${item.endSec.toFixed(1)}s)`;
+
+            labelBox.appendChild(label);
+            labelBox.appendChild(timeSpan);
+
+            leftBox.appendChild(activeIndicator);
+            leftBox.appendChild(colorSquare);
+            leftBox.appendChild(labelBox);
+
+            const rightActions = document.createElement('div');
+            rightActions.style.cssText = 'display:flex; align-items:center; gap:6px;';
+
+            const jumpBtn = document.createElement('button');
+            jumpBtn.type = 'button';
+            jumpBtn.className = 'btn btn-xs btn-outline';
+            jumpBtn.title = 'প্রিভিউতে এই সময়ে যান (Seek to fill)';
+            jumpBtn.style.cssText = 'padding:2px 7px; font-size:11px; border-color:rgba(251,191,36,0.4); color:#fde68a; background:rgba(0,0,0,0.2); border-radius:4px;';
+            jumpBtn.innerHTML = '<i class="fa-solid fa-play"></i> যান';
+            jumpBtn.addEventListener('click', (ev) => {
+                ev.stopPropagation();
+                if (typeof seekEditorTimelineTo === 'function') {
+                    seekEditorTimelineTo(item.startSec);
+                } else {
+                    state.currentTime = item.startSec;
+                    if (state.video) state.video.currentTime = item.startSec;
+                    if (typeof updatePlayhead === 'function') updatePlayhead();
+                    drawFrame();
+                }
+            });
+
+            rightActions.appendChild(jumpBtn);
+
+            row.appendChild(leftBox);
+            row.appendChild(rightActions);
+
+            row.addEventListener('click', () => {
+                state.selectedFillId = item.id;
+                showFillControls(item.id);
+                renderFillList();
+                drawFrame();
+            });
             fillListEl.appendChild(row);
         });
     }
@@ -16564,12 +16673,90 @@ document.addEventListener('DOMContentLoaded', () => {
         const item = (state.fillRegions || []).find(r => r.id === id);
         if (!item) { if (fillTimingContainer) fillTimingContainer.style.display = 'none'; return; }
         if (fillTimingContainer) fillTimingContainer.style.display = 'block';
+
+        const _clock = (typeof getEditorTimelineClock === 'function')
+            ? getEditorTimelineClock()
+            : { current: state.currentTime || 0, total: state.duration || 1000 };
+        const totalDur = Math.max(0.1, _clock.total || state.duration || 1000);
+
+        if (item.endSec > totalDur && totalDur > 0) {
+            if (item.startSec < totalDur) item.endSec = Math.min(totalDur, item.endSec);
+        }
+        if (item.startSec > totalDur && totalDur > 0) {
+            item.startSec = 0;
+            item.endSec = totalDur;
+        }
+
         if (fillColorInput) { fillColorInput.value = item.color; }
         if (fillColorVal) fillColorVal.innerText = item.color.toUpperCase();
         if (fillOpacitySlider) fillOpacitySlider.value = item.opacity ?? 80;
         if (fillOpacityVal) fillOpacityVal.innerText = (item.opacity ?? 80) + '%';
-        if (fillStartInput) fillStartInput.value = item.startSec;
-        if (fillEndInput) fillEndInput.value = item.endSec;
+        if (fillStartInput) {
+            fillStartInput.min = '0';
+            fillStartInput.max = totalDur.toFixed(1);
+            fillStartInput.value = item.startSec !== undefined ? Number(item.startSec).toFixed(1) : '0.0';
+        }
+        if (fillEndInput) {
+            fillEndInput.min = '0.1';
+            fillEndInput.max = totalDur.toFixed(1);
+            fillEndInput.value = item.endSec !== undefined ? Number(item.endSec).toFixed(1) : totalDur.toFixed(1);
+        }
+
+        // Update timing helper text with formatted time and total video time
+        const fillHelpText = fillTimingContainer.querySelector('.help-text');
+        if (fillHelpText) {
+            fillHelpText.innerHTML = `ভিডিওর মোট সময়: <strong>${formatTime(totalDur)} (${totalDur.toFixed(1)}s)</strong>। এই ফিল কোন সময়ে দেখাবে তা ঠিক করুন:`;
+        }
+
+        // Quick preset buttons for Full Video and From Playhead
+        let fillPresetRow = document.getElementById('fill-timing-presets-row');
+        if (!fillPresetRow) {
+            fillPresetRow = document.createElement('div');
+            fillPresetRow.id = 'fill-timing-presets-row';
+            fillPresetRow.style.cssText = 'display:flex; gap:6px; margin-top:8px; margin-bottom:8px; flex-wrap:wrap;';
+            fillPresetRow.innerHTML = `
+                <button type="button" id="fill-preset-full" class="btn btn-xs btn-outline" style="font-size:11px; padding:3px 8px; border-color:rgba(255,255,255,0.2); color:#e2e8f0; border-radius:4px; background:rgba(255,255,255,0.05); cursor:pointer;">
+                    <i class="fa-regular fa-clock"></i> পুরো ভিডিও (Full Video)
+                </button>
+                <button type="button" id="fill-preset-from-now" class="btn btn-xs btn-outline" style="font-size:11px; padding:3px 8px; border-color:rgba(255,255,255,0.2); color:#e2e8f0; border-radius:4px; background:rgba(255,255,255,0.05); cursor:pointer;">
+                    <i class="fa-solid fa-play"></i> বর্তমান থেকে শেষ
+                </button>
+            `;
+            if (deleteFillBtn && deleteFillBtn.parentNode) {
+                deleteFillBtn.parentNode.insertBefore(fillPresetRow, deleteFillBtn);
+            } else {
+                fillTimingContainer.appendChild(fillPresetRow);
+            }
+
+            document.getElementById('fill-preset-full')?.addEventListener('click', () => {
+                const cur = selectedFill();
+                if (cur) {
+                    const c = (typeof getEditorTimelineClock === 'function') ? getEditorTimelineClock() : { total: state.duration || 1000 };
+                    cur.startSec = 0;
+                    cur.endSec = Math.max(0.1, c.total || state.duration || 1000);
+                    if (fillStartInput) fillStartInput.value = '0.0';
+                    if (fillEndInput) fillEndInput.value = cur.endSec.toFixed(1);
+                    renderFillList();
+                    drawFrame();
+                    if (typeof triggerAutoSave === 'function') triggerAutoSave();
+                }
+            });
+
+            document.getElementById('fill-preset-from-now')?.addEventListener('click', () => {
+                const cur = selectedFill();
+                if (cur) {
+                    const c = (typeof getEditorTimelineClock === 'function') ? getEditorTimelineClock() : { current: 0, total: state.duration || 1000 };
+                    const tDur = Math.max(0.1, c.total || state.duration || 1000);
+                    cur.startSec = Math.max(0, Math.min(tDur - 0.1, c.current || 0));
+                    cur.endSec = tDur;
+                    if (fillStartInput) fillStartInput.value = cur.startSec.toFixed(1);
+                    if (fillEndInput) fillEndInput.value = cur.endSec.toFixed(1);
+                    renderFillList();
+                    drawFrame();
+                    if (typeof triggerAutoSave === 'function') triggerAutoSave();
+                }
+            });
+        }
     }
 
     if (fillToolToggle) fillToolToggle.addEventListener('change', () => {
@@ -16588,29 +16775,35 @@ document.addEventListener('DOMContentLoaded', () => {
 
     if (fillColorInput) fillColorInput.addEventListener('input', () => {
         if (fillColorVal) fillColorVal.innerText = fillColorInput.value.toUpperCase();
-        const item = selectedFill(); if (item) { item.color = fillColorInput.value; drawFrame(); }
+        const item = selectedFill(); if (item) { item.color = fillColorInput.value; drawFrame(); if (typeof triggerAutoSave === 'function') triggerAutoSave(); }
     });
 
     if (fillOpacitySlider) fillOpacitySlider.addEventListener('input', () => {
         if (fillOpacityVal) fillOpacityVal.innerText = fillOpacitySlider.value + '%';
-        const item = selectedFill(); if (item) { item.opacity = parseInt(fillOpacitySlider.value); drawFrame(); }
+        const item = selectedFill(); if (item) { item.opacity = parseInt(fillOpacitySlider.value); drawFrame(); if (typeof triggerAutoSave === 'function') triggerAutoSave(); }
     });
 
     if (fillStartInput) fillStartInput.addEventListener('input', () => {
         const item = selectedFill();
         if (item) {
-            item.startSec = Math.max(0, parseFloat(fillStartInput.value) || 0);
-            item.endSec = Math.max(item.startSec + 0.1, item.endSec);
-            if (fillEndInput) fillEndInput.value = item.endSec;
+            const _c = (typeof getEditorTimelineClock === 'function') ? getEditorTimelineClock() : { total: state.duration || 1000 };
+            const maxT = Math.max(0.1, _c.total || state.duration || 1000);
+            item.startSec = Math.max(0, Math.min(maxT, parseFloat(fillStartInput.value) || 0));
+            item.endSec = Math.max(item.startSec + 0.1, Math.min(maxT, item.endSec));
+            if (fillEndInput) fillEndInput.value = item.endSec.toFixed(1);
             renderFillList(); drawFrame();
+            if (typeof triggerAutoSave === 'function') triggerAutoSave();
         }
     });
 
     if (fillEndInput) fillEndInput.addEventListener('input', () => {
         const item = selectedFill();
         if (item) {
-            item.endSec = Math.max(item.startSec + 0.1, parseFloat(fillEndInput.value) || item.startSec + 1);
+            const _c = (typeof getEditorTimelineClock === 'function') ? getEditorTimelineClock() : { total: state.duration || 1000 };
+            const maxT = Math.max(0.1, _c.total || state.duration || 1000);
+            item.endSec = Math.max(item.startSec + 0.1, Math.min(maxT, parseFloat(fillEndInput.value) || maxT));
             renderFillList(); drawFrame();
+            if (typeof triggerAutoSave === 'function') triggerAutoSave();
         }
     });
 
@@ -24064,6 +24257,14 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         if (typeof renderBlurRegionList === 'function') renderBlurRegionList();
         if (typeof renderHighlightList === 'function') renderHighlightList();
+        // Background Fill Sync
+        const fillToolToggle = document.getElementById('fill-tool-toggle');
+        const fillActionsContainer = document.getElementById('fill-actions-container');
+        if (state.fillRegions && state.fillRegions.length > 0) {
+            if (fillActionsContainer) fillActionsContainer.style.display = 'block';
+            if (fillToolToggle) fillToolToggle.checked = true;
+            state.isAddingFill = true;
+        }
         if (typeof renderFillList === 'function') renderFillList();
         if (typeof renderTextOverlayList === 'function') renderTextOverlayList();
         if (typeof renderBrollList === 'function') renderBrollList();

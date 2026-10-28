@@ -5396,14 +5396,14 @@
                                         <div class="control-group mt-3">
                                             <label>Original Video Volume</label>
                                             <div class="slider-val-container">
-                                                <input type="range" id="addaudio-video-volume-slider" min="0" max="200" value="100">
+                                                <input type="range" id="addaudio-video-volume-slider" min="0" max="300" value="100">
                                                 <span id="addaudio-video-volume-val">100%</span>
                                             </div>
                                         </div>
                                         <div class="control-group mt-3">
                                             <label>New Audio Volume</label>
                                             <div class="slider-val-container">
-                                                <input type="range" id="addaudio-audio-volume-slider" min="0" max="200" value="100">
+                                                <input type="range" id="addaudio-audio-volume-slider" min="0" max="300" value="100">
                                                 <span id="addaudio-audio-volume-val">100%</span>
                                             </div>
                                         </div>
@@ -5424,6 +5424,16 @@
                                         </div>
                                         <label class="switch">
                                             <input type="checkbox" id="addaudio-shortest-toggle" checked>
+                                            <span class="slider round"></span>
+                                        </label>
+                                    </div>
+                                    <div class="toggle-control mt-3">
+                                        <div class="toggle-label">
+                                            <h4>Loop Audio (অডিও বারবার বাজান)</h4>
+                                            <p>অডিও ছোট হলে ভিডিওর শেষ পর্যন্ত বারবার লুপ হয়ে বাজতে থাকবে।</p>
+                                        </div>
+                                        <label class="switch">
+                                            <input type="checkbox" id="addaudio-loop-toggle" checked>
                                             <span class="slider round"></span>
                                         </label>
                                     </div>
@@ -5617,20 +5627,20 @@
     <script src="theme.js?v=1"></script>
     <script src="color-scopes.js?v=1"></script>
     <script src="public/capacitor/capacitor.js"></script>
-    <script src="audio.js?v=5"></script>
+    <script src="audio.js?v=6"></script>
     <script src="audio-silence-generator.js?v=1"></script>
     <script src="smoke-effect.js?v=5"></script>
     <script src="glitter-effect.js?v=4"></script>
-    <script src="editor.js?v=24"></script>
+    <script src="editor.js?v=25"></script>
     <script src="keyframes.js?v=1"></script>
     <script src="render-engine.js?v=2"></script>
-    <script src="exporter.js?v=5"></script>
+    <script src="exporter.js?v=6"></script>
     <script src="eq-core.js?v=1"></script>
     <script src="audio-eq.js?v=1"></script>
     <script src="fast-join.js?v=1"></script>
     <script src="phase9.js?v=6"></script>
     <script src="transitions-library.js?v=1"></script>
-    <script src="multitrack.js?v=4"></script>
+    <script src="multitrack.js?v=5"></script>
     <script src="subtitle-import.js?v=1"></script>
     <script src="text-find-replace.js?v=1"></script>
     <script src="lower-third-presets.js?v=1"></script>

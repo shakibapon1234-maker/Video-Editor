@@ -1059,14 +1059,25 @@ app.post('/api/add-audio/upload-audio', express.raw({ type: '*/*', limit: '2gb' 
     });
 });
 
-app.post('/api/add-audio/compile', (req, res) => {
+app.post('/api/add-audio/compile', async (req, res) => {
     const sessionId = req.query.session;
     const session = sessionId && addAudioSessions.get(sessionId);
     if (!session || !session.videoPath || !session.audioPath) {
         return res.status(400).json({ error: 'Upload both a video and an audio file before compiling.' });
     }
 
-    const { mode = 'replace', videoVolume = 1, audioVolume = 1, offsetSec = 0, shortest = true } = req.body || {};
+    let { mode = 'replace', videoVolume = 1, audioVolume = 1, offsetSec = 0, shortest = true, loopAudio = false } = req.body || {};
+    shortest = (shortest === true || shortest === 'true');
+    loopAudio = (loopAudio === true || loopAudio === 'true');
+
+    // Auto-fallback to 'replace' mode if original video has no audio track
+    if (mode === 'mix') {
+        const hasAudio = await checkFileHasAudio(session.videoPath);
+        if (!hasAudio) {
+            console.log('Original video has no audio stream, falling back mode from mix to replace');
+            mode = 'replace';
+        }
+    }
     const offsetMs = Math.max(0, Math.round((parseFloat(offsetSec) || 0) * 1000));
     const vVol = Math.max(0, parseFloat(videoVolume));
     const aVol = Math.max(0, parseFloat(audioVolume));
@@ -1084,12 +1095,10 @@ app.post('/api/add-audio/compile', (req, res) => {
 
     let filterStr, mapArgs;
     if (mode === 'mix') {
-        // Mix the new audio with the video's existing audio track. Each side
-        // gets its own volume filter before amix combines them; duration
-        // follows the video's original audio length when "shortest" is on
-        // (matching the video, same as -shortest below) or the longer of the
-        // two tracks otherwise.
-        filterStr = `[0:a]volume=${vVol}[va];[1:a]adelay=${offsetMs}:all=1,volume=${aVol}[na];[va][na]amix=inputs=2:duration=${shortest ? 'first' : 'longest'}:dropout_transition=2[aout]`;
+        // Mix the new audio with the video's existing audio track.
+        // normalize=0 prevents amix from automatically halving the volume (0.5x).
+        // dropout_transition=0 avoids volume dip at startup.
+        filterStr = `[0:a]volume=${vVol}[va];[1:a]adelay=${offsetMs}:all=1,volume=${aVol}[na];[va][na]amix=inputs=2:duration=${(shortest || loopAudio) ? 'first' : 'longest'}:dropout_transition=0:normalize=0[aout]`;
         mapArgs = ['-map', '0:v:0', '-map', '[aout]'];
     } else {
         // Replace mode: drop the video's own audio, use only the new track
@@ -1098,7 +1107,7 @@ app.post('/api/add-audio/compile', (req, res) => {
         mapArgs = ['-map', '0:v:0', '-map', '[aout]'];
     }
 
-    console.log(`Adding audio (${mode}): ${session.videoPath} + ${session.audioPath} -> ${outputPath}`);
+    console.log(`Adding audio (${mode}, loop=${loopAudio}): ${session.videoPath} + ${session.audioPath} -> ${outputPath}`);
 
     const outputOptions = [
         '-filter_complex', filterStr,
@@ -1108,11 +1117,16 @@ app.post('/api/add-audio/compile', (req, res) => {
         '-b:a', '192k',
         '-movflags', '+faststart'
     ];
-    if (shortest) outputOptions.push('-shortest');
+    if (shortest || loopAudio) outputOptions.push('-shortest');
 
-    ffmpeg()
-        .input(session.videoPath)
-        .input(session.audioPath)
+    let command = ffmpeg().input(session.videoPath);
+    if (loopAudio) {
+        command = command.input(session.audioPath).inputOptions(['-stream_loop', '-1']);
+    } else {
+        command = command.input(session.audioPath);
+    }
+
+    command
         .outputOptions(outputOptions)
         .output(outputPath)
         .on('end', () => {

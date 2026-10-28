@@ -3214,6 +3214,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const addaudioAudioVolumeVal = document.getElementById('addaudio-audio-volume-val');
     const addaudioOffsetVal = document.getElementById('addaudio-offset-val');
     const addaudioShortestToggle = document.getElementById('addaudio-shortest-toggle');
+    const addaudioLoopToggle = document.getElementById('addaudio-loop-toggle');
     const addaudioRunBtn = document.getElementById('addaudio-run-btn');
     const addaudioProgressBox = document.getElementById('addaudio-progress-box');
     const addaudioStatusText = document.getElementById('addaudio-status-text');
@@ -3341,6 +3342,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const audioVolume = addaudioAudioVolumeSlider ? (parseInt(addaudioAudioVolumeSlider.value, 10) / 100) : 1;
         const offsetSec = addaudioParseOffset(addaudioOffsetVal ? addaudioOffsetVal.value : '0');
         const shortest = addaudioShortestToggle ? addaudioShortestToggle.checked : true;
+        const loopAudio = addaudioLoopToggle ? addaudioLoopToggle.checked : true;
 
         addaudioRunBtn.disabled = true;
         if (addaudioProgressBox) addaudioProgressBox.style.display = 'block';
@@ -3386,6 +3388,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     audioVolume,
                     offsetSec,
                     shortest,
+                    loopAudio,
                     filename: addaudioVideoFile.name
                 })
             });

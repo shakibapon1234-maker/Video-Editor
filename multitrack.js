@@ -797,18 +797,42 @@
                 if (t.type !== 'audio' || t.muted) return false;
                 return !!findActiveClipInTrack(t, globalT);
             });
+            var anyVideoActive = state.extraTracks.some(function (t) {
+                if (t.type !== 'video' || t.muted) return false;
+                return !!findActiveClipInTrack(t, globalT);
+            });
 
-            var volSlider = document.getElementById('multitrack-original-vol-slider');
-            var savedRatioStr = localStorage.getItem('multitrack_orig_vol');
-            var ratio = volSlider ? (parseFloat(volSlider.value) / 100) : (savedRatioStr !== null ? parseFloat(savedRatioStr) / 100 : 0);
-            if (isNaN(ratio)) ratio = 0;
+            var audioSlider = document.getElementById('multitrack-original-vol-slider');
+            var savedAudioStr = localStorage.getItem('multitrack_orig_vol');
+            var audioRatio = audioSlider ? (parseFloat(audioSlider.value) / 100) : (savedAudioStr !== null ? parseFloat(savedAudioStr) / 100 : 0);
+            if (isNaN(audioRatio)) audioRatio = 0;
+
+            var videoSlider = document.getElementById('multitrack-video-orig-vol-slider');
+            var savedVideoStr = localStorage.getItem('multitrack_video_orig_vol');
+            var videoRatio = videoSlider ? (parseFloat(videoSlider.value) / 100) : (savedVideoStr !== null ? parseFloat(savedVideoStr) / 100 : 0);
+            if (isNaN(videoRatio)) videoRatio = 0;
+
             var fullVol = (state.videoVolume !== undefined ? state.videoVolume : 1.0);
 
-            if (anyAudioActive) {
-                var duckGain = fullVol * ratio;
+            var duckRatio = 1.0;
+            var isDucked = false;
+
+            if (anyAudioActive && anyVideoActive) {
+                duckRatio = Math.min(audioRatio, videoRatio);
+                isDucked = true;
+            } else if (anyAudioActive) {
+                duckRatio = audioRatio;
+                isDucked = true;
+            } else if (anyVideoActive) {
+                duckRatio = videoRatio;
+                isDucked = true;
+            }
+
+            if (isDucked) {
+                var duckGain = fullVol * duckRatio;
                 // 1. Direct HTML5 video element control — only if user hasn't pressed preview-mute
                 if (state.video && !window.speakerMutedState) {
-                    if (ratio === 0) {
+                    if (duckRatio === 0) {
                         state.video.muted = true;
                     } else {
                         state.video.muted = false;
@@ -825,7 +849,7 @@
                 _mtDuckState = true;
 
             } else if (_mtDuckState) {
-                // Playhead exited the audio clip segment → Restore original video audio
+                // Playhead exited the audio/video clip segment → Restore original video audio
                 if (state.video && !window.speakerMutedState) {
                     state.video.muted = false;
                     var restoreVol = Math.max(0, Math.min(1, fullVol * (window.currentSpeakerVolume !== undefined ? window.currentSpeakerVolume : 1)));
@@ -1657,8 +1681,10 @@
             });
             body.appendChild(tracksWrap);
 
-            // Show original audio volume control only when an Audio Track exists
+            // Show original audio volume control when Audio Track and/or Video Track exists
             var hasAudioTrack = state.extraTracks.some(function (t) { return t.type === 'audio'; });
+            var hasVideoTrack = state.extraTracks.some(function (t) { return t.type === 'video'; });
+
             if (hasAudioTrack) {
                 var audioCtrlBox = document.createElement('div');
                 styleEl(audioCtrlBox, {
@@ -1670,13 +1696,13 @@
                 });
                 var savedVal = localStorage.getItem('multitrack_orig_vol') || '0';
                 audioCtrlBox.innerHTML =
-                    '<i class="fa-solid fa-sliders" style="color:#10b981;font-size:14px;flex-shrink:0"></i>' +
+                    '<i class="fa-solid fa-music" style="color:#10b981;font-size:14px;flex-shrink:0"></i>' +
                     '<div style="flex:1;min-width:160px">' +
                       '<div style="font-size:12px;font-weight:600;color:#10b981;margin-bottom:4px">' +
-                        '🎚️ Audio Track চলাকালীন ভিডিওর নিজস্ব অডিও ভলিউম' +
+                        '🎚️ Audio Track চলাকালীন মূল ভিডিওর নিজস্ব অডিও ভলিউম' +
                       '</div>' +
                       '<div style="font-size:11px;color:rgba(255,255,255,0.5);margin-bottom:6px">' +
-                        '0% = Audio Track শুধু বাজবে (ভিডিওর অডিও বন্ধ) &nbsp;|&nbsp; 100% = দুটো একসাথে মিক্স হবে' +
+                        '0% = Audio Track শুধু বাজবে (মূল ভিডিওর অডিও বন্ধ) &nbsp;|&nbsp; 100% = দুটো একসাথে মিক্স হবে' +
                       '</div>' +
                       '<div style="display:flex;align-items:center;gap:8px">' +
                         '<input type="range" id="multitrack-original-vol-slider" min="0" max="100" value="' + savedVal + '" style="flex:1;accent-color:#10b981;cursor:pointer">' +
@@ -1693,6 +1719,46 @@
                         sl.addEventListener('input', function () {
                             vl.textContent = sl.value + '%';
                             localStorage.setItem('multitrack_orig_vol', sl.value);
+                        });
+                    }
+                }, 0);
+            }
+
+            if (hasVideoTrack) {
+                var videoCtrlBox = document.createElement('div');
+                styleEl(videoCtrlBox, {
+                    marginTop: '10px', padding: '10px 12px',
+                    background: 'rgba(59,130,246,0.08)',
+                    border: '1px solid rgba(59,130,246,0.25)',
+                    borderRadius: '8px', display: 'flex',
+                    alignItems: 'center', gap: '10px', flexWrap: 'wrap'
+                });
+                var savedVideoVal = localStorage.getItem('multitrack_video_orig_vol');
+                if (savedVideoVal === null) savedVideoVal = '0'; // default 0%: added video's audio takes focus unless mixed
+                videoCtrlBox.innerHTML =
+                    '<i class="fa-solid fa-video" style="color:#3b82f6;font-size:14px;flex-shrink:0"></i>' +
+                    '<div style="flex:1;min-width:160px">' +
+                      '<div style="font-size:12px;font-weight:600;color:#60a5fa;margin-bottom:4px">' +
+                        '🎚️ Video Track চলাকালীন মূল ভিডিওর নিজস্ব অডিও ভলিউম' +
+                      '</div>' +
+                      '<div style="font-size:11px;color:rgba(255,255,255,0.5);margin-bottom:6px">' +
+                        '0% = Video Track-এর অডিও শুধু বাজবে (মূল ভিডিওর অডিও বন্ধ) &nbsp;|&nbsp; 100% = দুটো একসাথে মিক্স হবে' +
+                      '</div>' +
+                      '<div style="display:flex;align-items:center;gap:8px">' +
+                        '<input type="range" id="multitrack-video-orig-vol-slider" min="0" max="100" value="' + savedVideoVal + '" style="flex:1;accent-color:#3b82f6;cursor:pointer">' +
+                        '<span id="multitrack-video-orig-vol-val" style="font-size:12px;font-weight:700;color:#60a5fa;min-width:32px">' + savedVideoVal + '%</span>' +
+                      '</div>' +
+                    '</div>';
+                body.appendChild(videoCtrlBox);
+
+                // Wire slider → live display + persist
+                setTimeout(function () {
+                    var vsl = document.getElementById('multitrack-video-orig-vol-slider');
+                    var vvl = document.getElementById('multitrack-video-orig-vol-val');
+                    if (vsl && vvl) {
+                        vsl.addEventListener('input', function () {
+                            vvl.textContent = vsl.value + '%';
+                            localStorage.setItem('multitrack_video_orig_vol', vsl.value);
                         });
                     }
                 }, 0);
