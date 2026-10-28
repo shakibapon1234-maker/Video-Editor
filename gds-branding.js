@@ -11,7 +11,7 @@
 (function () {
     'use strict';
 
-    var STORAGE_KEY = 'gds_branding_config_v1';
+    var STORAGE_KEY = 'gds_branding_config_v2';
 
     var GDS_DEFAULTS = {
         website: 'gdstraininghub.com',
@@ -24,14 +24,24 @@
         pinnedCta: 'ফুল ভিডিও: পিন করা কমেন্টে 👇',
         logoSrc: 'assets/branding/logo.png',
         logoAltSrc: 'assets/branding/logo.gif',
-        autoLogo: true,
+        autoLogo: false, // Default is strictly false — logo is never added automatically unless user turns it on
         fullDuration: true
     };
 
     function getConfig() {
         try {
             var raw = localStorage.getItem(STORAGE_KEY);
-            if (raw) {
+            if (!raw) {
+                // If old v1 config exists, migrate custom fields but reset autoLogo to false
+                var oldRaw = localStorage.getItem('gds_branding_config_v1');
+                if (oldRaw) {
+                    var oldParsed = JSON.parse(oldRaw);
+                    delete oldParsed.autoLogo; // Reset old auto-add default
+                    var migrated = Object.assign({}, GDS_DEFAULTS, oldParsed, { autoLogo: false });
+                    localStorage.setItem(STORAGE_KEY, JSON.stringify(migrated));
+                    return migrated;
+                }
+            } else {
                 var parsed = JSON.parse(raw);
                 return Object.assign({}, GDS_DEFAULTS, parsed);
             }

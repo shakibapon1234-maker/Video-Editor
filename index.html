@@ -1185,11 +1185,14 @@
 
                                 <div class="blur-actions mt-3" id="blur-actions-container" style="display: none;">
                                     <div class="control-group">
-                                        <label>Blur Intensity</label>
-                                        <div class="slider-val-container">
-                                            <input type="range" id="blur-intensity-slider" min="2" max="40" value="15">
-                                            <span id="blur-intensity-val">15px</span>
+                                        <div style="display:flex; justify-content:space-between; align-items:center;">
+                                            <label style="font-weight:600;">Blur Intensity (ব্লারের গভীরতা)</label>
+                                            <span id="blur-intensity-val" style="color:var(--primary, #818cf8); font-weight:700;">25px</span>
                                         </div>
+                                        <div class="slider-val-container">
+                                            <input type="range" id="blur-intensity-slider" min="5" max="60" value="25" style="width:100%;">
+                                        </div>
+                                        <p style="font-size:11px; color:#94a3b8; margin-top:4px;">সংবেদনশীল তথ্য/নম্বর ঢাকতে ২০-৩০px ব্যবহার করুন যাতে ইউটিউব কনটেন্ট রিমুভ না করে।</p>
                                     </div>
 
                                     <div class="blur-region-list mt-3" id="blur-region-list">
@@ -5618,7 +5621,7 @@
     <script src="audio-silence-generator.js?v=1"></script>
     <script src="smoke-effect.js?v=5"></script>
     <script src="glitter-effect.js?v=4"></script>
-    <script src="editor.js?v=22"></script>
+    <script src="editor.js?v=24"></script>
     <script src="keyframes.js?v=1"></script>
     <script src="render-engine.js?v=2"></script>
     <script src="exporter.js?v=5"></script>
@@ -5733,6 +5736,6 @@
     <script src="ui-customization.js?v=6"></script>
     <script src="glass-cards.js?v=4"></script>
     <script src="screen-recorder.js?v=2"></script>
-    <script src="gds-branding.js?v=1"></script>
+    <script src="gds-branding.js?v=2"></script>
 </body>
 </html>

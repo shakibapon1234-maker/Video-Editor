@@ -6345,8 +6345,23 @@ document.addEventListener('DOMContentLoaded', () => {
                 ctx.strokeStyle = '#ec4899';
                 ctx.lineWidth = Math.max(2, fontPx * 0.06);
                 ctx.strokeText(text, x, y);
-                ctx.fillStyle = getFrontFill(0);
-                ctx.fillText(text, x, y);
+                if (colorMode === 'per-letter') {
+                    const widths = charList.map(c => ctx.measureText(c).width);
+                    const totalW = widths.reduce((a, b) => a + b, 0);
+                    let curX = (ctx.textAlign === 'center') ? (x - totalW / 2) : (ctx.textAlign === 'right' ? (x - totalW) : x);
+                    charList.forEach((c, idx) => {
+                        const cw = widths[idx];
+                        ctx.save();
+                        ctx.translate(curX + cw / 2, y);
+                        ctx.fillStyle = getFrontFill(idx);
+                        ctx.fillText(c, 0, 0);
+                        ctx.restore();
+                        curX += cw;
+                    });
+                } else {
+                    ctx.fillStyle = getFrontFill(0);
+                    ctx.fillText(text, x, y);
+                }
             } else if (template.includes('depth')) {
                 // Crisp, high-contrast face with a heavy dark outline so the
                 // long directional shadow behind it reads as genuine depth.
@@ -6356,8 +6371,23 @@ document.addEventListener('DOMContentLoaded', () => {
                 ctx.strokeStyle = '#0b0d14';
                 ctx.strokeText(text, x, y);
                 ctx.shadowBlur = 0;
-                ctx.fillStyle = getFrontFill(0) === '#ffffff' ? '#e8edff' : getFrontFill(0);
-                ctx.fillText(text, x, y);
+                if (colorMode === 'per-letter') {
+                    const widths = charList.map(c => ctx.measureText(c).width);
+                    const totalW = widths.reduce((a, b) => a + b, 0);
+                    let curX = (ctx.textAlign === 'center') ? (x - totalW / 2) : (ctx.textAlign === 'right' ? (x - totalW) : x);
+                    charList.forEach((c, idx) => {
+                        const cw = widths[idx];
+                        ctx.save();
+                        ctx.translate(curX + cw / 2, y);
+                        ctx.fillStyle = getFrontFill(idx);
+                        ctx.fillText(c, 0, 0);
+                        ctx.restore();
+                        curX += cw;
+                    });
+                } else {
+                    ctx.fillStyle = getFrontFill(0) === '#ffffff' ? '#e8edff' : getFrontFill(0);
+                    ctx.fillText(text, x, y);
+                }
             } else if (template.includes('glass')) {
                 // Frosted, semi-translucent face with a bright rim-light —
                 // visibly cooler and airier than the solid bevel look.
@@ -6367,18 +6397,48 @@ document.addEventListener('DOMContentLoaded', () => {
                 ctx.strokeStyle = 'rgba(255,255,255,0.95)';
                 ctx.strokeText(text, x, y);
                 ctx.shadowBlur = 0;
-                const gFill = getFrontFill(0);
-                ctx.fillStyle = gFill === '#ffffff' ? 'rgba(235, 248, 255, 0.88)' : gFill;
-                ctx.fillText(text, x, y);
+                if (colorMode === 'per-letter') {
+                    const widths = charList.map(c => ctx.measureText(c).width);
+                    const totalW = widths.reduce((a, b) => a + b, 0);
+                    let curX = (ctx.textAlign === 'center') ? (x - totalW / 2) : (ctx.textAlign === 'right' ? (x - totalW) : x);
+                    charList.forEach((c, idx) => {
+                        const cw = widths[idx];
+                        ctx.save();
+                        ctx.translate(curX + cw / 2, y);
+                        ctx.fillStyle = getFrontFill(idx);
+                        ctx.fillText(c, 0, 0);
+                        ctx.restore();
+                        curX += cw;
+                    });
+                } else {
+                    const gFill = getFrontFill(0);
+                    ctx.fillStyle = gFill === '#ffffff' ? 'rgba(235, 248, 255, 0.88)' : gFill;
+                    ctx.fillText(text, x, y);
+                }
             } else if (template.includes('chrome')) {
                 // Bright specular highlight stroke + cool steel-blue fill to
                 // sell a polished metal surface.
                 ctx.lineWidth = Math.max(2, fontPx * 0.05);
                 ctx.strokeStyle = '#f8fafc';
                 ctx.strokeText(text, x, y);
-                const cFill = getFrontFill(0);
-                ctx.fillStyle = cFill === '#ffffff' ? '#cbd5e1' : cFill;
-                ctx.fillText(text, x, y);
+                if (colorMode === 'per-letter') {
+                    const widths = charList.map(c => ctx.measureText(c).width);
+                    const totalW = widths.reduce((a, b) => a + b, 0);
+                    let curX = (ctx.textAlign === 'center') ? (x - totalW / 2) : (ctx.textAlign === 'right' ? (x - totalW) : x);
+                    charList.forEach((c, idx) => {
+                        const cw = widths[idx];
+                        ctx.save();
+                        ctx.translate(curX + cw / 2, y);
+                        ctx.fillStyle = getFrontFill(idx);
+                        ctx.fillText(c, 0, 0);
+                        ctx.restore();
+                        curX += cw;
+                    });
+                } else {
+                    const cFill = getFrontFill(0);
+                    ctx.fillStyle = cFill === '#ffffff' ? '#cbd5e1' : cFill;
+                    ctx.fillText(text, x, y);
+                }
                 ctx.save();
                 ctx.globalAlpha = 0.5;
                 ctx.fillStyle = '#ffffff';
@@ -6387,14 +6447,30 @@ document.addEventListener('DOMContentLoaded', () => {
                 ctx.restore();
             } else if (template.includes('holo')) {
                 // Rainbow-tinted outline over a shifting fill for an
-                // iridescent-foil sticker look.
-                const hueBase = (Date.now() / 12) % 360;
+                // iridescent-foil sticker look. Deterministic time for export stability.
+                const curT = (typeof state !== 'undefined' && state.currentTime) ? state.currentTime : 0;
+                const hueBase = (curT * 120) % 360;
                 ctx.lineWidth = Math.max(2, fontPx * 0.05);
                 ctx.strokeStyle = `hsla(${hueBase}, 95%, 70%, 0.9)`;
                 ctx.strokeText(text, x, y);
-                const hFill = getFrontFill(0);
-                ctx.fillStyle = hFill === '#ffffff' ? `hsla(${(hueBase + 140) % 360}, 85%, 78%, 1)` : hFill;
-                ctx.fillText(text, x, y);
+                if (colorMode === 'per-letter') {
+                    const widths = charList.map(c => ctx.measureText(c).width);
+                    const totalW = widths.reduce((a, b) => a + b, 0);
+                    let curX = (ctx.textAlign === 'center') ? (x - totalW / 2) : (ctx.textAlign === 'right' ? (x - totalW) : x);
+                    charList.forEach((c, idx) => {
+                        const cw = widths[idx];
+                        ctx.save();
+                        ctx.translate(curX + cw / 2, y);
+                        ctx.fillStyle = getFrontFill(idx);
+                        ctx.fillText(c, 0, 0);
+                        ctx.restore();
+                        curX += cw;
+                    });
+                } else {
+                    const hFill = getFrontFill(0);
+                    ctx.fillStyle = hFill === '#ffffff' ? `hsla(${(hueBase + 140) % 360}, 85%, 78%, 1)` : hFill;
+                    ctx.fillText(text, x, y);
+                }
             } else if (template.includes('glossy')) {
                 // ── Ultra-Glossy 3D Glaze (3rd Screenshot Style) ──────────────
                 ctx.save();
@@ -6414,14 +6490,44 @@ document.addEventListener('DOMContentLoaded', () => {
                 ctx.shadowBlur = Math.max(6, fontPx * 0.12);
                 ctx.shadowOffsetY = Math.max(2, fontPx * 0.05);
 
-                const grad = ctx.createLinearGradient(x, y - fontPx * 0.55, x, y + fontPx * 0.55);
-                const baseC = getFrontFill(0);
-                grad.addColorStop(0, '#ffffff');
-                grad.addColorStop(0.46, baseC === '#ffffff' ? '#ffffff' : baseC);
-                grad.addColorStop(0.50, shadeColorTO(baseC === '#ffffff' ? '#e2e8f0' : baseC, -8));
-                grad.addColorStop(1, shadeColorTO(baseC === '#ffffff' ? '#cbd5e1' : baseC, -22));
-                ctx.fillStyle = grad;
-                ctx.fillText(text, x, y);
+                if (colorMode === 'gradient') {
+                    const grad = ctx.createLinearGradient(x, y - fontPx * 0.55, x, y + fontPx * 0.55);
+                    const gc1 = (item && item.gradientColor1) || '#22d3ee';
+                    const gc2 = (item && item.gradientColor2) || '#a855f7';
+                    grad.addColorStop(0, '#ffffff');
+                    grad.addColorStop(0.35, gc1);
+                    grad.addColorStop(0.65, gc2);
+                    grad.addColorStop(1, shadeColorTO(gc2, -25));
+                    ctx.fillStyle = grad;
+                    ctx.fillText(text, x, y);
+                } else if (colorMode === 'per-letter') {
+                    const widths = charList.map(c => ctx.measureText(c).width);
+                    const totalW = widths.reduce((a, b) => a + b, 0);
+                    let curX = (ctx.textAlign === 'center') ? (x - totalW / 2) : (ctx.textAlign === 'right' ? (x - totalW) : x);
+                    charList.forEach((c, idx) => {
+                        const cw = widths[idx];
+                        ctx.save();
+                        ctx.translate(curX + cw / 2, y);
+                        const cBase = getFrontFill(idx);
+                        const cGrad = ctx.createLinearGradient(0, -fontPx * 0.55, 0, fontPx * 0.55);
+                        cGrad.addColorStop(0, '#ffffff');
+                        cGrad.addColorStop(0.46, cBase);
+                        cGrad.addColorStop(1, shadeColorTO(cBase, -20));
+                        ctx.fillStyle = cGrad;
+                        ctx.fillText(c, 0, 0);
+                        ctx.restore();
+                        curX += cw;
+                    });
+                } else {
+                    const grad = ctx.createLinearGradient(x, y - fontPx * 0.55, x, y + fontPx * 0.55);
+                    const baseC = getFrontFill(0);
+                    grad.addColorStop(0, '#ffffff');
+                    grad.addColorStop(0.46, baseC === '#ffffff' ? '#ffffff' : baseC);
+                    grad.addColorStop(0.50, shadeColorTO(baseC === '#ffffff' ? '#e2e8f0' : baseC, -8));
+                    grad.addColorStop(1, shadeColorTO(baseC === '#ffffff' ? '#cbd5e1' : baseC, -22));
+                    ctx.fillStyle = grad;
+                    ctx.fillText(text, x, y);
+                }
                 ctx.shadowBlur = 0;
 
                 // Specular upper-half gloss sheen
@@ -6488,14 +6594,44 @@ document.addEventListener('DOMContentLoaded', () => {
                 ctx.shadowBlur = Math.max(6, fontPx * 0.12);
                 ctx.shadowOffsetY = Math.max(2, fontPx * 0.05);
 
-                const grad = ctx.createLinearGradient(x, y - fontPx * 0.55, x, y + fontPx * 0.55);
-                const baseC = getFrontFill(0);
-                grad.addColorStop(0, '#ffffff');
-                grad.addColorStop(0.46, baseC === '#ffffff' ? '#ffffff' : baseC);
-                grad.addColorStop(0.50, shadeColorTO(baseC === '#ffffff' ? '#e2e8f0' : baseC, -8));
-                grad.addColorStop(1, shadeColorTO(baseC === '#ffffff' ? '#cbd5e1' : baseC, -22));
-                ctx.fillStyle = grad;
-                ctx.fillText(text, x, y);
+                if (colorMode === 'gradient') {
+                    const grad = ctx.createLinearGradient(x, y - fontPx * 0.55, x, y + fontPx * 0.55);
+                    const gc1 = (item && item.gradientColor1) || '#22d3ee';
+                    const gc2 = (item && item.gradientColor2) || '#a855f7';
+                    grad.addColorStop(0, '#ffffff');
+                    grad.addColorStop(0.35, gc1);
+                    grad.addColorStop(0.65, gc2);
+                    grad.addColorStop(1, shadeColorTO(gc2, -25));
+                    ctx.fillStyle = grad;
+                    ctx.fillText(text, x, y);
+                } else if (colorMode === 'per-letter') {
+                    const widths = charList.map(c => ctx.measureText(c).width);
+                    const totalW = widths.reduce((a, b) => a + b, 0);
+                    let curX = (ctx.textAlign === 'center') ? (x - totalW / 2) : (ctx.textAlign === 'right' ? (x - totalW) : x);
+                    charList.forEach((c, idx) => {
+                        const cw = widths[idx];
+                        ctx.save();
+                        ctx.translate(curX + cw / 2, y);
+                        const cBase = getFrontFill(idx);
+                        const cGrad = ctx.createLinearGradient(0, -fontPx * 0.55, 0, fontPx * 0.55);
+                        cGrad.addColorStop(0, '#ffffff');
+                        cGrad.addColorStop(0.46, cBase);
+                        cGrad.addColorStop(1, shadeColorTO(cBase, -20));
+                        ctx.fillStyle = cGrad;
+                        ctx.fillText(c, 0, 0);
+                        ctx.restore();
+                        curX += cw;
+                    });
+                } else {
+                    const grad = ctx.createLinearGradient(x, y - fontPx * 0.55, x, y + fontPx * 0.55);
+                    const baseC = getFrontFill(0);
+                    grad.addColorStop(0, '#ffffff');
+                    grad.addColorStop(0.46, baseC === '#ffffff' ? '#ffffff' : baseC);
+                    grad.addColorStop(0.50, shadeColorTO(baseC === '#ffffff' ? '#e2e8f0' : baseC, -8));
+                    grad.addColorStop(1, shadeColorTO(baseC === '#ffffff' ? '#cbd5e1' : baseC, -22));
+                    ctx.fillStyle = grad;
+                    ctx.fillText(text, x, y);
+                }
                 ctx.shadowBlur = 0;
 
                 // Specular upper-half gloss sheen
@@ -6578,6 +6714,9 @@ document.addEventListener('DOMContentLoaded', () => {
             if (charDrawFn) {
                 charDrawFn(ctx, chars[i], i, chars.length);
             } else {
+                if (item && item.colorMode === 'per-letter') {
+                    ctx.fillStyle = getTextOverlayFillStyle(ctx, item, i, chars.length, totalWidth, 80, text, 0, 0, item.fontSize);
+                }
                 if (strokeColor) ctx.strokeText(chars[i], 0, 0);
                 ctx.fillText(chars[i], 0, 0);
             }
@@ -6614,7 +6753,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // Draws `text` along a custom user-drawn curve defined by normalized
     // `curvePoints` [{x,y}, ...]. ctx.font/fillStyle/textAlign/textBaseline
     // must already be set by the caller.
-    function drawCustomCurveTextOverlay(ctx, text, curvePoints, strokeColor, strokeWidth, charDrawFn) {
+    function drawCustomCurveTextOverlay(ctx, text, curvePoints, strokeColor, strokeWidth, charDrawFn, item) {
         if (!curvePoints || curvePoints.length < 2 || !text) {
             if (charDrawFn) {
                 charDrawFn(ctx, text, 0, 1);
@@ -6692,6 +6831,9 @@ document.addEventListener('DOMContentLoaded', () => {
             if (charDrawFn) {
                 charDrawFn(ctx, chars[ci], ci, chars.length);
             } else {
+                if (item && item.colorMode === 'per-letter') {
+                    ctx.fillStyle = getTextOverlayFillStyle(ctx, item, ci, chars.length, totalLength, 80, text, 0, 0, item.fontSize);
+                }
                 if (strokeColor) ctx.strokeText(chars[ci], 0, 0);
                 ctx.fillText(chars[ci], 0, 0);
             }
@@ -6767,7 +6909,7 @@ document.addEventListener('DOMContentLoaded', () => {
         drawTextOverlayAnimatedLines(ctx, text, fontSize, (line) => drawTextOverlayParticleDustLine(ctx, line, progress, phase, fontSize, textColor, strokeColor, strokeWidth, currentTime));
     }
 
-    function drawTextOverlayParticleDustLine(ctx, text, progress, phase, fontSize, item, strokeColor, strokeWidth, currentTime) {
+    function drawTextOverlayParticleDustLine(ctx, text, progress, phase, fontSize, textColor, strokeColor, strokeWidth, currentTime) {
         const isEditingStill = (state.currentStep === 3 && !state.isPlaying);
         const effectivePhase = isEditingStill ? 'settled' : phase;
         
@@ -6855,7 +6997,7 @@ document.addEventListener('DOMContentLoaded', () => {
         drawTextOverlayAnimatedLines(ctx, text, fontSize || 40, (line) => drawTextOverlayGlitchLine(ctx, line, currentTime, textColor, strokeColor, strokeWidth));
     }
 
-    function drawTextOverlayGlitchLine(ctx, text, currentTime, item, strokeColor, strokeWidth, fontSize) {
+    function drawTextOverlayGlitchLine(ctx, text, currentTime, textColor, strokeColor, strokeWidth, fontSize) {
         const t = currentTime * 18;
         const isGlitchBeat = (Math.sin(t * 1.3) > 0.55) || (Math.cos(t * 2.7) > 0.65);
         const shiftX = isGlitchBeat ? (Math.sin(t * 7) * 7) : 0;
@@ -8003,57 +8145,116 @@ document.addEventListener('DOMContentLoaded', () => {
         // --- Step A2: Draw Blur/Mosaic Regions (Phase 4B) ---
         if (state.blurRegions && state.blurRegions.length > 0) {
             // Get current timeline time for time-gated blur regions
-            const _blurTimelineClock = getEditorTimelineClock();
+            const _blurTimelineClock = (typeof getEditorTimelineClock === 'function')
+                ? getEditorTimelineClock()
+                : { current: state.currentTime || 0, total: state.duration || 1000 };
             const _blurCurrentTime = state.isExportingVideo
                 ? (state.exportTickerTime ?? _blurTimelineClock.current)
                 : _blurTimelineClock.current;
-            state.blurRegions.forEach((region) => {
-                // Skip region if current time is outside its time window
+
+            // Reusable offscreen scratch canvas to sample and blur the exact pixels rendered in-place
+            if (!window._blurOffscreenCanvas) {
+                window._blurOffscreenCanvas = document.createElement('canvas');
+                window._blurOffscreenCtx = window._blurOffscreenCanvas.getContext('2d', { willReadFrequently: true });
+            }
+            const offCanvas = window._blurOffscreenCanvas;
+            const offCtx = window._blurOffscreenCtx;
+
+            state.blurRegions.forEach((region, regionIdx) => {
                 const blurStart = (region.startSec !== undefined && region.startSec !== null) ? region.startSec : 0;
                 const blurEnd   = (region.endSec   !== undefined && region.endSec   !== null) ? region.endSec   : Infinity;
-                if (_blurCurrentTime < blurStart || _blurCurrentTime > blurEnd) return;
+                const isTimeActive = (_blurCurrentTime >= blurStart && _blurCurrentTime <= blurEnd);
+                const isSelected = region.id === state.selectedBlurId;
 
-                const rx = drawX + region.x * drawW;
-                const ry = drawY + region.y * drawH;
-                const rw = region.w * drawW;
-                const rh = region.h * drawH;
+                const rx = Math.round(drawX + region.x * drawW);
+                const ry = Math.round(drawY + region.y * drawH);
+                const rw = Math.round(region.w * drawW);
+                const rh = Math.round(region.h * drawH);
                 if (rw <= 0 || rh <= 0) return;
 
-                state.ctx.save();
-                state.ctx.beginPath();
-                state.ctx.rect(rx, ry, rw, rh);
-                state.ctx.clip();
+                // 1. Render the actual blurred content in-place if currently active in the video timeline
+                if (isTimeActive) {
+                    const pad = Math.min(35, Math.max(8, Math.round((region.intensity || 25) * 0.8)));
+                    const sx = Math.max(0, rx - pad);
+                    const sy = Math.max(0, ry - pad);
+                    const sw = Math.min(canvasW - sx, rw + (rx - sx) + pad);
+                    const sh = Math.min(canvasH - sy, rh + (ry - sy) + pad);
 
-                // Re-draw the same video source frame into the clipped region with a blur filter applied,
-                // so the blur only affects this rectangle instead of the whole canvas.
-                state.ctx.filter = `blur(${region.intensity}px)`;
-                if (state.isAdjustingCrop) {
-                    state.ctx.drawImage(mediaSource, drawX, drawY, drawW, drawH);
-                } else {
-                    const sx = (state.cropX || 0) * videoW;
-                    const sy = (state.cropY || 0) * videoH;
-                    const sw = (state.cropW || 1) * videoW;
-                    const sh = (state.cropH || 1) * videoH;
-                    state.ctx.drawImage(mediaSource, sx, sy, sw, sh, drawX, drawY, drawW, drawH);
+                    if (sw > 0 && sh > 0 && offCtx) {
+                        try {
+                            offCanvas.width = sw;
+                            offCanvas.height = sh;
+                            offCtx.clearRect(0, 0, sw, sh);
+                            // Capture the exact rendered frame pixels (handles all transforms, Ken Burns, color grades & punch zooms)
+                            offCtx.drawImage(state.canvas, sx, sy, sw, sh, 0, 0, sw, sh);
+
+                            state.ctx.save();
+                            state.ctx.beginPath();
+                            state.ctx.rect(rx, ry, rw, rh);
+                            state.ctx.clip();
+
+                            // Resolution-scaled blur intensity (keeps 1080p and 4K exports strong and opaque)
+                            const scale = Math.max(1, canvasW / 1280);
+                            const blurPx = Math.max(8, Math.round((region.intensity || 25) * scale));
+
+                            // Multi-pass blur for strong, impenetrable YouTube privacy protection
+                            state.ctx.filter = `blur(${blurPx}px)`;
+                            state.ctx.drawImage(offCanvas, sx, sy, sw, sh);
+
+                            // Second reinforcement pass for high security on sensitive numbers / text
+                            if (blurPx >= 12) {
+                                state.ctx.filter = `blur(${Math.round(blurPx * 0.7)}px)`;
+                                state.ctx.drawImage(offCanvas, sx, sy, sw, sh);
+                            }
+
+                            state.ctx.filter = 'none';
+                            state.ctx.restore();
+                        } catch (blurErr) {
+                            console.warn('Blur render notice:', blurErr);
+                        }
+                    }
                 }
-                state.ctx.filter = 'none';
-                state.ctx.restore();
 
-                // Show selection box only while actively editing in Step 2
-                if (state.currentStep === 2 && state.isAddingBlur) {
+                // 2. Show selection box and resize handles while Blur tool is toggled ON (preview-only, never in exported video)
+                if (state.isAddingBlur && !state.isExportingVideo && !state.customExportTime) {
                     state.ctx.save();
-                    state.ctx.strokeStyle = region.id === state.selectedBlurId ? 'rgba(79, 70, 229, 0.9)' : 'rgba(255, 255, 255, 0.6)';
-                    state.ctx.lineWidth = 2;
-                    state.ctx.setLineDash([6, 4]);
+                    state.ctx.strokeStyle = isSelected ? '#a855f7' : (isTimeActive ? 'rgba(255, 255, 255, 0.75)' : 'rgba(148, 163, 184, 0.45)');
+                    state.ctx.lineWidth = isSelected ? 2.5 : 1.5;
+                    state.ctx.setLineDash(isSelected ? [6, 3] : [4, 4]);
                     state.ctx.strokeRect(rx, ry, rw, rh);
                     state.ctx.setLineDash([]);
 
-                    if (region.id === state.selectedBlurId) {
-                        state.ctx.fillStyle = '#ffffff';
-                        state.ctx.fillRect(rx + rw - 6, ry + rh - 6, 12, 12);
-                        state.ctx.strokeStyle = '#4f46e5';
-                        state.ctx.strokeRect(rx + rw - 6, ry + rh - 6, 12, 12);
+                    // Draw 4 corner handles on selected region
+                    if (isSelected) {
+                        const hs = Math.max(8, Math.min(14, Math.round(canvasW * 0.012)));
+                        const corners = [
+                            [rx, ry],
+                            [rx + rw, ry],
+                            [rx, ry + rh],
+                            [rx + rw, ry + rh]
+                        ];
+                        corners.forEach(([cx, cy]) => {
+                            state.ctx.fillStyle = '#ffffff';
+                            state.ctx.strokeStyle = '#9333ea';
+                            state.ctx.lineWidth = 2;
+                            state.ctx.beginPath();
+                            state.ctx.arc(cx, cy, hs / 2, 0, Math.PI * 2);
+                            state.ctx.fill();
+                            state.ctx.stroke();
+                        });
                     }
+
+                    // Region badge label (e.g. "Blur 1")
+                    state.ctx.fillStyle = isSelected ? 'rgba(147, 51, 234, 0.92)' : 'rgba(15, 23, 42, 0.75)';
+                    state.ctx.font = 'bold 11px sans-serif';
+                    const badgeText = `Blur ${regionIdx + 1}${!isTimeActive ? ' (সময়সীমার বাইরে)' : ''}`;
+                    const badgeW = state.ctx.measureText(badgeText).width + 10;
+                    const badgeH = 18;
+                    const badgeY = Math.max(0, ry - badgeH - 2);
+                    state.ctx.fillRect(rx, badgeY, badgeW, badgeH);
+                    state.ctx.fillStyle = '#ffffff';
+                    state.ctx.fillText(badgeText, rx + 5, badgeY + 13);
+
                     state.ctx.restore();
                 }
             });
@@ -10975,7 +11176,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         } else {
                             var _activeCurvePoints = (state.isDrawingTextCurve && state.textCurvePoints && state.textCurvePoints.length >= 2)
                                 ? state.textCurvePoints : item.curvePoints;
-                            drawCustomCurveTextOverlay(ctx2, textToDraw, _activeCurvePoints, outlineColor, outlineWidth, _charDrawFn);
+                            drawCustomCurveTextOverlay(ctx2, textToDraw, _activeCurvePoints, outlineColor, outlineWidth, _charDrawFn, item);
                         }
                         return;
                     }
@@ -11048,7 +11249,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         });
                         ctx2.restore();
                     } else if (textAnimStyle === 'shine-sweep') {
-                        drawTextOverlayShineSweep(ctx2, textToDraw, currentTime, item.fontSize, item, outlineColor, outlineWidth);
+                        drawTextOverlayShineSweep(ctx2, textToDraw, currentTime, item.fontSize, playbackTextFill, outlineColor, outlineWidth);
                     } else if (textAnimStyle === 'rainbow-flow') {
                         drawTextOverlayRainbowFlow(ctx2, textToDraw, currentTime, outlineColor, outlineWidth, item.fontSize);
                     } else if (textAnimStyle === 'reels-scatter' || textAnimStyle === 'neon-speed-streak') {
@@ -11075,16 +11276,54 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (_extraThick > 0 && !isGlassSolidSplit) {
                     state.ctx.save();
                     state.ctx.font = buildTextOverlayFont(item, item.fontSize, fontFamily);
-                    state.ctx.strokeStyle = item.color || '#ffffff';
                     state.ctx.lineWidth = _extraThick * 1.5;
                     state.ctx.lineJoin = 'round';
                     state.ctx.textAlign = 'center';
                     state.ctx.textBaseline = 'middle';
+                    // Use destination-over so the stroke ONLY thickens outwards and
+                    // NEVER overwrites or contaminates the inner gradient/rainbow fill
+                    state.ctx.globalCompositeOperation = 'destination-over';
                     const _thickLines = resolvedItemText.split('\n');
                     const _thickLH = item.fontSize * 1.25;
                     const _thickStartY = _thickLines.length <= 1 ? 0 : -((_thickLines.length - 1) * _thickLH) / 2;
                     _thickLines.forEach((ln, li) => {
-                        state.ctx.strokeText(ln, 0, _thickStartY + li * _thickLH);
+                        const lineY = _thickStartY + li * _thickLH;
+                        if (item.colorMode === 'per-letter') {
+                            const chars = splitGraphemes(ln);
+                            const widths = chars.map(c => state.ctx.measureText(c).width);
+                            const totalW = widths.reduce((a, b) => a + b, 0);
+                            let curX = -totalW / 2;
+                            chars.forEach((c, idx) => {
+                                const cw = widths[idx];
+                                state.ctx.save();
+                                state.ctx.translate(curX + cw / 2, lineY);
+                                state.ctx.strokeStyle = getTextOverlayFillStyle(state.ctx, item, idx, chars.length, totalW, _thickLH, ln, 0, 0, item.fontSize);
+                                state.ctx.strokeText(c, 0, 0);
+                                state.ctx.restore();
+                                curX += cw;
+                            });
+                        } else if (item.colorMode === 'gradient') {
+                            state.ctx.strokeStyle = getTextOverlayFillStyle(state.ctx, item, 0, 1, boxW, _thickLH, ln, 0, lineY, item.fontSize);
+                            state.ctx.strokeText(ln, 0, lineY);
+                        } else if (textAnimStyle === 'rainbow-flow') {
+                            const chars = splitGraphemes(ln);
+                            const widths = chars.map(c => state.ctx.measureText(c).width);
+                            const totalW = widths.reduce((a, b) => a + b, 0);
+                            let curX = -totalW / 2;
+                            chars.forEach((c, idx) => {
+                                const cw = widths[idx];
+                                const hue = ((currentTime || 0) * 140 + idx * 25) % 360;
+                                state.ctx.save();
+                                state.ctx.translate(curX + cw / 2, lineY);
+                                state.ctx.strokeStyle = `hsl(${hue}, 90%, 65%)`;
+                                state.ctx.strokeText(c, 0, 0);
+                                state.ctx.restore();
+                                curX += cw;
+                            });
+                        } else {
+                            state.ctx.strokeStyle = item.color || '#ffffff';
+                            state.ctx.strokeText(ln, 0, lineY);
+                        }
                     });
                     state.ctx.restore();
                 }
@@ -12439,14 +12678,20 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     
     function getRenderedVideoBounds() {
-        const canvasW = state.canvas.width, canvasH = state.canvas.height;
-        const activeClip = state.clips.find(c => c.id === state.activeClipId);
+        if (window.__baseMediaRect && window.__baseMediaRect.w > 0 && window.__baseMediaRect.h > 0) {
+            return window.__baseMediaRect;
+        }
+        const canvasW = state.canvas ? state.canvas.width : 1280;
+        const canvasH = state.canvas ? state.canvas.height : 720;
+        const activeClip = (state.clips || []).find(c => c.id === state.activeClipId);
         const isImage = activeClip && activeClip.type === 'image';
-        const sourceW = isImage ? (activeClip.imageImg?.naturalWidth || canvasW) : state.video.videoWidth;
-        const sourceH = isImage ? (activeClip.imageImg?.naturalHeight || canvasH) : state.video.videoHeight;
-        const videoAspect = sourceW / sourceH;
+        const sourceW = isImage ? (activeClip.imageImg?.naturalWidth || canvasW) : (state.video?.videoWidth || activeClip?.videoWidth || canvasW);
+        const sourceH = isImage ? (activeClip.imageImg?.naturalHeight || canvasH) : (state.video?.videoHeight || activeClip?.videoHeight || canvasH);
+        const videoAspect = (sourceW && sourceH) ? (sourceW / sourceH) : (16 / 9);
         const canvasAspect = canvasW / canvasH;
-        const currentAspect = state.isAdjustingCrop ? videoAspect : (((state.cropW || 1) * sourceW) / ((state.cropH || 1) * sourceH));
+        const cropWVal = (state.cropW && state.cropW > 0 && !isNaN(state.cropW)) ? state.cropW : 1;
+        const cropHVal = (state.cropH && state.cropH > 0 && !isNaN(state.cropH)) ? state.cropH : 1;
+        const currentAspect = state.isAdjustingCrop ? videoAspect : ((cropWVal * sourceW) / (cropHVal * sourceH));
         let w = canvasW, h = canvasH, x = 0, y = 0;
         if (state.layoutMode === 'fill') {
             if (currentAspect > canvasAspect) { w = canvasH * currentAspect; x = (canvasW - w) / 2; }
@@ -12701,105 +12946,116 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         // Blur/Mosaic region tool (Phase 4B)
-        if (state.isAddingBlur) {
+        const hasExistingBlurs = (state.blurRegions && state.blurRegions.length > 0);
+        if (state.isAddingBlur || hasExistingBlurs) {
             const coords = getCanvasCoords(e);
+            const bounds = getRenderedVideoBounds();
+            const drawX = bounds.x;
+            const drawY = bounds.y;
+            const drawW = bounds.w;
+            const drawH = bounds.h;
 
-            const canvasW = state.canvas.width;
-            const canvasH = state.canvas.height;
-            const videoW = state.video.videoWidth;
-            const videoH = state.video.videoHeight;
-            const videoAspect = videoW / videoH;
-            const canvasAspect = canvasW / canvasH;
+            if (drawW > 0 && drawH > 0) {
+                // Clamp click coordinates to bounds so clicking near or at edge works reliably
+                const clampedX = Math.max(drawX, Math.min(drawX + drawW, coords.x));
+                const clampedY = Math.max(drawY, Math.min(drawY + drawH, coords.y));
 
-            let drawW = canvasW;
-            let drawH = canvasH;
-            let drawX = 0;
-            let drawY = 0;
+                const rect = state.canvas.getBoundingClientRect();
+                const w_rect = rect.width || 1;
+                const h_rect = rect.height || 1;
+                const r_canvas = (state.canvas.width / state.canvas.height) || (16 / 9);
+                const r_rect = w_rect / h_rect;
+                const w_render = (r_canvas > r_rect) ? w_rect : h_rect * r_canvas;
+                const handleSize = Math.max(16, 24 * (state.canvas.width / (w_render || state.canvas.width)));
+                const isNear = (x, y) => Math.hypot(coords.x - x, coords.y - y) < handleSize;
 
-            if (videoAspect > canvasAspect) {
-                drawH = canvasW / videoAspect;
-                drawY = (canvasH - drawH) / 2;
-            } else if (videoAspect < canvasAspect) {
-                drawW = canvasH * videoAspect;
-                drawX = (canvasW - drawW) / 2;
-            }
+                // 1. Check if clicking on ANY 4-corner resize handle of active/existing blur regions
+                const activeRegion = state.blurRegions.find(r => r.id === state.selectedBlurId);
+                const testRegions = activeRegion ? [activeRegion, ...state.blurRegions.filter(r => r.id !== activeRegion.id)] : state.blurRegions;
 
-            if (coords.x < drawX || coords.x > drawX + drawW || coords.y < drawY || coords.y > drawY + drawH) {
-                return;
-            }
+                let cornerHitRegion = null;
+                let cornerHitType = null;
+                for (const r of testRegions) {
+                    const rx = drawX + r.x * drawW;
+                    const ry = drawY + r.y * drawH;
+                    const rw = r.w * drawW;
+                    const rh = r.h * drawH;
 
-            const rect = state.canvas.getBoundingClientRect();
-            const w_rect = rect.width;
-            const h_rect = rect.height;
-            const r_canvas = canvasW / canvasH;
-            const r_rect = w_rect / h_rect;
-            const w_render = (r_canvas > r_rect) ? w_rect : h_rect * r_canvas;
-            const handleSize = 20 * (canvasW / w_render);
-            const isNear = (x, y) => Math.hypot(coords.x - x, coords.y - y) < handleSize;
+                    if (isNear(rx + rw, ry + rh)) { cornerHitRegion = r; cornerHitType = 'br'; break; }
+                    if (isNear(rx, ry + rh)) { cornerHitRegion = r; cornerHitType = 'bl'; break; }
+                    if (isNear(rx + rw, ry)) { cornerHitRegion = r; cornerHitType = 'tr'; break; }
+                    if (isNear(rx, ry)) { cornerHitRegion = r; cornerHitType = 'tl'; break; }
+                }
 
-            // If a region is already selected, check for resize-handle or drag hit first
-            const selected = state.blurRegions.find(r => r.id === state.selectedBlurId);
-            if (selected) {
-                const rx = drawX + selected.x * drawW;
-                const ry = drawY + selected.y * drawH;
-                const rw = selected.w * drawW;
-                const rh = selected.h * drawH;
-
-                if (isNear(rx + rw, ry + rh)) {
+                if (cornerHitRegion) {
+                    state.selectedBlurId = cornerHitRegion.id;
                     state.isResizingBlur = true;
-                    e.preventDefault();
-                    return;
-                }
-                if (coords.x >= rx && coords.x <= rx + rw && coords.y >= ry && coords.y <= ry + rh) {
-                    state.isDraggingBlur = true;
-                    state.dragBlurOffsetX = coords.x - rx;
-                    state.dragBlurOffsetY = coords.y - ry;
-                    e.preventDefault();
-                    return;
-                }
-            }
-
-            // Check if click lands on a different existing region -> select it
-            for (let i = state.blurRegions.length - 1; i >= 0; i--) {
-                const region = state.blurRegions[i];
-                const rx = drawX + region.x * drawW;
-                const ry = drawY + region.y * drawH;
-                const rw = region.w * drawW;
-                const rh = region.h * drawH;
-                if (coords.x >= rx && coords.x <= rx + rw && coords.y >= ry && coords.y <= ry + rh) {
-                    state.selectedBlurId = region.id;
-                    if (window.onBlurRegionSelected) window.onBlurRegionSelected(region.id);
+                    state.blurResizeCorner = cornerHitType;
+                    state.blurDrawBounds = { x: drawX, y: drawY, w: drawW, h: drawH };
+                    state.isAddingBlur = true;
+                    const bToggle = document.getElementById('blur-tool-toggle');
+                    if (bToggle) bToggle.checked = true;
+                    const bCont = document.getElementById('blur-actions-container');
+                    if (bCont) bCont.style.display = 'block';
+                    if (window.onBlurRegionSelected) window.onBlurRegionSelected(cornerHitRegion.id);
                     drawFrame();
                     e.preventDefault();
                     return;
                 }
+
+                // 2. Check if click lands inside any existing region -> select AND start dragging immediately
+                for (let i = state.blurRegions.length - 1; i >= 0; i--) {
+                    const region = state.blurRegions[i];
+                    const rx = drawX + region.x * drawW;
+                    const ry = drawY + region.y * drawH;
+                    const rw = region.w * drawW;
+                    const rh = region.h * drawH;
+                    if (coords.x >= rx && coords.x <= rx + rw && coords.y >= ry && coords.y <= ry + rh) {
+                        state.selectedBlurId = region.id;
+                        state.isDraggingBlur = true;
+                        state.blurDrawBounds = { x: drawX, y: drawY, w: drawW, h: drawH };
+                        state.dragBlurOffsetX = coords.x - rx;
+                        state.dragBlurOffsetY = coords.y - ry;
+                        state.isAddingBlur = true;
+                        const bToggle = document.getElementById('blur-tool-toggle');
+                        if (bToggle) bToggle.checked = true;
+                        const bCont = document.getElementById('blur-actions-container');
+                        if (bCont) bCont.style.display = 'block';
+                        if (window.onBlurRegionSelected) window.onBlurRegionSelected(region.id);
+                        drawFrame();
+                        e.preventDefault();
+                        return;
+                    }
+                }
+
+                // 3. Otherwise start drawing a brand-new region with rock-solid fixed anchor coordinates ONLY if isAddingBlur is actively on
+                if (state.isAddingBlur) {
+                    state.isDrawingNewBlur = true;
+                    state.blurStartCanvasX = clampedX;
+                    state.blurStartCanvasY = clampedY;
+                    state.blurDrawBounds = { x: drawX, y: drawY, w: drawW, h: drawH };
+
+                    const _blurClock = (typeof getEditorTimelineClock === 'function') ? getEditorTimelineClock() : { current: 0, total: state.duration || 999 };
+                    const totalDur = Math.max(10, _blurClock.total || state.duration || 999);
+
+                    const newRegion = {
+                        id: Date.now(),
+                        x: (clampedX - drawX) / drawW,
+                        y: (clampedY - drawY) / drawH,
+                        w: 0,
+                        h: 0,
+                        intensity: parseInt(document.getElementById('blur-intensity-slider')?.value || '25'),
+                        startSec: 0,
+                        endSec: Math.ceil(totalDur)
+                    };
+                    state.blurRegions.push(newRegion);
+                    state.selectedBlurId = newRegion.id;
+                    if (window.onBlurRegionSelected) window.onBlurRegionSelected(newRegion.id);
+
+                    e.preventDefault();
+                    return;
+                }
             }
-
-            // Otherwise, start drawing a brand-new region
-            state.isDrawingNewBlur = true;
-            state.blurDrawDrawX = drawX;
-            state.blurDrawDrawY = drawY;
-            state.blurDrawDrawW = drawW;
-            state.blurDrawDrawH = drawH;
-
-            // Get total timeline duration for default endSec
-            const _blurClock = getEditorTimelineClock ? getEditorTimelineClock() : { current: 0, total: Infinity };
-            const newRegion = {
-                id: Date.now(),
-                x: (coords.x - drawX) / drawW,
-                y: (coords.y - drawY) / drawH,
-                w: 0,
-                h: 0,
-                intensity: 15,
-                startSec: 0,
-                endSec: Math.ceil(_blurClock.total) || 999
-            };
-            state.blurRegions.push(newRegion);
-            state.selectedBlurId = newRegion.id;
-            if (window.onBlurRegionSelected) window.onBlurRegionSelected(newRegion.id);
-
-            e.preventDefault();
-            return;
         }
 
         const coords = getCanvasCoords(e);
@@ -14733,51 +14989,83 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         // Blur/Mosaic region tool (Phase 4B)
-        if (state.isAddingBlur && (state.isDrawingNewBlur || state.isDraggingBlur || state.isResizingBlur)) {
+        if (state.isDrawingNewBlur || state.isDraggingBlur || state.isResizingBlur) {
             const coords = getCanvasCoords(e);
-            const drawX = state.blurDrawDrawX;
-            const drawY = state.blurDrawDrawY;
-            const drawW = state.blurDrawDrawW;
-            const drawH = state.blurDrawDrawH;
+            const bounds = state.blurDrawBounds || getRenderedVideoBounds();
+            const drawX = bounds.x;
+            const drawY = bounds.y;
+            const drawW = bounds.w;
+            const drawH = bounds.h;
             const region = state.blurRegions.find(r => r.id === state.selectedBlurId);
-            if (!region) return;
+            if (!region || drawW <= 0 || drawH <= 0) return;
 
             const clientX = Math.max(drawX, Math.min(drawX + drawW, coords.x));
             const clientY = Math.max(drawY, Math.min(drawY + drawH, coords.y));
 
             if (state.isDrawingNewBlur) {
-                const startX = drawX + region.x * drawW;
-                const startY = drawY + region.y * drawH;
-                const x1 = Math.min(startX, clientX);
-                const y1 = Math.min(startY, clientY);
-                const w = Math.abs(clientX - startX);
-                const h = Math.abs(clientY - startY);
+                // Fixed starting point so drawing left/up never drifts or jumps
+                const anchorX = state.blurStartCanvasX !== undefined ? state.blurStartCanvasX : drawX;
+                const anchorY = state.blurStartCanvasY !== undefined ? state.blurStartCanvasY : drawY;
+                const x1 = Math.min(anchorX, clientX);
+                const y1 = Math.min(anchorY, clientY);
+                const w = Math.abs(clientX - anchorX);
+                const h = Math.abs(clientY - anchorY);
 
-                region.x = (x1 - drawX) / drawW;
-                region.y = (y1 - drawY) / drawH;
-                region.w = w / drawW;
-                region.h = h / drawH;
+                region.x = Math.max(0, Math.min(1, (x1 - drawX) / drawW));
+                region.y = Math.max(0, Math.min(1, (y1 - drawY) / drawH));
+                region.w = Math.max(0, Math.min(1 - region.x, w / drawW));
+                region.h = Math.max(0, Math.min(1 - region.y, h / drawH));
                 drawFrame();
             } else if (state.isDraggingBlur) {
                 const rw = region.w * drawW;
                 const rh = region.h * drawH;
-                let newPixelX = coords.x - state.dragBlurOffsetX;
-                let newPixelY = coords.y - state.dragBlurOffsetY;
+                let newPixelX = coords.x - (state.dragBlurOffsetX || 0);
+                let newPixelY = coords.y - (state.dragBlurOffsetY || 0);
 
                 newPixelX = Math.max(drawX, Math.min(drawX + drawW - rw, newPixelX));
                 newPixelY = Math.max(drawY, Math.min(drawY + drawH - rh, newPixelY));
 
-                region.x = (newPixelX - drawX) / drawW;
-                region.y = (newPixelY - drawY) / drawH;
+                region.x = Math.max(0, Math.min(1, (newPixelX - drawX) / drawW));
+                region.y = Math.max(0, Math.min(1, (newPixelY - drawY) / drawH));
                 drawFrame();
             } else if (state.isResizingBlur) {
-                const rx = drawX + region.x * drawW;
-                const ry = drawY + region.y * drawH;
-                const newW = Math.max(10, clientX - rx);
-                const newH = Math.max(10, clientY - ry);
+                const corner = state.blurResizeCorner || 'br';
+                let rx = drawX + region.x * drawW;
+                let ry = drawY + region.y * drawH;
+                let rw = region.w * drawW;
+                let rh = region.h * drawH;
 
-                region.w = newW / drawW;
-                region.h = newH / drawH;
+                if (corner === 'br') {
+                    const newW = Math.max(12, clientX - rx);
+                    const newH = Math.max(12, clientY - ry);
+                    region.w = Math.min(1 - region.x, newW / drawW);
+                    region.h = Math.min(1 - region.y, newH / drawH);
+                } else if (corner === 'tl') {
+                    const fixedX2 = rx + rw;
+                    const fixedY2 = ry + rh;
+                    const newX1 = Math.min(fixedX2 - 12, clientX);
+                    const newY1 = Math.min(fixedY2 - 12, clientY);
+                    region.x = Math.max(0, (newX1 - drawX) / drawW);
+                    region.y = Math.max(0, (newY1 - drawY) / drawH);
+                    region.w = Math.min(1 - region.x, (fixedX2 - newX1) / drawW);
+                    region.h = Math.min(1 - region.y, (fixedY2 - newY1) / drawH);
+                } else if (corner === 'tr') {
+                    const fixedX1 = rx;
+                    const fixedY2 = ry + rh;
+                    const newX2 = Math.max(fixedX1 + 12, clientX);
+                    const newY1 = Math.min(fixedY2 - 12, clientY);
+                    region.y = Math.max(0, (newY1 - drawY) / drawH);
+                    region.w = Math.min(1 - region.x, (newX2 - fixedX1) / drawW);
+                    region.h = Math.min(1 - region.y, (fixedY2 - newY1) / drawH);
+                } else if (corner === 'bl') {
+                    const fixedX2 = rx + rw;
+                    const fixedY1 = ry;
+                    const newX1 = Math.min(fixedX2 - 12, clientX);
+                    const newY2 = Math.max(fixedY1 + 12, clientY);
+                    region.x = Math.max(0, (newX1 - drawX) / drawW);
+                    region.w = Math.min(1 - region.x, (fixedX2 - newX1) / drawW);
+                    region.h = Math.min(1 - region.y, (newY2 - fixedY1) / drawH);
+                }
                 drawFrame();
             }
             return;
@@ -15511,16 +15799,23 @@ document.addEventListener('DOMContentLoaded', () => {
             state.isDrawingNewBlur = false;
             state.isDraggingBlur = false;
             state.isResizingBlur = false;
+            state.blurResizeCorner = null;
 
             const region = state.blurRegions.find(r => r.id === state.selectedBlurId);
             let isRemoved = false;
-            if (wasDrawing && region && (region.w < 0.02 || region.h < 0.02)) {
-                // Discard accidental tiny/zero-size box from a simple click
-                state.blurRegions = state.blurRegions.filter(r => r.id !== region.id);
-                state.selectedBlurId = null;
-                isRemoved = true;
+            if (wasDrawing && region) {
+                const bounds = state.blurDrawBounds || getRenderedVideoBounds();
+                const pixelW = region.w * bounds.w;
+                const pixelH = region.h * bounds.h;
+                if (pixelW < 5 && pixelH < 5) {
+                    // Discard purely stationary accidental clicks (less than 5px)
+                    state.blurRegions = state.blurRegions.filter(r => r.id !== region.id);
+                    state.selectedBlurId = null;
+                    isRemoved = true;
+                }
             }
             if (window.onBlurRegionSelected) window.onBlurRegionSelected(state.selectedBlurId);
+            if (typeof triggerAutoSave === 'function') triggerAutoSave();
             drawFrame();
             if (!isRemoved && window.recordEditorHistory) {
                 window.recordEditorHistory(wasDrawing ? 'Blur region added' : 'Blur region modified');
@@ -15677,10 +15972,23 @@ document.addEventListener('DOMContentLoaded', () => {
     blurToolToggle.addEventListener('change', (e) => {
         state.isAddingBlur = e.target.checked;
         if (state.isAddingBlur) {
+            // Turn off conflicting drag/crop/fill modes so clicks are dedicated to blur
+            state.isAdjustingCrop = false;
+            state.isAddingFill = false;
+            state.isAddingHighlight = false;
+            state.isDrawingTextBox = false;
+            if (cropToolToggle) cropToolToggle.checked = false;
+            if (cropActionsContainer) cropActionsContainer.style.display = 'none';
+            if (state.canvas) state.canvas.style.cursor = 'crosshair';
+
             blurActionsContainer.style.display = 'block';
             renderBlurRegionList();
+            if (window.showToast) {
+                window.showToast('ব্লার মোড চালু হয়েছে — প্রিভিউ স্ক্রিনে ড্র্যাগ করে এরিয়া আঁকুন (Drag on video to blur)');
+            }
         } else {
             blurActionsContainer.style.display = 'none';
+            if (state.canvas) state.canvas.style.cursor = 'default';
         }
         drawFrame();
     });
@@ -15688,84 +15996,150 @@ document.addEventListener('DOMContentLoaded', () => {
     blurIntensitySlider.addEventListener('input', (e) => {
         const value = parseInt(e.target.value);
         blurIntensityVal.innerText = value + 'px';
-        const region = state.blurRegions.find(r => r.id === state.selectedBlurId);
+        const region = state.blurRegions.find(r => r.id === state.selectedBlurId) || (state.blurRegions.length > 0 ? state.blurRegions[state.blurRegions.length - 1] : null);
         if (region) {
             region.intensity = value;
             drawFrame();
         }
+        if (typeof triggerAutoSave === 'function') triggerAutoSave();
     });
 
     function renderBlurRegionList() {
         if (!blurRegionListEl) return;
         blurRegionListEl.innerHTML = '';
+
+        if (state.blurRegions.length === 0) {
+            const emptyEl = document.createElement('div');
+            emptyEl.style.cssText = 'text-align:center; padding:16px 10px; color:#94a3b8; font-size:12px; background:rgba(255,255,255,0.02); border:1px dashed rgba(255,255,255,0.12); border-radius:8px;';
+            emptyEl.innerHTML = '<i class="fa-solid fa-hand-pointer" style="margin-right:6px; color:#818cf8;"></i> এখনো কোনো ব্লার এরিয়া আঁকা হয়নি। প্রিভিউ স্ক্রিনে ড্র্যাগ করে এরিয়া আঁকুন।';
+            blurRegionListEl.appendChild(emptyEl);
+            deleteBlurRegionBtn.style.display = 'none';
+            return;
+        }
+
+        const _clock = (typeof getEditorTimelineClock === 'function') ? getEditorTimelineClock() : { current: state.currentTime || 0, total: state.duration || 1000 };
+
         state.blurRegions.forEach((region, idx) => {
             const isSelected = region.id === state.selectedBlurId;
-            const wrapper = document.createElement('div');
-            wrapper.style.marginBottom = '10px';
+            const isTimeActive = (_clock.current >= (region.startSec ?? 0) && _clock.current <= (region.endSec ?? Infinity));
 
+            const wrapper = document.createElement('div');
+            wrapper.style.marginBottom = '12px';
+            wrapper.style.borderRadius = '8px';
+            wrapper.style.overflow = 'hidden';
+            wrapper.style.border = isSelected ? '1.5px solid #a855f7' : '1px solid rgba(255,255,255,0.1)';
+            wrapper.style.boxShadow = isSelected ? '0 0 12px rgba(168,85,247,0.25)' : 'none';
+            wrapper.style.transition = 'all 0.2s ease';
+
+            // --- Header Row ---
             const row = document.createElement('div');
             row.className = 'blur-region-list-item' + (isSelected ? ' active' : '');
-            row.style.display = 'flex';
-            row.style.alignItems = 'center';
-            row.style.justifyContent = 'space-between';
-            row.style.padding = '8px 12px';
-            row.style.borderRadius = '6px';
-            row.style.cursor = 'pointer';
-            row.style.background = isSelected ? 'rgba(79, 70, 229, 0.12)' : 'rgba(255,255,255,0.04)';
-            row.style.border = isSelected ? '1px solid var(--primary)' : '1px solid rgba(255,255,255,0.08)';
+            row.style.cssText = `display:flex; align-items:center; justify-content:space-between; padding:9px 12px; cursor:pointer; background:${isSelected ? 'rgba(168,85,247,0.18)' : 'rgba(255,255,255,0.05)'};`;
+
+            const leftBox = document.createElement('div');
+            leftBox.style.cssText = 'display:flex; align-items:center; gap:8px;';
+
+            const badge = document.createElement('span');
+            badge.style.cssText = `font-size:11px; font-weight:700; padding:2px 7px; border-radius:4px; background:${isSelected ? '#9333ea' : '#334155'}; color:#fff;`;
+            badge.innerText = `#${idx + 1}`;
 
             const label = document.createElement('span');
-            label.innerText = `Blur Region ${idx + 1}`;
-            label.style.fontSize = '13px';
-            label.style.fontWeight = '500';
+            label.innerText = `Blur এরিয়া ${idx + 1}`;
+            label.style.fontSize = '12.5px';
+            label.style.fontWeight = '600';
+            label.style.color = isSelected ? '#f3e8ff' : '#e2e8f0';
 
-            row.appendChild(label);
+            const activeIndicator = document.createElement('span');
+            activeIndicator.style.cssText = `width:7px; height:7px; border-radius:50%; background:${isTimeActive ? '#22c55e' : '#64748b'}; display:inline-block;`;
+            activeIndicator.title = isTimeActive ? 'বর্তমানে সক্রিয় (Active)' : 'এই সময়ে নিষ্ক্রিয় (Inactive)';
+
+            leftBox.appendChild(badge);
+            leftBox.appendChild(label);
+            leftBox.appendChild(activeIndicator);
+
+            const rightActions = document.createElement('div');
+            rightActions.style.cssText = 'display:flex; align-items:center; gap:6px;';
+
+            // Jump to time button
+            const jumpBtn = document.createElement('button');
+            jumpBtn.type = 'button';
+            jumpBtn.className = 'btn btn-xs btn-outline';
+            jumpBtn.title = 'প্রিভিউতে এই ব্লার এরিয়ায় যান (Seek to time)';
+            jumpBtn.style.cssText = 'padding:3px 7px; font-size:11px; border-color:rgba(168,85,247,0.4); color:#c084fc;';
+            jumpBtn.innerHTML = '<i class="fa-solid fa-play"></i> যান';
+            jumpBtn.addEventListener('click', (ev) => {
+                ev.stopPropagation();
+                if (region.startSec !== undefined) {
+                    if (state.video) state.video.currentTime = region.startSec;
+                    state.currentTime = region.startSec;
+                    if (typeof updatePlayhead === 'function') updatePlayhead();
+                    drawFrame();
+                }
+            });
+
+            // Delete individual region button
+            const delBtn = document.createElement('button');
+            delBtn.type = 'button';
+            delBtn.className = 'btn btn-xs btn-outline';
+            delBtn.title = 'এই ব্লার এরিয়া মুছুন (Remove)';
+            delBtn.style.cssText = 'padding:3px 7px; font-size:11px; border-color:rgba(239,68,68,0.4); color:#fca5a5;';
+            delBtn.innerHTML = '<i class="fa-solid fa-trash-can"></i>';
+            delBtn.addEventListener('click', (ev) => {
+                ev.stopPropagation();
+                state.blurRegions = state.blurRegions.filter(r => r.id !== region.id);
+                if (state.selectedBlurId === region.id) state.selectedBlurId = null;
+                renderBlurRegionList();
+                if (typeof triggerAutoSave === 'function') triggerAutoSave();
+                drawFrame();
+                if (window.showToast) window.showToast('ব্লার এরিয়া মুছে ফেলা হয়েছে', 'info');
+            });
+
+            rightActions.appendChild(jumpBtn);
+            rightActions.appendChild(delBtn);
+
+            row.appendChild(leftBox);
+            row.appendChild(rightActions);
+
             row.addEventListener('click', () => {
                 state.selectedBlurId = region.id;
                 renderBlurRegionList();
-                blurIntensitySlider.value = region.intensity;
-                blurIntensityVal.innerText = region.intensity + 'px';
+                blurIntensitySlider.value = region.intensity || 25;
+                blurIntensityVal.innerText = (region.intensity || 25) + 'px';
                 deleteBlurRegionBtn.style.display = 'inline-block';
+
+                // Automatically seek to region start time if currently outside so user immediately sees the box
+                if (region.startSec !== undefined && (_clock.current < region.startSec || _clock.current > (region.endSec ?? Infinity))) {
+                    if (state.video) state.video.currentTime = region.startSec;
+                    state.currentTime = region.startSec;
+                    if (typeof updatePlayhead === 'function') updatePlayhead();
+                }
                 drawFrame();
             });
             wrapper.appendChild(row);
 
-            // --- Time slot controls (always visible) ---
+            // --- Time slot & quick presets ---
             const timeRow = document.createElement('div');
-            timeRow.style.display = 'flex';
-            timeRow.style.alignItems = 'center';
-            timeRow.style.gap = '6px';
-            timeRow.style.padding = '6px 10px';
-            timeRow.style.background = 'rgba(255,255,255,0.03)';
-            timeRow.style.borderRadius = '0 0 6px 6px';
-            timeRow.style.borderTop = '1px solid rgba(255,255,255,0.06)';
-            timeRow.style.marginTop = '0';
+            timeRow.style.cssText = 'background:rgba(15,23,42,0.45); padding:8px 10px; border-top:1px solid rgba(255,255,255,0.06);';
+
+            const timeInputsRow = document.createElement('div');
+            timeInputsRow.style.cssText = 'display:flex; align-items:center; gap:8px; margin-bottom:8px;';
 
             const makeTimeInput = (labelText, value, onChange) => {
                 const grp = document.createElement('div');
-                grp.style.display = 'flex';
-                grp.style.flexDirection = 'column';
-                grp.style.flex = '1';
+                grp.style.cssText = 'display:flex; flex-direction:column; flex:1;';
                 const lbl = document.createElement('label');
                 lbl.innerText = labelText;
-                lbl.style.fontSize = '10px';
-                lbl.style.color = 'rgba(255,255,255,0.45)';
-                lbl.style.marginBottom = '3px';
+                lbl.style.cssText = 'font-size:10.5px; color:#94a3b8; margin-bottom:2px; font-weight:500;';
                 const inp = document.createElement('input');
                 inp.type = 'number';
                 inp.min = '0';
-                inp.step = '0.1';
+                inp.step = '0.5';
                 inp.value = value !== undefined ? Number(value).toFixed(1) : '0.0';
-                inp.style.width = '100%';
-                inp.style.padding = '4px 6px';
-                inp.style.borderRadius = '4px';
-                inp.style.border = '1px solid rgba(255,255,255,0.15)';
-                inp.style.background = 'rgba(0,0,0,0.3)';
-                inp.style.color = '#fff';
-                inp.style.fontSize = '12px';
-                inp.style.boxSizing = 'border-box';
-                inp.addEventListener('change', (e) => onChange(parseFloat(e.target.value) || 0));
-                // Prevent row click from triggering when editing input
+                inp.style.cssText = 'width:100%; padding:4px 8px; border-radius:5px; border:1px solid rgba(255,255,255,0.15); background:rgba(0,0,0,0.4); color:#fff; font-size:12px; box-sizing:border-box; font-weight:600;';
+                inp.addEventListener('change', (e) => {
+                    onChange(parseFloat(e.target.value) || 0);
+                    if (typeof triggerAutoSave === 'function') triggerAutoSave();
+                });
                 inp.addEventListener('click', (e) => e.stopPropagation());
                 grp.appendChild(lbl);
                 grp.appendChild(inp);
@@ -15783,21 +16157,53 @@ document.addEventListener('DOMContentLoaded', () => {
 
             const arrow = document.createElement('span');
             arrow.innerText = '→';
-            arrow.style.color = 'rgba(255,255,255,0.3)';
-            arrow.style.fontSize = '12px';
-            arrow.style.marginTop = '14px';
+            arrow.style.cssText = 'color:rgba(255,255,255,0.3); font-size:13px; margin-top:14px;';
 
-            timeRow.appendChild(startGrp);
-            timeRow.appendChild(arrow);
-            timeRow.appendChild(endGrp);
+            timeInputsRow.appendChild(startGrp);
+            timeInputsRow.appendChild(arrow);
+            timeInputsRow.appendChild(endGrp);
+            timeRow.appendChild(timeInputsRow);
+
+            // Quick preset pills: Full Video, From Now to End
+            const presetsRow = document.createElement('div');
+            presetsRow.style.cssText = 'display:flex; gap:6px; flex-wrap:wrap;';
+
+            const fullVideoBtn = document.createElement('button');
+            fullVideoBtn.type = 'button';
+            fullVideoBtn.style.cssText = 'background:rgba(255,255,255,0.06); border:1px solid rgba(255,255,255,0.12); color:#cbd5e1; font-size:10.5px; padding:3px 8px; border-radius:4px; cursor:pointer;';
+            fullVideoBtn.innerHTML = '<i class="fa-regular fa-clock"></i> পুরো ভিডিও';
+            fullVideoBtn.addEventListener('click', (ev) => {
+                ev.stopPropagation();
+                region.startSec = 0;
+                region.endSec = Math.ceil(_clock.total || 9999);
+                renderBlurRegionList();
+                if (typeof triggerAutoSave === 'function') triggerAutoSave();
+                drawFrame();
+                if (window.showToast) window.showToast('এই ব্লার পুরো ভিডিও জুড়ে সেট করা হয়েছে');
+            });
+
+            const fromNowBtn = document.createElement('button');
+            fromNowBtn.type = 'button';
+            fromNowBtn.style.cssText = 'background:rgba(168,85,247,0.12); border:1px solid rgba(168,85,247,0.3); color:#d8b4fe; font-size:10.5px; padding:3px 8px; border-radius:4px; cursor:pointer;';
+            fromNowBtn.innerHTML = '<i class="fa-solid fa-location-dot"></i> বর্তমান সময় থেকে';
+            fromNowBtn.addEventListener('click', (ev) => {
+                ev.stopPropagation();
+                region.startSec = Math.max(0, parseFloat((_clock.current || 0).toFixed(1)));
+                renderBlurRegionList();
+                if (typeof triggerAutoSave === 'function') triggerAutoSave();
+                drawFrame();
+                if (window.showToast) window.showToast(`শুরুর সময় ${region.startSec}s এ সেট হয়েছে`);
+            });
+
+            presetsRow.appendChild(fullVideoBtn);
+            presetsRow.appendChild(fromNowBtn);
+            timeRow.appendChild(presetsRow);
+
             wrapper.appendChild(timeRow);
-
             blurRegionListEl.appendChild(wrapper);
         });
 
-        if (state.blurRegions.length === 0) {
-            deleteBlurRegionBtn.style.display = 'none';
-        }
+        deleteBlurRegionBtn.style.display = state.selectedBlurId ? 'inline-block' : 'none';
     }
 
     if (deleteBlurRegionBtn) {
@@ -15806,6 +16212,7 @@ document.addEventListener('DOMContentLoaded', () => {
             state.selectedBlurId = null;
             renderBlurRegionList();
             deleteBlurRegionBtn.style.display = 'none';
+            if (typeof triggerAutoSave === 'function') triggerAutoSave();
             drawFrame();
         });
     }
@@ -15815,8 +16222,8 @@ document.addEventListener('DOMContentLoaded', () => {
         renderBlurRegionList();
         const region = state.blurRegions.find(r => r.id === id);
         if (region && blurIntensitySlider) {
-            blurIntensitySlider.value = region.intensity;
-            blurIntensityVal.innerText = region.intensity + 'px';
+            blurIntensitySlider.value = region.intensity || 25;
+            blurIntensityVal.innerText = (region.intensity || 25) + 'px';
             if (deleteBlurRegionBtn) deleteBlurRegionBtn.style.display = 'inline-block';
         } else if (deleteBlurRegionBtn) {
             deleteBlurRegionBtn.style.display = 'none';
@@ -17510,6 +17917,15 @@ document.addEventListener('DOMContentLoaded', () => {
             y: 0.5,
             fontSize: parseInt(textOverlayFontsizeSlider.value),
             color: textOverlayColorInput.value,
+            colorMode: textOverlayColorMode ? textOverlayColorMode.value : 'solid',
+            perLetterPalette: textOverlayPerLetterPalette ? textOverlayPerLetterPalette.value : 'rainbow',
+            gradientColor1: textOverlayGradientColor1 ? textOverlayGradientColor1.value : '#22d3ee',
+            gradientColor2: textOverlayGradientColor2 ? textOverlayGradientColor2.value : '#a855f7',
+            gradientDirection: textOverlayGradientDirection ? textOverlayGradientDirection.value : 'horizontal',
+            extraThickness: textOverlayThicknessSlider ? parseInt(textOverlayThicknessSlider.value, 10) : 0,
+            isBold: textOverlayBoldBtn ? textOverlayBoldBtn.classList.contains('active') : true,
+            isItalic: textOverlayItalicBtn ? textOverlayItalicBtn.classList.contains('active') : false,
+            isUnderline: textOverlayUnderlineBtn ? textOverlayUnderlineBtn.classList.contains('active') : false,
             font: textOverlayFontSelect.value || 'Hind Siliguri',
             visualTemplate: textOverlayVisualTemplate ? textOverlayVisualTemplate.value : 'standard',
             strokeEnabled: textOverlayStrokeEnabled ? !!textOverlayStrokeEnabled.checked : false,
@@ -23638,6 +24054,14 @@ document.addEventListener('DOMContentLoaded', () => {
         // Render dynamic timelines and overlays
         if (typeof renderClipTimeline === 'function') renderClipTimeline();
         if (typeof renderSubtitlesList === 'function') renderSubtitlesList();
+        // Blur Regions Sync
+        const blurToolToggle = document.getElementById('blur-tool-toggle');
+        const blurActionsContainer = document.getElementById('blur-actions-container');
+        if (state.blurRegions && state.blurRegions.length > 0) {
+            if (blurActionsContainer) blurActionsContainer.style.display = 'block';
+            if (blurToolToggle) blurToolToggle.checked = true;
+            state.isAddingBlur = true;
+        }
         if (typeof renderBlurRegionList === 'function') renderBlurRegionList();
         if (typeof renderHighlightList === 'function') renderHighlightList();
         if (typeof renderFillList === 'function') renderFillList();
