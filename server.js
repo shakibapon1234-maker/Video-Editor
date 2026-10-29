@@ -1393,8 +1393,13 @@ app.post('/api/fast-direct-render', express.json({ limit: '2048mb' }), async (re
                     } else {
                         filterParts.push(`[aextra]anull[aout]`);
                     }
+                } else if (anyInputHasAudio) {
+                    // Native audio exists in clips, no extra audio file -- pass through directly
+                    filterParts.push(`[aclipout]aformat=sample_rates=48000:channel_layouts=stereo[aout]`);
                 } else {
-                    filterParts.push(`[aclipout]anull[aout]`);
+                    // No audio at all -- generate silence so FFmpeg output mapping does not fail
+                    const silenceDur = Math.max(0.1, parseFloat(totalDuration) || 1);
+                    filterParts.push(`aevalsrc=0:d=${silenceDur.toFixed(3)}:s=48000:c=stereo[aout]`);
                 }
 
                 let outFilename = safeJoinName(reqFilename || `direct-render-${Date.now()}.mp4`);

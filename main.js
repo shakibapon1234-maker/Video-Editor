@@ -240,6 +240,8 @@ if (!gotLock) {
         return { canceled: false, filePath: choice.filePath };
     });
 
+    let serverModule = null;
+
     app.whenReady().then(() => {
         session.defaultSession.setPermissionCheckHandler((webContents, permission) => {
             return permission === 'media' || permission === 'display-capture';
@@ -279,7 +281,6 @@ if (!gotLock) {
             } catch (_) {}
         }
 
-        let serverModule;
         try {
             serverModule = require('./server.js');
         } catch (error) {

@@ -1917,7 +1917,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     setTimeout(() => {
                         clearInterval(poll);
                         finish();
-                    }, 2500);
+                    }, 8000);
                 });
 
                 // Clear error handler
@@ -25483,7 +25483,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 clearWorkspaceState();
                 state.activeProjectId = savedProjectId;
                 const restored = await restoreProjectFromBrowserStorage(savedProjectId, file);
-                if (restored) {
+                if (restored && state.clips && state.clips.length > 0) {
                     state.projectVideoFingerprint = videoFingerprint;
                     if (savedProjectId !== targetProjId) {
                         state.activeProjectId = targetProjId;
