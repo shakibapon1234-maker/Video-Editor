@@ -484,16 +484,22 @@ document.addEventListener('DOMContentLoaded', () => {
                 // original aspect ratio
                 const srcW = (state.video && state.video.videoWidth) || 1280;
                 const srcH = (state.video && state.video.videoHeight) || 720;
-                const maxBound = is480 ? 854 : (is1080 ? 1920 : 1280);
-                if (srcW >= srcH) {
-                    targetW = Math.min(srcW, maxBound);
-                    targetH = Math.round((targetW * srcH) / srcW);
+                const srcAspect = (srcW && srcH) ? (srcW / srcH) : (16 / 9);
+                if (srcAspect >= 1.70 && srcAspect <= 1.85) {
+                    targetW = is480 ? 854 : (is1080 ? 1920 : 1280);
+                    targetH = is480 ? 480 : (is1080 ? 1080 : 720);
                 } else {
-                    targetH = Math.min(srcH, maxBound);
-                    targetW = Math.round((targetH * srcW) / srcH);
+                    const maxBound = is480 ? 854 : (is1080 ? 1920 : 1280);
+                    if (srcW >= srcH) {
+                        targetW = Math.min(srcW, maxBound);
+                        targetH = Math.round((targetW * srcH) / srcW);
+                    } else {
+                        targetH = Math.min(srcH, maxBound);
+                        targetW = Math.round((targetH * srcW) / srcH);
+                    }
+                    targetW = Math.round(targetW / 2) * 2;
+                    targetH = Math.round(targetH / 2) * 2;
                 }
-                targetW = Math.round(targetW / 2) * 2;
-                targetH = Math.round(targetH / 2) * 2;
             }
 
             // Calculate video placement within output canvas for exact blur positioning
@@ -681,6 +687,10 @@ document.addEventListener('DOMContentLoaded', () => {
                 const videoHeight = state.video ? state.video.videoHeight : 360;
                 const cw = (state.cropW || 1) * videoWidth;
                 const ch = (state.cropH || 1) * videoHeight;
+                const aspect = (cw && ch) ? (cw / ch) : (16 / 9);
+                if (aspect >= 1.70 && aspect <= 1.85) {
+                    return is1080p ? { w: 1920, h: 1080 } : (is480p ? { w: 854, h: 480 } : { w: 1280, h: 720 });
+                }
                 const maxDim = is480p ? 854 : (is1080p ? 1920 : 1280);
                 let w = cw, h = ch;
                 if (w > maxDim || h > maxDim) {

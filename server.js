@@ -1389,13 +1389,14 @@ app.post('/api/fast-direct-render', express.json({ limit: '2048mb' }), async (re
                     const audioIdx = inputPaths.length;
                     filterParts.push(`[${audioIdx}:a]aformat=sample_rates=48000:channel_layouts=stereo[aextra]`);
                     if (anyInputHasAudio) {
-                        filterParts.push(`[aclipout][aextra]amix=inputs=2:duration=first:dropout_transition=2[aout]`);
+                        filterParts.push(`[aclipout][aextra]amix=inputs=2:duration=first:dropout_transition=2[amixed]`);
+                        filterParts.push(`[amixed]dynaudnorm=f=150:g=15:m=8:p=0.95,alimiter=limit=-1.2dB,aformat=sample_rates=48000:channel_layouts=stereo[aout]`);
                     } else {
-                        filterParts.push(`[aextra]anull[aout]`);
+                        filterParts.push(`[aextra]dynaudnorm=f=150:g=15:m=8:p=0.95,alimiter=limit=-1.2dB,aformat=sample_rates=48000:channel_layouts=stereo[aout]`);
                     }
                 } else if (anyInputHasAudio) {
                     // Native audio exists in clips, no extra audio file -- pass through directly
-                    filterParts.push(`[aclipout]aformat=sample_rates=48000:channel_layouts=stereo[aout]`);
+                    filterParts.push(`[aclipout]dynaudnorm=f=150:g=15:m=8:p=0.95,alimiter=limit=-1.2dB,aformat=sample_rates=48000:channel_layouts=stereo[aout]`);
                 } else {
                     // No audio at all -- generate silence so FFmpeg output mapping does not fail
                     const silenceDur = Math.max(0.1, parseFloat(totalDuration) || 1);
@@ -1429,10 +1430,10 @@ app.post('/api/fast-direct-render', express.json({ limit: '2048mb' }), async (re
                     '-c:v', 'libx264',
                     '-preset', 'fast',
                     '-crf', '18',
-                    '-b:v', '5M',
-                    '-minrate', '3M',
-                    '-maxrate', '8M',
-                    '-bufsize', '8M',
+                    '-b:v', '8M',
+                    '-minrate', '4M',
+                    '-maxrate', '12M',
+                    '-bufsize', '12M',
                     '-r', '30',
                     '-fps_mode', 'cfr',
                     '-g', '60',
