@@ -9826,7 +9826,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     // translucent black backdrop behind PiP images so they stand out
                     // against busy footage. Default is transparent — no backdrop — so
                     // background-removed PNGs stay fully see-through.
-                    if (item.mode === 'pip' && item.transparentBg === false) {
+                    if (item.mode === 'pip' && item.transparentBg === false && item.type !== 'gif') {
                         state.ctx.fillStyle = 'rgba(0,0,0,0.25)';
                         state.ctx.fillRect(drawBoxX - 4, drawBoxY - 4, boxW + 8, boxH + 8);
                     }
@@ -19510,7 +19510,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 // true (default) = fully transparent, no PiP backdrop box. false =
                 // "Normal" mode keeps the old translucent black backdrop behind PiP
                 // images so they stand out against busy footage.
-                transparentBg: brollTransparentBg ? brollTransparentBg.checked : true
+                transparentBg: isGif ? true : (brollTransparentBg ? brollTransparentBg.checked : true)
             };
             state.brollOverlays.push(newItem);
             state.selectedBrollId = newItem.id;
@@ -20392,7 +20392,10 @@ document.addEventListener('DOMContentLoaded', () => {
         // Older items saved before this toggle existed have no transparentBg
         // property at all — treat that as "transparent" (the new default) so
         // existing PNGs/text immediately lose their black backdrop too.
-        if (brollTransparentBg) brollTransparentBg.checked = item.transparentBg !== false;
+        if (item.type === 'gif') {
+            item.transparentBg = true;
+        }
+        if (brollTransparentBg) brollTransparentBg.checked = item.type === 'gif' ? true : (item.transparentBg !== false);
         if (brollSizeContainer) brollSizeContainer.style.display = 'block'; // always visible
 
         // Fit Mode only makes sense for a fullscreen IMAGE (Text B-roll has no
@@ -25033,7 +25036,7 @@ document.addEventListener('DOMContentLoaded', () => {
             state.stickers = data.stickers || [];
             state.symbolOverlays = data.symbolOverlays || [];
             state.shapeOverlays = data.shapeOverlays || [];
-            state.brollOverlays = data.brollOverlays || [];
+            state.brollOverlays = (data.brollOverlays || []).map(b => b.type === 'gif' ? { ...b, transparentBg: true } : b);
             state.blurRegions = data.blurRegions || [];
             state.subtitles = data.subtitles || [];
             state.clips = data.clips || [];
@@ -26173,7 +26176,7 @@ document.addEventListener('DOMContentLoaded', () => {
             state.stickers = savedData.stickers || [];
             state.symbolOverlays = savedData.symbolOverlays || [];
             state.shapeOverlays = savedData.shapeOverlays || [];
-            state.brollOverlays = savedData.brollOverlays || [];
+            state.brollOverlays = (savedData.brollOverlays || []).map(b => b.type === 'gif' ? { ...b, transparentBg: true } : b);
             state.blurRegions = savedData.blurRegions || [];
             state.subtitles = savedData.subtitles || [];
             state.clips = savedData.clips || [];
