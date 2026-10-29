@@ -1243,6 +1243,7 @@ window.VideoEditor = {
     selectedBlurId: null,
     isAddingBlur: false,
     isDrawingNewBlur: false,
+    forceNewBlurDraw: false,
     isDraggingBlur: false,
     isResizingBlur: false,
     dragBlurOffsetX: 0,
@@ -12968,8 +12969,8 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         // Blur/Mosaic region tool (Phase 4B)
-        const hasExistingBlurs = (state.blurRegions && state.blurRegions.length > 0);
-        if (state.isAddingBlur || hasExistingBlurs) {
+        // Only active if Blur tool is explicitly enabled
+        if (state.isAddingBlur) {
             const coords = getCanvasCoords(e);
             const bounds = getRenderedVideoBounds();
             const drawX = bounds.x;
@@ -12978,9 +12979,37 @@ document.addEventListener('DOMContentLoaded', () => {
             const drawH = bounds.h;
 
             if (drawW > 0 && drawH > 0) {
-                // Clamp click coordinates to bounds so clicking near or at edge works reliably
                 const clampedX = Math.max(drawX, Math.min(drawX + drawW, coords.x));
                 const clampedY = Math.max(drawY, Math.min(drawY + drawH, coords.y));
+                const _blurClock = (typeof getEditorTimelineClock === 'function') ? getEditorTimelineClock() : { current: state.currentTime || 0, total: state.duration || 1000 };
+
+                // 0. If user explicitly clicked "+ নতুন ব্লার আঁকুন", immediately draw new box
+                if (state.forceNewBlurDraw) {
+                    state.forceNewBlurDraw = false;
+                    state.isDrawingNewBlur = true;
+                    state.blurStartCanvasX = clampedX;
+                    state.blurStartCanvasY = clampedY;
+                    state.blurDrawBounds = { x: drawX, y: drawY, w: drawW, h: drawH };
+
+                    const totalDur = Math.max(10, _blurClock.total || state.duration || 999);
+                    const newRegion = {
+                        id: Date.now(),
+                        x: (clampedX - drawX) / drawW,
+                        y: (clampedY - drawY) / drawH,
+                        w: 0,
+                        h: 0,
+                        intensity: parseInt(document.getElementById('blur-intensity-slider')?.value || '25'),
+                        startSec: Math.max(0, parseFloat((_blurClock.current || 0).toFixed(1))),
+                        endSec: Math.ceil(totalDur)
+                    };
+                    state.blurRegions.push(newRegion);
+                    state.selectedBlurId = newRegion.id;
+                    if (window.onBlurRegionSelected) window.onBlurRegionSelected(newRegion.id);
+                    if (typeof renderBlurRegionList === 'function') renderBlurRegionList();
+                    drawFrame();
+                    e.preventDefault();
+                    return;
+                }
 
                 const rect = state.canvas.getBoundingClientRect();
                 const w_rect = rect.width || 1;
@@ -12991,92 +13020,90 @@ document.addEventListener('DOMContentLoaded', () => {
                 const handleSize = Math.max(16, 24 * (state.canvas.width / (w_render || state.canvas.width)));
                 const isNear = (x, y) => Math.hypot(coords.x - x, coords.y - y) < handleSize;
 
-                // 1. Check if clicking on ANY 4-corner resize handle of active/existing blur regions
+                // 1. Check if clicking on ANY 4-corner resize handle of the ACTIVE/SELECTED blur region
                 const activeRegion = state.blurRegions.find(r => r.id === state.selectedBlurId);
-                const testRegions = activeRegion ? [activeRegion, ...state.blurRegions.filter(r => r.id !== activeRegion.id)] : state.blurRegions;
+                if (activeRegion) {
+                    const rx = drawX + activeRegion.x * drawW;
+                    const ry = drawY + activeRegion.y * drawH;
+                    const rw = activeRegion.w * drawW;
+                    const rh = activeRegion.h * drawH;
 
-                let cornerHitRegion = null;
-                let cornerHitType = null;
-                for (const r of testRegions) {
-                    const rx = drawX + r.x * drawW;
-                    const ry = drawY + r.y * drawH;
-                    const rw = r.w * drawW;
-                    const rh = r.h * drawH;
+                    let cornerHitType = null;
+                    if (isNear(rx + rw, ry + rh)) cornerHitType = 'br';
+                    else if (isNear(rx, ry + rh)) cornerHitType = 'bl';
+                    else if (isNear(rx + rw, ry)) cornerHitType = 'tr';
+                    else if (isNear(rx, ry)) cornerHitType = 'tl';
 
-                    if (isNear(rx + rw, ry + rh)) { cornerHitRegion = r; cornerHitType = 'br'; break; }
-                    if (isNear(rx, ry + rh)) { cornerHitRegion = r; cornerHitType = 'bl'; break; }
-                    if (isNear(rx + rw, ry)) { cornerHitRegion = r; cornerHitType = 'tr'; break; }
-                    if (isNear(rx, ry)) { cornerHitRegion = r; cornerHitType = 'tl'; break; }
-                }
-
-                if (cornerHitRegion) {
-                    state.selectedBlurId = cornerHitRegion.id;
-                    state.isResizingBlur = true;
-                    state.blurResizeCorner = cornerHitType;
-                    state.blurDrawBounds = { x: drawX, y: drawY, w: drawW, h: drawH };
-                    state.isAddingBlur = true;
-                    const bToggle = document.getElementById('blur-tool-toggle');
-                    if (bToggle) bToggle.checked = true;
-                    const bCont = document.getElementById('blur-actions-container');
-                    if (bCont) bCont.style.display = 'block';
-                    if (window.onBlurRegionSelected) window.onBlurRegionSelected(cornerHitRegion.id);
-                    drawFrame();
-                    e.preventDefault();
-                    return;
-                }
-
-                // 2. Check if click lands inside any existing region -> select AND start dragging immediately
-                for (let i = state.blurRegions.length - 1; i >= 0; i--) {
-                    const region = state.blurRegions[i];
-                    const rx = drawX + region.x * drawW;
-                    const ry = drawY + region.y * drawH;
-                    const rw = region.w * drawW;
-                    const rh = region.h * drawH;
-                    if (coords.x >= rx && coords.x <= rx + rw && coords.y >= ry && coords.y <= ry + rh) {
-                        state.selectedBlurId = region.id;
-                        state.isDraggingBlur = true;
+                    if (cornerHitType) {
+                        state.isResizingBlur = true;
+                        state.blurResizeCorner = cornerHitType;
                         state.blurDrawBounds = { x: drawX, y: drawY, w: drawW, h: drawH };
-                        state.dragBlurOffsetX = coords.x - rx;
-                        state.dragBlurOffsetY = coords.y - ry;
-                        state.isAddingBlur = true;
-                        const bToggle = document.getElementById('blur-tool-toggle');
-                        if (bToggle) bToggle.checked = true;
-                        const bCont = document.getElementById('blur-actions-container');
-                        if (bCont) bCont.style.display = 'block';
-                        if (window.onBlurRegionSelected) window.onBlurRegionSelected(region.id);
+                        if (window.onBlurRegionSelected) window.onBlurRegionSelected(activeRegion.id);
                         drawFrame();
                         e.preventDefault();
                         return;
                     }
                 }
 
-                // 3. Otherwise start drawing a brand-new region with rock-solid fixed anchor coordinates ONLY if isAddingBlur is actively on
-                if (state.isAddingBlur) {
-                    state.isDrawingNewBlur = true;
-                    state.blurStartCanvasX = clampedX;
-                    state.blurStartCanvasY = clampedY;
+                // 2. Check if click lands inside an existing region (ONLY if currently time-active OR already selected)
+                let clickedRegion = null;
+                for (let i = state.blurRegions.length - 1; i >= 0; i--) {
+                    const region = state.blurRegions[i];
+                    const isTimeActive = (_blurClock.current >= (region.startSec ?? 0) && _blurClock.current <= (region.endSec ?? Infinity));
+                    const isSelected = region.id === state.selectedBlurId;
+
+                    // Inactive regions from another timestamp do NOT intercept clicks unless user specifically selected it!
+                    if (!isTimeActive && !isSelected) continue;
+
+                    const rx = drawX + region.x * drawW;
+                    const ry = drawY + region.y * drawH;
+                    const rw = region.w * drawW;
+                    const rh = region.h * drawH;
+                    if (coords.x >= rx && coords.x <= rx + rw && coords.y >= ry && coords.y <= ry + rh) {
+                        clickedRegion = region;
+                        break;
+                    }
+                }
+
+                if (clickedRegion) {
+                    state.selectedBlurId = clickedRegion.id;
+                    state.isDraggingBlur = true;
                     state.blurDrawBounds = { x: drawX, y: drawY, w: drawW, h: drawH };
-
-                    const _blurClock = (typeof getEditorTimelineClock === 'function') ? getEditorTimelineClock() : { current: 0, total: state.duration || 999 };
-                    const totalDur = Math.max(10, _blurClock.total || state.duration || 999);
-
-                    const newRegion = {
-                        id: Date.now(),
-                        x: (clampedX - drawX) / drawW,
-                        y: (clampedY - drawY) / drawH,
-                        w: 0,
-                        h: 0,
-                        intensity: parseInt(document.getElementById('blur-intensity-slider')?.value || '25'),
-                        startSec: 0,
-                        endSec: Math.ceil(totalDur)
-                    };
-                    state.blurRegions.push(newRegion);
-                    state.selectedBlurId = newRegion.id;
-                    if (window.onBlurRegionSelected) window.onBlurRegionSelected(newRegion.id);
-
+                    const rx = drawX + clickedRegion.x * drawW;
+                    const ry = drawY + clickedRegion.y * drawH;
+                    state.dragBlurOffsetX = coords.x - rx;
+                    state.dragBlurOffsetY = coords.y - ry;
+                    if (window.onBlurRegionSelected) window.onBlurRegionSelected(clickedRegion.id);
+                    renderBlurRegionList();
+                    drawFrame();
                     e.preventDefault();
                     return;
                 }
+
+                // 3. Otherwise clicked on empty space -> start drawing a brand-new blur region!
+                state.isDrawingNewBlur = true;
+                state.blurStartCanvasX = clampedX;
+                state.blurStartCanvasY = clampedY;
+                state.blurDrawBounds = { x: drawX, y: drawY, w: drawW, h: drawH };
+
+                const totalDur = Math.max(10, _blurClock.total || state.duration || 999);
+                const newRegion = {
+                    id: Date.now(),
+                    x: (clampedX - drawX) / drawW,
+                    y: (clampedY - drawY) / drawH,
+                    w: 0,
+                    h: 0,
+                    intensity: parseInt(document.getElementById('blur-intensity-slider')?.value || '25'),
+                    startSec: Math.max(0, parseFloat((_blurClock.current || 0).toFixed(1))),
+                    endSec: Math.ceil(totalDur)
+                };
+                state.blurRegions.push(newRegion);
+                state.selectedBlurId = newRegion.id;
+                if (window.onBlurRegionSelected) window.onBlurRegionSelected(newRegion.id);
+                if (typeof renderBlurRegionList === 'function') renderBlurRegionList();
+                drawFrame();
+                e.preventDefault();
+                return;
             }
         }
 
@@ -15991,6 +16018,36 @@ document.addEventListener('DOMContentLoaded', () => {
     const blurIntensityVal = document.getElementById('blur-intensity-val');
     const blurRegionListEl = document.getElementById('blur-region-list');
     const deleteBlurRegionBtn = document.getElementById('delete-blur-region-btn');
+    const addNewBlurBtn = document.getElementById('add-new-blur-btn');
+    const deselectBlurRegionBtn = document.getElementById('deselect-blur-region-btn');
+
+    if (addNewBlurBtn) {
+        addNewBlurBtn.addEventListener('click', () => {
+            state.isAddingBlur = true;
+            if (blurToolToggle) blurToolToggle.checked = true;
+            if (blurActionsContainer) blurActionsContainer.style.display = 'block';
+
+            state.forceNewBlurDraw = true;
+            state.selectedBlurId = null;
+            if (state.canvas) state.canvas.style.cursor = 'crosshair';
+            renderBlurRegionList();
+            drawFrame();
+            if (window.showToast) {
+                window.showToast('নতুন ব্লার মোড সক্রিয় — প্রিভিউ স্ক্রিনে ড্র্যাগ করে এরিয়া আঁকুন (Drag to blur)');
+            }
+        });
+    }
+
+    if (deselectBlurRegionBtn) {
+        deselectBlurRegionBtn.addEventListener('click', () => {
+            state.selectedBlurId = null;
+            state.forceNewBlurDraw = false;
+            if (state.canvas) state.canvas.style.cursor = state.isAddingBlur ? 'crosshair' : 'default';
+            renderBlurRegionList();
+            drawFrame();
+            if (window.showToast) window.showToast('ব্লার সিলেকশন বাতিল করা হয়েছে');
+        });
+    }
 
     blurToolToggle.addEventListener('change', (e) => {
         state.isAddingBlur = e.target.checked;
@@ -16238,7 +16295,8 @@ document.addEventListener('DOMContentLoaded', () => {
             blurRegionListEl.appendChild(wrapper);
         });
 
-        deleteBlurRegionBtn.style.display = state.selectedBlurId ? 'inline-block' : 'none';
+        if (deleteBlurRegionBtn) deleteBlurRegionBtn.style.display = state.selectedBlurId ? 'inline-block' : 'none';
+        if (deselectBlurRegionBtn) deselectBlurRegionBtn.style.display = state.selectedBlurId ? 'inline-block' : 'none';
     }
 
     if (deleteBlurRegionBtn) {
@@ -26348,21 +26406,19 @@ document.addEventListener('DOMContentLoaded', () => {
     // Fix: cancel the pending timer and set editorIsResetting=true *before*
     // doing any of the async clearing, so nothing can resurrect the project
     // in between.
-    // --- Clear All Edits for Current Video (Keep Video Loaded, Reset Edits) ---
+    // --- Clear All Edits for Current Video (Keep Video Loaded, Reset Edits & Cuts) ---
     async function clearAllEditsForCurrentVideo() {
         if (!state.clips || state.clips.length === 0) {
             if (typeof showToast === 'function') showToast('বর্তমানে কোনো ভিডিও লোড করা নেই।', 'warning');
             return;
         }
 
-        const activeClip = state.clips.find(c => c.id === state.activeClipId) || state.clips[0];
-        const clipName = activeClip ? activeClip.name : 'ভিডিও';
-        const confirmMsg = `আপনি কি নিশ্চিত যে "${clipName}"-এর সমস্ত এডিটিং (সাবটাইটেল, বি-রোল, ওভারলে, ফিল্টার ইত্যাদি) মুছে দিয়ে ভিডিওটি ফ্রেশ করতে চান?\n\nভিডিওটি লোড থাকবে, কিন্তু সব এডিট মুছে নতুন অবস্থা হবে।`;
+        const baseClip = state.clips[0];
+        const clipName = baseClip ? baseClip.name : 'ভিডিও';
+        const confirmMsg = `আপনি কি নিশ্চিত যে "${clipName}"-এর সমস্ত এডিটিং (কাট/স্প্লিট, সাবটাইটেল, বি-রোল, ওভারলে, ফিল্টার ইত্যাদি) মুছে দিয়ে ভিডিওটি আগের মতো সম্পূর্ণ ও ফ্রেশ করতে চান?\n\nভিডিওটি লোড থাকবে, কিন্তু সব কাট ও এডিট মুছে মূল অবস্থায় ফিরে আসবে।`;
 
         if (!confirm(confirmMsg)) return;
 
-        const preservedClips = state.clips;
-        const preservedActiveClipId = state.activeClipId;
         const preservedProjId = state.activeProjectId;
         const preservedFingerprint = state.projectVideoFingerprint;
 
@@ -26379,83 +26435,101 @@ document.addEventListener('DOMContentLoaded', () => {
 
             clearWorkspaceState(false);
 
-            state.clips = preservedClips;
-            state.activeClipId = preservedActiveClipId;
+            // Determine true original full video duration
+            let fullDur = (state.video && state.video.duration && !isNaN(state.video.duration) && state.video.duration > 0)
+                ? state.video.duration
+                : (baseClip.fileDuration || baseClip.duration || state.duration || 10);
+
+            // Restore the original uncut single full video clip
+            const freshClip = {
+                id: baseClip.id || Date.now(),
+                name: baseClip.name || 'ভিডিও',
+                type: baseClip.type || 'video',
+                url: baseClip.url,
+                file: baseClip.file,
+                filePath: baseClip.filePath || '',
+                start: 0,
+                end: fullDur,
+                duration: fullDur,
+                fileDuration: fullDur,
+                speed: 1,
+                cropX: 0,
+                cropY: 0,
+                cropW: 1,
+                cropH: 1,
+                zoom: 100,
+                offsetX: 0,
+                offsetY: 0,
+                punchZooms: [],
+                kenBurnsEnabled: false,
+                kenBurnsStartZoom: 100,
+                kenBurnsEndZoom: 115,
+                kenBurnsPan: 'right',
+                speedRamp: { enabled: false, segments: [1, 1, 1] },
+                transitionType: 'none',
+                transitionDuration: 0.5,
+                smokeLayers: [],
+                glitterLayers: []
+            };
+
+            state.clips = [freshClip];
+            state.activeClipId = freshClip.id;
             state.activeProjectId = preservedProjId;
             state.projectVideoFingerprint = preservedFingerprint;
+
+            state.duration = fullDur;
+            state.startTime = 0;
+            state.endTime = fullDur;
+            state.currentTime = 0;
 
             state.cropX = 0;
             state.cropY = 0;
             state.cropW = 1;
             state.cropH = 1;
+            state.isAdjustingCrop = false;
             state.aspectRatio = 'original';
             state.layoutMode = 'fit';
-            // These live on state (not per-clip), so "Clear All" for the
-            // current video was leaving them on — Chroma Key stayed enabled
-            // across a clear because nothing here ever touched it.
             state.chromaKeyEnabled = false;
             state.chromaKeyColor = '#00ff00';
             state.chromaKeyThreshold = 45;
 
-            if (activeClip) {
-                activeClip.start = 0;
-                activeClip.cropX = 0;
-                activeClip.cropY = 0;
-                activeClip.cropW = 1;
-                activeClip.cropH = 1;
-                activeClip.zoom = 100;
-                activeClip.offsetX = 0;
-                activeClip.offsetY = 0;
-                // Punch Zoom, Ken Burns, Speed/Speed-Ramp, and Transition are
-                // all per-clip edits (phase9.js / punch-zoom-ui.js) that this
-                // function never reset before, so they survived "Clear All"
-                // even though every other edit type was wiped.
-                activeClip.punchZooms = [];
-                activeClip.kenBurnsEnabled = false;
-                activeClip.kenBurnsStartZoom = 100;
-                activeClip.kenBurnsEndZoom = 115;
-                activeClip.kenBurnsPan = 'right';
-                activeClip.speed = 1;
-                activeClip.speedRamp = { enabled: false, segments: [1, 1, 1] };
-                activeClip.transitionType = 'none';
-                activeClip.transitionDuration = 0.5;
-                if (state.video) state.video.playbackRate = 1;
-                if (activeClip.type !== 'image' && state.video && state.video.duration && !isNaN(state.video.duration)) {
-                    state.duration = state.video.duration;
-                    activeClip.duration = state.video.duration;
-                    activeClip.end = state.video.duration;
-                } else if (activeClip.type === 'image') {
-                    state.duration = activeClip.duration || 5.0;
-                    activeClip.end = state.duration;
-                }
-                state.startTime = 0;
-                state.endTime = state.duration;
-            }
-
-            state.currentTime = 0;
             if (state.video) {
-                if (activeClip && activeClip.type !== 'image' && activeClip.url) {
-                    if (state.video.src !== activeClip.url) {
-                        state.video.src = activeClip.url;
-                        state.video.load();
-                    }
+                if (freshClip.url && state.video.src !== freshClip.url) {
+                    state.video.src = freshClip.url;
+                    state.video.load();
                 }
                 state.video.currentTime = 0;
+                state.video.playbackRate = 1;
                 state.video.pause();
             }
             state.isPlaying = false;
             const playPauseBtnEl = document.getElementById('play-pause-btn');
             if (playPauseBtnEl) playPauseBtnEl.innerHTML = '<i class="fa-solid fa-play"></i>';
 
-            state.historyLabels = (savedData && savedData.historyLabels ? savedData.historyLabels : []).slice(-50);
-            state.undoStack = (savedData && savedData.undoStack ? savedData.undoStack : []).slice(-50);
-            state.redoStack = (savedData && savedData.redoStack ? savedData.redoStack : []).slice(-50);
-            state.redoLabels = (savedData && savedData.redoLabels ? savedData.redoLabels : []).slice(-50);
+            // Reset history stacks cleanly
+            state.historyLabels = [];
+            state.undoStack = [];
+            state.redoStack = [];
+            state.redoLabels = [];
             if (typeof window.updateHistoryUI === 'function') {
                 window.updateHistoryUI();
             } else if (typeof updateHistoryUI === 'function') {
                 updateHistoryUI();
             }
+
+            // Reset all global Phase 13 particle & 3D properties
+            state.smokeLayers = [];
+            state.glitterLayers = [];
+            state.smokeOptions = null;
+            state.glitterOptions = null;
+            state.rotX = 0;
+            state.rotY = 0;
+            state.rotZ = 0;
+            state.rot3dEnabled = false;
+            state.rot3dMode = 'continuous';
+            state.rot3dSpeed = 1.0;
+            state.flipH = false;
+            state.flipV = false;
 
             updateCanvasDimensions();
             syncUIFromState();
@@ -26471,46 +26545,21 @@ document.addEventListener('DOMContentLoaded', () => {
             if (typeof renderFillList === 'function') renderFillList();
             if (window.renderMultiTrackPanel) window.renderMultiTrackPanel();
             if (window.syncPhase9ClipUI) window.syncPhase9ClipUI();
-            // Reset all global and clip-level Phase 13 particle & 3D properties
-            state.smokeLayers = [];
-            state.glitterLayers = [];
-            state.smokeOptions = null;
-            state.glitterOptions = null;
-            state.rotX = 0;
-            state.rotY = 0;
-            state.rotZ = 0;
-            state.rot3dEnabled = false;
-            state.rot3dMode = 'continuous';
-            state.rot3dSpeed = 1.0;
-            state.flipH = false;
-            state.flipV = false;
-            if (state.clips && state.clips.length > 0) {
-                state.clips.forEach(c => {
-                    c.smokeLayers = [];
-                    c.glitterLayers = [];
-                    c.smokeOptions = null;
-                    c.glitterOptions = null;
-                    c.rotX = 0;
-                    c.rotY = 0;
-                    c.rotZ = 0;
-                    c.rot3dEnabled = false;
-                    c.rot3dMode = 'continuous';
-                    c.rot3dSpeed = 1.0;
-                    c.flipH = false;
-                    c.flipV = false;
-                });
-            }
             if (typeof window.syncPhase133DAndSmokeUI === 'function') window.syncPhase133DAndSmokeUI();
             if (typeof window.stopParticleOverlayLoop === 'function') window.stopParticleOverlayLoop();
             drawFrame();
+        } catch (err) {
+            console.error('Error clearing edits:', err);
         } finally {
             editorIsResetting = false;
         }
 
-        await saveProjectToBrowserStorage(preservedProjId);
+        if (typeof saveProjectToBrowserStorage === 'function') {
+            await saveProjectToBrowserStorage(preservedProjId);
+        }
 
         if (typeof showToast === 'function') {
-            showToast(`"${clipName}"-এর সমস্ত এডিট ক্লিয়ার করা হয়েছে। ফ্রেশ প্রজেক্ট শুরু হলো!`, 'success');
+            showToast(`"${clipName}"-এর সমস্ত কাট ও এডিট ক্লিয়ার করা হয়েছে। ভিডিওটি মূল ফ্রেশ অবস্থায় ফিরে এসেছে!`, 'success');
         }
     }
     window.clearAllEditsForCurrentVideo = clearAllEditsForCurrentVideo;

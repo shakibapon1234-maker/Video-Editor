@@ -1184,6 +1184,10 @@
                                 </div>
 
                                 <div class="blur-actions mt-3" id="blur-actions-container" style="display: none;">
+                                    <button type="button" id="add-new-blur-btn" class="btn btn-primary btn-block mb-3" style="background: linear-gradient(135deg, #8b5cf6 0%, #6d28d9 100%); border: none; font-weight: 700; padding: 10px 14px; font-size: 13.5px; border-radius: 8px; box-shadow: 0 4px 12px rgba(139, 92, 246, 0.35); cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px;">
+                                        <i class="fa-solid fa-plus"></i> + নতুন ব্লার এরিয়া আঁকুন (Draw New Blur)
+                                    </button>
+
                                     <div class="control-group">
                                         <div style="display:flex; justify-content:space-between; align-items:center;">
                                             <label style="font-weight:600;">Blur Intensity (ব্লারের গভীরতা)</label>
@@ -1199,9 +1203,14 @@
                                         <!-- Dynamically populated list of blur regions -->
                                     </div>
 
-                                    <button id="delete-blur-region-btn" class="btn-text-danger mt-2" style="display: none;">
-                                        <i class="fa-solid fa-trash-can"></i> Remove Selected Region
-                                    </button>
+                                    <div style="display: flex; gap: 8px; margin-top: 10px;">
+                                        <button type="button" id="deselect-blur-region-btn" class="btn btn-secondary btn-sm" style="flex: 1; display: none; padding: 8px; font-weight: 600; font-size: 12px; background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.15); color: #cbd5e1; border-radius: 6px; cursor: pointer;">
+                                            <i class="fa-solid fa-xmark"></i> সিলেকশন বাতিল
+                                        </button>
+                                        <button type="button" id="delete-blur-region-btn" class="btn btn-danger btn-sm" style="flex: 1; display: none; margin: 0; padding: 8px; background: #ef4444; color: #fff; font-weight: 600; font-size: 12px; border: none; border-radius: 6px; cursor: pointer;">
+                                            <i class="fa-solid fa-trash-can"></i> এই ব্লার মুছুন
+                                        </button>
+                                    </div>
                                 </div>
                             </div>
                         </div>
@@ -5636,7 +5645,7 @@
     <script src="audio-silence-generator.js?v=1"></script>
     <script src="smoke-effect.js?v=5"></script>
     <script src="glitter-effect.js?v=4"></script>
-    <script src="editor.js?v=26"></script>
+    <script src="editor.js?v=28"></script>
     <script src="keyframes.js?v=1"></script>
     <script src="render-engine.js?v=2"></script>
     <script src="exporter.js?v=7"></script>
