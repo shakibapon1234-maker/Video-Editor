@@ -1273,8 +1273,12 @@ app.post('/api/fast-direct-render', express.json({ limit: '2048mb' }), async (re
                     }
                 }
 
+                // Probe each input clip to check if it has native audio
+                const probes = await Promise.all(inputPaths.map(p => probeFastJoinClip(p)));
+
                 const filterParts = [];
                 const videoLabels = [];
+                const audioLabels = [];
                 inputPaths.forEach((inp, i) => {
                     const clip = clips[i];
                     const s = Math.max(0, parseFloat(clip.start) || 0);
@@ -1303,12 +1307,49 @@ app.post('/api/fast-direct-render', express.json({ limit: '2048mb' }), async (re
                         filterParts.push(`${baseTrim},scale=${targetW}:${targetH}:force_original_aspect_ratio=decrease,pad=${targetW}:${targetH}:(ow-iw)/2:(oh-ih)/2:black,setsar=1[v${i}]`);
                     }
                     videoLabels.push(`[v${i}]`);
-                });
-                filterParts.push(`${videoLabels.join('')}concat=n=${inputPaths.length}:v=1:a=0[vout]`);
 
-                if (audioPath && fs.existsSync(audioPath)) {
+                    // Audio stream extraction per clip from native video files
+                    const p = probes[i];
+                    if (p && p.hasAudio) {
+                        let aFilter = `[${i}:a]atrim=start=${s.toFixed(3)}:end=${e.toFixed(3)},asetpts=PTS-STARTPTS`;
+                        if (Math.abs(spd - 1.0) > 0.01) {
+                            let remSpd = spd;
+                            const tempoFilters = [];
+                            while (remSpd > 2.0) { tempoFilters.push('atempo=2.0'); remSpd /= 2.0; }
+                            while (remSpd < 0.5) { tempoFilters.push('atempo=0.5'); remSpd /= 0.5; }
+                            tempoFilters.push(`atempo=${remSpd.toFixed(3)}`);
+                            aFilter += `,${tempoFilters.join(',')}`;
+                        }
+                        aFilter += `,aformat=sample_rates=48000:channel_layouts=stereo[a${i}]`;
+                        filterParts.push(aFilter);
+                    } else {
+                        const segDur = Math.max(0.05, (e - s) / spd);
+                        filterParts.push(`aevalsrc=0:d=${segDur.toFixed(3)}:s=48000:c=stereo[a${i}]`);
+                    }
+                    audioLabels.push(`[a${i}]`);
+                });
+
+                filterParts.push(`${videoLabels.join('')}concat=n=${inputPaths.length}:v=1:a=0[vout]`);
+                filterParts.push(`${audioLabels.join('')}concat=n=${inputPaths.length}:v=0:a=1[aclipout]`);
+
+                const anyInputHasAudio = probes.some(p => p && p.hasAudio);
+                let hasExtraAudioFile = audioPath && fs.existsSync(audioPath);
+                if (hasExtraAudioFile) {
+                    try {
+                        if (fs.statSync(audioPath).size <= 1000) hasExtraAudioFile = false;
+                    } catch (_) { hasExtraAudioFile = false; }
+                }
+
+                if (hasExtraAudioFile) {
                     const audioIdx = inputPaths.length;
-                    filterParts.push(`[${audioIdx}:a]aformat=sample_rates=48000:channel_layouts=stereo[aout]`);
+                    filterParts.push(`[${audioIdx}:a]aformat=sample_rates=48000:channel_layouts=stereo[aextra]`);
+                    if (anyInputHasAudio) {
+                        filterParts.push(`[aclipout][aextra]amix=inputs=2:duration=first:dropout_transition=2[aout]`);
+                    } else {
+                        filterParts.push(`[aextra]anull[aout]`);
+                    }
+                } else {
+                    filterParts.push(`[aclipout]anull[aout]`);
                 }
 
                 let outFilename = safeJoinName(reqFilename || `direct-render-${Date.now()}.mp4`);
@@ -1331,9 +1372,10 @@ app.post('/api/fast-direct-render', express.json({ limit: '2048mb' }), async (re
 
                 const outputOptions = [
                     '-map', '[vout]',
-                    ...(audioPath && fs.existsSync(audioPath)
-                        ? ['-map', '[aout]', '-c:a', 'aac', '-b:a', '192k', '-ar', '48000']
-                        : ['-an']),
+                    '-map', '[aout]',
+                    '-c:a', 'aac',
+                    '-b:a', '192k',
+                    '-ar', '48000',
                     '-c:v', 'libx264',
                     '-preset', 'fast',
                     '-crf', '18',

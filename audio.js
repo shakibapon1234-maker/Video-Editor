@@ -3641,21 +3641,25 @@ document.addEventListener('DOMContentLoaded', () => {
             const clipOutputDuration = window.getClipOutputDuration ? window.getClipOutputDuration(clip) : (clipTrimDuration / clipSpeed);
 
             if (clip.type !== 'image' && clip.file) {
-                try {
-                    const arrayBuffer = await clip.file.arrayBuffer();
-                    const decodeCtx = new (window.AudioContext || window.webkitAudioContext)();
-                    const audioBuffer = await decodeCtx.decodeAudioData(arrayBuffer);
-                    await decodeCtx.close();
+                if (clip.file.size > 1.5 * 1024 * 1024 * 1024) {
+                    console.warn(`Video file ${clip.name || ''} is larger than 1.5GB (${(clip.file.size/1024/1024).toFixed(1)}MB), server FFmpeg will handle native audio directly.`);
+                } else {
+                    try {
+                        const arrayBuffer = await clip.file.arrayBuffer();
+                        const decodeCtx = new (window.AudioContext || window.webkitAudioContext)();
+                        const audioBuffer = await decodeCtx.decodeAudioData(arrayBuffer);
+                        await decodeCtx.close();
 
-                    decodedVideoBuffers.push({
-                        buffer: audioBuffer,
-                        clip,
-                        timelineStart: timelineTime,
-                        clipTrimDuration,
-                        clipSpeed
-                    });
-                } catch (err) {
-                    console.error(`Error decoding audio for clip ${clip.name}:`, err);
+                        decodedVideoBuffers.push({
+                            buffer: audioBuffer,
+                            clip,
+                            timelineStart: timelineTime,
+                            clipTrimDuration,
+                            clipSpeed
+                        });
+                    } catch (err) {
+                        console.error(`Error decoding audio for clip ${clip.name}:`, err);
+                    }
                 }
             }
             timelineTime += clipOutputDuration;
@@ -4008,6 +4012,16 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         // --- 6. Render Offline Audio ---
+        const hasAudioContent = decodedVideoBuffers.length > 0 ||
+            !!voiceoverBuffer ||
+            (state.bgMusicTracks && state.bgMusicTracks.length > 0) ||
+            (state.extraTracks && state.extraTracks.some(t => t.type !== 'image' && !t.muted && (t.clips || []).length > 0));
+
+        if (!hasAudioContent) {
+            console.log('No audio tracks or buffers present to render offline.');
+            return null;
+        }
+
         console.log('Rendering audio offline...');
         const renderedBuffer = await offlineCtx.startRendering();
         console.log('Audio rendering complete.');
