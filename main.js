@@ -70,7 +70,7 @@ app.commandLine.appendSwitch('autoplay-policy', 'no-user-gesture-required');
 
 const gotLock = app.requestSingleInstanceLock();
 if (!gotLock) {
-    app.quit();
+    app.exit(0);
 } else {
     let mainWindow = null;
 
@@ -284,7 +284,7 @@ if (!gotLock) {
             serverModule = require('./server.js');
         } catch (error) {
             dialog.showErrorBox('Studio Flow failed to start', String(error && error.stack || error));
-            app.quit();
+            app.exit(0);
             return;
         }
 
@@ -299,18 +299,23 @@ if (!gotLock) {
                         createWindow();
                     }).on('error', () => {
                         dialog.showErrorBox('Studio Flow is already running', 'Another copy of Studio Flow (or another app) is already using port 4000. Close it and try again.');
-                        app.quit();
+                        app.exit(0);
                     });
                 } else {
                     dialog.showErrorBox('Studio Flow server error', String(error && error.stack || error));
-                    app.quit();
+                    app.exit(0);
                 }
             });
         }
     });
 
     app.on('window-all-closed', () => {
-        if (process.platform !== 'darwin') app.quit();
+        if (serverModule && serverModule.server) {
+            try {
+                serverModule.server.close();
+            } catch (_) {}
+        }
+        if (process.platform !== 'darwin') app.exit(0);
     });
 
     app.on('activate', () => {

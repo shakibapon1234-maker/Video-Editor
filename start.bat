@@ -22,11 +22,11 @@ if not exist "node_modules\electron\dist\electron.exe" (
 )
 
 echo Starting Studio Flow Video Editor...
-powershell -NoProfile -Command "$c = Get-NetTCPConnection -LocalPort 4000 -ErrorAction SilentlyContinue; if ($c) { $c | ForEach-Object { Stop-Process -Id $_.OwningProcess -Force -ErrorAction SilentlyContinue }; Start-Sleep -Milliseconds 300 }"
+powershell -NoProfile -Command "$c = Get-NetTCPConnection -LocalPort 4000 -ErrorAction SilentlyContinue; if ($c) { $c | ForEach-Object { Stop-Process -Id $_.OwningProcess -Force -ErrorAction SilentlyContinue } }; Get-Process electron -ErrorAction SilentlyContinue | Where-Object { $_.Path -like '*Video-Editor*' } | Stop-Process -Force -ErrorAction SilentlyContinue; Start-Sleep -Milliseconds 300"
 "%CD%\node_modules\electron\dist\electron.exe" .
 set "START_EXIT=%ERRORLEVEL%"
 
-if not "%START_EXIT%"=="0" (
+if not "%START_EXIT%"=="0" if not "%START_EXIT%"=="-1" if not "%START_EXIT%"=="4294967295" (
     echo.
     echo Desktop app closed with error code %START_EXIT%.
     pause
