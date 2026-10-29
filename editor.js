@@ -24143,6 +24143,22 @@ document.addEventListener('DOMContentLoaded', () => {
                     row.classList.add('linked');
                     selectBtn.className = 'btn btn-sm btn-success';
                     selectBtn.innerHTML = '<i class="fa-solid fa-circle-check"></i> Linked';
+
+                    // Automatically link all other clips that share the exact same source file name
+                    missingFiles.forEach(other => {
+                        if (!other.fileObj && (other.name === item.name || other.name === selectedFile.name)) {
+                            other.fileObj = selectedFile;
+                            const otherRow = document.getElementById(`relink-row-${other.type}-${other.id}`);
+                            if (otherRow) {
+                                otherRow.classList.add('linked');
+                                const otherBtn = otherRow.querySelector('button');
+                                if (otherBtn) {
+                                    otherBtn.className = 'btn btn-sm btn-success';
+                                    otherBtn.innerHTML = '<i class="fa-solid fa-circle-check"></i> Linked';
+                                }
+                            }
+                        }
+                    });
                     
                     const allLinked = missingFiles.every(x => x.fileObj);
                     confirmBtn.disabled = !allLinked;

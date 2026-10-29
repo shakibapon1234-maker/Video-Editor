@@ -383,12 +383,17 @@ document.addEventListener('DOMContentLoaded', () => {
         if (fastDirectRenderBtn) fastDirectRenderBtn.disabled = true;
         if (renderBtn) renderBtn.disabled = true;
         setProgress(5);
-        renderStatusText.innerText = 'অডিও প্রস্তুত করা হচ্ছে... (Preparing audio...)';
+        renderStatusText.innerText = 'অডিও ট্র্যাক সংগ্রহ ও প্রস্তুত করা হচ্ছে... (Collecting & preparing audio...)';
 
         try {
-            // Render offline mixed audio (includes all background music and multi-track audio)
+            // Render offline mixed audio only if extra tracks (BGM, voiceover, etc.) or effects exist
             let audioBase64 = null;
-            if (window.renderAudioOffline) {
+            const hasVoiceover = !!(state.voiceoverRecorded && state.voiceoverBlob);
+            const hasBgMusic = Array.isArray(state.bgMusicTracks) && state.bgMusicTracks.length > 0;
+            const hasExtraTracks = Array.isArray(state.extraTracks) && state.extraTracks.some(t => t.type === 'audio' && (t.clips || []).length > 0);
+            const hasExtraAudio = hasVoiceover || hasBgMusic || hasExtraTracks;
+
+            if (hasExtraAudio && window.renderAudioOffline) {
                 try {
                     const grandTotalFrames = Math.ceil(totalDuration * 30);
                     const audioBuffer = await window.renderAudioOffline(grandTotalFrames / 30);
@@ -403,10 +408,13 @@ document.addEventListener('DOMContentLoaded', () => {
                 } catch (aErr) {
                     console.warn('Audio offline mix warning:', aErr);
                 }
+            } else {
+                // Brief pause so audio verification is visibly communicated in the UI
+                await new Promise(r => setTimeout(r, 700));
             }
 
             setProgress(15);
-            renderStatusText.innerText = 'ক্লিপগুলো প্রস্তুত করা হচ্ছে...';
+            renderStatusText.innerText = 'ভিডিও ক্লিপগুলো প্রস্তুত করা হচ্ছে... (Preparing video clips...)';
             const clipsPayload = [];
             for (let i = 0; i < state.clips.length; i++) {
                 const c = state.clips[i];
