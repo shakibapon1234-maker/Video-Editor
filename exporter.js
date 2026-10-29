@@ -496,7 +496,91 @@ document.addEventListener('DOMContentLoaded', () => {
                 targetH = Math.round(targetH / 2) * 2;
             }
 
-            renderStatusText.innerText = `সার্ভারে হাই-স্পিড FFmpeg রেন্ডার শুরু হচ্ছে (${selectedQuality} - ${targetW}x${targetH})...`;
+            // Calculate video placement within output canvas for exact blur positioning
+            let outDrawW = targetW;
+            let outDrawH = targetH;
+            let outDrawX = 0;
+            let outDrawY = 0;
+
+            const mediaSrcW = (state.video && state.video.videoWidth) || 1280;
+            const mediaSrcH = (state.video && state.video.videoHeight) || 720;
+            const mediaAspect = (mediaSrcW && mediaSrcH) ? (mediaSrcW / mediaSrcH) : (16 / 9);
+            const targetAspect = (targetW && targetH) ? (targetW / targetH) : mediaAspect;
+
+            if (selectedLayoutMode === 'fill') {
+                outDrawW = targetW;
+                outDrawH = targetH;
+                outDrawX = 0;
+                outDrawY = 0;
+            } else {
+                if (Math.abs(mediaAspect - targetAspect) > 0.01) {
+                    if (mediaAspect > targetAspect) {
+                        outDrawW = targetW;
+                        outDrawH = Math.round(targetW / mediaAspect);
+                        outDrawX = 0;
+                        outDrawY = Math.round((targetH - outDrawH) / 2);
+                    } else {
+                        outDrawH = targetH;
+                        outDrawW = Math.round(targetH * mediaAspect);
+                        outDrawX = Math.round((targetW - outDrawW) / 2);
+                        outDrawY = 0;
+                    }
+                }
+            }
+
+            // Robust mapping of timeline blur regions to output pixel coordinates
+            const rawBlurs = Array.isArray(state.blurRegions) ? state.blurRegions : [];
+            const blurRegionsPayload = rawBlurs
+                .map(r => {
+                    let rawX = r.x !== undefined ? Number(r.x) : 0;
+                    let rawY = r.y !== undefined ? Number(r.y) : 0;
+                    let rawW = r.w !== undefined ? Number(r.w) : 0;
+                    let rawH = r.h !== undefined ? Number(r.h) : 0;
+
+                    // Handle possible inverted drags
+                    if (rawW < 0) {
+                        rawX += rawW;
+                        rawW = Math.abs(rawW);
+                    }
+                    if (rawH < 0) {
+                        rawY += rawH;
+                        rawH = Math.abs(rawH);
+                    }
+
+                    if (rawW < 0.002 || rawH < 0.002) return null;
+
+                    let rx = Math.round(outDrawX + rawX * outDrawW);
+                    let ry = Math.round(outDrawY + rawY * outDrawH);
+                    let rw = Math.round(rawW * outDrawW);
+                    let rh = Math.round(rawH * outDrawH);
+
+                    rx = Math.max(0, Math.min(targetW - 4, rx));
+                    ry = Math.max(0, Math.min(targetH - 4, ry));
+                    rw = Math.max(4, Math.min(targetW - rx, rw));
+                    rh = Math.max(4, Math.min(targetH - ry, rh));
+
+                    rx = Math.floor(rx / 2) * 2;
+                    ry = Math.floor(ry / 2) * 2;
+                    rw = Math.floor(rw / 2) * 2;
+                    rh = Math.floor(rh / 2) * 2;
+
+                    return {
+                        x: rx,
+                        y: ry,
+                        w: rw,
+                        h: rh,
+                        startSec: typeof r.startSec === 'number' ? r.startSec : 0,
+                        endSec: typeof r.endSec === 'number' ? r.endSec : 999999,
+                        intensity: r.intensity || 25
+                    };
+                })
+                .filter(Boolean);
+
+            console.log('[FastDirectRender] Exporting blur regions payload:', blurRegionsPayload);
+
+            const blurCount = blurRegionsPayload.length;
+            const blurStatusNote = blurCount > 0 ? ` (${blurCount}টি ব্লার সহ)` : '';
+            renderStatusText.innerText = `সার্ভারে হাই-স্পিড FFmpeg রেন্ডার শুরু হচ্ছে (${selectedQuality} - ${targetW}x${targetH}${blurStatusNote})...`;
             setProgress(25);
 
             const timestamp = new Date().toISOString().slice(0, 16).replace('T', '_').replace(':', '-');
@@ -508,6 +592,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 body: JSON.stringify({
                     clips: clipsPayload,
                     audioBase64,
+                    blurRegions: blurRegionsPayload,
                     totalDuration,
                     filename: defaultFilename,
                     quality: selectedQuality,
@@ -545,7 +630,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (data.status === 'rendering') {
                     const uiPct = Math.min(98, Math.max(25, Math.round(25 + (data.percent || 0) * 0.73)));
                     setProgress(uiPct);
-                    renderStatusText.innerText = `হাই-স্পিড রেন্ডার চলছে... (${data.percent || 0}%) — ১ মিনিটের মধ্যে প্রস্তুত হচ্ছে`;
+                    renderStatusText.innerText = `হাই-স্পিড রেন্ডার চলছে... (${data.percent || 0}%)${blurCount > 0 ? ` — ${blurCount}টি ব্লার প্রসেস হচ্ছে` : ' — ১-২ মিনিটের মধ্যে প্রস্তুত হচ্ছে'}`;
                 } else if (data.status === 'done') {
                     finished = true;
                     setProgress(100);

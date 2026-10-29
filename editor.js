@@ -16028,6 +16028,18 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     function renderBlurRegionList() {
+        const fastIndicator = document.getElementById('fast-render-blur-indicator');
+        const fastText = document.getElementById('fast-render-blur-text');
+        const validBlurCount = (state.blurRegions || []).filter(r => (r.w || 0) > 0.005 && (r.h || 0) > 0.005).length;
+        if (fastIndicator && fastText) {
+            if (validBlurCount > 0) {
+                fastIndicator.style.display = 'block';
+                fastText.innerText = `${validBlurCount}টি ব্লার এরিয়া প্রস্তুত`;
+            } else {
+                fastIndicator.style.display = 'none';
+            }
+        }
+
         if (!blurRegionListEl) return;
         blurRegionListEl.innerHTML = '';
 

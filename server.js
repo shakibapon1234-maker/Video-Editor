@@ -315,7 +315,15 @@ app.get('/favicon.ico', (req, res) => {
 });
 
 // Serve editor static files
-app.use(express.static(__dirname));
+app.use(express.static(__dirname, {
+    etag: false,
+    maxAge: 0,
+    setHeaders: (res) => {
+        res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+        res.setHeader('Pragma', 'no-cache');
+        res.setHeader('Expires', '0');
+    }
+}));
 
 // Ensure output and temp directories exist
 const DATA_DIR = process.env.SF_DATA_DIR || __dirname;
@@ -1195,6 +1203,7 @@ app.post('/api/fast-direct-render', express.json({ limit: '2048mb' }), async (re
         const {
             clips,
             audioBase64,
+            blurRegions,
             filename: reqFilename,
             totalDuration,
             quality,
@@ -1330,6 +1339,42 @@ app.post('/api/fast-direct-render', express.json({ limit: '2048mb' }), async (re
                 });
 
                 filterParts.push(`${videoLabels.join('')}concat=n=${inputPaths.length}:v=1:a=0[vout]`);
+
+                console.log(`[FastDirectRender] Request received: ${clips.length} clips, ${(blurRegions || []).length} blur regions`);
+                let finalVideoLabel = '[vout]';
+                if (Array.isArray(blurRegions) && blurRegions.length > 0) {
+                    let currentVLabel = '[vout]';
+                    let validBlurCount = 0;
+                    blurRegions.forEach((br) => {
+                        const rawX = parseFloat(br.x) || 0;
+                        const rawY = parseFloat(br.y) || 0;
+                        const rawW = parseFloat(br.w) || 0;
+                        const rawH = parseFloat(br.h) || 0;
+
+                        // Clamping and even-number alignment
+                        let rx = Math.max(0, Math.min(targetW - 4, Math.floor(rawX / 2) * 2));
+                        let ry = Math.max(0, Math.min(targetH - 4, Math.floor(rawY / 2) * 2));
+                        let rw = Math.max(4, Math.min(targetW - rx, Math.floor(rawW / 2) * 2));
+                        let rh = Math.max(4, Math.min(targetH - ry, Math.floor(rawH / 2) * 2));
+
+                        if (rw < 4 || rh < 4) return;
+
+                        const sSec = Math.max(0, parseFloat(br.startSec) || 0);
+                        const eSec = Math.max(sSec + 0.05, parseFloat(br.endSec) || 999999);
+                        const rawIntensity = parseFloat(br.intensity) || 25;
+                        const blurSize = Math.max(8, Math.min(Math.min(rw, rh), Math.round(rawIntensity * (targetW / 1280))));
+
+                        const nextVLabel = `[vblur_${validBlurCount}]`;
+                        filterParts.push(`${currentVLabel}split=2[vb_${validBlurCount}][vc_${validBlurCount}]`);
+                        filterParts.push(`[vc_${validBlurCount}]crop=${rw}:${rh}:${rx}:${ry},avgblur=sizeX=${blurSize}:sizeY=${blurSize}[vbl_${validBlurCount}]`);
+                        filterParts.push(`[vb_${validBlurCount}][vbl_${validBlurCount}]overlay=${rx}:${ry}:enable='between(t,${sSec.toFixed(3)},${eSec.toFixed(3)})'${nextVLabel}`);
+                        currentVLabel = nextVLabel;
+                        validBlurCount++;
+                    });
+                    if (validBlurCount > 0) {
+                        finalVideoLabel = currentVLabel;
+                    }
+                }
                 filterParts.push(`${audioLabels.join('')}concat=n=${inputPaths.length}:v=0:a=1[aclipout]`);
 
                 const anyInputHasAudio = probes.some(p => p && p.hasAudio);
@@ -1371,7 +1416,7 @@ app.post('/api/fast-direct-render', express.json({ limit: '2048mb' }), async (re
                 const estDuration = Math.max(0.1, parseFloat(totalDuration) || 0);
 
                 const outputOptions = [
-                    '-map', '[vout]',
+                    '-map', finalVideoLabel,
                     '-map', '[aout]',
                     '-c:a', 'aac',
                     '-b:a', '192k',
