@@ -492,9 +492,13 @@ function compileVideo(ws, tempDir, filename, totalFrames, enhanceQuality = false
 
     const hasAudio = fs.existsSync(audioPath);
     const inputPattern = path.join(tempDir, 'frame_%05d.jpg').replace(/\\/g, '/');
+    // H.264/yuv420p only requires even dimensions.  Rounding to a multiple of
+    // 16 silently converted a 1920x1080 master into 1920x1072 (and other
+    // non-standard sizes), which makes platforms scale it again.  Keep the
+    // requested Full-HD canvas intact while still guaranteeing valid encoding.
     const videoFilterChain = enhanceQuality
-        ? 'hqdn3d=1.5:1.5:4:4,scale=trunc(iw/16)*16:trunc(ih/16)*16,unsharp=5:5:0.8:5:5:0.4,setsar=1'
-        : 'scale=trunc(iw/16)*16:trunc(ih/16)*16,setsar=1';
+        ? 'hqdn3d=1.5:1.5:4:4,scale=trunc(iw/2)*2:trunc(ih/2)*2,unsharp=5:5:0.8:5:5:0.4,setsar=1'
+        : 'scale=trunc(iw/2)*2:trunc(ih/2)*2,setsar=1';
 
     let command = ffmpeg()
         .input(inputPattern)
@@ -509,9 +513,14 @@ function compileVideo(ws, tempDir, filename, totalFrames, enhanceQuality = false
     // Set output duration explicitly from actual frames so outro is never cut
     const duration = actualFrames / 30 + 0.05;
 
+    // Canvas export is the final master for text-heavy tutorials.  Preserve
+    // small UI text before YouTube performs its own transcode: use a high
+    // quality 1080p profile even when the optional source-enhancement filter
+    // is not selected.  "slow" is intentional; it trades overnight render
+    // time for a more efficient, cleaner H.264 file.
     const encodeOptions = enhanceQuality
-        ? ['-c:v libx264', '-pix_fmt yuv420p', '-preset fast', '-crf 16', '-b:v 6M', '-minrate 4M', '-maxrate 10M', '-bufsize 10M']
-        : ['-c:v libx264', '-pix_fmt yuv420p', '-preset fast', '-crf 20', '-b:v 4.5M', '-minrate 3M', '-maxrate 8M', '-bufsize 8M'];
+        ? ['-c:v libx264', '-pix_fmt yuv420p', '-preset slow', '-crf 15', '-b:v 10M', '-minrate 6M', '-maxrate 14M', '-bufsize 14M']
+        : ['-c:v libx264', '-pix_fmt yuv420p', '-preset slow', '-crf 16', '-b:v 8M', '-minrate 4M', '-maxrate 12M', '-bufsize 12M'];
 
     command
         .outputOptions([
@@ -1106,7 +1115,10 @@ app.post('/api/add-audio/compile', async (req, res) => {
         // Mix the new audio with the video's existing audio track.
         // normalize=0 prevents amix from automatically halving the volume (0.5x).
         // dropout_transition=0 avoids volume dip at startup.
-        filterStr = `[0:a]volume=${vVol}[va];[1:a]adelay=${offsetMs}:all=1,volume=${aVol}[na];[va][na]amix=inputs=2:duration=${(shortest || loopAudio) ? 'first' : 'longest'}:dropout_transition=0:normalize=0[aout]`;
+        // Keep the requested level relationship, but reserve safe headroom after
+        // summing two tracks.  Without a limiter, 100% voice + 100% music can
+        // create clipped samples even though each input file is clean.
+        filterStr = `[0:a]volume=${vVol}[va];[1:a]adelay=${offsetMs}:all=1,volume=${aVol}[na];[va][na]amix=inputs=2:duration=${(shortest || loopAudio) ? 'first' : 'longest'}:dropout_transition=0:normalize=0,alimiter=limit=-1dB[aout]`;
         mapArgs = ['-map', '0:v:0', '-map', '[aout]'];
     } else {
         // Replace mode: drop the video's own audio, use only the new track

@@ -1396,7 +1396,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     }, t);
                 }
 
-                const frameBlob = await new Promise(resolve => canvas.toBlob(resolve, 'image/jpeg', 0.92));
+                const frameBlob = await new Promise(resolve => canvas.toBlob(resolve, 'image/jpeg', 0.96));
                 await renderTarget.sendFrame(frameBlob);
 
                 frameIndex++;
@@ -1519,7 +1519,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     }
                 }
 
-                const frameBlob = await new Promise(resolve => canvas.toBlob(resolve, 'image/jpeg', 0.92));
+                const frameBlob = await new Promise(resolve => canvas.toBlob(resolve, 'image/jpeg', 0.96));
                 if (frameBlob && !exportCancelled) {
                     await renderTarget.sendFrame(frameBlob);
                 }
@@ -1564,7 +1564,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     }, t);
                 }
 
-                const frameBlob = await new Promise(resolve => canvas.toBlob(resolve, 'image/jpeg', 0.92));
+                const frameBlob = await new Promise(resolve => canvas.toBlob(resolve, 'image/jpeg', 0.96));
                 await renderTarget.sendFrame(frameBlob);
 
                 frameIndex++;
