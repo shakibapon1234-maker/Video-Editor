@@ -1687,6 +1687,146 @@ setInterval(() => {
     }
 }, 30 * 60 * 1000).unref();
 
+// --- AUTO-BLUR SENSITIVE INFO (YOUTUBE POLICY PROTECTION) ---
+const autoBlurJobs = new Map();
+
+app.post('/api/auto-blur/detect', express.json({ limit: '10mb' }), (req, res) => {
+    try {
+        const { videoPath, categories, customWords, intensity, sampleRate } = req.body || {};
+        if (!videoPath || !fs.existsSync(videoPath)) {
+            return res.status(400).json({ error: 'ভিডিও ফাইল খুঁজে পাওয়া যায়নি। দয়া করে টাইমলাইনে একটি বৈধ ভিডিও লোড করুন।' });
+        }
+
+        const jobId = `autoblur_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
+        const job = {
+            status: 'running',
+            percent: 0,
+            message: 'মডেল ও ফ্রেম স্ক্যান শুরু হচ্ছে...',
+            regions: [],
+            error: null,
+            process: null,
+            createdAt: Date.now()
+        };
+        autoBlurJobs.set(jobId, job);
+
+        setTimeout(() => autoBlurJobs.delete(jobId), 60 * 60 * 1000);
+
+        const scriptPath = path.join(__dirname, 'auto_blur_pii.py');
+        const catArg = Array.isArray(categories) ? categories.join(',') : (categories || 'email,phone,dob,id,url');
+        const wordsArg = Array.isArray(customWords) ? customWords.join(',') : (customWords || '');
+        const intensityArg = String(parseInt(intensity) || 28);
+        const rateArg = String(parseFloat(sampleRate) || 1.0);
+
+        const args = [
+            scriptPath,
+            '--video', videoPath,
+            '--categories', catArg,
+            '--custom-words', wordsArg,
+            '--intensity', intensityArg,
+            '--sample-rate', rateArg
+        ];
+
+        console.log(`[AutoBlur] Starting detection for ${videoPath}`);
+        const pyProc = cp.spawn('python', args, {
+            windowsHide: true,
+            env: { ...process.env, PYTHONUTF8: '1', PYTHONIOENCODING: 'utf-8' }
+        });
+        job.process = pyProc;
+
+        let outputBuffer = '';
+        pyProc.stdout.on('data', (chunk) => {
+            const lines = chunk.toString().split('\n');
+            for (const line of lines) {
+                const trimmed = line.trim();
+                if (!trimmed) continue;
+                if (trimmed.startsWith('{') && trimmed.includes('"progress"')) {
+                    try {
+                        const parsed = JSON.parse(trimmed);
+                        job.percent = parsed.progress || job.percent;
+                        if (parsed.message) job.message = parsed.message;
+                    } catch (_) {}
+                } else {
+                    outputBuffer += trimmed + '\n';
+                }
+            }
+        });
+
+        pyProc.stderr.on('data', (data) => {
+            console.warn('[AutoBlur PyStderr]', data.toString().slice(0, 200));
+        });
+
+        pyProc.on('close', (code) => {
+            job.process = null;
+            if (job.status === 'cancelled') return;
+
+            if (code !== 0) {
+                job.status = 'error';
+                job.error = 'ভিডিও স্ক্যান করতে ব্যর্থ হয়েছে। দয়া করে পাইথন ও ডিপেনডেন্সি চেক করুন।';
+                return;
+            }
+
+            const startTag = '###RESULT_START###';
+            const endTag = '###RESULT_END###';
+            const sIdx = outputBuffer.indexOf(startTag);
+            const eIdx = outputBuffer.indexOf(endTag);
+
+            if (sIdx !== -1 && eIdx !== -1) {
+                const jsonStr = outputBuffer.substring(sIdx + startTag.length, eIdx).trim();
+                try {
+                    const result = JSON.parse(jsonStr);
+                    if (result.status === 'error') {
+                        job.status = 'error';
+                        job.error = result.error || 'Unknown scanner error';
+                    } else {
+                        job.status = 'completed';
+                        job.percent = 100;
+                        job.message = `সম্পন্ন! ${result.regions.length}টি সংবেদনশীল এলাকা চিহ্নিত করা হয়েছে।`;
+                        job.regions = result.regions || [];
+                    }
+                } catch (parseErr) {
+                    job.status = 'error';
+                    job.error = `রেজাল্ট প্রসেস করতে ব্যর্থ হয়েছে: ${parseErr.message}`;
+                }
+            } else {
+                job.status = 'error';
+                job.error = 'স্ক্যানার থেকে কোনো আউটপুট পাওয়া যায়নি।';
+            }
+        });
+
+        res.json({ ok: true, jobId });
+
+    } catch (err) {
+        console.error('[AutoBlur] Route error:', err);
+        res.status(500).json({ error: err.message });
+    }
+});
+
+app.get('/api/auto-blur/status/:jobId', (req, res) => {
+    const job = autoBlurJobs.get(req.params.jobId);
+    if (!job) {
+        return res.status(404).json({ error: 'Job not found or expired.' });
+    }
+    res.json({
+        status: job.status,
+        percent: job.percent,
+        message: job.message,
+        regions: job.regions,
+        error: job.error
+    });
+});
+
+app.post('/api/auto-blur/cancel/:jobId', (req, res) => {
+    const job = autoBlurJobs.get(req.params.jobId);
+    if (job) {
+        job.status = 'cancelled';
+        if (job.process) {
+            try { job.process.kill('SIGKILL'); } catch (_) {}
+        }
+        autoBlurJobs.delete(req.params.jobId);
+    }
+    res.json({ ok: true });
+});
+
 // Serve downloads folder
 app.use('/exports', express.static(OUTPUT_DIR));
 

@@ -16021,6 +16021,197 @@ document.addEventListener('DOMContentLoaded', () => {
     const addNewBlurBtn = document.getElementById('add-new-blur-btn');
     const deselectBlurRegionBtn = document.getElementById('deselect-blur-region-btn');
 
+    // --- AUTO-BLUR SENSITIVE INFO (YOUTUBE POLICY PROTECTION) ---
+    const abTriggerBtn = document.getElementById('auto-blur-modal-trigger-btn');
+    const abModal = document.getElementById('auto-blur-modal');
+    const abCloseBtn = document.getElementById('ab-modal-close');
+    const abCancelBtn = document.getElementById('ab-cancel-btn');
+    const abStartBtn = document.getElementById('ab-start-btn');
+    const abProgressWrap = document.getElementById('ab-progress-wrap');
+    const abProgressBar = document.getElementById('ab-progress-bar');
+    const abStatusText = document.getElementById('ab-status-text');
+    const abStatusPct = document.getElementById('ab-status-pct');
+
+    let abActiveJobId = null;
+    let abPollTimer = null;
+
+    function openAutoBlurModal() {
+        let videoPath = '';
+        if (state.clips && state.clips.length > 0) {
+            const firstWithFile = state.clips.find(c => c && c.filePath);
+            if (firstWithFile) videoPath = firstWithFile.filePath;
+        }
+        if (!videoPath && window.getSafeFilePath && state.files && state.files[0]) {
+            videoPath = window.getSafeFilePath(state.files[0]);
+        }
+
+        if (!videoPath) {
+            if (window.showToast) {
+                window.showToast('⚠️ অটো ব্লারের জন্য প্রথমে একটি ভিডিও ক্লিপ টাইমলাইনে ইমপোর্ট করুন।');
+            } else {
+                alert('অটো ব্লারের জন্য প্রথমে একটি ভিডিও ক্লিপ টাইমলাইনে যোগ করুন।');
+            }
+            return;
+        }
+
+        if (abModal) {
+            abModal.style.display = 'flex';
+            if (abProgressWrap) abProgressWrap.style.display = 'none';
+            if (abProgressBar) abProgressBar.style.width = '0%';
+            if (abStartBtn) {
+                abStartBtn.disabled = false;
+                abStartBtn.innerHTML = '<i class="fa-solid fa-play"></i> <span>🚀 স্ক্যান ও অটো ব্লার করুন</span>';
+            }
+        }
+    }
+
+    function closeAutoBlurModal() {
+        if (abModal) abModal.style.display = 'none';
+        if (abActiveJobId) {
+            fetch(`/api/auto-blur/cancel/${abActiveJobId}`, { method: 'POST' }).catch(() => {});
+            abActiveJobId = null;
+        }
+        if (abPollTimer) {
+            clearInterval(abPollTimer);
+            abPollTimer = null;
+        }
+    }
+
+    if (abTriggerBtn) abTriggerBtn.addEventListener('click', openAutoBlurModal);
+    if (abCloseBtn) abCloseBtn.addEventListener('click', closeAutoBlurModal);
+    if (abCancelBtn) abCancelBtn.addEventListener('click', closeAutoBlurModal);
+
+    if (abStartBtn) {
+        abStartBtn.addEventListener('click', async () => {
+            let videoPath = '';
+            if (state.clips && state.clips.length > 0) {
+                const firstWithFile = state.clips.find(c => c && c.filePath);
+                if (firstWithFile) videoPath = firstWithFile.filePath;
+            }
+            if (!videoPath && window.getSafeFilePath && state.files && state.files[0]) {
+                videoPath = window.getSafeFilePath(state.files[0]);
+            }
+
+            if (!videoPath) {
+                alert('ভিডিও ফাইল পাওয়া যায়নি।');
+                return;
+            }
+
+            const cats = [];
+            if (document.getElementById('ab-cat-email')?.checked) cats.push('email');
+            if (document.getElementById('ab-cat-phone')?.checked) cats.push('phone');
+            if (document.getElementById('ab-cat-dob')?.checked) cats.push('dob');
+            if (document.getElementById('ab-cat-id')?.checked) cats.push('id');
+            if (document.getElementById('ab-cat-url')?.checked) cats.push('url');
+
+            const customWords = document.getElementById('ab-custom-words')?.value || '';
+            const sampleRate = document.getElementById('ab-sample-rate')?.value || '1.0';
+            const intensity = document.getElementById('ab-intensity')?.value || '28';
+
+            abStartBtn.disabled = true;
+            abStartBtn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> <span>স্ক্যান শুরু হচ্ছে...</span>';
+            if (abProgressWrap) abProgressWrap.style.display = 'block';
+            if (abProgressBar) abProgressBar.style.width = '5%';
+            if (abStatusText) abStatusText.textContent = 'সার্ভার রিকোয়েস্ট পাঠানো হচ্ছে...';
+            if (abStatusPct) abStatusPct.textContent = '5%';
+
+            try {
+                const resp = await fetch('/api/auto-blur/detect', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        videoPath,
+                        categories: cats,
+                        customWords,
+                        sampleRate,
+                        intensity
+                    })
+                });
+
+                if (!resp.ok) {
+                    const errData = await resp.json().catch(() => ({}));
+                    throw new Error(errData.error || 'স্ক্যান শুরু করা যায়নি।');
+                }
+
+                const data = await resp.json();
+                abActiveJobId = data.jobId;
+
+                abPollTimer = setInterval(async () => {
+                    if (!abActiveJobId) return;
+                    try {
+                        const statusResp = await fetch(`/api/auto-blur/status/${abActiveJobId}`);
+                        if (!statusResp.ok) return;
+                        const job = await statusResp.json();
+
+                        if (job.status === 'running') {
+                            const pct = Math.max(5, Math.min(98, job.percent || 10));
+                            if (abProgressBar) abProgressBar.style.width = pct + '%';
+                            if (abStatusPct) abStatusPct.textContent = pct + '%';
+                            if (abStatusText) abStatusText.textContent = job.message || 'স্ক্যান হচ্ছে...';
+                        } else if (job.status === 'completed') {
+                            clearInterval(abPollTimer);
+                            abPollTimer = null;
+                            abActiveJobId = null;
+
+                            if (abProgressBar) abProgressBar.style.width = '100%';
+                            if (abStatusPct) abStatusPct.textContent = '100%';
+                            if (abStatusText) abStatusText.textContent = job.message || 'সম্পন্ন!';
+
+                            const detectedRegions = job.regions || [];
+                            if (detectedRegions.length === 0) {
+                                alert('স্ক্যান শেষ হয়েছে, তবে কোনো সংবেদনশীল তথ্য খুঁজে পাওয়া যায়নি।');
+                            } else {
+                                if (!state.blurRegions) state.blurRegions = [];
+                                
+                                detectedRegions.forEach(r => {
+                                    state.blurRegions.push({
+                                        id: r.id || Date.now() + Math.random(),
+                                        x: r.x,
+                                        y: r.y,
+                                        w: r.w,
+                                        h: r.h,
+                                        intensity: parseInt(r.intensity) || parseInt(intensity) || 28,
+                                        startSec: parseFloat(r.startSec) || 0,
+                                        endSec: parseFloat(r.endSec) || (state.duration || 999),
+                                        label: r.label || '🛡️ Auto-Blur'
+                                    });
+                                });
+
+                                if (blurToolToggle) blurToolToggle.checked = true;
+                                state.isAddingBlur = true;
+                                if (blurActionsContainer) blurActionsContainer.style.display = 'block';
+
+                                if (typeof renderBlurRegionList === 'function') renderBlurRegionList();
+                                if (typeof drawFrame === 'function') drawFrame();
+
+                                if (window.showToast) {
+                                    window.showToast(`✅ ${detectedRegions.length}টি সংবেদনশীল এলাকা সফলভাবে অটো ব্লার করা হয়েছে!`);
+                                }
+                            }
+
+                            setTimeout(closeAutoBlurModal, 1200);
+
+                        } else if (job.status === 'error') {
+                            clearInterval(abPollTimer);
+                            abPollTimer = null;
+                            abActiveJobId = null;
+                            alert(`স্ক্যানিং ত্রুটি: ${job.error || 'অজানা সমস্যা'}`);
+                            abStartBtn.disabled = false;
+                            abStartBtn.innerHTML = '<i class="fa-solid fa-play"></i> <span>🚀 পুনরায় চেষ্টা করুন</span>';
+                        }
+                    } catch (pollErr) {
+                        console.warn('Auto-blur polling error:', pollErr);
+                    }
+                }, 800);
+
+            } catch (err) {
+                alert(`সমস্যা হয়েছে: ${err.message}`);
+                abStartBtn.disabled = false;
+                abStartBtn.innerHTML = '<i class="fa-solid fa-play"></i> <span>🚀 স্ক্যান ও অটো ব্লার করুন</span>';
+            }
+        });
+    }
+
     if (addNewBlurBtn) {
         addNewBlurBtn.addEventListener('click', () => {
             state.isAddingBlur = true;
@@ -24043,6 +24234,36 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
+    async function deleteProjectFilesFromDB(projId) {
+        if (!projId) return;
+        try {
+            const db = await getDB();
+            const tx = db.transaction(STORE_NAME, 'readwrite');
+            const store = tx.objectStore(STORE_NAME);
+            const request = store.getAllKeys();
+            return new Promise((res, rej) => {
+                request.onsuccess = () => {
+                    const keys = request.result || [];
+                    const prefix = `${projId}_`;
+                    let count = 0;
+                    keys.forEach(key => {
+                        if (typeof key === 'string' && key.startsWith(prefix)) {
+                            store.delete(key);
+                            count++;
+                        }
+                    });
+                    if (count > 0) {
+                        console.log(`[Storage] Deleted ${count} media blobs from IndexedDB for project ${projId}`);
+                    }
+                };
+                tx.oncomplete = () => res();
+                tx.onerror = () => rej(tx.error);
+            });
+        } catch (e) {
+            console.error(`IndexedDB deleteProjectFilesFromDB failed for ${projId}:`, e);
+        }
+    }
+
     // Helper functions for Base64 conversion
     function blobToBase64(blob, onProgress) {
         return new Promise((resolve, reject) => {
@@ -25250,6 +25471,41 @@ document.addEventListener('DOMContentLoaded', () => {
         // pointer is unavailable.  It must therefore be newest-first.
         list.sort((a, b) => (b.lastModified || 0) - (a.lastModified || 0));
         saveProjectsRegistry(list);
+        if (typeof autoPruneOldProjects === 'function') {
+            autoPruneOldProjects(MAX_RETAINED_PROJECTS).catch(() => {});
+        }
+    }
+
+    const MAX_RETAINED_PROJECTS = 5;
+
+    async function autoPruneOldProjects(maxRetain = MAX_RETAINED_PROJECTS) {
+        try {
+            let list = getProjectsRegistry();
+            if (!Array.isArray(list) || list.length <= maxRetain) return;
+
+            // list is sorted newest-first
+            const toKeep = list.slice(0, maxRetain);
+            const toRemove = list.slice(maxRetain);
+            const keepIds = new Set(toKeep.map(p => p.id));
+            if (state && state.activeProjectId) {
+                keepIds.add(state.activeProjectId);
+            }
+
+            for (const oldProj of toRemove) {
+                if (keepIds.has(oldProj.id)) continue;
+                console.warn(`[Auto-Prune] Pruning old project "${oldProj.name}" (${oldProj.id}) to preserve disk space...`);
+                try {
+                    localStorage.removeItem(`studio_flow_project_${oldProj.id}`);
+                } catch (_) {}
+                if (typeof deleteProjectFilesFromDB === 'function') {
+                    await deleteProjectFilesFromDB(oldProj.id);
+                }
+            }
+
+            saveProjectsRegistry(toKeep);
+        } catch (err) {
+            console.error("[Auto-Prune] Error pruning old projects:", err);
+        }
     }
 
     function clearWorkspaceState(fullReset = true) {
@@ -25590,6 +25846,36 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
+    const modalClearCacheBtn = document.getElementById('modal-clear-cache-btn');
+    if (modalClearCacheBtn) {
+        modalClearCacheBtn.addEventListener('click', async () => {
+            if (confirm("আপনি কি সংরক্ষিত সব পুরনো ভিডিও ক্যাশ ও হিস্ট্রি মুছে দিয়ে C ড্রাইভ ফাঁকা করতে চান?\n(আপনার বর্তমান সক্রিয় প্রজেক্টটি অক্ষত থাকবে)")) {
+                try {
+                    const currentId = getCurrentProjectId();
+                    let list = getProjectsRegistry();
+                    let clearedCount = 0;
+                    for (const p of list) {
+                        if (p.id !== currentId) {
+                            localStorage.removeItem(`studio_flow_project_${p.id}`);
+                            if (typeof deleteProjectFilesFromDB === 'function') {
+                                await deleteProjectFilesFromDB(p.id);
+                            }
+                            clearedCount++;
+                        }
+                    }
+                    const updatedList = list.filter(p => p.id === currentId);
+                    saveProjectsRegistry(updatedList);
+                    renderSavedProjectsList();
+                    if (typeof showToast === 'function') {
+                        showToast(`পুরনো ${clearedCount}টি প্রজেক্টের ভিডিও ক্যাশ মুছে C ড্রাইভ ফাঁকা করা হয়েছে!`, 'success');
+                    }
+                } catch (e) {
+                    console.error("Clear cache failed:", e);
+                }
+            }
+        });
+    }
+
     function renderSavedProjectsList() {
         if (!projectsListContainer) return;
         const list = getProjectsRegistry();
@@ -25659,7 +25945,12 @@ document.addEventListener('DOMContentLoaded', () => {
             localStorage.removeItem(`studio_flow_project_${projId}`);
             let list = getProjectsRegistry().filter(p => p.id !== projId);
             saveProjectsRegistry(list);
-        } catch (e) {}
+            if (typeof deleteProjectFilesFromDB === 'function') {
+                deleteProjectFilesFromDB(projId).catch(() => {});
+            }
+        } catch (e) {
+            console.error("deleteProjectFromStorage error:", e);
+        }
     }
 
     // --- Save project state into IndexedDB and LocalStorage ---
@@ -26253,6 +26544,9 @@ document.addEventListener('DOMContentLoaded', () => {
             drawFrame();
             
             console.log(`Project ${activeProjId} restored successfully.`);
+            if (typeof autoPruneOldProjects === 'function') {
+                autoPruneOldProjects().catch(() => {});
+            }
             return true;
         } catch (e) {
             console.error("Auto-restore process failed:", e);

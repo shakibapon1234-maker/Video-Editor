@@ -1184,6 +1184,9 @@
                                 </div>
 
                                 <div class="blur-actions mt-3" id="blur-actions-container" style="display: none;">
+                                    <button type="button" id="auto-blur-modal-trigger-btn" class="btn btn-block mb-3" style="background: linear-gradient(135deg, #ef4444 0%, #b91c1c 100%); border: none; color: white; font-weight: 700; padding: 11px 14px; font-size: 13.5px; border-radius: 8px; box-shadow: 0 4px 14px rgba(239, 68, 68, 0.4); cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px;">
+                                        <i class="fa-solid fa-shield-halved"></i> 🛡️ অটো ব্লার স্ক্যানার (YouTube Policy Protection)
+                                    </button>
                                     <button type="button" id="add-new-blur-btn" class="btn btn-primary btn-block mb-3" style="background: linear-gradient(135deg, #8b5cf6 0%, #6d28d9 100%); border: none; font-weight: 700; padding: 10px 14px; font-size: 13.5px; border-radius: 8px; box-shadow: 0 4px 12px rgba(139, 92, 246, 0.35); cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px;">
                                         <i class="fa-solid fa-plus"></i> + নতুন ব্লার এরিয়া আঁকুন (Draw New Blur)
                                     </button>
@@ -5622,8 +5625,11 @@
                 <p class="help-text" style="color: #94a3b8; font-size: 13px; margin-bottom: 16px;">প্রতিটি ভিডিওর সাথে সম্পর্কিত B-roll, টেক্সট, সাবটাইটেল ও কাট-ছাঁটের কাজ আলাদাভাবে ট্র্যাকিং করে সেভ হয়ে থাকে। আপনার পছন্দের ভিডিও সিলেক্ট করে প্রজেক্ট খুলতে পারবেন:</p>
                 <div id="projects-list-container" style="display: flex; flex-direction: column; gap: 10px;"></div>
             </div>
-            <div class="modal-footer" style="display: flex; justify-content: space-between; align-items: center; margin-top: 20px; padding-top: 14px; border-top: 1px solid var(--border-color, #334155);">
-                <button id="modal-start-fresh-btn" class="btn btn-outline" type="button" style="color: #ef4444; border-color: rgba(239,68,68,0.4);"><i class="fa-solid fa-plus"></i> নতুন ফ্রেশ প্রজেক্ট শুরু করুন</button>
+            <div class="modal-footer" style="display: flex; justify-content: space-between; align-items: center; margin-top: 20px; padding-top: 14px; border-top: 1px solid var(--border-color, #334155); gap: 10px; flex-wrap: wrap;">
+                <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+                    <button id="modal-start-fresh-btn" class="btn btn-outline" type="button" style="color: #ef4444; border-color: rgba(239,68,68,0.4);"><i class="fa-solid fa-plus"></i> নতুন ফ্রেশ প্রজেক্ট শুরু করুন</button>
+                    <button id="modal-clear-cache-btn" class="btn btn-outline" type="button" style="color: #f59e0b; border-color: rgba(245,158,11,0.4);"><i class="fa-solid fa-broom"></i> ক্যাশ ও হিস্ট্রি মুছুন</button>
+                </div>
                 <button id="modal-close-btn" class="btn btn-secondary" type="button">বন্ধ করুন</button>
             </div>
         </div>
@@ -5761,5 +5767,96 @@
     <script src="glass-cards.js?v=4"></script>
     <script src="screen-recorder.js?v=2"></script>
     <script src="gds-branding.js?v=2"></script>
+
+    <!-- Auto-Blur Sensitive Info (YouTube Policy Protection) Modal -->
+    <div class="modal-overlay" id="auto-blur-modal" style="display: none; z-index: 9999999; backdrop-filter: blur(8px); background: rgba(0,0,0,0.85); align-items: center; justify-content: center;">
+        <div class="modal-card" style="max-width: 580px; width: 92%; background: #0f172a; border: 1.5px solid rgba(239, 68, 68, 0.4); border-radius: 16px; box-shadow: 0 20px 50px rgba(0,0,0,0.8), 0 0 30px rgba(239, 68, 68, 0.2); overflow: hidden;">
+            <div class="modal-header" style="background: linear-gradient(135deg, rgba(239,68,68,0.2) 0%, rgba(15,23,42,0.9) 100%); padding: 18px 24px; border-bottom: 1px solid rgba(255,255,255,0.1); display: flex; justify-content: space-between; align-items: center;">
+                <h3 style="margin: 0; font-size: 17px; font-weight: 700; color: #fff; display: flex; align-items: center; gap: 10px;">
+                    <i class="fa-solid fa-shield-halved" style="color: #ef4444; font-size: 20px;"></i>
+                    <span>YouTube Policy Auto-Blur (সংবেদনশীল তথ্য অটো ব্লার)</span>
+                </h3>
+                <button type="button" class="modal-close" id="ab-modal-close" style="background: none; border: none; color: #94a3b8; font-size: 18px; cursor: pointer;"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+            <div class="modal-body" style="padding: 22px 24px; max-height: 80vh; overflow-y: auto;">
+                <p style="font-size: 13px; color: #cbd5e1; margin-bottom: 16px; line-height: 1.6;">
+                    ইউটিউব কমিউনিটি পলিসি অনুযায়ী ইমেইল, ফোন, পাসপোর্ট ও ব্যক্তিগত তথ্য ভিডিওতে দেখানো নিষিদ্ধ। এই টুলটি AI ও OCR দিয়ে ভিডিও স্ক্যান করে স্বয়ংক্রিয়ভাবে সেগুলোর ওপর ব্লার বসিয়ে দেবে।
+                </p>
+
+                <div style="background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.08); border-radius: 12px; padding: 16px; margin-bottom: 18px;">
+                    <h4 style="font-size: 13.5px; font-weight: 700; color: #f87171; margin-bottom: 12px;">যেসব তথ্য অটো ব্লার হবে:</h4>
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+                        <label style="display: flex; align-items: center; gap: 8px; font-size: 13px; color: #e2e8f0; cursor: pointer;">
+                            <input type="checkbox" id="ab-cat-email" checked style="accent-color: #ef4444; width: 16px; height: 16px;">
+                            <span>📧 ইমেইল অ্যাড্রেস</span>
+                        </label>
+                        <label style="display: flex; align-items: center; gap: 8px; font-size: 13px; color: #e2e8f0; cursor: pointer;">
+                            <input type="checkbox" id="ab-cat-phone" checked style="accent-color: #ef4444; width: 16px; height: 16px;">
+                            <span>📱 ফোন / মোবাইল নম্বর</span>
+                        </label>
+                        <label style="display: flex; align-items: center; gap: 8px; font-size: 13px; color: #e2e8f0; cursor: pointer;">
+                            <input type="checkbox" id="ab-cat-dob" checked style="accent-color: #ef4444; width: 16px; height: 16px;">
+                            <span>🎂 জন্মতারিখ (DOB)</span>
+                        </label>
+                        <label style="display: flex; align-items: center; gap: 8px; font-size: 13px; color: #e2e8f0; cursor: pointer;">
+                            <input type="checkbox" id="ab-cat-id" checked style="accent-color: #ef4444; width: 16px; height: 16px;">
+                            <span>🆔 পাসপোর্ট / NID নম্বর</span>
+                        </label>
+                        <label style="display: flex; align-items: center; gap: 8px; font-size: 13px; color: #e2e8f0; cursor: pointer; grid-column: span 2;">
+                            <input type="checkbox" id="ab-cat-url" checked style="accent-color: #ef4444; width: 16px; height: 16px;">
+                            <span>🔗 ওয়েবসাইট লিঙ্ক, ডোমেন ও আইপি</span>
+                        </label>
+                    </div>
+                </div>
+
+                <div style="margin-bottom: 16px;">
+                    <label style="display: block; font-size: 13px; font-weight: 600; color: #e2e8f0; margin-bottom: 6px;">
+                        অতিরিক্ত কাস্টম শব্দ বা লিঙ্ক (ঐচ্ছিক):
+                    </label>
+                    <textarea id="ab-custom-words" rows="2" placeholder="কমা দিয়ে শব্দ লিখুন, যেমন: shakib, secret.com, PNR123" style="width: 100%; box-sizing: border-box; background: #1e293b; border: 1px solid rgba(255,255,255,0.15); border-radius: 8px; color: #fff; padding: 10px; font-size: 13px; resize: vertical;"></textarea>
+                    <small style="color: #94a3b8; font-size: 11px;">স্ক্রিনে এই শব্দগুলো দেখা মাত্রই সেটির ওপর ব্লার বসে যাবে।</small>
+                </div>
+
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 18px;">
+                    <div>
+                        <label style="display: block; font-size: 12.5px; font-weight: 600; color: #cbd5e1; margin-bottom: 6px;">স্ক্যান নিখুঁত মাত্রা:</label>
+                        <select id="ab-sample-rate" style="width: 100%; padding: 8px 10px; background: #1e293b; border: 1px solid rgba(255,255,255,0.15); border-radius: 8px; color: #fff; font-size: 13px;">
+                            <option value="0.5">প্রতি ০.৫ সেকেন্ড পর পর (উচ্চ নিখুঁত)</option>
+                            <option value="1.0" selected>প্রতি ১.০ সেকেন্ড পর পর (স্ট্যান্ডার্ড)</option>
+                            <option value="2.0">প্রতি ২.০ সেকেন্ড পর পর (দ্রুততম)</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label style="display: block; font-size: 12.5px; font-weight: 600; color: #cbd5e1; margin-bottom: 6px;">ব্লারের গভীরতা:</label>
+                        <select id="ab-intensity" style="width: 100%; padding: 8px 10px; background: #1e293b; border: 1px solid rgba(255,255,255,0.15); border-radius: 8px; color: #fff; font-size: 13px;">
+                            <option value="20">হালকা (20px)</option>
+                            <option value="28" selected>শক্তিশালী (28px - নিরাপদ)</option>
+                            <option value="40">অতিরিক্ত ব্লার (40px)</option>
+                        </select>
+                    </div>
+                </div>
+
+                <!-- Progress Bar container -->
+                <div id="ab-progress-wrap" style="display: none; margin-bottom: 18px; background: rgba(0,0,0,0.4); padding: 14px; border-radius: 10px; border: 1px solid rgba(239,68,68,0.3);">
+                    <div style="display: flex; justify-content: space-between; font-size: 12px; color: #f87171; margin-bottom: 6px; font-weight: 600;">
+                        <span id="ab-status-text">স্ক্যান হচ্ছে...</span>
+                        <span id="ab-status-pct">0%</span>
+                    </div>
+                    <div style="height: 8px; background: #1e293b; border-radius: 4px; overflow: hidden;">
+                        <div id="ab-progress-bar" style="height: 100%; width: 0%; background: linear-gradient(90deg, #ef4444, #f59e0b, #10b981); transition: width 0.3s ease;"></div>
+                    </div>
+                </div>
+
+                <div style="display: flex; gap: 10px; justify-content: flex-end;">
+                    <button type="button" class="btn btn-secondary" id="ab-cancel-btn" style="padding: 10px 18px; background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.2); color: #cbd5e1; border-radius: 8px; font-weight: 600; cursor: pointer;">বাতিল</button>
+                    <button type="button" class="btn btn-danger" id="ab-start-btn" style="padding: 10px 22px; background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%); border: none; color: #fff; border-radius: 8px; font-weight: 700; cursor: pointer; display: flex; align-items: center; gap: 8px; box-shadow: 0 4px 14px rgba(239, 68, 68, 0.4);">
+                        <i class="fa-solid fa-play"></i>
+                        <span>🚀 স্ক্যান ও অটো ব্লার করুন</span>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
 </body>
 </html>
