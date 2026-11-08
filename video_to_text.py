@@ -1,16 +1,24 @@
 # -*- coding: utf-8 -*-
 """
-Standalone Video/Audio to Text Converter (Offline Speech-to-Text)
-Uses OpenAI Whisper - Works 100% locally without any API keys or Internet!
+Standalone Video/Audio to Text Converter (বাংলা স্পিচ টু টেক্সট)
+Supports:
+  1. Fast & Accurate Google Speech Recognition (bn-BD) - FREE, NO API KEY, Takes 15-30s! (Recommended)
+  2. Offline OpenAI Whisper AI - Works 100% offline without Internet.
 """
 
 import os
 import sys
 import subprocess
 import argparse
+import tempfile
+import shutil
 
-# Fix Windows console encoding so Bengali/emoji prints without crashing
+# Fix Windows console encoding so Bengali/emoji prints properly
 if sys.platform == "win32":
+    try:
+        os.system("chcp 65001 >nul 2>&1")
+    except Exception:
+        pass
     import io
     sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8', errors='replace')
     sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8', errors='replace')
@@ -21,109 +29,6 @@ ffmpeg_dir = os.path.join(script_dir, 'node_modules', 'ffmpeg-static')
 if os.path.exists(ffmpeg_dir):
     os.environ["PATH"] = ffmpeg_dir + os.path.pathsep + os.environ.get("PATH", "")
 
-# Rich Bengali initial_prompt -- forces Bengali Unicode script output
-BENGALI_PROMPT = (
-    "\u09ac\u09bf\u09b6\u09cd\u09ac \u098f\u0996\u09a8 \u09b9\u09be\u09a4\u09c7\u09b0 \u09ae\u09c1\u09a0\u09cb\u09af\u09bc\u0964 "
-    "\u09aa\u09cd\u09b0\u09a4\u09bf\u09a6\u09bf\u09a8 \u09b9\u09be\u099c\u09be\u09b0\u09cb \u09ae\u09be\u09a8\u09c1\u09b7 "
-    "\u099f\u09cd\u09b0\u09be\u09ad\u09c7\u09b2 \u098f\u099c\u09c7\u09a8\u09cd\u09b8\u09bf\u09b0 \u0995\u09cb\u09b0\u09cd\u09b8 "
-    "\u09b6\u09bf\u0996\u099b\u09c7\u09a8\u0964 \u09ac\u09be\u0982\u09b2\u09be\u09a6\u09c7\u09b6\u09c7 \u09ac\u09bf\u09ae\u09be\u09a8 "
-    "\u099a\u09b2\u09be\u099a\u09b2 \u0993 \u09ad\u09bf\u09b8\u09be \u09aa\u09cd\u09b0\u09b8\u09c7\u09b8\u09bf\u0982 \u09b6\u09bf\u09b2\u09cd\u09aa\u09c7 "
-    "\u0995\u09b0\u09cd\u09ae\u09b8\u0982\u09b8\u09cd\u09a5\u09be\u09a8\u09c7\u09b0 \u09ac\u09bf\u09b6\u09be\u09b2 \u09b8\u09c1\u09af\u09cb\u0997 \u09b0\u09af\u09bc\u09c7\u099b\u09c7\u0964"
-)
-
-def get_cached_models():
-    cache_dir = os.path.join(os.path.expanduser("~"), ".cache", "whisper")
-    if not os.path.exists(cache_dir):
-        return []
-    name_map = {
-        'tiny.pt': 'tiny', 'base.pt': 'base',
-        'small.pt': 'small', 'medium.pt': 'medium',
-        'large-v3.pt': 'large-v3'
-    }
-    return [name_map[f] for f in os.listdir(cache_dir) if f in name_map]
-
-def safe_print(text):
-    try:
-        print(text)
-    except Exception:
-        print(text.encode('ascii', errors='replace').decode('ascii'))
-
-def convert_video_to_text(file_path, model_name='small'):
-    file_path = os.path.abspath(file_path.strip('"\' '))
-    if not os.path.exists(file_path):
-        safe_print(f"\n[ERROR] File not found:\n   {file_path}")
-        return False
-
-    safe_print(f"\n==========================================")
-    safe_print(f"[*] Video to Text Converter (Whisper Offline)")
-    safe_print(f"==========================================")
-    safe_print(f"[FILE] {file_path}")
-    safe_print(f"[LANG] Bengali Unicode (bangla horof)")
-    safe_print(f"[MODEL] {model_name}")
-    safe_print(f"[...] Processing... please wait...\n")
-
-    try:
-        import whisper
-
-        model = whisper.load_model(model_name)
-
-        result = model.transcribe(
-            file_path,
-            language='bengali',
-            task='transcribe',
-            initial_prompt=BENGALI_PROMPT,
-            condition_on_previous_text=False,  # Prevents repetition/hallucination loops
-            temperature=(0.0, 0.2, 0.4, 0.6),  # Fallback temps if hallucination detected
-            compression_ratio_threshold=2.4,    # Skip segments that repeat too much
-            no_speech_threshold=0.6,            # Skip silent segments
-            verbose=False,
-        )
-
-        transcribed_text = result.get('text', '').strip()
-
-        base_name = os.path.splitext(file_path)[0]
-        txt_path = os.path.abspath(f"{base_name}_transcript.txt")
-        srt_path = os.path.abspath(f"{base_name}_subtitle.srt")
-
-        with open(txt_path, 'w', encoding='utf-8') as f:
-            f.write(transcribed_text)
-
-        segments = result.get('segments', [])
-        with open(srt_path, 'w', encoding='utf-8') as f:
-            for i, seg in enumerate(segments, 1):
-                start = format_timestamp(seg['start'])
-                end   = format_timestamp(seg['end'])
-                text  = seg['text'].strip()
-                f.write(f"{i}\n{start} --> {end}\n{text}\n\n")
-
-        safe_print("==========================================")
-        safe_print("[OK] SUCCESS! Transcription completed!")
-        safe_print("==========================================")
-        safe_print(f"[TXT] {txt_path}\n")
-        safe_print(f"[SRT] {srt_path}\n")
-        safe_print("------------------------------------------")
-        safe_print("Preview (first 500 chars):")
-        safe_print("------------------------------------------")
-        safe_print(transcribed_text[:500] + ("..." if len(transcribed_text) > 500 else ""))
-        safe_print("------------------------------------------\n")
-
-        try:
-            subprocess.Popen(['explorer', '/select,', txt_path])
-        except Exception:
-            pass
-        try:
-            os.startfile(txt_path)
-        except Exception:
-            pass
-
-        return True
-
-    except Exception as e:
-        safe_print(f"\n[ERROR] Transcription failed: {e}")
-        import traceback
-        traceback.print_exc()
-        return False
-
 def format_timestamp(seconds):
     millis   = int((seconds % 1) * 1000)
     seconds  = int(seconds)
@@ -133,39 +38,228 @@ def format_timestamp(seconds):
     seconds  = seconds  %  60
     return f"{hours:02d}:{minutes:02d}:{seconds:02d},{millis:03d}"
 
-if __name__ == '__main__':
-    cached = get_cached_models()
-    safe_print("\n[*] Video / Audio => Bangla Text Converter")
-    safe_print("=" * 45)
-    safe_print(f"[OK] Available (no download): {', '.join(cached) if cached else 'none'}")
-    safe_print("=" * 45)
+def safe_print(text, flush=True):
+    try:
+        print(text, flush=flush)
+    except Exception:
+        try:
+            print(text.encode('ascii', errors='replace').decode('ascii'), flush=flush)
+        except Exception:
+            pass
 
-    parser = argparse.ArgumentParser(description="Convert Video/Audio to Text Offline")
-    parser.add_argument("file",    nargs="?", help="Path to video or audio file")
+def check_internet():
+    import urllib.request
+    try:
+        urllib.request.urlopen('https://www.google.com', timeout=3)
+        return True
+    except Exception:
+        return False
+
+def convert_with_google(file_path):
+    """Fast Google Speech Recognition (bn-BD)"""
+    safe_print("\n[+] মোড: ⚡ Google Speech Recognition (বাংলা bn-BD)")
+    safe_print("[*] অডিও প্রস্তুত করা হচ্ছে...")
+
+    temp_dir = tempfile.mkdtemp(prefix="video_to_text_")
+    temp_wav = os.path.join(temp_dir, "temp_full.wav")
+
+    try:
+        # Extract 16kHz mono WAV
+        cmd = [
+            'ffmpeg', '-y', '-i', file_path,
+            '-ar', '16000', '-ac', '1', '-f', 'wav',
+            temp_wav
+        ]
+        subprocess.run(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=True)
+
+        import speech_recognition as sr
+        from pydub import AudioSegment
+
+        r = sr.Recognizer()
+        sound = AudioSegment.from_wav(temp_wav)
+
+        chunk_length_ms = 12000  # 12-second chunks
+        chunks = [sound[i:i + chunk_length_ms] for i in range(0, len(sound), chunk_length_ms)]
+        total_chunks = len(chunks)
+
+        safe_print(f"[*] মোট অডিও সেগমেন্ট: {total_chunks} টি (প্রতিটি ১২ সেকেন্ড)")
+        safe_print("[*] বাংলা ভয়েস থেকে টেক্সটে রূপান্তর শুরু হচ্ছে...\n")
+
+        full_text = []
+        srt_entries = []
+
+        for idx, chunk in enumerate(chunks, 1):
+            chunk_file = os.path.join(temp_dir, f"chunk_{idx}.wav")
+            chunk.export(chunk_file, format="wav")
+
+            start_sec = ((idx - 1) * chunk_length_ms) / 1000.0
+            end_sec = min((idx * chunk_length_ms) / 1000.0, len(sound) / 1000.0)
+
+            with sr.AudioFile(chunk_file) as source:
+                audio_data = r.record(source)
+                try:
+                    text = r.recognize_google(audio_data, language="bn-BD")
+                    if text.strip():
+                        full_text.append(text.strip())
+                        srt_entries.append((len(srt_entries) + 1, start_sec, end_sec, text.strip()))
+                        preview = text.strip()[:65] + ("..." if len(text.strip()) > 65 else "")
+                        safe_print(f"  [{idx:02d}/{total_chunks:02d}] ✓ {preview}")
+                except sr.UnknownValueError:
+                    # Silence or inaudible chunk
+                    pass
+                except sr.RequestError as e:
+                    safe_print(f"  [{idx:02d}/{total_chunks:02d}] ⚠️ রিকোয়েস্ট সমস্যা: {e}")
+
+            try:
+                if os.path.exists(chunk_file):
+                    os.remove(chunk_file)
+            except Exception:
+                pass
+
+        final_transcript = " ".join(full_text).strip()
+        return final_transcript, srt_entries
+
+    finally:
+        try:
+            shutil.rmtree(temp_dir, ignore_errors=True)
+        except Exception:
+            pass
+
+def convert_with_whisper(file_path, model_name='small'):
+    """Offline OpenAI Whisper Recognition"""
+    safe_print(f"\n[+] মোড: 🔒 Offline Whisper AI (মডেল: {model_name})")
+    safe_print("[*] Whisper মডেল লোড করা হচ্ছে... (CPU-তে কিছুটা সময় লাগতে পারে)")
+
+    import whisper
+    model = whisper.load_model(model_name)
+
+    safe_print("[*] ট্রান্সক্রিপশন চলছে... দয়া করে অপেক্ষা করুন...")
+
+    result = model.transcribe(
+        file_path,
+        language='bn',
+        task='transcribe',
+        condition_on_previous_text=False,
+        temperature=0.0,
+        compression_ratio_threshold=2.4,
+        no_speech_threshold=0.6,
+        verbose=False,
+    )
+
+    final_transcript = result.get('text', '').strip()
+    segments = result.get('segments', [])
+
+    srt_entries = []
+    for i, seg in enumerate(segments, 1):
+        srt_entries.append((i, seg['start'], seg['end'], seg['text'].strip()))
+
+    return final_transcript, srt_entries
+
+def convert_video_to_text(file_path, engine='auto', model_name='small'):
+    file_path = os.path.abspath(file_path.strip('"\' '))
+    if not os.path.exists(file_path):
+        safe_print(f"\n[ERROR] ফাইলটি খুঁজে পাওয়া যায়নি:\n   {file_path}")
+        return False
+
+    safe_print(f"\n========================================================")
+    safe_print(f"[*] Video / Audio to Text Converter (বাংলা টেক্সট কনভার্টার)")
+    safe_print(f"========================================================")
+    safe_print(f"[FILE] {file_path}")
+
+    final_text = ""
+    srt_entries = []
+
+    # Engine selection
+    use_google = (engine == 'google')
+    if engine == 'auto':
+        has_net = check_internet()
+        if has_net:
+            use_google = True
+        else:
+            safe_print("[!] ইন্টারনেট সংযোগ নেই। অফলাইন Whisper ব্যবহার করা হচ্ছে...")
+            use_google = False
+
+    if use_google:
+        try:
+            final_text, srt_entries = convert_with_google(file_path)
+        except Exception as e:
+            safe_print(f"\n[⚠️ Google Engine Error]: {e}")
+            safe_print("[*] অফলাইন Whisper মডেলে রূপান্তর করার চেষ্টা করা হচ্ছে...")
+            final_text, srt_entries = convert_with_whisper(file_path, model_name=model_name)
+    else:
+        final_text, srt_entries = convert_with_whisper(file_path, model_name=model_name)
+
+    if not final_text:
+        safe_print("\n[!] কোনো কথা বা টেক্সট শনাক্ত করা যায়নি। অডিও স্পষ্ট কিনা চেক করুন।")
+        return False
+
+    # Save output files
+    base_name = os.path.splitext(file_path)[0]
+    txt_path = os.path.abspath(f"{base_name}_transcript.txt")
+    srt_path = os.path.abspath(f"{base_name}_subtitle.srt")
+
+    with open(txt_path, 'w', encoding='utf-8') as f:
+        f.write(final_text)
+
+    with open(srt_path, 'w', encoding='utf-8') as f:
+        for item in srt_entries:
+            idx, s_time, e_time, text = item
+            f.write(f"{idx}\n{format_timestamp(s_time)} --> {format_timestamp(e_time)}\n{text}\n\n")
+
+    safe_print("\n========================================================")
+    safe_print("[OK] সফল হয়েছে! ভিডিও থেকে টেক্সট তৈরি সম্পন্ন!")
+    safe_print("========================================================")
+    safe_print(f"[TXT ফাইল] {txt_path}")
+    safe_print(f"[SRT ফাইল] {srt_path}\n")
+    safe_print("--------------------------------------------------------")
+    safe_print("প্রিভিউ (প্রথম ৪০০ অক্ষর):")
+    safe_print("--------------------------------------------------------")
+    safe_print(final_text[:400] + ("..." if len(final_text) > 400 else ""))
+    safe_print("--------------------------------------------------------\n")
+
+    # Automatically open File Explorer and Notepad
+    try:
+        subprocess.Popen(['explorer', '/select,', txt_path])
+    except Exception:
+        pass
+    try:
+        os.startfile(txt_path)
+    except Exception:
+        pass
+
+    return True
+
+if __name__ == '__main__':
+    parser = argparse.ArgumentParser(description="Convert Video/Audio to Bangla Text")
+    parser.add_argument("file", nargs="?", help="Path to video or audio file")
+    parser.add_argument("--engine", choices=['auto', 'google', 'whisper'], default='auto',
+                        help="Speech engine: auto (default), google (fast bn-BD), whisper (offline)")
     parser.add_argument("--model", default="small",
-                        help="Whisper model: tiny/base/small(default)/medium/large-v3")
+                        help="Whisper model (if offline): tiny/base/small/medium")
     args = parser.parse_args()
 
-    model_choice = args.model
-    input_file   = args.file
+    input_file = args.file
 
     if not input_file:
-        safe_print(f"\n[>] Video/audio file er path ta drag kore drop korun, tahole Enter chapon:")
+        safe_print("\n========================================================")
+        safe_print("       [*] Video to Text Converter (বাংলা টেক্সট)        ")
+        safe_print("========================================================")
+        safe_print("[>] ভিডিও বা অডিও ফাইলের পাথ পেস্ট করে Enter চাপুন:")
         try:
             input_file = input("   > ").strip('"\' ')
         except Exception:
             input_file = sys.stdin.readline().strip('"\' \n\r')
 
     if input_file:
-        success = convert_video_to_text(input_file, model_name=model_choice)
+        success = convert_video_to_text(input_file, engine=args.engine, model_name=args.model)
         if success:
-            safe_print("[OK] File Explorer and Notepad opened automatically!")
+            safe_print("[OK] File Explorer এবং Notepad স্বয়ংক্রিয়ভাবে ওপেন হয়েছে!")
         else:
-            safe_print("[ERROR] Something went wrong. See above message.")
+            safe_print("[ERROR] কনভার্ট সম্পন্ন হতে পারেনি।")
     else:
-        safe_print("[ERROR] No file selected.")
+        safe_print("[ERROR] কোনো ফাইল সিলেক্ট করা হয়নি।")
 
     try:
-        input("\n[>] Press ENTER to close...")
+        input("\n[>] বন্ধ করতে ENTER চাপুন...")
     except Exception:
         pass

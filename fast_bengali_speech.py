@@ -1,17 +1,22 @@
 # -*- coding: utf-8 -*-
 """
 Fast & Accurate Bengali Video/Audio to Text Converter
-Uses Google Speech Recognition (bn-BD) - FREE, NO API KEY, Takes 10-15 SECONDS!
+Uses Google Speech Recognition (bn-BD) - FREE, NO API KEY, Takes 15-30 SECONDS!
 100% Pure Bengali Unicode Script!
 """
 
 import os
 import sys
 import subprocess
-import math
+import tempfile
+import shutil
 
 # Fix Windows console encoding
 if sys.platform == "win32":
+    try:
+        os.system("chcp 65001 >nul 2>&1")
+    except Exception:
+        pass
     import io
     sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8', errors='replace')
     sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8', errors='replace')
@@ -34,19 +39,19 @@ def format_timestamp(seconds):
 def convert_video_to_text(file_path):
     file_path = os.path.abspath(file_path.strip('"\' '))
     if not os.path.exists(file_path):
-        print(f"\n[ERROR] File not found: {file_path}")
+        print(f"\n[ERROR] ফাইলটি পাওয়া যায়নি: {file_path}", flush=True)
         return False
 
-    print(f"\n==========================================")
-    print(f"[*] Fast Bengali Video to Text Converter")
-    print(f"==========================================")
-    print(f"[FILE] {file_path}")
-    print(f"[ENGINE] Google Speech Recognition (bn-BD)")
-    print(f"[STATUS] Extracting audio and transcribing...")
+    print(f"\n==========================================", flush=True)
+    print(f"[*] Fast Bengali Video to Text Converter", flush=True)
+    print(f"==========================================", flush=True)
+    print(f"[FILE] {file_path}", flush=True)
+    print(f"[ENGINE] Google Speech Recognition (bn-BD)", flush=True)
+    print(f"[STATUS] অডিও এক্সট্র্যাক্ট করা হচ্ছে...", flush=True)
 
-    # Temp audio path
-    temp_wav = os.path.join(script_dir, "temp_speech_input.wav")
-    
+    temp_dir = tempfile.mkdtemp(prefix="fast_bengali_")
+    temp_wav = os.path.join(temp_dir, "temp_full.wav")
+
     try:
         # Extract audio using ffmpeg as 16kHz mono WAV
         cmd = [
@@ -61,21 +66,23 @@ def convert_video_to_text(file_path):
 
         r = sr.Recognizer()
         sound = AudioSegment.from_wav(temp_wav)
-        
+
         chunk_length_ms = 12000  # 12 second chunks for fast, accurate recognition
         chunks = [sound[i:i + chunk_length_ms] for i in range(0, len(sound), chunk_length_ms)]
+        total_chunks = len(chunks)
 
         full_text = []
         srt_entries = []
 
-        print(f"[*] Processing {len(chunks)} audio segments...")
+        print(f"[*] মোট অডিও সেগমেন্ট: {total_chunks} টি (প্রতিটি ১২ সেকেন্ড)", flush=True)
+        print(f"[*] ট্রান্সক্রিপশন শুরু হচ্ছে...\n", flush=True)
 
-        for idx, chunk in enumerate(chunks):
-            chunk_file = os.path.join(script_dir, f"temp_chunk_{idx}.wav")
+        for idx, chunk in enumerate(chunks, 1):
+            chunk_file = os.path.join(temp_dir, f"chunk_{idx}.wav")
             chunk.export(chunk_file, format="wav")
 
-            start_sec = (idx * chunk_length_ms) / 1000.0
-            end_sec = min(((idx + 1) * chunk_length_ms) / 1000.0, len(sound) / 1000.0)
+            start_sec = ((idx - 1) * chunk_length_ms) / 1000.0
+            end_sec = min((idx * chunk_length_ms) / 1000.0, len(sound) / 1000.0)
 
             with sr.AudioFile(chunk_file) as source:
                 audio_data = r.record(source)
@@ -83,23 +90,17 @@ def convert_video_to_text(file_path):
                     text = r.recognize_google(audio_data, language="bn-BD")
                     if text.strip():
                         full_text.append(text.strip())
-                        srt_entries.append((idx + 1, start_sec, end_sec, text.strip()))
-                        print(f"  [{idx+1}/{len(chunks)}] {text.strip()[:60]}...")
+                        srt_entries.append((len(srt_entries) + 1, start_sec, end_sec, text.strip()))
+                        preview = text.strip()[:60] + ("..." if len(text.strip()) > 60 else "")
+                        print(f"  [{idx:02d}/{total_chunks:02d}] ✓ {preview}", flush=True)
                 except sr.UnknownValueError:
                     pass
                 except sr.RequestError as e:
-                    print(f"  [{idx+1}] Request error: {e}")
+                    print(f"  [{idx:02d}/{total_chunks:02d}] Request error: {e}", flush=True)
 
-            if os.path.exists(chunk_file):
-                try:
-                    os.remove(chunk_file)
-                except Exception:
-                    pass
-
-        # Cleanup temp audio
-        if os.path.exists(temp_wav):
             try:
-                os.remove(temp_wav)
+                if os.path.exists(chunk_file):
+                    os.remove(chunk_file)
             except Exception:
                 pass
 
@@ -117,11 +118,16 @@ def convert_video_to_text(file_path):
                 idx, start_s, end_s, text = item
                 f.write(f"{idx}\n{format_timestamp(start_s)} --> {format_timestamp(end_s)}\n{text}\n\n")
 
-        print("\n==========================================")
-        print("[SUCCESS] TRANSCRIPTION COMPLETED!")
-        print("==========================================")
-        print(f"[TXT] {txt_path}")
-        print(f"[SRT] {srt_path}\n")
+        print("\n==========================================", flush=True)
+        print("[SUCCESS] রূপান্তর সফল হয়েছে!", flush=True)
+        print("==========================================", flush=True)
+        print(f"[TXT] {txt_path}", flush=True)
+        print(f"[SRT] {srt_path}\n", flush=True)
+        print("------------------------------------------", flush=True)
+        print("প্রিভিউ (প্রথম ৪০০ অক্ষর):", flush=True)
+        print("------------------------------------------", flush=True)
+        print(final_transcript[:400] + ("..." if len(final_transcript) > 400 else ""), flush=True)
+        print("------------------------------------------\n", flush=True)
 
         # Open file explorer & notepad
         try:
@@ -136,20 +142,20 @@ def convert_video_to_text(file_path):
         return True
 
     except Exception as e:
-        print(f"\n[ERROR] {e}")
+        print(f"\n[ERROR] {e}", flush=True)
         import traceback
         traceback.print_exc()
-        if os.path.exists(temp_wav):
-            try:
-                os.remove(temp_wav)
-            except Exception:
-                pass
         return False
+    finally:
+        try:
+            shutil.rmtree(temp_dir, ignore_errors=True)
+        except Exception:
+            pass
 
 if __name__ == '__main__':
     input_file = " ".join(sys.argv[1:]).strip('"\' ') if len(sys.argv) > 1 else None
     if not input_file:
-        input_file = input("Enter video file path: ").strip('"\' ')
+        input_file = input("ভিডিও ফাইলের পাথ দিন (Enter video file path): ").strip('"\' ')
     if input_file:
         convert_video_to_text(input_file)
-    input("\nPress ENTER to exit...")
+    input("\nবন্ধ করতে ENTER চাপুন...")
