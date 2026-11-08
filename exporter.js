@@ -3315,6 +3315,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const addaudioVideoVolumeVal = document.getElementById('addaudio-video-volume-val');
     const addaudioAudioVolumeSlider = document.getElementById('addaudio-audio-volume-slider');
     const addaudioAudioVolumeVal = document.getElementById('addaudio-audio-volume-val');
+    const addaudioDuckingSettings = document.getElementById('addaudio-ducking-settings');
+    const addaudioDuckingDepth = document.getElementById('addaudio-ducking-depth');
     const addaudioOffsetVal = document.getElementById('addaudio-offset-val');
     const addaudioShortestToggle = document.getElementById('addaudio-shortest-toggle');
     const addaudioLoopToggle = document.getElementById('addaudio-loop-toggle');
@@ -3332,7 +3334,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function addaudioMaybeShowOptions() {
         if (addaudioOptionsBox) {
-            addaudioOptionsBox.style.display = (addaudioVideoFile && addaudioAudioFile) ? 'block' : 'none';
+            const show = Boolean(addaudioVideoFile && addaudioAudioFile);
+            addaudioOptionsBox.style.display = show ? 'block' : 'none';
+            if (show) updateAddAudioVisibility();
         }
     }
 
@@ -3400,12 +3404,18 @@ document.addEventListener('DOMContentLoaded', () => {
         addaudioMaybeShowOptions();
     }
 
+    function updateAddAudioVisibility() {
+        const mode = addaudioModeSelect ? addaudioModeSelect.value : 'ducking';
+        if (addaudioMixVolumes) {
+            addaudioMixVolumes.style.display = (mode === 'ducking' || mode === 'mix') ? 'block' : 'none';
+        }
+        if (addaudioDuckingSettings) {
+            addaudioDuckingSettings.style.display = (mode === 'ducking') ? 'block' : 'none';
+        }
+    }
+
     if (addaudioModeSelect) {
-        addaudioModeSelect.addEventListener('change', () => {
-            if (addaudioMixVolumes) {
-                addaudioMixVolumes.style.display = (addaudioModeSelect.value === 'mix') ? 'block' : 'none';
-            }
-        });
+        addaudioModeSelect.addEventListener('change', updateAddAudioVisibility);
     }
 
     if (addaudioVideoVolumeSlider && addaudioVideoVolumeVal) {
@@ -3440,9 +3450,10 @@ document.addEventListener('DOMContentLoaded', () => {
     async function runAddAudioToVideo() {
         if (!addaudioVideoFile || !addaudioAudioFile) return;
 
-        const mode = addaudioModeSelect ? addaudioModeSelect.value : 'replace';
+        const mode = addaudioModeSelect ? addaudioModeSelect.value : 'ducking';
         const videoVolume = addaudioVideoVolumeSlider ? (parseInt(addaudioVideoVolumeSlider.value, 10) / 100) : 1;
-        const audioVolume = addaudioAudioVolumeSlider ? (parseInt(addaudioAudioVolumeSlider.value, 10) / 100) : 1;
+        const audioVolume = addaudioAudioVolumeSlider ? (parseInt(addaudioAudioVolumeSlider.value, 10) / 100) : 0.18;
+        const duckingRatio = addaudioDuckingDepth ? parseFloat(addaudioDuckingDepth.value) : 5;
         const offsetSec = addaudioParseOffset(addaudioOffsetVal ? addaudioOffsetVal.value : '0');
         const shortest = addaudioShortestToggle ? addaudioShortestToggle.checked : true;
         const loopAudio = addaudioLoopToggle ? addaudioLoopToggle.checked : true;
@@ -3489,6 +3500,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     mode,
                     videoVolume,
                     audioVolume,
+                    duckingRatio,
                     offsetSec,
                     shortest,
                     loopAudio,

@@ -5381,10 +5381,10 @@
                         <div class="card mt-4">
                             <div class="card-header">
                                 <i class="fa-solid fa-music card-icon"></i>
-                                <h3>Add Audio to Video (ভিডিওতে অডিও যোগ করুন)</h3>
+                                <h3>Add Audio & Background Music (অটো-ডাকিং ব্যাকগ্রাউন্ড মিউজিক যোগ করুন)</h3>
                             </div>
                             <div class="card-body">
-                                <p class="help-text">একটি ভিডিও ও একটি অডিও ফাইল আপলোড করুন — নতুন অডিওটি ভিডিওর সাথে যোগ করে (বা আগের সাউন্ড বদলে) নতুন ভিডিও ডাউনলোড করুন। এটি বর্তমান প্রজেক্টের সাথে সম্পর্কহীন — সরাসরি যেকোনো ভিডিও/অডিও ফাইল এখানে আপলোড করুন।</p>
+                                <p class="help-text">যেকোনো ভিডিও এবং ব্যাকগ্রাউন্ড মিউজিক দিন — <strong>কোনো ফুল রেন্ডারিং ছাড়া মাত্র ৩০–৬০ সেকেন্ডে</strong> অটো-ডাকিং (ভিডিওতে কথা থাকলে মিউজিক নিজে থেকেই কমবে, কথা না থাকলে বাড়বে) সহ নতুন ভিডিও তৈরি হবে। ৩০-৪০ মিনিটের বড় ভিডিওর জন্য এটি অত্যন্ত দ্রুত ও সেরা সমাধান!</p>
 
                                 <div class="file-selector-box mt-3" id="addaudio-video-dropzone">
                                     <i class="fa-solid fa-file-video"></i>
@@ -5395,8 +5395,8 @@
 
                                 <div class="file-selector-box mt-3" id="addaudio-audio-dropzone">
                                     <i class="fa-solid fa-file-audio"></i>
-                                    <span id="addaudio-audio-dropzone-label">Drag & Drop Audio here or Click to Select</span>
-                                    <button class="btn btn-sm btn-outline" type="button">Select Audio</button>
+                                    <span id="addaudio-audio-dropzone-label">Drag & Drop Audio / Music here or Click to Select</span>
+                                    <button class="btn btn-sm btn-outline" type="button">Select Audio / Music</button>
                                     <input type="file" id="addaudio-audio-file-input" accept="audio/*" style="display: none;">
                                 </div>
 
@@ -5404,25 +5404,34 @@
                                     <div class="control-group mt-3">
                                         <label>মোড (Mode)</label>
                                         <select id="addaudio-mode-select" class="form-select">
-                                            <option value="replace">Replace Original Audio (আগের সাউন্ড বদলে দিন)</option>
-                                            <option value="mix">Mix with Original Audio (আগের সাউন্ডের সাথে মিশিয়ে দিন)</option>
+                                            <option value="ducking" selected>⚡ Auto Ducking Music (ভয়েস এলে মিউজিক অটো কমবে) - Recommended</option>
+                                            <option value="mix">Standard Mix (ভলিউম ফিক্সড রেখে সাধারণ মিক্স)</option>
+                                            <option value="replace">Replace Original Audio (ভিডিওর আগের সাউন্ড বদলে দিন)</option>
                                         </select>
                                     </div>
 
-                                    <div id="addaudio-mix-volumes" style="display: none;">
+                                    <div id="addaudio-mix-volumes" style="display: block;">
                                         <div class="control-group mt-3">
-                                            <label>Original Video Volume</label>
+                                            <label>Original Video Volume (ভিডিওর কথার ভলিউম)</label>
                                             <div class="slider-val-container">
                                                 <input type="range" id="addaudio-video-volume-slider" min="0" max="300" value="100">
                                                 <span id="addaudio-video-volume-val">100%</span>
                                             </div>
                                         </div>
                                         <div class="control-group mt-3">
-                                            <label>New Audio Volume</label>
+                                            <label>Background Music Volume (মিউজিকের মূল ভলিউম)</label>
                                             <div class="slider-val-container">
                                                 <input type="range" id="addaudio-audio-volume-slider" min="0" max="300" value="18">
                                                 <span id="addaudio-audio-volume-val">18%</span>
                                             </div>
+                                        </div>
+                                        <div id="addaudio-ducking-settings" class="control-group mt-3">
+                                            <label>Ducking Depth (কথা শুরু হলে মিউজিক কতটা কমবে)</label>
+                                            <select id="addaudio-ducking-depth" class="form-select">
+                                                <option value="5" selected>স্বাভাবিক (Medium - ৭৫% কমবে) [ডিফল্ট]</option>
+                                                <option value="8">বেশি (High - ৮৫% কমবে, ডায়লগ বেশি স্পষ্ট)</option>
+                                                <option value="3">হালকা (Soft - ৫০% কমবে)</option>
+                                            </select>
                                         </div>
                                     </div>
 
@@ -5456,7 +5465,7 @@
                                     </div>
 
                                     <button id="addaudio-run-btn" class="btn btn-primary btn-block mt-3" type="button">
-                                        <i class="fa-solid fa-music"></i> Add Audio to Video
+                                        <i class="fa-solid fa-wand-magic-sparkles"></i> Add Audio / Background Music (সুপারফাস্ট রেন্ডার)
                                     </button>
                                 </div>
 

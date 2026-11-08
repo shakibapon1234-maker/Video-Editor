@@ -1083,21 +1083,23 @@ app.post('/api/add-audio/compile', async (req, res) => {
         return res.status(400).json({ error: 'Upload both a video and an audio file before compiling.' });
     }
 
-    let { mode = 'replace', videoVolume = 1, audioVolume = 1, offsetSec = 0, shortest = true, loopAudio = false } = req.body || {};
+    let { mode = 'ducking', videoVolume = 1, audioVolume = 0.18, duckingRatio = 5, offsetSec = 0, shortest = true, loopAudio = true } = req.body || {};
     shortest = (shortest === true || shortest === 'true');
     loopAudio = (loopAudio === true || loopAudio === 'true');
 
     // Auto-fallback to 'replace' mode if original video has no audio track
-    if (mode === 'mix') {
+    if (mode === 'mix' || mode === 'ducking') {
         const hasAudio = await checkFileHasAudio(session.videoPath);
         if (!hasAudio) {
-            console.log('Original video has no audio stream, falling back mode from mix to replace');
+            console.log('Original video has no audio stream, falling back mode to replace');
             mode = 'replace';
         }
     }
     const offsetMs = Math.max(0, Math.round((parseFloat(offsetSec) || 0) * 1000));
     const vVol = Math.max(0, parseFloat(videoVolume));
     const aVol = Math.max(0, parseFloat(audioVolume));
+    const ratio = Math.max(2, Math.min(20, parseFloat(duckingRatio) || 5));
+    const delayFilter = offsetMs > 0 ? `adelay=${offsetMs}:all=1,` : '';
 
     const originalName = req.body.filename || session.videoOriginalName || 'video.mp4';
     const ext = path.extname(originalName) || '.mp4';
@@ -1111,19 +1113,21 @@ app.post('/api/add-audio/compile', async (req, res) => {
     }
 
     let filterStr, mapArgs;
-    if (mode === 'mix') {
-        // Mix the new audio with the video's existing audio track.
-        // normalize=0 prevents amix from automatically halving the volume (0.5x).
-        // dropout_transition=0 avoids volume dip at startup.
-        // Keep the requested level relationship, but reserve safe headroom after
-        // summing two tracks.  Without a limiter, 100% voice + 100% music can
-        // create clipped samples even though each input file is clean.
-        filterStr = `[0:a]volume=${vVol}[va];[1:a]adelay=${offsetMs}:all=1,volume=${aVol}[na];[va][na]amix=inputs=2:duration=${(shortest || loopAudio) ? 'first' : 'longest'}:dropout_transition=0:normalize=0,alimiter=limit=-1dB[aout]`;
+    if (mode === 'ducking') {
+        // Auto-ducking sidechain compression:
+        // [0:a] is voice dialogue from video.
+        // [1:a] is background music.
+        // When speech is detected on [voice_side] (threshold=0.03), music is ducked by ratio (e.g. 5x).
+        // When speech stops, release=700ms smoothly restores music volume.
+        filterStr = `[0:a]volume=${vVol},asplit=2[voice_main][voice_side];[1:a]${delayFilter}volume=${aVol}[music_raw];[music_raw][voice_side]sidechaincompress=threshold=0.03:ratio=${ratio}:attack=150:release=700:makeup=1[ducked_music];[voice_main][ducked_music]amix=inputs=2:duration=${(shortest || loopAudio) ? 'first' : 'longest'}:dropout_transition=0:normalize=0,alimiter=limit=-1dB[aout]`;
+        mapArgs = ['-map', '0:v:0', '-map', '[aout]'];
+    } else if (mode === 'mix') {
+        // Mix the new audio with the video's existing audio track (flat levels).
+        filterStr = `[0:a]volume=${vVol}[va];[1:a]${delayFilter}volume=${aVol}[na];[va][na]amix=inputs=2:duration=${(shortest || loopAudio) ? 'first' : 'longest'}:dropout_transition=0:normalize=0,alimiter=limit=-1dB[aout]`;
         mapArgs = ['-map', '0:v:0', '-map', '[aout]'];
     } else {
-        // Replace mode: drop the video's own audio, use only the new track
-        // (still respecting the start offset and volume).
-        filterStr = `[1:a]adelay=${offsetMs}:all=1,volume=${aVol}[aout]`;
+        // Replace mode: drop the video's own audio, use only the new track.
+        filterStr = `[1:a]${delayFilter}volume=${aVol}[aout]`;
         mapArgs = ['-map', '0:v:0', '-map', '[aout]'];
     }
 
