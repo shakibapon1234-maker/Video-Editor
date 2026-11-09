@@ -11,6 +11,10 @@ contextBridge.exposeInMainWorld('electronAPI', {
         ipcRenderer.on('fast-join-save-progress', listener);
         return () => ipcRenderer.removeListener('fast-join-save-progress', listener);
     },
+    // Generic Export Video saver: opens native Windows Save As dialog & writes file directly
+    saveExportedVideo: (downloadUrl, filename) => ipcRenderer.invoke('save-exported-video', downloadUrl, filename),
+    // Opens or reveals exported file in Windows File Explorer
+    openExportsFolder: (filename) => ipcRenderer.invoke('open-exports-folder', filename),
     getPathForFile: (file) => {
         try {
             if (webUtils && typeof webUtils.getPathForFile === 'function') {
@@ -27,4 +31,3 @@ contextBridge.exposeInMainWorld('electronAPI', {
     saveScreenRecording: (arrayBuffer, suggestedName) =>
         ipcRenderer.invoke('save-screen-recording', arrayBuffer, suggestedName),
 });
-

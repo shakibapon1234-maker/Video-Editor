@@ -4626,8 +4626,9 @@
                                         <span><i class="fa-solid fa-gauge-high"></i> রেন্ডার কোয়ালিটি ও স্পিড:</span>
                                     </label>
                                     <select id="multi-aspect-quality" class="form-select multi-aspect-quality-select">
-                                        <option value="720p" selected>⚡ Fast HD (720p) — পিসিতে চাপ পড়বে না, সুপার ফাস্ট (রিকমেন্ডেড)</option>
-                                        <option value="1080p">💎 Full HD (1080p) — সর্বোচ্চ কোয়ালিটি (রেন্ডারে বেশি সময় লাগবে)</option>
+                                        <option value="480p">📱 Fast SD (480p) — ছোট ফাইল ও সুপার ফাস্ট</option>
+                                        <option value="720p" selected>⚡ Fast HD (720p) — ব্যালেন্সড কোয়ালিটি ও স্পিড (রিকমেন্ডেড)</option>
+                                        <option value="1080p">💎 Full HD (1080p) — সর্বোচ্চ কোয়ালিটি</option>
                                     </select>
                                 </div>
 
@@ -4722,11 +4723,15 @@
                                 </div>
 
                                 <!-- Multi-Aspect Success Box -->
-                                <div class="render-success-box mt-3" id="multi-aspect-success-box" style="display: none; background: rgba(16, 185, 129, 0.1); border: 1px solid rgba(16, 185, 129, 0.35); border-radius: 8px; padding: 12px; text-align: center;">
-                                    <div style="color: #34d399; font-size: 14px; font-weight: 600; margin-bottom: 4px;">
+                                <div class="render-success-box mt-3" id="multi-aspect-success-box" style="display: none; background: rgba(16, 185, 129, 0.1); border: 1px solid rgba(16, 185, 129, 0.35); border-radius: 8px; padding: 14px; text-align: center;">
+                                    <div style="color: #34d399; font-size: 15px; font-weight: 700; margin-bottom: 4px;">
                                         <i class="fa-solid fa-circle-check"></i> সব রেশিও এক্সপোর্ট সম্পন্ন হয়েছে!
                                     </div>
-                                    <p id="multi-aspect-success-desc" style="font-size: 12px; color: #cbd5e1; margin: 0;">সবগুলো ভিডিও ডাউনলোড বা সেভ হয়ে গেছে।</p>
+                                    <p id="multi-aspect-success-desc" style="font-size: 12px; color: #cbd5e1; margin: 0 0 10px 0;">সবগুলো ভিডিও সফলভাবে রেন্ডার হয়েছে। নিচে ক্লিক করে সংরক্ষণ করুন:</p>
+                                    <div id="multi-aspect-results-list" style="display: flex; flex-direction: column; gap: 8px; text-align: left;"></div>
+                                    <button id="multi-aspect-open-folder-btn" class="btn btn-outline btn-sm btn-block mt-3" type="button" style="display:none; font-weight: 600; border-color: rgba(52, 211, 153, 0.5); color: #34d399;">
+                                        <i class="fa-solid fa-folder-open"></i> সব ফাইল ফোল্ডারে খুলুন (Open Folder)
+                                    </button>
                                 </div>
 
                                 <!-- Multi-Aspect Error Box -->

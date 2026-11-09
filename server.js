@@ -342,6 +342,7 @@ wss.on('connection', (ws) => {
     let totalFrames = 0;
     let expectedFilename = 'output.mp4';
     let enhanceQuality = false;
+    let renderQuality = '1080p';
     let mode = 'idle'; // idle, frames, audio
 
     ws.on('message', async (message, isBinary) => {
@@ -376,6 +377,7 @@ wss.on('connection', (ws) => {
                     totalFrames = data.totalFrames;
                     expectedFilename = data.filename || 'output.mp4';
                     enhanceQuality = !!data.enhanceQuality;
+                    renderQuality = data.quality || '1080p';
                     if (data.customThumbnailData) {
                         const imageData = data.customThumbnailData.replace(/^data:image\/[a-zA-Z+]+;base64,/, '');
                         fs.writeFileSync(path.join(tempDir, 'custom-thumbnail.jpg'), Buffer.from(imageData, 'base64'));
@@ -405,7 +407,7 @@ wss.on('connection', (ws) => {
                     mode = 'idle';
                     const diskFrames = fs.existsSync(tempDir) ? fs.readdirSync(tempDir).filter(f => f.startsWith('frame_')).length : frameCount;
                     const finalFrameCount = Math.max(diskFrames, frameCount, totalFrames || 0);
-                    compileVideo(ws, tempDir, expectedFilename, finalFrameCount, enhanceQuality);
+                    compileVideo(ws, tempDir, expectedFilename, finalFrameCount, enhanceQuality, renderQuality);
                 }
             } else {
                 // Handle binary payloads
@@ -456,7 +458,49 @@ function cleanupDir(dirPath) {
     }
 }
 
-function compileVideo(ws, tempDir, filename, totalFrames, enhanceQuality = false) {
+function getFfmpegEncodingOptions(quality = '1080p', enhanceQuality = false, isDirect = false) {
+    const q = String(quality || '1080p').toLowerCase().trim();
+    let crf = 18;
+    let maxrate = '12M';
+    let bufsize = '20M';
+    let audioBitrate = '192k';
+    let preset = isDirect ? 'fast' : (enhanceQuality ? 'slow' : 'medium');
+
+    if (q === '480p') {
+        crf = enhanceQuality ? 20 : 22;
+        maxrate = '2500k';
+        bufsize = '5000k';
+        audioBitrate = '128k';
+    } else if (q === '720p') {
+        crf = enhanceQuality ? 18 : 20;
+        maxrate = '6M';
+        bufsize = '10M';
+        audioBitrate = '160k';
+    } else { // 1080p or default
+        crf = enhanceQuality ? 16 : 18;
+        maxrate = enhanceQuality ? '15M' : '12M';
+        bufsize = enhanceQuality ? '24M' : '20M';
+        audioBitrate = '192k';
+    }
+
+    return {
+        videoOptions: [
+            '-c:v', 'libx264',
+            '-pix_fmt', 'yuv420p',
+            '-preset', preset,
+            '-crf', String(crf),
+            '-maxrate', maxrate,
+            '-bufsize', bufsize
+        ],
+        audioOptions: [
+            '-c:a', 'aac',
+            '-b:a', audioBitrate,
+            '-ar', '48000'
+        ]
+    };
+}
+
+function compileVideo(ws, tempDir, filename, totalFrames, enhanceQuality = false, quality = '1080p') {
     const audioPath = path.join(tempDir, 'audio.wav');
     const customThumbnailPath = path.join(tempDir, 'custom-thumbnail.jpg');
     const finalOutputPath = path.join(OUTPUT_DIR, filename);
@@ -518,29 +562,23 @@ function compileVideo(ws, tempDir, filename, totalFrames, enhanceQuality = false
     // quality 1080p profile even when the optional source-enhancement filter
     // is not selected.  "slow" is intentional; it trades overnight render
     // time for a more efficient, cleaner H.264 file.
-    const encodeOptions = enhanceQuality
-        ? ['-c:v libx264', '-pix_fmt yuv420p', '-preset slow', '-crf 15', '-b:v 10M', '-minrate 6M', '-maxrate 14M', '-bufsize 14M']
-        : ['-c:v libx264', '-pix_fmt yuv420p', '-preset slow', '-crf 16', '-b:v 8M', '-minrate 4M', '-maxrate 12M', '-bufsize 12M'];
+    const encoding = getFfmpegEncodingOptions(quality, enhanceQuality, false);
 
     command
         .outputOptions([
-            ...encodeOptions,
-            '-r 30',
-            '-fps_mode cfr',
-            '-g 60',
-            '-keyint_min 30',
-            '-sc_threshold 0',
-            '-movflags +faststart',
-            `-t ${duration.toFixed(3)}`
+            ...encoding.videoOptions,
+            '-r', '30',
+            '-fps_mode', 'cfr',
+            '-g', '60',
+            '-keyint_min', '30',
+            '-sc_threshold', '0',
+            '-movflags', '+faststart',
+            '-t', duration.toFixed(3)
         ])
         .output(compiledPath.replace(/\\/g, '/'));
 
     if (hasAudio) {
-        command = command.outputOptions([
-            '-c:a aac',
-            '-b:a 192k',
-            '-ar 44100'
-        ]);
+        command = command.outputOptions(encoding.audioOptions);
     }
 
     command
@@ -1437,25 +1475,18 @@ app.post('/api/fast-direct-render', express.json({ limit: '2048mb' }), async (re
 
                 const estDuration = Math.max(0.1, parseFloat(totalDuration) || 0);
 
+                const encoding = getFfmpegEncodingOptions(quality || '1080p', false, true);
+
                 const outputOptions = [
                     '-map', finalVideoLabel,
                     '-map', '[aout]',
-                    '-c:a', 'aac',
-                    '-b:a', '192k',
-                    '-ar', '48000',
-                    '-c:v', 'libx264',
-                    '-preset', 'fast',
-                    '-crf', '18',
-                    '-b:v', '8M',
-                    '-minrate', '4M',
-                    '-maxrate', '12M',
-                    '-bufsize', '12M',
+                    ...encoding.audioOptions,
+                    ...encoding.videoOptions,
                     '-r', '30',
                     '-fps_mode', 'cfr',
                     '-g', '60',
                     '-keyint_min', '30',
                     '-sc_threshold', '0',
-                    '-pix_fmt', 'yuv420p',
                     '-movflags', '+faststart'
                 ];
                 if (estDuration > 0) {

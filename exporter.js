@@ -356,6 +356,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Exposed for Phase 9 Multi-Aspect Batch Export (phase9.js)
     window.runExportPipeline = runExportPipeline;
+    window.v2aAudioBufferToWavBlob = v2aAudioBufferToWavBlob;
 
     async function startFastDirectExport() {
         if (!state.duration || !state.clips || state.clips.length === 0) {
@@ -647,6 +648,10 @@ document.addEventListener('DOMContentLoaded', () => {
                     if (downloadLink) {
                         downloadLink.href = data.downloadUrl;
                         downloadLink.download = data.filename || 'video.mp4';
+                    }
+                    if (window.electronAPI && typeof window.electronAPI.saveExportedVideo === 'function') {
+                        window.electronAPI.saveExportedVideo(data.downloadUrl, data.filename || 'video.mp4');
+                    } else if (downloadLink) {
                         downloadLink.click();
                     }
                 } else if (data.status === 'error') {
@@ -908,7 +913,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    async function runExportPipeline(totalDuration, isBatch = false, batchFilename = '', batchIndex = 0, batchCount = 0) {
+    async function runExportPipeline(totalDuration, isBatch = false, batchFilename = '', batchIndex = 0, batchCount = 0, requestedQuality = null) {
         const canvas = state.canvas;
         const video = state.video;
 
@@ -958,6 +963,30 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     async function saveVideo(compileOutput, filename) {
+        if (window.electronAPI && typeof window.electronAPI.saveExportedVideo === 'function') {
+            try {
+                const targetUrl = (compileOutput && compileOutput.downloadUrl) ? compileOutput.downloadUrl : `/exports/${filename}`;
+                const res = await window.electronAPI.saveExportedVideo(targetUrl, filename);
+                if (res && res.filePath) {
+                    if (renderSuccessBox) {
+                        let msg = renderSuccessBox.querySelector('.saved-location-msg');
+                        if (!msg) {
+                            msg = document.createElement('p');
+                            msg.className = 'saved-location-msg';
+                            msg.style.cssText = 'font-size:12px;color:#4ade80;margin-top:6px;font-weight:600;';
+                            renderSuccessBox.appendChild(msg);
+                        }
+                        const displayName = (res.filePath ? res.filePath.split(/[/\\]/).pop() : filename);
+                        msg.innerHTML = '✅ ফাইল সেভ হয়েছে: ' + displayName;
+                    }
+                    return true;
+                }
+                if (res && res.canceled) return false;
+            } catch (elErr) {
+                console.warn('Native Electron saveExportedVideo failed, fallback to browser link:', elErr);
+            }
+        }
+
         if (isCapacitorApp()) {
             try {
                 const cap = window.Capacitor;
@@ -1084,13 +1113,15 @@ document.addEventListener('DOMContentLoaded', () => {
                 } else {
                     const enhanceCheckbox = document.getElementById('enhance-quality-checkbox');
                     const enhanceQuality = !isCapacitorApp() && !!(enhanceCheckbox && enhanceCheckbox.checked);
-                    await serverLog(`Sending init control message, totalFrames: ${totalFrames}, filename: ${filename}, enhanceQuality: ${enhanceQuality}`);
+                    const selectedQuality = requestedQuality || (qualitySelect ? qualitySelect.value : '1080p');
+                    await serverLog(`Sending init control message, totalFrames: ${totalFrames}, filename: ${filename}, enhanceQuality: ${enhanceQuality}, quality: ${selectedQuality}`);
                     this.ws.send(JSON.stringify({
                         type: 'init',
                         totalFrames: totalFrames,
                         filename: filename,
                         customThumbnailData,
-                        enhanceQuality
+                        enhanceQuality,
+                        quality: selectedQuality
                     }));
                     await new Promise((resolve) => {
                         const onMsg = async (event) => {

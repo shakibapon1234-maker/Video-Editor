@@ -2012,14 +2012,19 @@ document.addEventListener('DOMContentLoaded', () => {
     // --- Multi-Aspect Batch Export (plan 9-6) ---
     function computeCanvasDimsForRatio(ratio, quality = '720p') {
         const is1080p = quality === '1080p';
+        const is480p = quality === '480p';
         switch (ratio) {
             case '9-16':
+                if (is480p) return { w: 480, h: 854 };
                 return is1080p ? { w: 1080, h: 1920 } : { w: 720, h: 1280 };
             case '16-9':
+                if (is480p) return { w: 854, h: 480 };
                 return is1080p ? { w: 1920, h: 1080 } : { w: 1280, h: 720 };
             case '1-1':
+                if (is480p) return { w: 480, h: 480 };
                 return is1080p ? { w: 1080, h: 1080 } : { w: 720, h: 720 };
             case '4-5':
+                if (is480p) return { w: 480, h: 600 };
                 return is1080p ? { w: 1080, h: 1350 } : { w: 720, h: 900 };
             case 'original':
             default: {
@@ -2027,22 +2032,18 @@ document.addEventListener('DOMContentLoaded', () => {
                 const videoHeight = state.video ? state.video.videoHeight : 360;
                 const cw = (state.cropW || 1) * videoWidth;
                 const ch = (state.cropH || 1) * videoHeight;
-                const maxDim = is1080p ? 1920 : 1280;
+                const maxDim = is480p ? 854 : (is1080p ? 1920 : 1280);
                 let w = cw, h = ch;
                 if (w > maxDim || h > maxDim) {
                     if (w > h) { h = Math.round((h * maxDim) / w); w = maxDim; }
                     else { w = Math.round((w * maxDim) / h); h = maxDim; }
                 }
-                return { w: Math.round(w), h: Math.round(h) };
+                return { w: Math.round(w / 2) * 2, h: Math.round(h / 2) * 2 };
             }
         }
     }
 
     async function runMultiAspectExport(items, quality = '720p') {
-        if (typeof window.runExportPipeline !== 'function') {
-            alert('রেন্ডার পাইপলাইন লোড হয়নি। পেজ রিফ্রেশ করুন।');
-            return;
-        }
         if (!state.duration || !state.clips || state.clips.length === 0) {
             alert('এক্সপোর্ট করার আগে একটি ভিডিও লোড করুন।');
             return;
@@ -2056,6 +2057,8 @@ document.addEventListener('DOMContentLoaded', () => {
         const batchSummary = document.getElementById('multi-aspect-batch-summary');
         const successBox = document.getElementById('multi-aspect-success-box');
         const successDesc = document.getElementById('multi-aspect-success-desc');
+        const resultsList = document.getElementById('multi-aspect-results-list');
+        const openFolderBtn = document.getElementById('multi-aspect-open-folder-btn');
         const errorBox = document.getElementById('multi-aspect-error-box');
         const errorDesc = document.getElementById('multi-aspect-error-desc');
         const exportBtn = document.getElementById('multi-aspect-export-btn');
@@ -2066,72 +2069,297 @@ document.addEventListener('DOMContentLoaded', () => {
         if (progressFill) progressFill.style.width = '0%';
         if (pctText) pctText.innerText = '0%';
         if (statusText) statusText.innerText = 'রেন্ডার শুরু হচ্ছে... (Starting batch render)';
+        if (resultsList) resultsList.innerHTML = '';
         if (exportBtn) {
             exportBtn.disabled = true;
             exportBtn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> রেন্ডার হচ্ছে...';
         }
 
+        // Prevent live loops & editor resize during export
+        state.isExportingVideo = true;
+        if (window.stopBgAnimLoop) window.stopBgAnimLoop();
+        if (state.isPlaying && state.video) {
+            state.isPlaying = false;
+            state.video.pause();
+        }
+
         // Save editor layout so we can restore afterward
         const savedAspect = state.aspectRatio;
-        const savedCanvasW = state.canvas.width;
-        const savedCanvasH = state.canvas.height;
+        const savedCanvasW = state.canvas ? state.canvas.width : 1280;
+        const savedCanvasH = state.canvas ? state.canvas.height : 720;
         const savedActiveClipId = state.activeClipId;
         const savedLayoutMode = state.layoutMode;
         const savedBackgroundMode = state.backgroundMode;
 
+        // Check if project has animated text overlays, intro/outro, or extra video tracks
+        const hasTextOverlays = Array.isArray(state.textOverlays) && state.textOverlays.length > 0;
+        const hasIntroOutro = !!(state.introEnabled || state.outroEnabled);
+        const hasExtraVideoTracks = Array.isArray(state.extraTracks) && state.extraTracks.some(t => t.type === 'video' && (t.clips || []).length > 0);
+        const needsCanvasPipeline = hasTextOverlays || hasIntroOutro || hasExtraVideoTracks;
+
+        const exportedResults = [];
+
         try {
+            const totalDuration = state.clips.reduce((sum, c) => {
+                return sum + (window.getClipOutputDuration ? window.getClipOutputDuration(c) : (Math.max(0, c.end - c.start) / Math.max(0.5, Math.min(2, Number(c.speed) || 1))));
+            }, 0);
+
+            // Prepare offline audio mix once for all ratios if extra tracks / music exist
+            let sharedAudioBase64 = null;
+            const hasVoiceover = !!(state.voiceoverRecorded && state.voiceoverBlob);
+            const hasBgMusic = Array.isArray(state.bgMusicTracks) && state.bgMusicTracks.length > 0;
+            const hasExtraAudioTracks = Array.isArray(state.extraTracks) && state.extraTracks.some(t => t.type === 'audio' && (t.clips || []).length > 0);
+            const hasExtraAudio = hasVoiceover || hasBgMusic || hasExtraAudioTracks;
+
+            if (!needsCanvasPipeline && hasExtraAudio && window.renderAudioOffline) {
+                if (statusText) statusText.innerText = 'অডিও মিক্স করা হচ্ছে... (Mixing project audio...)';
+                try {
+                    const grandTotalFrames = Math.ceil(totalDuration * 30);
+                    const audioBuffer = await window.renderAudioOffline(grandTotalFrames / 30);
+                    if (audioBuffer && window.v2aAudioBufferToWavBlob) {
+                        const audioBlob = window.v2aAudioBufferToWavBlob(audioBuffer);
+                        sharedAudioBase64 = await new Promise((resolve) => {
+                            const reader = new FileReader();
+                            reader.onloadend = () => resolve(reader.result);
+                            reader.readAsDataURL(audioBlob);
+                        });
+                    }
+                } catch (aErr) {
+                    console.warn('Multi-aspect audio offline mix warning:', aErr);
+                }
+            }
+
             for (let i = 0; i < items.length; i++) {
                 const item = items[i];
                 const ratio = item.ratio;
                 const fitMode = item.fitMode || 'fit-blur';
-
-                state.aspectRatio = ratio;
                 const dims = computeCanvasDimsForRatio(ratio, quality);
-                state.canvas.width = dims.w;
-                state.canvas.height = dims.h;
 
-                if (fitMode === 'crop') {
-                    state.layoutMode = 'fill';
-                    state.backgroundMode = 'none';
-                } else if (fitMode === 'fit-blur') {
-                    state.layoutMode = 'fit';
-                    state.backgroundMode = 'blur';
-                } else if (fitMode === 'fit-black') {
-                    state.layoutMode = 'fit';
-                    state.backgroundMode = 'none';
-                }
+                let ratioTitle = '9:16 Reel / Shorts';
+                if (ratio === '16-9') ratioTitle = '16:9 Landscape / YouTube';
+                else if (ratio === '1-1') ratioTitle = '1:1 Square / Post';
+                else if (ratio === '4-5') ratioTitle = '4:5 Portrait / FB Feed';
 
-                if (window.syncPhase9ClipUI) window.syncPhase9ClipUI();
-                if (window.drawEditorFrame) window.drawEditorFrame();
-                else if (window.drawFrame) window.drawFrame();
+                const modeLabel = fitMode === 'crop' ? 'Crop to Fill (ফুল স্ক্রিন)' : (fitMode === 'fit-blur' ? 'Fit + Blur (ব্লার)' : 'Black Bars (কালো বার)');
 
-                const modeLabel = fitMode === 'crop' ? 'Crop' : (fitMode === 'fit-blur' ? 'Blur' : 'Black Bars');
-                const curRatioTitle = `${ratio} (${modeLabel}) — ${dims.w}x${dims.h}`;
                 if (statusText) {
-                    statusText.innerText = `রেন্ডার হচ্ছে (${i + 1}/${items.length}): ${curRatioTitle}`;
+                    statusText.innerText = `রেন্ডার হচ্ছে (${i + 1}/${items.length}): ${ratioTitle} — ${dims.w}×${dims.h}`;
                 }
                 if (batchSummary) {
                     batchSummary.innerText = `রেশিও: ${i + 1}/${items.length}`;
                 }
+                if (ratioDetail) {
+                    ratioDetail.innerText = `বর্তমান ফাইল: ${ratioTitle}`;
+                }
 
-                // Attach real-time per-frame progress listener
-                window.onExportPipelineProgress = (percent) => {
-                    const currentVideoPct = Math.min(100, Math.max(0, Math.round(percent || 0)));
-                    const overallPct = Math.min(99, Math.round(((i + (currentVideoPct / 100)) / items.length) * 100));
+                if (!needsCanvasPipeline) {
+                    // --- Ultra-Fast Native FFmpeg Direct Pipeline ---
+                    const clipsPayload = [];
+                    for (let ci = 0; ci < state.clips.length; ci++) {
+                        const c = state.clips[ci];
+                        let resolvedPath = c.filePath || '';
+                        if (!resolvedPath && c.file) {
+                            try {
+                                if (window.electronAPI && typeof window.electronAPI.getPathForFile === 'function') {
+                                    resolvedPath = window.electronAPI.getPathForFile(c.file) || '';
+                                }
+                            } catch (_) {}
+                            if (!resolvedPath && c.file.path) resolvedPath = c.file.path;
+                        }
+                        if (!resolvedPath && state.clips[0] && state.clips[0].filePath) {
+                            resolvedPath = state.clips[0].filePath;
+                        }
+                        if (resolvedPath) c.filePath = resolvedPath;
 
-                    if (progressFill) progressFill.style.width = overallPct + '%';
-                    if (pctText) pctText.innerText = overallPct + '%';
-                    if (ratioDetail) {
-                        ratioDetail.innerText = `বর্তমান ফাইল (${ratio}): ${currentVideoPct}% সম্পন্ন`;
+                        const clipObj = {
+                            id: c.id,
+                            name: c.name || `clip_${ci + 1}.mp4`,
+                            start: c.start || 0,
+                            end: c.end || c.duration,
+                            speed: c.speed || 1,
+                            cropX: c.cropX !== undefined ? c.cropX : (state.cropX || 0),
+                            cropY: c.cropY !== undefined ? c.cropY : (state.cropY || 0),
+                            cropW: c.cropW !== undefined ? c.cropW : (state.cropW || 1),
+                            cropH: c.cropH !== undefined ? c.cropH : (state.cropH || 1),
+                            filePath: resolvedPath || ''
+                        };
+                        if (!clipObj.filePath) {
+                            const blobToRead = c.file || c.blob || (c.url ? await fetch(c.url).then(r => r.blob()).catch(() => null) : null);
+                            if (blobToRead) {
+                                clipObj.base64 = await new Promise((resB64) => {
+                                    const reader = new FileReader();
+                                    reader.onloadend = () => resB64(reader.result);
+                                    reader.readAsDataURL(blobToRead);
+                                });
+                            }
+                        }
+                        clipsPayload.push(clipObj);
                     }
-                    if (batchSummary) {
-                        batchSummary.innerText = `সর্বমোট: ${overallPct}% (${i + 1}/${items.length})`;
-                    }
-                    setProgressSafe(overallPct);
-                };
 
-                const totalDuration = state.clips.reduce((sum, c) => sum + getClipOutputDuration(c), 0);
-                await window.runExportPipeline(totalDuration, true, `video_${ratio}`, i + 1, items.length);
+                    const effectiveLayout = fitMode === 'crop' ? 'fill' : 'fit';
+                    const effectiveBg = fitMode === 'fit-blur' ? 'blur' : 'none';
+
+                    // Compute blur regions positioning scaled to output target dims
+                    let outDrawW = dims.w;
+                    let outDrawH = dims.h;
+                    let outDrawX = 0;
+                    let outDrawY = 0;
+                    const mediaSrcW = (state.video && state.video.videoWidth) || 1280;
+                    const mediaSrcH = (state.video && state.video.videoHeight) || 720;
+                    const mediaAspect = (mediaSrcW && mediaSrcH) ? (mediaSrcW / mediaSrcH) : (16 / 9);
+                    const targetAspect = (dims.w && dims.h) ? (dims.w / dims.h) : mediaAspect;
+
+                    if (effectiveLayout !== 'fill' && Math.abs(mediaAspect - targetAspect) > 0.01) {
+                        if (mediaAspect > targetAspect) {
+                            outDrawW = dims.w;
+                            outDrawH = Math.round(dims.w / mediaAspect);
+                            outDrawX = 0;
+                            outDrawY = Math.round((dims.h - outDrawH) / 2);
+                        } else {
+                            outDrawH = dims.h;
+                            outDrawW = Math.round(dims.h * mediaAspect);
+                            outDrawX = Math.round((dims.w - outDrawW) / 2);
+                            outDrawY = 0;
+                        }
+                    }
+
+                    const rawBlurs = Array.isArray(state.blurRegions) ? state.blurRegions : [];
+                    const blurRegionsPayload = rawBlurs
+                        .map(r => {
+                            let rawX = r.x !== undefined ? Number(r.x) : 0;
+                            let rawY = r.y !== undefined ? Number(r.y) : 0;
+                            let rawW = r.w !== undefined ? Number(r.w) : 0;
+                            let rawH = r.h !== undefined ? Number(r.h) : 0;
+                            if (rawW < 0) { rawX += rawW; rawW = Math.abs(rawW); }
+                            if (rawH < 0) { rawY += rawH; rawH = Math.abs(rawH); }
+                            if (rawW < 0.002 || rawH < 0.002) return null;
+
+                            let rx = Math.round(outDrawX + rawX * outDrawW);
+                            let ry = Math.round(outDrawY + rawY * outDrawH);
+                            let rw = Math.round(rawW * outDrawW);
+                            let rh = Math.round(rawH * outDrawH);
+
+                            rx = Math.max(0, Math.min(dims.w - 4, rx));
+                            ry = Math.max(0, Math.min(dims.h - 4, ry));
+                            rw = Math.max(4, Math.min(dims.w - rx, rw));
+                            rh = Math.max(4, Math.min(dims.h - ry, rh));
+
+                            return {
+                                x: Math.floor(rx / 2) * 2,
+                                y: Math.floor(ry / 2) * 2,
+                                w: Math.floor(rw / 2) * 2,
+                                h: Math.floor(rh / 2) * 2,
+                                startSec: typeof r.startSec === 'number' ? r.startSec : 0,
+                                endSec: typeof r.endSec === 'number' ? r.endSec : 999999,
+                                intensity: r.intensity || 25
+                            };
+                        })
+                        .filter(Boolean);
+
+                    const timestamp = new Date().toISOString().slice(0, 16).replace('T', '_').replace(':', '-');
+                    const outFilename = `video_${ratio}_${quality}_${timestamp}.mp4`;
+
+                    const resp = await fetch('/api/fast-direct-render', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            clips: clipsPayload,
+                            audioBase64: sharedAudioBase64,
+                            blurRegions: blurRegionsPayload,
+                            totalDuration,
+                            filename: outFilename,
+                            quality,
+                            aspectRatio: ratio,
+                            layoutMode: effectiveLayout,
+                            backgroundMode: effectiveBg,
+                            targetWidth: dims.w,
+                            targetHeight: dims.h
+                        })
+                    });
+
+                    if (!resp.ok) {
+                        const text = await resp.text().catch(() => '');
+                        throw new Error(text || 'Direct render server error');
+                    }
+
+                    const { renderId } = await resp.json();
+                    let finished = false;
+                    let renderResult = null;
+
+                    while (!finished) {
+                        await new Promise(r => setTimeout(r, 600));
+                        const statusResp = await fetch(`/api/fast-direct-render/status/${renderId}`);
+                        if (!statusResp.ok) throw new Error('Status poll failed');
+                        const sData = await statusResp.json();
+
+                        if (sData.status === 'rendering') {
+                            const curPct = Math.min(99, Math.max(1, sData.percent || 0));
+                            const overallPct = Math.min(99, Math.round(((i + (curPct / 100)) / items.length) * 100));
+                            if (progressFill) progressFill.style.width = overallPct + '%';
+                            if (pctText) pctText.innerText = overallPct + '%';
+                            if (ratioDetail) ratioDetail.innerText = `বর্তমান ফাইল (${ratioTitle}): ${curPct}%`;
+                        } else if (sData.status === 'done') {
+                            finished = true;
+                            renderResult = sData;
+                        } else if (sData.status === 'error') {
+                            throw new Error(sData.error || 'FFmpeg direct render failed');
+                        }
+                    }
+
+                    if (renderResult) {
+                        exportedResults.push({
+                            ratio,
+                            ratioTitle,
+                            modeLabel,
+                            dims,
+                            filename: renderResult.filename || outFilename,
+                            downloadUrl: renderResult.downloadUrl || `/exports/${outFilename}`
+                        });
+                    }
+
+                } else {
+                    // --- Canvas Frame-by-Frame Pipeline (for projects with text overlays / intro / outro) ---
+                    state.aspectRatio = ratio;
+                    state.canvas.width = dims.w;
+                    state.canvas.height = dims.h;
+
+                    if (fitMode === 'crop') {
+                        state.layoutMode = 'fill';
+                        state.backgroundMode = 'none';
+                    } else if (fitMode === 'fit-blur') {
+                        state.layoutMode = 'fit';
+                        state.backgroundMode = 'blur';
+                    } else if (fitMode === 'fit-black') {
+                        state.layoutMode = 'fit';
+                        state.backgroundMode = 'none';
+                    }
+
+                    if (window.syncPhase9ClipUI) window.syncPhase9ClipUI();
+                    if (window.drawEditorFrame) window.drawEditorFrame();
+                    else if (window.drawFrame) window.drawFrame();
+
+                    // Attach per-frame progress listener
+                    window.onExportPipelineProgress = (percent) => {
+                        const currentVideoPct = Math.min(100, Math.max(0, Math.round(percent || 0)));
+                        const overallPct = Math.min(99, Math.round(((i + (currentVideoPct / 100)) / items.length) * 100));
+                        if (progressFill) progressFill.style.width = overallPct + '%';
+                        if (pctText) pctText.innerText = overallPct + '%';
+                        if (ratioDetail) ratioDetail.innerText = `বর্তমান ফাইল (${ratioTitle}): ${currentVideoPct}% সম্পন্ন`;
+                        if (batchSummary) batchSummary.innerText = `সর্বমোট: ${overallPct}% (${i + 1}/${items.length})`;
+                    };
+
+                    const exportFilename = `video_${ratio}_${quality}`;
+                    await window.runExportPipeline(totalDuration, true, exportFilename, i + 1, items.length, quality);
+
+                    exportedResults.push({
+                        ratio,
+                        ratioTitle,
+                        modeLabel,
+                        dims,
+                        filename: `${exportFilename}_edited.mp4`,
+                        downloadUrl: `/exports/${exportFilename}_edited.mp4`
+                    });
+                }
 
                 const ratioDonePct = Math.round(((i + 1) / items.length) * 100);
                 if (progressFill) progressFill.style.width = ratioDonePct + '%';
@@ -2140,19 +2368,90 @@ document.addEventListener('DOMContentLoaded', () => {
 
             if (progressFill) progressFill.style.width = '100%';
             if (pctText) pctText.innerText = '100%';
-            if (statusText) statusText.innerText = 'সব রেন্ডার সম্পন্ন হয়েছে!';
-            if (progressBox) {
-                setTimeout(() => {
-                    progressBox.style.display = 'none';
-                }, 1000);
-            }
+            if (statusText) statusText.innerText = 'সব রেন্ডার সফলভাবে সম্পন্ন হয়েছে!';
+
+            setTimeout(() => {
+                if (progressBox) progressBox.style.display = 'none';
+            }, 600);
+
             if (successBox) {
                 successBox.style.display = 'block';
                 if (successDesc) {
-                    const ratioNames = items.map(it => it.ratio).join(', ');
-                    successDesc.innerText = `সবগুলো (${items.length}টি: ${ratioNames}) রেশিওর ভিডিও ফাইল সফলভাবে ডাউনলোড বা সেভ হয়েছে!`;
+                    successDesc.innerText = `সবগুলো (${exportedResults.length}টি) রেশিওর ভিডিও ফাইল সফলভাবে রেন্ডার হয়েছে। নিচে ক্লিক করে সংরক্ষণ করুন:`;
+                }
+
+                // Populate results list with interactive Download / Save & Open Folder buttons
+                if (resultsList) {
+                    resultsList.innerHTML = '';
+                    const isElectron = !!(window.electronAPI && typeof window.electronAPI.saveExportedVideo === 'function');
+
+                    exportedResults.forEach((res) => {
+                        const card = document.createElement('div');
+                        card.style.cssText = 'background: rgba(15, 23, 42, 0.7); border: 1px solid rgba(99, 102, 241, 0.35); border-radius: 8px; padding: 10px 12px; display: flex; justify-content: space-between; align-items: center; gap: 10px; margin-bottom: 6px;';
+
+                        const infoDiv = document.createElement('div');
+                        infoDiv.style.cssText = 'flex: 1; min-width: 0;';
+                        infoDiv.innerHTML = `
+                            <div style="font-size: 13px; font-weight: 700; color: #38bdf8; display: flex; align-items: center; gap: 6px;">
+                                <i class="fa-solid fa-layer-group"></i> ${res.ratioTitle} (${res.dims.w}×${res.dims.h})
+                            </div>
+                            <div style="font-size: 11px; color: #94a3b8; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 2px;">
+                                ${res.filename} • ${res.modeLabel}
+                            </div>
+                        `;
+
+                        const actionsDiv = document.createElement('div');
+                        actionsDiv.style.cssText = 'display: flex; gap: 6px; flex-shrink: 0; align-items: center;';
+
+                        const downloadBtn = document.createElement('button');
+                        downloadBtn.className = 'btn btn-primary btn-sm';
+                        downloadBtn.type = 'button';
+                        downloadBtn.style.cssText = 'padding: 6px 12px; font-size: 12px; font-weight: 600; display: inline-flex; align-items: center; gap: 5px;';
+                        downloadBtn.innerHTML = '<i class="fa-solid fa-download"></i> Save / Download';
+                        downloadBtn.onclick = async () => {
+                            if (isElectron) {
+                                await window.electronAPI.saveExportedVideo(res.downloadUrl, res.filename);
+                            } else {
+                                const a = document.createElement('a');
+                                a.href = res.downloadUrl;
+                                a.download = res.filename;
+                                document.body.appendChild(a);
+                                a.click();
+                                document.body.removeChild(a);
+                            }
+                        };
+                        actionsDiv.appendChild(downloadBtn);
+
+                        if (isElectron) {
+                            const openBtn = document.createElement('button');
+                            openBtn.className = 'btn btn-outline btn-sm';
+                            openBtn.type = 'button';
+                            openBtn.style.cssText = 'padding: 6px 10px; font-size: 12px; color: #cbd5e1;';
+                            openBtn.title = 'ফোল্ডারে দেখুন (Show in Folder)';
+                            openBtn.innerHTML = '<i class="fa-solid fa-folder-open"></i>';
+                            openBtn.onclick = () => {
+                                if (window.electronAPI && window.electronAPI.openExportsFolder) {
+                                    window.electronAPI.openExportsFolder(res.filename);
+                                }
+                            };
+                            actionsDiv.appendChild(openBtn);
+                        }
+
+                        card.appendChild(infoDiv);
+                        card.appendChild(actionsDiv);
+                        resultsList.appendChild(card);
+                    });
+                }
+
+                if (openFolderBtn) {
+                    const isElectron = !!(window.electronAPI && typeof window.electronAPI.openExportsFolder === 'function');
+                    openFolderBtn.style.display = isElectron ? 'block' : 'none';
+                    openFolderBtn.onclick = () => {
+                        if (isElectron) window.electronAPI.openExportsFolder();
+                    };
                 }
             }
+
         } catch (err) {
             console.error('Multi-Aspect export error:', err);
             if (errorBox) {
@@ -2162,16 +2461,22 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
             }
         } finally {
+            state.isExportingVideo = false;
             window.onExportPipelineProgress = null;
             state.aspectRatio = savedAspect;
-            state.canvas.width = savedCanvasW;
-            state.canvas.height = savedCanvasH;
+            if (state.canvas) {
+                state.canvas.width = savedCanvasW;
+                state.canvas.height = savedCanvasH;
+            }
             state.activeClipId = savedActiveClipId;
             state.layoutMode = savedLayoutMode;
             state.backgroundMode = savedBackgroundMode;
+
+            if (window.updateCanvasDimensions) window.updateCanvasDimensions();
             if (window.syncPhase9ClipUI) window.syncPhase9ClipUI();
             if (window.drawEditorFrame) window.drawEditorFrame();
             else if (window.drawFrame) window.drawFrame();
+            if (window.startBgAnimLoop) window.startBgAnimLoop();
 
             const statusEl = document.getElementById('multi-aspect-current');
             if (statusEl) statusEl.style.display = 'none';
@@ -2179,13 +2484,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 exportBtn.innerHTML = '<i class="fa-solid fa-layer-group"></i> Export Selected Ratios (<span id="multi-aspect-count">' + items.length + '</span>)';
             }
         }
-    }
-
-    function setProgressSafe(pct) {
-        const fill = document.getElementById('render-progress-fill');
-        const txt = document.getElementById('render-percentage');
-        if (fill) fill.style.width = pct + '%';
-        if (txt) txt.innerText = pct + '%';
     }
 
     const multiAspectCheckboxes = document.querySelectorAll('.multi-aspect-checkbox');

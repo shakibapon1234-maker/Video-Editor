@@ -2848,7 +2848,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function updateCanvasDimensions() {
-        if (!state.duration) return;
+        if (!state.duration || state.isExportingVideo) return;
         
         const activeClip = state.clips.find(c => c.id === state.activeClipId);
         const isImage = activeClip && activeClip.type === 'image';

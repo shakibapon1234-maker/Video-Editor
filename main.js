@@ -1,4 +1,4 @@
-const { app, BrowserWindow, session, dialog, ipcMain, clipboard, nativeImage, desktopCapturer } = require('electron');
+const { app, BrowserWindow, session, dialog, ipcMain, clipboard, nativeImage, desktopCapturer, shell } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const http = require('http');
@@ -238,6 +238,82 @@ if (!gotLock) {
             request.on('error', reject);
         });
         return { canceled: false, filePath: choice.filePath };
+    });
+
+    // Save any exported video (Canvas render, Direct render, Multi-aspect)
+    ipcMain.handle('save-exported-video', async (event, downloadUrl, suggestedFilename) => {
+        try {
+            const cleanName = path.basename(String(suggestedFilename || 'video.mp4')).replace(/[<>:"/\\|?*\x00-\x1f]/g, '_');
+            const extension = path.extname(cleanName).replace('.', '').toLowerCase() || 'mp4';
+            const choice = await dialog.showSaveDialog(mainWindow, {
+                title: 'Save Exported Video (ভিডিও সংরক্ষণ করুন)',
+                defaultPath: path.join(app.getPath('videos'), cleanName),
+                filters: [{ name: 'MP4 Video', extensions: [extension, 'mp4'] }, { name: 'All Files', extensions: ['*'] }]
+            });
+            if (choice.canceled || !choice.filePath) return { canceled: true };
+
+            const filenameOnServer = path.basename(String(downloadUrl || cleanName).split('?')[0]);
+            const localDataDir = process.env.SF_DATA_DIR || __dirname;
+            const candidatePaths = [
+                path.join(localDataDir, 'exports', filenameOnServer),
+                path.join(__dirname, 'exports', filenameOnServer),
+                path.join(localDataDir, 'exports', cleanName),
+                path.join(__dirname, 'exports', cleanName)
+            ];
+
+            let sourcePath = candidatePaths.find(p => fs.existsSync(p));
+            if (sourcePath) {
+                await fs.promises.copyFile(sourcePath, choice.filePath);
+                return { canceled: false, filePath: choice.filePath };
+            }
+
+            // Fallback: stream from localhost server
+            const cleanUrl = String(downloadUrl).startsWith('http') ? downloadUrl : `http://127.0.0.1:4000${downloadUrl}`;
+            await new Promise((resolve, reject) => {
+                const request = http.get(cleanUrl, (response) => {
+                    if (response.statusCode !== 200) {
+                        response.resume();
+                        reject(new Error(`Download failed (HTTP ${response.statusCode}).`));
+                        return;
+                    }
+                    pipeline(response, fs.createWriteStream(choice.filePath))
+                        .then(resolve)
+                        .catch(async (error) => {
+                            await fs.promises.unlink(choice.filePath).catch(() => {});
+                            reject(error);
+                        });
+                });
+                request.on('error', reject);
+            });
+            return { canceled: false, filePath: choice.filePath };
+        } catch (err) {
+            console.error('save-exported-video error:', err);
+            throw err;
+        }
+    });
+
+    // Reveal exported file or open exports folder in Windows File Explorer
+    ipcMain.handle('open-exports-folder', async (event, filename) => {
+        try {
+            const localDataDir = process.env.SF_DATA_DIR || __dirname;
+            const exportsDir = path.join(localDataDir, 'exports');
+            if (filename) {
+                const safeName = path.basename(filename);
+                const filePath = path.join(exportsDir, safeName);
+                if (fs.existsSync(filePath)) {
+                    shell.showItemInFolder(filePath);
+                    return true;
+                }
+            }
+            if (fs.existsSync(exportsDir)) {
+                await shell.openPath(exportsDir);
+                return true;
+            }
+            return false;
+        } catch (err) {
+            console.error('open-exports-folder error:', err);
+            return false;
+        }
     });
 
     let serverModule = null;
