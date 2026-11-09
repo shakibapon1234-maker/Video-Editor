@@ -7,3 +7,7 @@ temp_addaudio/
 temp_mute/
 temp_whisper/
 *.log
+__pycache__/
+*.pyc
+.system_generated/
+*.tmp

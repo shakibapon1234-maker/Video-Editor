@@ -7713,6 +7713,12 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         }
 
+        // Integer-align draw rects to prevent sub-pixel floating-point jitter / shimmer
+        drawX = Math.round(drawX);
+        drawY = Math.round(drawY);
+        drawW = Math.round(drawW);
+        drawH = Math.round(drawH);
+
         // Exposed for punch-zoom-ui.js's click-on-video focus picker: this is
         // the same base rect (before Ken Burns/punch-zoom/static-zoom scaling)
         // that focusX/focusY are measured against, so a click at this rect's

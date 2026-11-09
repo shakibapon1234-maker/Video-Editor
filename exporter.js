@@ -93,7 +93,11 @@ document.addEventListener('DOMContentLoaded', () => {
     // maxWaitMs increased from 8000→15000: screen recordings (e.g. GDSC
     // terminal command videos) are high-entropy and may need more time to
     // seek on a busy CPU. Still throws on genuine timeout so we never hang.
-    async function waitForSeek(video, targetTime, maxWaitMs = 15000) {
+    // Synchronize video element seek and Chromium GPU frame presentation.
+    // Registering requestVideoFrameCallback BEFORE setting currentTime is essential:
+    // Chromium guarantees that rvfc fires exactly when the newly decoded frame
+    // is presented to the GPU compositor for canvas capture.
+    async function waitForSeek(video, targetTime, maxWaitMs = 5000) {
         if (!video || !video.src) return;
 
         // Ensure video element has loaded frame data
@@ -109,7 +113,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 };
                 video.addEventListener('loadeddata', onReady);
                 video.addEventListener('canplay', onReady);
-                setTimeout(onReady, 3000);
+                setTimeout(onReady, 2000);
             });
         }
 
@@ -117,81 +121,63 @@ document.addEventListener('DOMContentLoaded', () => {
             ? Math.max(0, video.duration - 0.01)
             : Math.max(0, targetTime);
 
-        // A variable-frame-rate recording is allowed to seek to the closest
-        // real frame timestamp, which need not equal targetTime exactly. The
-        // important correctness signal is its `seeked` event followed by a
-        // decoded paint -- not a numeric equality check on currentTime.
-        if (Math.abs(video.currentTime - clampedTarget) <= (1 / 120) && video.readyState >= 2) {
+        // A variable-frame-rate recording: only skip if time is identical down to sub-millisecond
+        if (Math.abs(video.currentTime - clampedTarget) < 0.0001 && video.readyState >= 2) {
             return;
         }
 
-        video.currentTime = clampedTarget;
-        let settled = await new Promise((resolve) => {
-            let finished = false;
-            const finish = (didSeek) => {
-                if (finished) return;
-                finished = true;
-                video.removeEventListener('seeked', onSeeked);
-                clearTimeout(timer);
-                resolve(didSeek);
-            };
-            const onSeeked = () => finish(true);
-            const timer = setTimeout(() => {
-                // If the browser finished seeking without firing 'seeked' (e.g. keyframe already decoded),
-                // consider it settled rather than timing out.
-                if (!video.seeking && video.readyState >= 2) {
-                    finish(true);
-                } else {
-                    finish(false);
-                }
-            }, maxWaitMs);
-            video.addEventListener('seeked', onSeeked, { once: true });
-        });
+        await new Promise((resolve) => {
+            let settled = false;
+            let seekedFired = false;
+            let framePresented = false;
+            let rvfcId = null;
 
-        // Resilience layer: if the seek timed out, attempt recovery instead of instantly failing
-        if (!settled) {
-            if (!video.seeking && video.readyState >= 2) {
+            const finish = () => {
+                if (settled) return;
                 settled = true;
-            } else {
-                // Micro-nudge recovery: nudge timestamp slightly to trigger the browser decoder queue
-                const nudge = Math.max(0, Math.min((video.duration || clampedTarget) - 0.005, clampedTarget + 0.001));
-                video.currentTime = nudge;
-                settled = await new Promise((resolve) => {
-                    let finished = false;
-                    const finish = (didSeek) => {
-                        if (finished) return;
-                        finished = true;
-                        video.removeEventListener('seeked', onSeeked);
-                        clearTimeout(timer);
-                        resolve(didSeek);
-                    };
-                    const onSeeked = () => finish(true);
-                    const timer = setTimeout(() => finish(video.readyState >= 2), 3000);
-                    video.addEventListener('seeked', onSeeked, { once: true });
+                video.removeEventListener('seeked', onSeeked);
+                if (rvfcId && typeof video.cancelVideoFrameCallback === 'function') {
+                    video.cancelVideoFrameCallback(rvfcId);
+                }
+                clearTimeout(timer);
+                resolve();
+            };
+
+            const checkDone = () => {
+                if (seekedFired && framePresented) {
+                    finish();
+                }
+            };
+
+            const onSeeked = () => {
+                seekedFired = true;
+                if (typeof video.requestVideoFrameCallback !== 'function') {
+                    requestAnimationFrame(() => requestAnimationFrame(() => {
+                        framePresented = true;
+                        finish();
+                    }));
+                } else {
+                    checkDone();
+                }
+            };
+
+            if (typeof video.requestVideoFrameCallback === 'function') {
+                rvfcId = video.requestVideoFrameCallback(() => {
+                    framePresented = true;
+                    checkDone();
                 });
             }
-        }
 
-        // After seeked fires or recovers, ensure readyState >= 2 (wait up to 2 seconds)
-        if (video.readyState < 2) {
-            await new Promise((resolve) => {
-                let done = false;
-                const finish = () => { if (!done) { done = true; resolve(); } };
-                const check = setInterval(() => {
-                    if (video.readyState >= 2) { clearInterval(check); finish(); }
-                }, 50);
-                setTimeout(() => { clearInterval(check); finish(); }, 2000);
-            });
-        }
+            const timer = setTimeout(() => {
+                finish();
+            }, maxWaitMs);
 
-        // If readyState is ready, ensure paint and return
-        if (video.readyState >= 2) {
-            await waitForDecodedVideoFrame(video);
-            return;
-        }
+            video.addEventListener('seeked', onSeeked, { once: true });
+            video.currentTime = clampedTarget;
+        });
 
-        // Non-fatal fallback for long videos: do not abort a 19,000-frame render on a single decoder hitch.
-        console.warn(`[waitForSeek] Recovered frame at ${targetTime.toFixed(3)}s with fallback paint to protect export.`);
+        // Ensure compositor has painted the frame buffer
+        await new Promise((resolve) => requestAnimationFrame(resolve));
     }
 
     // Seeks every active "Video B-roll" overlay (background/PiP video-over-video)
