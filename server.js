@@ -4,6 +4,7 @@ const WebSocket = require('ws');
 const path = require('path');
 const fs = require('fs');
 const cp = require('child_process');
+const os = require('os');
 const ffmpeg = require('fluent-ffmpeg');
 const ffmpegPath = require('ffmpeg-static');
 
@@ -1873,6 +1874,81 @@ app.post('/api/auto-blur/cancel/:jobId', (req, res) => {
         autoBlurJobs.delete(req.params.jobId);
     }
     res.json({ ok: true });
+});
+
+
+// ==========================================
+// Standalone Audio to Text API
+// Supports: MP3, M4A, MP4 (Audio), AAC, WAV, OGG, OPUS, FLAC, WEBM etc.
+// ==========================================
+app.post('/api/audio-to-text', (req, res) => {
+    const originalName = decodeURIComponent(req.query.filename || 'recording.m4a');
+    const safeExt = (path.extname(originalName) || '.m4a').replace(/[^\.\w]/g, '').slice(0, 8) || '.m4a';
+    const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'sf_audio_to_text_'));
+    const inputPath = path.join(tempDir, `audio_${Date.now()}${safeExt}`);
+    const out = fs.createWriteStream(inputPath);
+    let failed = false;
+
+    const fail = (err) => {
+        if (failed) return;
+        failed = true;
+        console.error('audio-to-text upload error:', err);
+        try { out.destroy(); } catch (_) {}
+        try { fs.rmSync(tempDir, { recursive: true, force: true }); } catch (_) {}
+        if (!res.headersSent) res.status(500).json({ error: String(err && err.message ? err.message : err) });
+    };
+
+    req.on('error', fail);
+    out.on('error', fail);
+    out.on('finish', () => {
+        if (failed) return;
+        const scriptPath = path.join(__dirname, 'audio_to_text.py');
+        const proc = cp.spawn('python', [scriptPath, inputPath, '--no-ui'], {
+            cwd: __dirname,
+            env: { ...process.env, PYTHONIOENCODING: 'utf-8' }
+        });
+
+        let stdout = '';
+        let stderr = '';
+        proc.stdout.on('data', d => { stdout += d.toString(); });
+        proc.stderr.on('data', d => { stderr += d.toString(); });
+
+        proc.on('close', code => {
+            const base = inputPath.replace(/\.[^/.]+$/, "");
+            const txtPath = `${base}_audio_transcript.txt`;
+            const srtPath = `${base}_audio_subtitle.srt`;
+
+            let transcript = '';
+            let srt = '';
+            if (fs.existsSync(txtPath)) {
+                try { transcript = fs.readFileSync(txtPath, 'utf8'); } catch (_) {}
+            }
+            if (fs.existsSync(srtPath)) {
+                try { srt = fs.readFileSync(srtPath, 'utf8'); } catch (_) {}
+            }
+
+            // Clean up temporary files
+            try { fs.rmSync(tempDir, { recursive: true, force: true }); } catch (_) {}
+
+            if (transcript || srt) {
+                res.json({
+                    success: true,
+                    text: transcript,
+                    srt: srt,
+                    originalName: originalName
+                });
+            } else {
+                console.warn('audio-to-text failed. Stdout:', stdout, 'Stderr:', stderr);
+                res.status(500).json({
+                    error: 'অডিও থেকে কোনো কথা শনাক্ত করা যায়নি। অডিও স্পষ্ট কিনা চেক করুন।',
+                    stdout: stdout,
+                    stderr: stderr
+                });
+            }
+        });
+    });
+
+    req.pipe(out);
 });
 
 // Serve downloads folder

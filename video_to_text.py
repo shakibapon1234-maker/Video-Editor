@@ -229,7 +229,29 @@ def convert_video_to_text(file_path, engine='auto', model_name='small'):
 
     return True
 
-if __name__ == '__main__':
+def pick_file_with_gui():
+    """Opens a native Windows Open File Dialog so the user can easily select any video or audio file."""
+    try:
+        import tkinter as tk
+        from tkinter import filedialog
+        root = tk.Tk()
+        root.withdraw()
+        root.attributes('-topmost', True)
+        file_path = filedialog.askopenfilename(
+            title="বাংলা টেক্সট করার জন্য ভিডিও বা অডিও ফাইল সিলেক্ট করুন",
+            filetypes=[
+                ("সব সমর্থিত মিডিয়া ফাইল", "*.mp4;*.mkv;*.mov;*.avi;*.flv;*.webm;*.mp3;*.m4a;*.aac;*.wav;*.ogg;*.opus;*.flac;*.wma"),
+                ("ভিডিও ফাইল (*.mp4, *.mkv, *.mov, *.avi, *.webm)", "*.mp4;*.mkv;*.mov;*.avi;*.flv;*.webm"),
+                ("অডিও ফাইল (*.mp3, *.m4a, *.aac, *.wav, *.ogg, *.opus)", "*.mp3;*.m4a;*.aac;*.wav;*.ogg;*.opus;*.flac"),
+                ("সকল ফাইল (*.*)", "*.*")
+            ]
+        )
+        root.destroy()
+        return file_path
+    except Exception:
+        return ""
+
+if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Convert Video/Audio to Bangla Text")
     parser.add_argument("file", nargs="?", help="Path to video or audio file")
     parser.add_argument("--engine", choices=['auto', 'google', 'whisper'], default='auto',
@@ -239,6 +261,10 @@ if __name__ == '__main__':
     args = parser.parse_args()
 
     input_file = args.file
+
+    if not input_file:
+        safe_print("\n[*] ফাইল সিলেক্টর উইন্ডো ওপেন করা হচ্ছে...")
+        input_file = pick_file_with_gui()
 
     if not input_file:
         safe_print("\n========================================================")
