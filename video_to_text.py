@@ -23,11 +23,44 @@ if sys.platform == "win32":
     sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8', errors='replace')
     sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8', errors='replace')
 
-# Ensure local ffmpeg-static is on PATH
+# ─── FFmpeg Detection ─────────────────────────────────────────────────────────────────────────────────
+# Priority: 1) node_modules/ffmpeg-static (project)  2) sibling ffmpeg.exe
+# 3) system PATH  4) known bundled locations (FDM, etc.)
 script_dir = os.path.dirname(os.path.abspath(__file__))
-ffmpeg_dir = os.path.join(script_dir, 'node_modules', 'ffmpeg-static')
-if os.path.exists(ffmpeg_dir):
-    os.environ["PATH"] = ffmpeg_dir + os.path.pathsep + os.environ.get("PATH", "")
+
+def _find_ffmpeg():
+    # 1. Local node_modules/ffmpeg-static (project use)
+    local_dir = os.path.join(script_dir, 'node_modules', 'ffmpeg-static')
+    local_bin = os.path.join(local_dir, 'ffmpeg.exe' if sys.platform == "win32" else 'ffmpeg')
+    if os.path.exists(local_bin):
+        os.environ["PATH"] = local_dir + os.pathsep + os.environ.get("PATH", "")
+        return local_bin
+
+    # 2. ffmpeg.exe sitting right next to the script (standalone copy on Desktop)
+    sibling_bin = os.path.join(script_dir, 'ffmpeg.exe' if sys.platform == "win32" else 'ffmpeg')
+    if os.path.exists(sibling_bin):
+        return sibling_bin
+
+    # 3. ffmpeg already on system PATH
+    import shutil as _shutil
+    system_ffmpeg = _shutil.which('ffmpeg')
+    if system_ffmpeg:
+        return system_ffmpeg
+
+    # 4. Known bundled locations (Free Download Manager, etc.)
+    fallback_paths = [
+        r"C:\\Program Files\\Softdeluxe\\Free Download Manager\\ffmpeg.exe",
+        r"C:\\ffmpeg\\bin\\ffmpeg.exe",
+        r"C:\\Program Files\\ffmpeg\\bin\\ffmpeg.exe",
+    ]
+    for p in fallback_paths:
+        if os.path.exists(p):
+            os.environ["PATH"] = os.path.dirname(p) + os.pathsep + os.environ.get("PATH", "")
+            return p
+
+    return None
+
+_find_ffmpeg()
 
 def format_timestamp(seconds):
     millis   = int((seconds % 1) * 1000)

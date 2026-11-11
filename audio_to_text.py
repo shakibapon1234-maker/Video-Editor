@@ -36,12 +36,48 @@ if sys.platform == "win32":
     sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8', errors='replace')
     sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8', errors='replace')
 
-# Ensure local ffmpeg-static is on PATH and configure pydub
+# ─── FFmpeg Detection ─────────────────────────────────────────────────────────
+# Priority order:
+#  1. node_modules/ffmpeg-static/ next to THIS script  (project folder)
+#  2. ffmpeg.exe anywhere alongside THIS script          (copy-to-desktop case)
+#  3. Standard system PATH                              (ffmpeg globally installed)
+#  4. Free Download Manager bundled ffmpeg              (Windows common fallback)
 script_dir = os.path.dirname(os.path.abspath(__file__))
-ffmpeg_dir = os.path.join(script_dir, 'node_modules', 'ffmpeg-static')
-ffmpeg_bin = os.path.join(ffmpeg_dir, 'ffmpeg.exe' if sys.platform == "win32" else 'ffmpeg')
-if os.path.exists(ffmpeg_dir):
-    os.environ["PATH"] = ffmpeg_dir + os.path.pathsep + os.environ.get("PATH", "")
+
+def _find_ffmpeg():
+    # 1. Local node_modules/ffmpeg-static (project use)
+    local_dir = os.path.join(script_dir, 'node_modules', 'ffmpeg-static')
+    local_bin = os.path.join(local_dir, 'ffmpeg.exe' if sys.platform == "win32" else 'ffmpeg')
+    if os.path.exists(local_bin):
+        os.environ["PATH"] = local_dir + os.pathsep + os.environ.get("PATH", "")
+        return local_bin, local_dir
+
+    # 2. ffmpeg.exe sitting right next to the script (standalone copy on Desktop)
+    sibling_bin = os.path.join(script_dir, 'ffmpeg.exe' if sys.platform == "win32" else 'ffmpeg')
+    if os.path.exists(sibling_bin):
+        return sibling_bin, script_dir
+
+    # 3. ffmpeg already on system PATH
+    import shutil as _shutil
+    system_ffmpeg = _shutil.which('ffmpeg')
+    if system_ffmpeg:
+        return system_ffmpeg, os.path.dirname(system_ffmpeg)
+
+    # 4. Known bundled locations (Free Download Manager, etc.)
+    fallback_paths = [
+        r"C:\Program Files\Softdeluxe\Free Download Manager\ffmpeg.exe",
+        r"C:\ffmpeg\bin\ffmpeg.exe",
+        r"C:\Program Files\ffmpeg\bin\ffmpeg.exe",
+    ]
+    for p in fallback_paths:
+        if os.path.exists(p):
+            fb_dir = os.path.dirname(p)
+            os.environ["PATH"] = fb_dir + os.pathsep + os.environ.get("PATH", "")
+            return p, fb_dir
+
+    return None, None
+
+ffmpeg_bin, ffmpeg_dir = _find_ffmpeg()
 
 SUPPORTED_EXTENSIONS = (
     '.mp3', '.m4a', '.mp4', '.aac', '.wav', '.ogg',
