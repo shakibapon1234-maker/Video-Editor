@@ -108,12 +108,19 @@
     function applyAllKeyframes() {
         var editor = ve();
         if (!editor) return;
-        var t = editor.currentTime || 0;
+        var clock = typeof window.getEditorTimelineClock === 'function' ? window.getEditorTimelineClock() : null;
+        var activeClip = (editor.clips || []).find(function(c) { return c.id === editor.activeClipId; });
+        var clipElapsed = activeClip && window.getClipOutputElapsedForSourceTime
+            ? window.getClipOutputElapsedForSourceTime(activeClip, editor.currentTime || 0)
+            : Math.max(0, ((editor.currentTime || 0) - (activeClip ? (activeClip.start || 0) : 0))) / Math.max(0.5, Math.min(2, Number(activeClip ? activeClip.speed : 1) || 1));
+        var timelineTime = clock ? clock.current : (editor.currentTime || 0);
+
         OVERLAY_ARRAYS.forEach(function (key) {
             var arr = editor[key];
             if (!arr || !arr.length) return;
             for (var i = 0; i < arr.length; i++) {
                 if (arr[i].keyframes && arr[i].keyframes.length >= 2) {
+                    var t = (arr[i].clipId === 'all') ? timelineTime : clipElapsed;
                     applyKeyframesToItem(arr[i], t);
                 }
             }

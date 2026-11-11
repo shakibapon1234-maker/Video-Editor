@@ -1431,6 +1431,19 @@ app.post('/api/fast-direct-render', express.json({ limit: '2048mb' }), async (re
                 }
                 filterParts.push(`${audioLabels.join('')}concat=n=${inputPaths.length}:v=0:a=1[aclipout]`);
 
+                let currentALabel = '[aclipout]';
+                if (Array.isArray(duckIntervals) && duckIntervals.length > 0) {
+                    let volExpr = '1';
+                    duckIntervals.forEach(di => {
+                        const s = Math.max(0, parseFloat(di.start) || 0);
+                        const e = Math.max(s + 0.05, parseFloat(di.end) || 0);
+                        const r = Math.max(0, Math.min(1, parseFloat(di.ratio) || 0));
+                        volExpr = `if(between(t\\,${s.toFixed(3)}\\,${e.toFixed(3)})\\,${r.toFixed(3)}\\,${volExpr})`;
+                    });
+                    filterParts.push(`${currentALabel}volume=eval=frame:volume='${volExpr}'[aclipducked]`);
+                    currentALabel = '[aclipducked]';
+                }
+
                 const anyInputHasAudio = probes.some(p => p && p.hasAudio);
                 let hasExtraAudioFile = audioPath && fs.existsSync(audioPath);
                 if (hasExtraAudioFile) {
@@ -1443,14 +1456,14 @@ app.post('/api/fast-direct-render', express.json({ limit: '2048mb' }), async (re
                     const audioIdx = inputPaths.length;
                     filterParts.push(`[${audioIdx}:a]aformat=sample_rates=48000:channel_layouts=stereo[aextra]`);
                     if (anyInputHasAudio) {
-                        filterParts.push(`[aclipout][aextra]amix=inputs=2:duration=first:dropout_transition=2[amixed]`);
+                        filterParts.push(`${currentALabel}[aextra]amix=inputs=2:duration=first:dropout_transition=2[amixed]`);
                         filterParts.push(`[amixed]dynaudnorm=f=150:g=15:m=8:p=0.95,alimiter=limit=-1.2dB,aformat=sample_rates=48000:channel_layouts=stereo[aout]`);
                     } else {
                         filterParts.push(`[aextra]dynaudnorm=f=150:g=15:m=8:p=0.95,alimiter=limit=-1.2dB,aformat=sample_rates=48000:channel_layouts=stereo[aout]`);
                     }
                 } else if (anyInputHasAudio) {
                     // Native audio exists in clips, no extra audio file -- pass through directly
-                    filterParts.push(`[aclipout]dynaudnorm=f=150:g=15:m=8:p=0.95,alimiter=limit=-1.2dB,aformat=sample_rates=48000:channel_layouts=stereo[aout]`);
+                    filterParts.push(`${currentALabel}dynaudnorm=f=150:g=15:m=8:p=0.95,alimiter=limit=-1.2dB,aformat=sample_rates=48000:channel_layouts=stereo[aout]`);
                 } else {
                     // No audio at all -- generate silence so FFmpeg output mapping does not fail
                     const silenceDur = Math.max(0.1, parseFloat(totalDuration) || 1);

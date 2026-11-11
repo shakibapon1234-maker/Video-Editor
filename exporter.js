@@ -186,13 +186,21 @@ document.addEventListener('DOMContentLoaded', () => {
     async function syncBrollVideoOverlays(targetTime) {
         const overlays = state.brollOverlays;
         if (!overlays || overlays.length === 0) return;
+        const activeClip = (state.clips || []).find(c => c.id === state.activeClipId);
+        const clipElapsed = activeClip && window.getClipOutputElapsedForSourceTime
+            ? window.getClipOutputElapsedForSourceTime(activeClip, targetTime)
+            : Math.max(0, ((targetTime || 0) - (activeClip ? (activeClip.start || 0) : 0))) / Math.max(0.5, Math.min(2, Number(activeClip?.speed) || 1));
+        const timelineTime = state.exportTickerTime !== undefined ? state.exportTickerTime : (window.getEditorTimelineClock ? window.getEditorTimelineClock().current : clipElapsed);
+
         for (const item of overlays) {
             if (item.type !== 'video' || !item.videoEl) continue;
-            const active = targetTime >= item.startSec && targetTime <= item.endSec;
+            if (item.clipId && item.clipId !== 'all' && item.clipId !== state.activeClipId) continue;
+            const effTime = (item.clipId === 'all') ? timelineTime : clipElapsed;
+            const active = effTime >= item.startSec && effTime <= item.endSec;
             if (!active) continue;
             const dur = item.videoEl.duration || 0;
             if (!dur) continue;
-            let rel = Math.max(0, targetTime - item.startSec);
+            let rel = Math.max(0, effTime - item.startSec);
             rel = item.loopVideo ? (rel % dur) : Math.min(rel, dur - 0.03);
             if (Math.abs(item.videoEl.currentTime - rel) <= (1 / 90)) continue;
             try {
@@ -363,6 +371,16 @@ document.addEventListener('DOMContentLoaded', () => {
         if (totalDuration <= 0) {
             alert('ক্লিপগুলোর ট্রিম রেঞ্জ সঠিক নয়। দয়া করে ট্রিম রেঞ্জ চেক করুন।');
             return;
+        }
+
+        const hasVisualOverlays = (Array.isArray(state.brollOverlays) && state.brollOverlays.length > 0) ||
+                                  (Array.isArray(state.textOverlays) && state.textOverlays.length > 0) ||
+                                  (Array.isArray(state.symbolOverlays) && state.symbolOverlays.length > 0) ||
+                                  (Array.isArray(state.shapeOverlays) && state.shapeOverlays.length > 0) ||
+                                  (Array.isArray(state.subtitles) && state.subtitles.length > 0);
+        if (hasVisualOverlays) {
+            const proceed = confirm("⚠️ আপনার ভিডিওতে বিরোল ছবি/টেক্সট/সাবটাইটেল রয়েছে।\n\n⚡ আল্ট্রা-ফাস্ট মোডে (Ultra-Fast Direct Export) শুধুমাত্র ট্রিম করা ক্লিপ ও ব্লার (Blur) এক্সপোর্ট হয়, ক্যানভাস বিরোল বা টেক্সট আসে না।\n\nবিরোল ও টেক্সট সহ ফুল কোয়ালিটি রেন্ডার পেতে 'Frame-by-Frame Canvas Render' ব্যবহার করা আবশ্যক।\n\nআপনি কি তবুও আল্ট্রা-ফাস্ট মোডে (বিরোল/টেক্সট ছাড়া শুধু ব্লার ও ক্লিপ) রেন্ডার করতে চান?");
+            if (!proceed) return;
         }
 
         renderProgressBox.style.display = 'block';
@@ -579,6 +597,10 @@ document.addEventListener('DOMContentLoaded', () => {
             const timestamp = new Date().toISOString().slice(0, 16).replace('T', '_').replace(':', '-');
             const defaultFilename = `video_edited_${timestamp}.mp4`;
 
+            const duckIntervals = (typeof window.getMultitrackAudioDuckingIntervals === 'function')
+                ? window.getMultitrackAudioDuckingIntervals()
+                : [];
+
             const resp = await fetch('/api/fast-direct-render', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -586,6 +608,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     clips: clipsPayload,
                     audioBase64,
                     blurRegions: blurRegionsPayload,
+                    duckIntervals,
                     totalDuration,
                     filename: defaultFilename,
                     quality: selectedQuality,

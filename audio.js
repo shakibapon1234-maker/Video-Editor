@@ -1229,7 +1229,8 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
 
-        const elapsed = (state.video.currentTime || 0) - (state.startTime || 0);
+        const clock = (typeof getEditorTimelineClock === 'function') ? getEditorTimelineClock() : null;
+        const elapsed = clock ? clock.current : ((state.video.currentTime || 0) - (state.startTime || 0));
         const active = getActiveBgMusicTrack(elapsed);
 
         state.bgMusicTracks.forEach(t => {
@@ -3560,7 +3561,8 @@ document.addEventListener('DOMContentLoaded', () => {
         syncSubtitleStyleUI();
     };
     // Offline audio rendering engine using OfflineAudioContext
-    window.renderAudioOffline = async function(totalDuration) {
+    window.renderAudioOffline = async function(totalDuration, options) {
+        const { extraTracksOnly = false } = options || {};
         if (!state.clips || state.clips.length === 0) {
             return null;
         }
@@ -3631,110 +3633,113 @@ document.addEventListener('DOMContentLoaded', () => {
         let timelineTime = introDur;
         const decodedVideoBuffers = [];
 
-        // Pre-decode all video clips
-        for (let i = 0; i < state.clips.length; i++) {
-            const clip = state.clips[i];
-            const clipTrimDuration = Math.max(0, clip.end - clip.start);
-            if (clipTrimDuration <= 0) continue;
+        // Pre-decode all video clips (skipped in fast direct render where FFmpeg natively handles video clips)
+        if (!extraTracksOnly) {
+            for (let i = 0; i < state.clips.length; i++) {
+                const clip = state.clips[i];
+                const clipTrimDuration = Math.max(0, clip.end - clip.start);
+                if (clipTrimDuration <= 0) continue;
 
-            const clipSpeed = Math.max(0.5, Math.min(2, Number(clip.speed) || 1));
-            const clipOutputDuration = window.getClipOutputDuration ? window.getClipOutputDuration(clip) : (clipTrimDuration / clipSpeed);
+                const clipSpeed = Math.max(0.5, Math.min(2, Number(clip.speed) || 1));
+                const clipOutputDuration = window.getClipOutputDuration ? window.getClipOutputDuration(clip) : (clipTrimDuration / clipSpeed);
 
-            if (clip.type !== 'image' && clip.file) {
-                if (clip.file.size > 1.5 * 1024 * 1024 * 1024) {
-                    console.warn(`Video file ${clip.name || ''} is larger than 1.5GB (${(clip.file.size/1024/1024).toFixed(1)}MB), server FFmpeg will handle native audio directly.`);
-                } else {
+                let clipMediaBlob = clip.file || clip.blob;
+                if (!clipMediaBlob && clip.url && clip.type !== 'image') {
                     try {
-                        const arrayBuffer = await clip.file.arrayBuffer();
-                        const decodeCtx = new (window.AudioContext || window.webkitAudioContext)();
-                        const audioBuffer = await decodeCtx.decodeAudioData(arrayBuffer);
-                        await decodeCtx.close();
+                        clipMediaBlob = await fetch(clip.url).then(r => r.blob()).catch(() => null);
+                    } catch (_) {}
+                }
+                if (clip.type !== 'image' && clipMediaBlob) {
+                    if (clipMediaBlob.size > 1.5 * 1024 * 1024 * 1024) {
+                        console.warn(`Video file ${clip.name || ''} is larger than 1.5GB (${(clipMediaBlob.size/1024/1024).toFixed(1)}MB), server FFmpeg will handle native audio directly.`);
+                    } else {
+                        try {
+                            const arrayBuffer = await clipMediaBlob.arrayBuffer();
+                            const decodeCtx = new (window.AudioContext || window.webkitAudioContext)();
+                            const audioBuffer = await decodeCtx.decodeAudioData(arrayBuffer);
+                            await decodeCtx.close();
 
-                        decodedVideoBuffers.push({
-                            buffer: audioBuffer,
-                            clip,
-                            timelineStart: timelineTime,
-                            clipTrimDuration,
-                            clipSpeed
-                        });
-                    } catch (err) {
-                        console.error(`Error decoding audio for clip ${clip.name}:`, err);
+                            decodedVideoBuffers.push({
+                                buffer: audioBuffer,
+                                clip,
+                                timelineStart: timelineTime,
+                                clipTrimDuration,
+                                clipSpeed
+                            });
+                        } catch (err) {
+                            console.error(`Error decoding audio for clip ${clip.name}:`, err);
+                        }
                     }
                 }
-            }
-            timelineTime += clipOutputDuration;
-        }
-
-        // Add Video clips to offlineCtx
-        decodedVideoBuffers.forEach(({ buffer, clip, timelineStart, clipTrimDuration, clipSpeed }) => {
-            const source = offlineCtx.createBufferSource();
-            source.buffer = buffer;
-            if (window.getClipSpeedSegments) {
-                const segs = window.getClipSpeedSegments(clip);
-                let segWallClockOffset = 0;
-                segs.forEach((seg) => {
-                    source.playbackRate.setValueAtTime(seg.speed, timelineStart + segWallClockOffset);
-                    segWallClockOffset += Math.max(0, seg.srcEnd - seg.srcStart) / seg.speed;
-                });
-            } else {
-                source.playbackRate.setValueAtTime(clipSpeed, 0);
+                timelineTime += clipOutputDuration;
             }
 
-            const clipGain = offlineCtx.createGain();
-            // Per-clip volume x master video volume. clip.volume defaults to
-            // 1.0 for clips created before this feature was added.
-            const perClipVol = (clip.volume !== undefined ? clip.volume : 1.0);
-            clipGain.gain.setValueAtTime(state.videoVolume * perClipVol, 0);
+            // Add Video clips to offlineCtx
+            decodedVideoBuffers.forEach(({ buffer, clip, timelineStart, clipTrimDuration, clipSpeed }) => {
+                const source = offlineCtx.createBufferSource();
+                source.buffer = buffer;
+                if (window.getClipSpeedSegments) {
+                    const segs = window.getClipSpeedSegments(clip);
+                    let segWallClockOffset = 0;
+                    segs.forEach((seg) => {
+                        source.playbackRate.setValueAtTime(seg.speed, timelineStart + segWallClockOffset);
+                        segWallClockOffset += Math.max(0, seg.srcEnd - seg.srcStart) / seg.speed;
+                    });
+                } else {
+                    source.playbackRate.setValueAtTime(clipSpeed, 0);
+                }
 
-            // Apply multitrack audio & video track ducking during export (matches live preview)
-            const savedMtRatio = localStorage.getItem('multitrack_orig_vol');
-            const mtAudioRatio = savedMtRatio !== null ? (parseFloat(savedMtRatio) / 100) : 0;
-            const savedMtVideoRatio = localStorage.getItem('multitrack_video_orig_vol');
-            const mtVideoRatio = savedMtVideoRatio !== null ? (parseFloat(savedMtVideoRatio) / 100) : 0;
-            if (state.extraTracks && state.extraTracks.length > 0) {
-                state.extraTracks.forEach(t => {
-                    if (!t.muted && (t.type === 'audio' || t.type === 'video')) {
-                        const ratio = (t.type === 'video') ? mtVideoRatio : mtAudioRatio;
-                        (t.clips || []).forEach(c => {
-                            const cStart = introDur + (c.timelineOffset || 0);
-                            const cDur = Math.max(0.1, (c.sourceEnd || 0) - (c.sourceStart || 0));
-                            const cEnd = cStart + cDur;
-                            if (cStart >= 0 && cEnd > cStart) {
-                                clipGain.gain.setValueAtTime(state.videoVolume * perClipVol * ratio, Math.max(0, cStart));
-                                clipGain.gain.setValueAtTime(state.videoVolume * perClipVol, Math.max(0, cEnd));
-                            }
-                        });
-                    }
-                });
-            }
+                const clipGain = offlineCtx.createGain();
+                // Per-clip volume x master video volume. clip.volume defaults to
+                // 1.0 for clips created before this feature was added.
+                const perClipVol = (clip.volume !== undefined ? clip.volume : 1.0);
+                clipGain.gain.setValueAtTime(state.videoVolume * perClipVol, 0);
 
-            // Apply background music mute original video audio if enabled
-            if (state.bgMusicMuteOriginal && state.bgMusicTracks && state.bgMusicTracks.length > 0) {
-                state.bgMusicTracks.forEach(t => {
-                    const cStart = introDur + (t.startSec || 0);
-                    const cEnd = (t.endSec == null || !isFinite(t.endSec)) ? totalDuration : introDur + t.endSec;
-                    if (cStart >= 0 && cEnd > cStart) {
-                        clipGain.gain.setValueAtTime(0, Math.max(0, cStart));
+                // Apply multitrack audio & video track ducking during export (matches live preview)
+                const duckIntervals = (typeof window.getMultitrackAudioDuckingIntervals === 'function')
+                    ? window.getMultitrackAudioDuckingIntervals()
+                    : [];
+                
+                duckIntervals.forEach(di => {
+                    const cStart = introDur + di.start;
+                    const cEnd = introDur + di.end;
+                    const ratio = di.ratio;
+                    if (cEnd > cStart) {
+                        clipGain.gain.setValueAtTime(state.videoVolume * perClipVol, Math.max(0, cStart - 0.005));
+                        clipGain.gain.setValueAtTime(state.videoVolume * perClipVol * ratio, Math.max(0, cStart));
+                        clipGain.gain.setValueAtTime(state.videoVolume * perClipVol * ratio, Math.max(0, cEnd - 0.005));
                         clipGain.gain.setValueAtTime(state.videoVolume * perClipVol, Math.max(0, cEnd));
                     }
                 });
-            }
 
-            // Connect voice changer if enabled on original video
-            if (state.applyVoiceChangerToVideo && state.voiceoverProfile && state.voiceoverProfile !== 'none') {
-                const changer = new VoiceChangerEffect(offlineCtx);
-                changer.setProfile(state.voiceoverProfile);
-                source.connect(changer.input);
-                changer.output.connect(clipGain);
-            } else {
-                source.connect(clipGain);
-            }
+                // Apply background music mute original video audio if enabled
+                if (state.bgMusicMuteOriginal && state.bgMusicTracks && state.bgMusicTracks.length > 0) {
+                    state.bgMusicTracks.forEach(t => {
+                        const cStart = introDur + (t.startSec || 0);
+                        const cEnd = (t.endSec == null || !isFinite(t.endSec)) ? totalDuration : introDur + t.endSec;
+                        if (cStart >= 0 && cEnd > cStart) {
+                            clipGain.gain.setValueAtTime(0, Math.max(0, cStart));
+                            clipGain.gain.setValueAtTime(state.videoVolume * perClipVol, Math.max(0, cEnd));
+                        }
+                    });
+                }
 
-            clipGain.connect(hp);
+                // Connect voice changer if enabled on original video
+                if (state.applyVoiceChangerToVideo && state.voiceoverProfile && state.voiceoverProfile !== 'none') {
+                    const changer = new VoiceChangerEffect(offlineCtx);
+                    changer.setProfile(state.voiceoverProfile);
+                    source.connect(changer.input);
+                    changer.output.connect(clipGain);
+                } else {
+                    source.connect(clipGain);
+                }
 
-            // Play the trimmed portion
-            source.start(timelineStart, clip.start, clipTrimDuration);
-        });
+                clipGain.connect(hp);
+
+                // Play the trimmed portion
+                source.start(timelineStart, clip.start, clipTrimDuration);
+            });
+        }
 
         // --- 2. Voiceover ---
         let voiceoverBuffer = null;
@@ -3775,7 +3780,11 @@ document.addEventListener('DOMContentLoaded', () => {
         if (state.brollOverlays && state.brollOverlays.length > 0) {
             for (const item of state.brollOverlays) {
                 if (!item.soundEffect || item.soundEffect === 'none') continue;
-                const startSec = Math.max(0, Math.min(totalDuration, item.startSec || 0));
+                const isAllClips = !item.clipId || item.clipId === 'all';
+                const slot = (typeof getClipSlot === 'function') ? getClipSlot(item.clipId) : { start: 0 };
+                const timelineStart = isAllClips ? (item.startSec || 0) : ((slot.start || 0) + (item.startSec || 0));
+                const timelineEnd = isAllClips ? (item.endSec || timelineStart) : ((slot.start || 0) + (item.endSec || timelineStart));
+                const startSec = Math.max(0, Math.min(totalDuration, timelineStart));
                 if (item.soundEffect === 'custom') {
                     // A real uploaded audio clip (e.g. a downloaded "yes"/"wow" voice
                     // sound) plays ONCE at entry only — unlike the short synthesized
@@ -3805,7 +3814,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     const animDur = item.animationSpeedSec || 0.4;
                     synthBrollSfx(offlineCtx, makeup, item.soundEffect, introDur + startSec);
                     const repeatSec = parseFloat(item.autoRepeatSec) || 0;
-                    const endSec = Math.max(0, Math.min(totalDuration, item.endSec || startSec));
+                    const endSec = Math.max(0, Math.min(totalDuration, timelineEnd));
                     if (repeatSec > 0) {
                         for (let t = startSec + repeatSec; t < endSec - animDur; t += repeatSec) {
                             synthBrollSfx(offlineCtx, makeup, item.soundEffect, introDur + t);

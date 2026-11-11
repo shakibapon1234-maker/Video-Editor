@@ -2093,9 +2093,13 @@ document.addEventListener('DOMContentLoaded', () => {
 
         // Check if project has animated text overlays, intro/outro, or extra video tracks
         const hasTextOverlays = Array.isArray(state.textOverlays) && state.textOverlays.length > 0;
+        const hasBrollOverlays = Array.isArray(state.brollOverlays) && state.brollOverlays.length > 0;
+        const hasSymbolOverlays = Array.isArray(state.symbolOverlays) && state.symbolOverlays.length > 0;
+        const hasShapeOverlays = Array.isArray(state.shapeOverlays) && state.shapeOverlays.length > 0;
+        const hasSubtitles = Array.isArray(state.subtitles) && state.subtitles.length > 0;
         const hasIntroOutro = !!(state.introEnabled || state.outroEnabled);
         const hasExtraVideoTracks = Array.isArray(state.extraTracks) && state.extraTracks.some(t => t.type === 'video' && (t.clips || []).length > 0);
-        const needsCanvasPipeline = hasTextOverlays || hasIntroOutro || hasExtraVideoTracks;
+        const needsCanvasPipeline = hasTextOverlays || hasBrollOverlays || hasSymbolOverlays || hasShapeOverlays || hasSubtitles || hasIntroOutro || hasExtraVideoTracks;
 
         const exportedResults = [];
 
@@ -2115,7 +2119,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (statusText) statusText.innerText = 'অডিও মিক্স করা হচ্ছে... (Mixing project audio...)';
                 try {
                     const grandTotalFrames = Math.ceil(totalDuration * 30);
-                    const audioBuffer = await window.renderAudioOffline(grandTotalFrames / 30);
+                    const audioBuffer = await window.renderAudioOffline(grandTotalFrames / 30, { extraTracksOnly: true });
                     if (audioBuffer && window.v2aAudioBufferToWavBlob) {
                         const audioBlob = window.v2aAudioBufferToWavBlob(audioBuffer);
                         sharedAudioBase64 = await new Promise((resolve) => {
@@ -2259,6 +2263,10 @@ document.addEventListener('DOMContentLoaded', () => {
                     const timestamp = new Date().toISOString().slice(0, 16).replace('T', '_').replace(':', '-');
                     const outFilename = `video_${ratio}_${quality}_${timestamp}.mp4`;
 
+                    const duckIntervals = (typeof window.getMultitrackAudioDuckingIntervals === 'function')
+                        ? window.getMultitrackAudioDuckingIntervals()
+                        : [];
+
                     const resp = await fetch('/api/fast-direct-render', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
@@ -2266,6 +2274,7 @@ document.addEventListener('DOMContentLoaded', () => {
                             clips: clipsPayload,
                             audioBase64: sharedAudioBase64,
                             blurRegions: blurRegionsPayload,
+                            duckIntervals,
                             totalDuration,
                             filename: outFilename,
                             quality,

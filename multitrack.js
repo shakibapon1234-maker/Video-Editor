@@ -963,6 +963,42 @@
         });
     }
 
+        function getMultitrackAudioDuckingIntervals() {
+        var intervals = [];
+        var state = (typeof ve === 'function' ? ve() : null) || window.VideoEditor;
+        if (!state || !state.extraTracks || !state.extraTracks.length) return intervals;
+
+        var audioSlider = document.getElementById('multitrack-original-vol-slider');
+        var savedAudioStr = localStorage.getItem('multitrack_orig_vol');
+        var audioRatio = audioSlider 
+            ? (parseFloat(audioSlider.value) / 100) 
+            : (savedAudioStr !== null && !isNaN(parseFloat(savedAudioStr)) ? parseFloat(savedAudioStr) / 100 : 0);
+        if (isNaN(audioRatio)) audioRatio = 0;
+
+        var videoSlider = document.getElementById('multitrack-video-orig-vol-slider');
+        var savedVideoStr = localStorage.getItem('multitrack_video_orig_vol');
+        var videoRatio = videoSlider 
+            ? (parseFloat(videoSlider.value) / 100) 
+            : (savedVideoStr !== null && !isNaN(parseFloat(savedVideoStr)) ? parseFloat(savedVideoStr) / 100 : 0);
+        if (isNaN(videoRatio)) videoRatio = 0;
+
+        state.extraTracks.forEach(function (track) {
+            if (track.muted) return;
+            if (track.type !== 'audio' && track.type !== 'video') return;
+            var ratio = (track.type === 'video') ? videoRatio : audioRatio;
+            (track.clips || []).forEach(function (c) {
+                var start = Math.max(0, parseFloat(c.timelineOffset) || 0);
+                var dur = Math.max(0.1, (parseFloat(c.sourceEnd) || 0) - (parseFloat(c.sourceStart) || 0));
+                var end = start + dur;
+                if (end > start) {
+                    intervals.push({ start: start, end: end, ratio: Math.max(0, Math.min(1, ratio)) });
+                }
+            });
+        });
+        return intervals;
+    }
+    window.getMultitrackAudioDuckingIntervals = getMultitrackAudioDuckingIntervals;
+
     window.drawExtraTracksMidFrame = drawExtraTracksMidFrame;
     window.prepareExtraTracksForExportFrame = prepareExtraTracksForExportFrame;
     window.cleanupExtraTracksExportMedia = cleanupExtraTracksExportMedia;

@@ -3071,6 +3071,28 @@ document.addEventListener('DOMContentLoaded', () => {
             // Insert newClip after activeClip
             state.clips.splice(clipIndex + 1, 0, newClip);
 
+            // Re-map overlays belonging to second half of split clip
+            const splitElapsed = Math.max(0, currentTime - activeClip.start);
+            const overlayArrays = [
+                state.brollOverlays,
+                state.textOverlays,
+                state.stickers,
+                state.symbolOverlays,
+                state.shapeOverlays
+            ];
+            overlayArrays.forEach(arr => {
+                if (!arr || !arr.length) return;
+                arr.forEach(item => {
+                    if (item.clipId === activeClip.id && item.startSec >= splitElapsed) {
+                        item.clipId = newClip.id;
+                        item.startSec = Math.max(0, item.startSec - splitElapsed);
+                        item.endSec = Math.max(item.startSec + 0.1, item.endSec - splitElapsed);
+                    } else if (item.clipId === activeClip.id && item.endSec > splitElapsed) {
+                        item.endSec = splitElapsed;
+                    }
+                });
+            });
+
             // Re-render
             renderClipTimeline();
 
@@ -3261,6 +3283,16 @@ document.addEventListener('DOMContentLoaded', () => {
                     cropH: activeClip.cropH
                 });
             }
+
+            // Adjust all overlays and timeline elements to match adjusted timeline
+            const oldClipId = activeClip.id;
+            const slot = getClipSlot(oldClipId);
+            const cutFromClipStart = Math.max(0, startCut - startBound);
+            const cutDuration = Math.max(0, endCut - startCut);
+            const timelineCutStart = slot.start + cutFromClipStart;
+            const newClip1Id = keepFirst ? newClips[0].id : null;
+            const newClip2Id = keepSecond ? (keepFirst ? newClips[1].id : newClips[0].id) : null;
+            adjustOverlaysAfterClipCut(oldClipId, newClip1Id, newClip2Id, cutFromClipStart, cutDuration, timelineCutStart);
 
             // Replace activeClip with newClips
             state.clips.splice(clipIndex, 1, ...newClips);
@@ -3559,11 +3591,16 @@ document.addEventListener('DOMContentLoaded', () => {
     function refreshAnimatedGifPreview() {
         const hasVisibleGif = state.brollOverlays.some((item) => {
             if (item.type !== 'gif' || (!item.imageImg && !item.gifParsed)) return false;
-            const isBeingEdited = state.currentStep === 3 && !state.isPlaying && item.id === state.selectedBrollId;
+            const isActivelyManipulated = state.currentStep === 3 && !state.isPlaying && item.id === state.selectedBrollId &&
+                (state.isDraggingBroll || state.isResizingBroll || state.isRotatingBroll);
             const _clock = getEditorTimelineClock ? getEditorTimelineClock() : { current: state.currentTime || 0, total: 1000 };
-            const effTime = (item.clipId === 'all') ? _clock.current : (state.currentTime || 0);
+            const activeClip = (state.clips || []).find(c => c.id === state.activeClipId);
+            const activeClipElapsed = activeClip && window.getClipOutputElapsedForSourceTime
+                ? window.getClipOutputElapsedForSourceTime(activeClip, state.currentTime || 0)
+                : Math.max(0, ((state.currentTime || 0) - (activeClip ? (activeClip.start || 0) : 0))) / Math.max(0.5, Math.min(2, Number(activeClip?.speed) || 1));
+            const effTime = (item.clipId === 'all') ? _clock.current : activeClipElapsed;
             return brollBelongsToActiveClip(item) &&
-                (isBeingEdited || (effTime >= item.startSec && effTime <= item.endSec));
+                (isActivelyManipulated || (effTime >= item.startSec && effTime <= item.endSec));
         });
 
         if (!hasVisibleGif || state.isPlaying || state.customExportTime !== undefined) {
@@ -3680,6 +3717,144 @@ document.addEventListener('DOMContentLoaded', () => {
             : Math.max(0, (state.currentTime - (active.start || 0))) / Math.max(0.5, Math.min(2, Number(active.speed) || 1));
         current += activeElapsed;
         return { current: Math.max(0, Math.min(total, current)), total };
+    }
+    window.getEditorTimelineClock = getEditorTimelineClock;
+
+    function getActiveClipElapsed() {
+        const activeClip = (state.clips || []).find(c => c.id === state.activeClipId);
+        if (!activeClip) return state.currentTime || 0;
+        if (activeClip.type === 'image') return state.imagePlayheadTime || 0;
+        return window.getClipOutputElapsedForSourceTime
+            ? window.getClipOutputElapsedForSourceTime(activeClip, state.currentTime || 0)
+            : Math.max(0, ((state.currentTime || 0) - (activeClip.start || 0))) / Math.max(0.5, Math.min(2, Number(activeClip.speed) || 1));
+    }
+    window.getActiveClipElapsed = getActiveClipElapsed;
+
+    function getTimelineCurrentTime() {
+        if (state.isExportingVideo && state.exportTickerTime !== undefined) {
+            return state.exportTickerTime;
+        }
+        const clock = getEditorTimelineClock();
+        return clock.current;
+    }
+    window.getTimelineCurrentTime = getTimelineCurrentTime;
+
+    function shiftIntervalAfterCut(startSec, endSec, cutStart, cutDur) {
+        const cutEnd = cutStart + cutDur;
+        const hasEnd = (endSec !== undefined && endSec !== null && isFinite(endSec));
+        let s = startSec ?? 0;
+        let e = hasEnd ? endSec : Infinity;
+
+        // Case 1: Item entirely after cut
+        if (s >= cutEnd) {
+            s = Math.max(0, s - cutDur);
+            if (hasEnd) e = Math.max(s + 0.1, e - cutDur);
+            return { startSec: s, endSec: hasEnd ? e : undefined, keep: true };
+        }
+        // Case 2: Item entirely before cut
+        if (e <= cutStart) {
+            return { startSec: s, endSec: hasEnd ? e : undefined, keep: true };
+        }
+        // Case 3: Item entirely inside cut
+        if (s >= cutStart && e <= cutEnd) {
+            return { keep: false };
+        }
+        // Case 4: Item starts before cut and ends inside cut
+        if (s < cutStart && e <= cutEnd) {
+            e = Math.max(s + 0.1, cutStart);
+            return { startSec: s, endSec: hasEnd ? e : undefined, keep: true };
+        }
+        // Case 5: Item starts inside cut and ends after cut
+        if (s >= cutStart && s < cutEnd && e > cutEnd) {
+            s = cutStart;
+            if (hasEnd) e = Math.max(s + 0.1, e - cutDur);
+            return { startSec: s, endSec: hasEnd ? e : undefined, keep: true };
+        }
+        // Case 6: Item spans across the entire cut
+        if (s < cutStart && e > cutEnd) {
+            if (hasEnd) e = Math.max(s + 0.1, e - cutDur);
+            return { startSec: s, endSec: hasEnd ? e : undefined, keep: true };
+        }
+        return { startSec: s, endSec: hasEnd ? e : undefined, keep: true };
+    }
+
+    function adjustOverlaysAfterClipCut(oldClipId, newClip1Id, newClip2Id, cutFromStart, cutDur, timelineCutStart) {
+        const overlayArrays = [
+            state.brollOverlays,
+            state.textOverlays,
+            state.stickers,
+            state.symbolOverlays,
+            state.shapeOverlays
+        ];
+        overlayArrays.forEach(arr => {
+            if (!arr || !arr.length) return;
+            for (let i = arr.length - 1; i >= 0; i--) {
+                const item = arr[i];
+                if (item.clipId === oldClipId) {
+                    if (newClip1Id && newClip2Id) {
+                        if (item.startSec < cutFromStart) {
+                            item.clipId = newClip1Id;
+                            if (item.endSec > cutFromStart) {
+                                item.endSec = cutFromStart;
+                            }
+                        } else if (item.startSec >= (cutFromStart + cutDur)) {
+                            item.clipId = newClip2Id;
+                            item.startSec = Math.max(0, item.startSec - cutFromStart - cutDur);
+                            item.endSec = Math.max(item.startSec + 0.1, item.endSec - cutFromStart - cutDur);
+                        } else {
+                            if (item.endSec > (cutFromStart + cutDur)) {
+                                item.clipId = newClip2Id;
+                                item.startSec = 0;
+                                item.endSec = Math.max(0.1, item.endSec - cutFromStart - cutDur);
+                            } else {
+                                arr.splice(i, 1);
+                            }
+                        }
+                    } else if (newClip1Id) {
+                        item.clipId = newClip1Id;
+                        if (item.startSec >= cutFromStart) {
+                            arr.splice(i, 1);
+                        } else if (item.endSec > cutFromStart) {
+                            item.endSec = cutFromStart;
+                        }
+                    } else if (newClip2Id) {
+                        item.clipId = newClip2Id;
+                        item.startSec = Math.max(0, item.startSec - cutDur);
+                        item.endSec = Math.max(item.startSec + 0.1, item.endSec - cutDur);
+                    }
+                } else if (item.clipId === 'all') {
+                    const res = shiftIntervalAfterCut(item.startSec, item.endSec, timelineCutStart, cutDur);
+                    if (!res.keep) {
+                        arr.splice(i, 1);
+                    } else {
+                        item.startSec = res.startSec;
+                        if (res.endSec !== undefined) item.endSec = res.endSec;
+                    }
+                }
+            }
+        });
+
+        // Shift global timeline items: blur regions, fill regions, subtitles, bgMusic
+        const shiftGlobalArray = (arr) => {
+            if (!arr || !arr.length) return;
+            for (let i = arr.length - 1; i >= 0; i--) {
+                const item = arr[i];
+                const res = shiftIntervalAfterCut(item.startSec, item.endSec, timelineCutStart, cutDur);
+                if (!res.keep) {
+                    arr.splice(i, 1);
+                } else {
+                    item.startSec = res.startSec;
+                    if (res.endSec !== undefined) item.endSec = res.endSec;
+                }
+            }
+        };
+
+        shiftGlobalArray(state.blurRegions);
+        shiftGlobalArray(state.fillRegions);
+        shiftGlobalArray(state.subtitles);
+        shiftGlobalArray(state.bgMusicTracks);
+
+        if (typeof renderBlurRegionList === 'function') renderBlurRegionList();
     }
 
     // Update playhead UI position
@@ -8565,7 +8740,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 // Reset one-shot sound-effect flags whenever playback is well before
                 // this item's start, so re-playing/looping over it triggers the
                 // whoosh/pop/click again instead of only ever firing once.
-                if (state.isPlaying && currentTime < item.startSec - 0.05) {
+                if (state.isPlaying && effectiveCurrentTime < item.startSec - 0.05) {
                     item._sfxEnterPlayed = false;
                     item._sfxExitPlayed = false;
                     item._lastSfxCycle = -1;
@@ -8579,14 +8754,23 @@ document.addEventListener('DOMContentLoaded', () => {
                 // which is both visually confusing and breaks click-to-select (an old,
                 // already-exported item's box can sit on top of the one you're trying
                 // to place). Once playing (in any step), everything respects real timing.
-                const isBeingEdited = state.currentStep === 3 && !state.isPlaying && item.id === state.selectedBrollId;
                 const _brollClock = getEditorTimelineClock ? getEditorTimelineClock() : { current: currentTime, total: 1000 };
                 const _brollTimelineTime = state.isExportingVideo
                     ? (state.exportTickerTime ?? _brollClock.current)
                     : _brollClock.current;
+                const activeClip = (state.clips || []).find(c => c.id === state.activeClipId);
+                const activeClipElapsed = activeClip && window.getClipOutputElapsedForSourceTime
+                    ? window.getClipOutputElapsedForSourceTime(activeClip, currentTime)
+                    : Math.max(0, ((currentTime || 0) - (activeClip ? (activeClip.start || 0) : 0))) / Math.max(0.5, Math.min(2, Number(activeClip?.speed) || 1));
                 const isAllClips = !item.clipId || item.clipId === 'all';
-                const effectiveCurrentTime = isAllClips ? _brollTimelineTime : currentTime;
-                const inRange = brollBelongsToActiveClip(item) && (isBeingEdited
+                const effectiveCurrentTime = isAllClips ? _brollTimelineTime : activeClipElapsed;
+
+                // When paused in Step 3, only force visibility IF the user is actively dragging/resizing/rotating this item on canvas.
+                // When simply paused or scrubbing to inspect frames, strictly respect item.startSec and item.endSec so the preview
+                // accurately reflects the running timeline!
+                const isActivelyManipulated = state.currentStep === 3 && !state.isPlaying && item.id === state.selectedBrollId &&
+                    (state.isDraggingBroll || state.isResizingBroll || state.isRotatingBroll);
+                const inRange = brollBelongsToActiveClip(item) && (isActivelyManipulated
                     ? true
                     : (effectiveCurrentTime >= item.startSec && effectiveCurrentTime <= item.endSec));
                 if (!inRange) {
@@ -8653,7 +8837,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     if (item.soundEffect === 'custom') {
                         // A real uploaded clip plays once at entry only — replaying a
                         // longer voice clip again on exit would usually overlap badly.
-                        if (!item._sfxEnterPlayed && currentTime >= item.startSec) {
+                        if (!item._sfxEnterPlayed && effectiveCurrentTime >= item.startSec) {
                             item._sfxEnterPlayed = true;
                             if (item.customSoundBuffer && window.playBrollCustomSound) window.playBrollCustomSound(item.customSoundBuffer);
                         }
@@ -10754,12 +10938,24 @@ document.addEventListener('DOMContentLoaded', () => {
         // --- Step F: Draw Text Overlays (Phase 2C, extended with box styles/fonts/animation/curve) ---
         if (state.textOverlays && state.textOverlays.length > 0) {
             const currentTime = state.currentTime;
+            const _txtClock = getEditorTimelineClock ? getEditorTimelineClock() : { current: currentTime, total: 1000 };
+            const _txtTimelineTime = state.isExportingVideo
+                ? (state.exportTickerTime ?? _txtClock.current)
+                : _txtClock.current;
+            const activeClip = (state.clips || []).find(c => c.id === state.activeClipId);
+            const activeClipElapsed = activeClip && window.getClipOutputElapsedForSourceTime
+                ? window.getClipOutputElapsedForSourceTime(activeClip, currentTime)
+                : Math.max(0, ((currentTime || 0) - (activeClip ? (activeClip.start || 0) : 0))) / Math.max(0.5, Math.min(2, Number(activeClip?.speed) || 1));
+
             state.textOverlays.forEach((item) => {
                 if (!textOverlayBelongsToActiveClip(item)) return;
-                const isSelectedAndEditing = (state.currentStep === 3 && !state.isPlaying && item.id === state.selectedTextOverlayId);
-                const isVisible = isSelectedAndEditing
+                const isAllClips = !item.clipId || item.clipId === 'all';
+                const effTime = isAllClips ? _txtTimelineTime : activeClipElapsed;
+                const isActivelyManipulated = (state.currentStep === 3 && !state.isPlaying && item.id === state.selectedTextOverlayId &&
+                    (state.isDraggingTextOverlay || state.isResizingTextOverlay || state.isRotatingTextOverlay));
+                const isVisible = isActivelyManipulated
                     ? true
-                    : (currentTime >= item.startSec && currentTime <= item.endSec);
+                    : (effTime >= item.startSec && effTime <= item.endSec);
                 if (!isVisible) return;
 
                 // Text and Box each have their own independent animation style/speed
@@ -10838,8 +11034,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 const textStyleIsRevealOnly = TEXT_OVERLAY_REVEAL_ANIM_STYLES && TEXT_OVERLAY_REVEAL_ANIM_STYLES.has(textAnimStyle);
                 const animStyleToUse = hasSpecificBoxAnim ? boxAnimStyle : (textStyleIsRevealOnly ? 'none' : textAnimStyle);
                 const animDurToUse = hasSpecificBoxAnim ? boxAnimDur : textAnimDur;
-                const containerT = computeOverlayAnimTransform(animStyleToUse, currentTime, item.startSec, item.endSec, animDurToUse, boxH, item.textAnimLoop, item.textAnimLoopSec, canvasW, canvasH, tx, ty, boxW, boxH);
-                const textRevealAnim = getTextOverlayAnimProgress({ animStyle: textAnimStyle, startSec: item.startSec, endSec: item.endSec, animLoop: item.textAnimLoop, animLoopSec: item.textAnimLoopSec }, currentTime, textAnimDur);
+                const containerT = computeOverlayAnimTransform(animStyleToUse, effTime, item.startSec, item.endSec, animDurToUse, boxH, item.textAnimLoop, item.textAnimLoopSec, canvasW, canvasH, tx, ty, boxW, boxH);
+                const textRevealAnim = getTextOverlayAnimProgress({ animStyle: textAnimStyle, startSec: item.startSec, endSec: item.endSec, animLoop: item.textAnimLoop, animLoopSec: item.textAnimLoopSec }, effTime, textAnimDur);
 
                 state.ctx.save();
                 state.ctx.globalAlpha = txAlpha * containerT.alpha;
@@ -11355,7 +11551,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
                     // Animated draw progress from left to right during reveal/entrance
                     let lineDrawP = 1;
-                    const inAnim = getTextOverlayAnimProgress({ animStyle: textAnimStyle, startSec: item.startSec, endSec: item.endSec, animLoop: item.textAnimLoop, animLoopSec: item.textAnimLoopSec }, currentTime, textAnimDur);
+                    const inAnim = getTextOverlayAnimProgress({ animStyle: textAnimStyle, startSec: item.startSec, endSec: item.endSec, animLoop: item.textAnimLoop, animLoopSec: item.textAnimLoopSec }, effTime, textAnimDur);
                     if (inAnim.phase === 'in') {
                         lineDrawP = Math.max(0, Math.min(1, easeOutCubicTO(inAnim.p * 1.25)));
                     } else if (inAnim.phase === 'out') {
@@ -11521,11 +11717,25 @@ document.addEventListener('DOMContentLoaded', () => {
         // has its own start/end time window, like Text Overlays and B-roll.
         if (state.symbolOverlays && state.symbolOverlays.length > 0) {
             const symCurrentTime = state.currentTime;
+            const _symClock = getEditorTimelineClock ? getEditorTimelineClock() : { current: symCurrentTime, total: 1000 };
+            const _symTimelineTime = state.isExportingVideo
+                ? (state.exportTickerTime ?? _symClock.current)
+                : _symClock.current;
+            const activeClip = (state.clips || []).find(c => c.id === state.activeClipId);
+            const activeClipElapsed = activeClip && window.getClipOutputElapsedForSourceTime
+                ? window.getClipOutputElapsedForSourceTime(activeClip, symCurrentTime)
+                : Math.max(0, ((symCurrentTime || 0) - (activeClip ? (activeClip.start || 0) : 0))) / Math.max(0.5, Math.min(2, Number(activeClip?.speed) || 1));
+
             state.symbolOverlays.forEach((item) => {
-                const isVisible = (state.currentStep === 3 && !state.isPlaying)
-                    ? true
-                    : (symCurrentTime >= item.startSec && symCurrentTime <= item.endSec);
-                if (!isVisible) return;
+                if (item.clipId && item.clipId !== 'all' && item.clipId !== state.activeClipId) return;
+                    const isAllClips = !item.clipId || item.clipId === 'all';
+                    const effTime = isAllClips ? _symTimelineTime : activeClipElapsed;
+                    const isActivelyManipulated = (state.currentStep === 3 && !state.isPlaying && item.id === state.selectedSymbolId &&
+                        (state.isDraggingSymbol || state.isResizingSymbol || state.isRotatingSymbol));
+                    const isVisible = isActivelyManipulated
+                        ? true
+                        : (effTime >= item.startSec && effTime <= item.endSec);
+                    if (!isVisible) return;
 
                 const box = getSymbolBox(item, canvasW, canvasH);
                 const rotation = item.rotation || 0;
@@ -11588,11 +11798,24 @@ document.addEventListener('DOMContentLoaded', () => {
         // tall, and each carries its own multi-line text drawn on top of the fill.
         if (state.shapeOverlays && state.shapeOverlays.length > 0) {
             const shpCurrentTime = state.currentTime;
+            const _shpClock = getEditorTimelineClock ? getEditorTimelineClock() : { current: shpCurrentTime, total: 1000 };
+            const _shpTimelineTime = state.isExportingVideo
+                ? (state.exportTickerTime ?? _shpClock.current)
+                : _shpClock.current;
+            const activeClip = (state.clips || []).find(c => c.id === state.activeClipId);
+            const activeClipElapsed = activeClip && window.getClipOutputElapsedForSourceTime
+                ? window.getClipOutputElapsedForSourceTime(activeClip, shpCurrentTime)
+                : Math.max(0, ((shpCurrentTime || 0) - (activeClip ? (activeClip.start || 0) : 0))) / Math.max(0.5, Math.min(2, Number(activeClip?.speed) || 1));
+
             state.shapeOverlays.forEach((item) => {
                 if (!shapeOverlayBelongsToActiveClip(item)) return;
-                const isVisible = (state.currentStep === 3 && !state.isPlaying)
+                const isAllClips = !item.clipId || item.clipId === 'all';
+                const effTime = isAllClips ? _shpTimelineTime : activeClipElapsed;
+                const isActivelyManipulated = (state.currentStep === 3 && !state.isPlaying && item.id === state.selectedShapeOverlayId &&
+                    (state.isDraggingShapeOverlay || state.isResizingShapeOverlay || state.isRotatingShapeOverlay));
+                const isVisible = isActivelyManipulated
                     ? true
-                    : (shpCurrentTime >= item.startSec && shpCurrentTime <= item.endSec);
+                    : (effTime >= item.startSec && effTime <= item.endSec);
                 if (!isVisible) return;
 
                 const box = getShapeOverlayBox(item, canvasW, canvasH);
@@ -11837,8 +12060,11 @@ document.addEventListener('DOMContentLoaded', () => {
             ? state.translatedSubtitles
             : state.subtitles;
         if (state.subtitlesEnabled && activeSubtitleTrack && activeSubtitleTrack.length > 0) {
-            const currentTime = state.currentTime;
-            const activeSub = activeSubtitleTrack.find(s => currentTime >= s.startSec && currentTime <= s.endSec);
+            const _subClock = getEditorTimelineClock ? getEditorTimelineClock() : { current: state.currentTime || 0, total: 1000 };
+            const subTimelineTime = state.isExportingVideo
+                ? (state.exportTickerTime ?? _subClock.current)
+                : _subClock.current;
+            const activeSub = activeSubtitleTrack.find(s => subTimelineTime >= s.startSec && subTimelineTime <= s.endSec);
 
             // Dual/Bilingual Subtitle Display: find the matching cue in the
             // *other* track (original vs translated) so it can be drawn as a
@@ -11849,7 +12075,7 @@ document.addEventListener('DOMContentLoaded', () => {
             if (state.showBothSubtitles) {
                 const secondaryTrack = (activeSubtitleTrack === state.translatedSubtitles) ? state.subtitles : state.translatedSubtitles;
                 if (secondaryTrack && secondaryTrack.length > 0) {
-                    secondarySub = secondaryTrack.find(s => currentTime >= s.startSec && currentTime <= s.endSec);
+                    secondarySub = secondaryTrack.find(s => subTimelineTime >= s.startSec && subTimelineTime <= s.endSec);
                 }
             }
 
@@ -11873,7 +12099,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 // Word-by-word progress for TikTok-style caption highlight.
                 const words = activeSub.text.split(/\s+/).filter(Boolean);
                 const span = Math.max(0.001, activeSub.endSec - activeSub.startSec);
-                const progress = Math.min(1, Math.max(0, (currentTime - activeSub.startSec) / span));
+                const progress = Math.min(1, Math.max(0, (subTimelineTime - activeSub.startSec) / span));
                 const highlightEnabled = !!st.highlightEnabled && words.length > 1;
                 const activeWordIndex = Math.min(words.length - 1, Math.floor(progress * words.length));
 
@@ -13501,11 +13727,16 @@ document.addEventListener('DOMContentLoaded', () => {
             // the underlying image clip gets a chance to start its own drag.
             if (item.type !== 'text' && item.type !== 'cash' && item.type !== 'built-in' && !item.imageImg && !item.gifParsed) continue;
 
-            const isBeingEdited = state.currentStep === 3 && !state.isPlaying && item.id === state.selectedBrollId;
+            const isActivelyManipulated = state.currentStep === 3 && !state.isPlaying && item.id === state.selectedBrollId &&
+                (state.isDraggingBroll || state.isResizingBroll || state.isRotatingBroll);
             const _clock = getEditorTimelineClock ? getEditorTimelineClock() : { current: currentTime, total: 1000 };
-            const effTime = (item.clipId === 'all') ? _clock.current : currentTime;
+            const activeClip = (state.clips || []).find(c => c.id === state.activeClipId);
+            const activeClipElapsed = activeClip && window.getClipOutputElapsedForSourceTime
+                ? window.getClipOutputElapsedForSourceTime(activeClip, currentTime)
+                : Math.max(0, ((currentTime || 0) - (activeClip ? (activeClip.start || 0) : 0))) / Math.max(0.5, Math.min(2, Number(activeClip?.speed) || 1));
+            const effTime = (item.clipId === 'all') ? _clock.current : activeClipElapsed;
             const visible = brollBelongsToActiveClip(item) &&
-                (isBeingEdited || (effTime >= item.startSec && effTime <= item.endSec));
+                (isActivelyManipulated || (effTime >= item.startSec && effTime <= item.endSec));
             if (!visible) continue;
 
             const box = getBrollBoxRect(item, canvasW, canvasH);
@@ -18480,7 +18711,19 @@ document.addEventListener('DOMContentLoaded', () => {
                 state.selectedTextOverlayId = item.id;
                 renderTextOverlayList();
                 showTextOverlayTimingFor(item.id);
-                drawFrame();
+                if (item.clipId && item.clipId !== 'all' && item.clipId !== state.activeClipId) {
+                    switchActiveClip(item.clipId);
+                }
+                const isAll = !item.clipId || item.clipId === 'all';
+                const clock = getEditorTimelineClock ? getEditorTimelineClock() : { current: 0, total: 1000 };
+                const slot = getClipSlot(item.clipId);
+                const curEff = isAll ? clock.current : getActiveClipElapsed();
+                if (curEff < item.startSec || curEff > item.endSec) {
+                    const targetTime = isAll ? item.startSec : (slot.start + item.startSec);
+                    seekEditorTimelineTo(targetTime);
+                } else {
+                    drawFrame();
+                }
             });
 
             textOverlayListEl.appendChild(row);
@@ -18593,6 +18836,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (item) {
             item.startSec = Math.max(0, parseFloat(e.target.value) || 0);
             renderTextOverlayList();
+            drawFrame();
         }
     });
 
@@ -18601,6 +18845,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (item) {
             item.endSec = Math.max(item.startSec + 0.1, parseFloat(e.target.value) || (item.startSec + 1));
             renderTextOverlayList();
+            drawFrame();
         }
     });
 
@@ -19664,7 +19909,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 startSec: (() => {
                     const slot = (typeof getClipSlot === 'function') ? getClipSlot(state.activeClipId) : { duration: 1000 };
                     const maxVal = slot.duration || state.endTime || state.duration || 1000;
-                    let initialStart = (state.currentTime != null && state.currentTime > 0) ? state.currentTime : 0;
+                    const clipNow = (typeof getActiveClipElapsed === 'function') ? getActiveClipElapsed() : ((state.currentTime != null && state.currentTime > 0) ? state.currentTime : 0);
+                    let initialStart = clipNow;
                     if (initialStart === 0 && state.brollOverlays.length > 0) {
                         const sameNamed = state.brollOverlays.filter(b => b.name === file.name);
                         if (sameNamed.length > 0) {
@@ -19679,7 +19925,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 endSec: (() => {
                     const slot = (typeof getClipSlot === 'function') ? getClipSlot(state.activeClipId) : { duration: 1000 };
                     const maxVal = slot.duration || state.endTime || state.duration || 1000;
-                    let initialStart = (state.currentTime != null && state.currentTime > 0) ? state.currentTime : 0;
+                    const clipNow = (typeof getActiveClipElapsed === 'function') ? getActiveClipElapsed() : ((state.currentTime != null && state.currentTime > 0) ? state.currentTime : 0);
+                    let initialStart = clipNow;
                     if (initialStart === 0 && state.brollOverlays.length > 0) {
                         const sameNamed = state.brollOverlays.filter(b => b.name === file.name);
                         if (sameNamed.length > 0) {
@@ -19857,7 +20104,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 startSec: (() => {
                     const slot = (typeof getClipSlot === 'function') ? getClipSlot(state.activeClipId) : { duration: 1000 };
                     const maxVal = slot.duration || state.endTime || state.duration || 1000;
-                    let initialStart = (state.currentTime != null && state.currentTime > 0) ? state.currentTime : 0;
+                    const clipNow = (typeof getActiveClipElapsed === 'function') ? getActiveClipElapsed() : ((state.currentTime != null && state.currentTime > 0) ? state.currentTime : 0);
+                    let initialStart = clipNow;
                     if (initialStart === 0 && state.brollOverlays.length > 0) {
                         const sameNamed = state.brollOverlays.filter(b => b.name === file.name);
                         if (sameNamed.length > 0) {
@@ -19872,7 +20120,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 endSec: (() => {
                     const slot = (typeof getClipSlot === 'function') ? getClipSlot(state.activeClipId) : { duration: 1000 };
                     const maxVal = slot.duration || state.endTime || state.duration || 1000;
-                    let initialStart = (state.currentTime != null && state.currentTime > 0) ? state.currentTime : 0;
+                    const clipNow = (typeof getActiveClipElapsed === 'function') ? getActiveClipElapsed() : ((state.currentTime != null && state.currentTime > 0) ? state.currentTime : 0);
+                    let initialStart = clipNow;
                     if (initialStart === 0 && state.brollOverlays.length > 0) {
                         const sameNamed = state.brollOverlays.filter(b => b.name === file.name);
                         if (sameNamed.length > 0) {
@@ -19957,8 +20206,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 _fsPosSet: true,
                 rotation: 0, // manual tilt angle in degrees, set via the rotate handle
                 clipId: state.activeClipId,
-                startSec: Math.min(state.endTime || state.duration || 5, state.currentTime || 0),
-                endSec: Math.min(state.endTime || state.duration || 5, (state.currentTime || 0) + 3),
+                startSec: Math.min((typeof getClipSlot === 'function' ? getClipSlot(state.activeClipId).duration : state.duration) || 5, (typeof getActiveClipElapsed === 'function' ? getActiveClipElapsed() : 0)),
+                endSec: Math.min((typeof getClipSlot === 'function' ? getClipSlot(state.activeClipId).duration : state.duration) || 5, (typeof getActiveClipElapsed === 'function' ? getActiveClipElapsed() : 0) + 3),
                 entryDirection: ['left', 'right', 'top', 'bottom'][Math.floor(Math.random() * 4)],
                 exitDirection: 'same',
                 animationStyle: brollModeSelect && brollModeSelect.value === 'pip' ? 'slide-pop' : 'zoom',
@@ -19994,8 +20243,8 @@ document.addEventListener('DOMContentLoaded', () => {
             y: 0.20,
             rotation: 0,
             clipId: state.activeClipId,
-            startSec: Math.min(state.endTime || state.duration || 5, state.currentTime || 0),
-            endSec: Math.min(state.endTime || state.duration || 5, (state.currentTime || 0) + 3),
+            startSec: Math.min((typeof getClipSlot === 'function' ? getClipSlot(state.activeClipId).duration : state.duration) || 5, (typeof getActiveClipElapsed === 'function' ? getActiveClipElapsed() : 0)),
+            endSec: Math.min((typeof getClipSlot === 'function' ? getClipSlot(state.activeClipId).duration : state.duration) || 5, (typeof getActiveClipElapsed === 'function' ? getActiveClipElapsed() : 0) + 3),
             entryDirection: 'bottom',
             exitDirection: 'same',
             animationStyle,
@@ -20031,8 +20280,8 @@ document.addEventListener('DOMContentLoaded', () => {
             y: 0.40,
             rotation: 0,
             clipId: state.activeClipId,
-            startSec: Math.max(0, state.currentTime || 0),
-            endSec: Math.min(state.endTime || state.duration || 5, (state.currentTime || 0) + 3),
+            startSec: Math.max(0, (typeof getActiveClipElapsed === 'function' ? getActiveClipElapsed() : 0)),
+            endSec: Math.min((typeof getClipSlot === 'function' ? getClipSlot(state.activeClipId).duration : state.duration) || 5, (typeof getActiveClipElapsed === 'function' ? getActiveClipElapsed() : 0) + 3),
             entryDirection: 'bottom',
             exitDirection: 'same',
             animationStyle: animationStyle,
@@ -20088,8 +20337,8 @@ document.addEventListener('DOMContentLoaded', () => {
             y: 0.12,
             rotation: 0,
             clipId: state.activeClipId,
-            startSec: Math.max(0, state.currentTime || 0),
-            endSec: Math.min(state.endTime || state.duration || 5, (state.currentTime || 0) + 4.5),
+            startSec: Math.max(0, (typeof getActiveClipElapsed === 'function' ? getActiveClipElapsed() : 0)),
+            endSec: Math.min((typeof getClipSlot === 'function' ? getClipSlot(state.activeClipId).duration : state.duration) || 5, (typeof getActiveClipElapsed === 'function' ? getActiveClipElapsed() : 0) + 4.5),
             entryDirection: 'bottom',
             exitDirection: 'same',
             animationStyle: 'fade',
@@ -20507,7 +20756,19 @@ document.addEventListener('DOMContentLoaded', () => {
                 state.selectedBrollId = item.id;
                 renderBrollList();
                 showBrollTimingFor(item.id);
-                drawFrame();
+                if (item.clipId && item.clipId !== 'all' && item.clipId !== state.activeClipId) {
+                    switchActiveClip(item.clipId);
+                }
+                const isAll = !item.clipId || item.clipId === 'all';
+                const clock = getEditorTimelineClock ? getEditorTimelineClock() : { current: 0, total: 1000 };
+                const slot = getClipSlot(item.clipId);
+                const curEff = isAll ? clock.current : getActiveClipElapsed();
+                if (curEff < item.startSec || curEff > item.endSec) {
+                    const targetTime = isAll ? item.startSec : (slot.start + item.startSec);
+                    seekEditorTimelineTo(targetTime);
+                } else {
+                    drawFrame();
+                }
                 ensureAnimatedGifPreview();
             });
 
@@ -21225,19 +21486,22 @@ document.addEventListener('DOMContentLoaded', () => {
         const item = state.brollOverlays.find(b => b.id === state.selectedBrollId);
         if (!item) return;
         
-        // If playhead is in active clip and differs from item.clipId, sync to active clip
-        if (state.activeClipId && item.clipId !== state.activeClipId) {
+        // If playhead is in active clip and differs from item.clipId (and not 'all'), sync to active clip
+        if (state.activeClipId && item.clipId !== state.activeClipId && item.clipId !== 'all') {
             item.clipId = state.activeClipId;
             if (brollTargetClipSelect) brollTargetClipSelect.value = state.activeClipId;
         }
 
         const slot = getClipSlot(item.clipId);
+        const clock = getEditorTimelineClock ? getEditorTimelineClock() : { current: 0, total: 1000 };
         const active = (state.clips || []).find(c => c.id === item.clipId);
         const clipElapsed = active && window.getClipOutputElapsedForSourceTime
             ? window.getClipOutputElapsedForSourceTime(active, state.currentTime || 0)
-            : Math.max(0, (state.currentTime - (active ? (active.start || 0) : 0)));
+            : Math.max(0, ((state.currentTime || 0) - (active ? (active.start || 0) : 0)));
 
-        const current = Math.max(0, Math.min(slot.duration || 1000, clipElapsed)).toFixed(1);
+        const current = (item.clipId === 'all')
+            ? Math.max(0, Math.min(clock.total || 1000, clock.current)).toFixed(1)
+            : Math.max(0, Math.min(slot.duration || 1000, clipElapsed)).toFixed(1);
         inputEl.value = current;
         inputEl.dispatchEvent(new Event('input', { bubbles: true }));
     }
@@ -21692,7 +21956,19 @@ document.addEventListener('DOMContentLoaded', () => {
                 state.selectedSymbolId = item.id;
                 renderSymbolList();
                 showSymbolControlsFor(item.id);
-                drawFrame();
+                if (item.clipId && item.clipId !== 'all' && item.clipId !== state.activeClipId) {
+                    switchActiveClip(item.clipId);
+                }
+                const isAll = !item.clipId || item.clipId === 'all';
+                const clock = getEditorTimelineClock ? getEditorTimelineClock() : { current: 0, total: 1000 };
+                const slot = getClipSlot(item.clipId);
+                const curEff = isAll ? clock.current : getActiveClipElapsed();
+                if (curEff < item.startSec || curEff > item.endSec) {
+                    const targetTime = isAll ? item.startSec : (slot.start + item.startSec);
+                    seekEditorTimelineTo(targetTime);
+                } else {
+                    drawFrame();
+                }
             });
 
             symbolListEl.appendChild(row);
@@ -21915,7 +22191,19 @@ document.addEventListener('DOMContentLoaded', () => {
                 state.selectedShapeOverlayId = item.id;
                 renderShapeOverlayList();
                 showShapeOverlayControlsFor(item.id);
-                drawFrame();
+                if (item.clipId && item.clipId !== 'all' && item.clipId !== state.activeClipId) {
+                    switchActiveClip(item.clipId);
+                }
+                const isAll = !item.clipId || item.clipId === 'all';
+                const clock = getEditorTimelineClock ? getEditorTimelineClock() : { current: 0, total: 1000 };
+                const slot = getClipSlot(item.clipId);
+                const curEff = isAll ? clock.current : getActiveClipElapsed();
+                if (curEff < item.startSec || curEff > item.endSec) {
+                    const targetTime = isAll ? item.startSec : (slot.start + item.startSec);
+                    seekEditorTimelineTo(targetTime);
+                } else {
+                    drawFrame();
+                }
             });
 
             shapeOverlayListEl.appendChild(row);
