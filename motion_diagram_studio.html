@@ -1,0 +1,2278 @@
+<!DOCTYPE html>
+<html lang="bn">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Motion Diagram & Infographic Studio — অ্যানিমেটেড ডায়াগ্রাম মেকার</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Hind+Siliguri:wght@400;500;600;700&family=Outfit:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-deep: #070b14;
+            --bg-surface: #0f172a;
+            --bg-card: rgba(15, 23, 42, 0.75);
+            --border-glow: rgba(56, 189, 248, 0.3);
+            --primary: #00f2fe;
+            --primary-glow: rgba(0, 242, 254, 0.4);
+            --accent: #4facfe;
+            --text-main: #f8fafc;
+            --text-muted: #94a3b8;
+            --accent-green: #10b981;
+            --accent-purple: #a855f7;
+            --accent-amber: #f59e0b;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            font-family: 'Outfit', 'Hind Siliguri', sans-serif;
+            -webkit-font-smoothing: antialiased;
+        }
+
+        body {
+            background-color: var(--bg-deep);
+            color: var(--text-main);
+            overflow: hidden;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+
+        header {
+            height: 56px;
+            background: rgba(15, 23, 42, 0.95);
+            border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0 20px;
+            z-index: 100;
+        }
+
+        .header-brand {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .header-brand i {
+            font-size: 22px;
+            color: var(--primary);
+            filter: drop-shadow(0 0 8px var(--primary-glow));
+        }
+
+        .header-brand h1 {
+            font-size: 16px;
+            font-weight: 700;
+            letter-spacing: 0.5px;
+            color: #fff;
+        }
+
+        .header-brand span {
+            font-size: 12px;
+            color: var(--primary);
+            background: rgba(0, 242, 254, 0.12);
+            padding: 2px 8px;
+            border-radius: 4px;
+            border: 1px solid rgba(0, 242, 254, 0.25);
+            font-weight: 600;
+        }
+
+        .header-actions {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 7px;
+            font-size: 13px;
+            font-weight: 600;
+            padding: 7px 14px;
+            border-radius: 8px;
+            border: 1px solid transparent;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            text-decoration: none;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, #00f2fe 0%, #4facfe 100%);
+            color: #050b14;
+            box-shadow: 0 0 15px rgba(0, 242, 254, 0.35);
+        }
+
+        .btn-primary:hover {
+            box-shadow: 0 0 22px rgba(0, 242, 254, 0.6);
+            transform: translateY(-1px);
+        }
+
+        .btn-success {
+            background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+            color: #fff;
+            box-shadow: 0 0 15px rgba(16, 185, 129, 0.3);
+        }
+
+        .btn-success:hover {
+            box-shadow: 0 0 22px rgba(16, 185, 129, 0.5);
+        }
+
+        .btn-secondary {
+            background: rgba(255, 255, 255, 0.06);
+            color: #e2e8f0;
+            border: 1px solid rgba(255, 255, 255, 0.12);
+        }
+
+        .btn-secondary:hover {
+            background: rgba(255, 255, 255, 0.12);
+            border-color: rgba(255, 255, 255, 0.2);
+        }
+
+        .workspace {
+            display: flex;
+            flex: 1;
+            overflow: hidden;
+            height: calc(100vh - 56px);
+        }
+
+        .sidebar {
+            width: 440px;
+            min-width: 440px;
+            background: var(--bg-surface);
+            border-right: 1px solid rgba(255, 255, 255, 0.08);
+            display: flex;
+            flex-direction: column;
+            overflow-y: auto;
+            z-index: 50;
+        }
+
+        .sidebar::-webkit-scrollbar {
+            width: 6px;
+        }
+        .sidebar::-webkit-scrollbar-thumb {
+            background: rgba(255, 255, 255, 0.15);
+            border-radius: 3px;
+        }
+
+        .tab-nav {
+            display: flex;
+            background: rgba(0, 0, 0, 0.25);
+            border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+            padding: 4px;
+            gap: 4px;
+            position: sticky;
+            top: 0;
+            z-index: 10;
+        }
+
+        .tab-btn {
+            flex: 1;
+            text-align: center;
+            padding: 8px 4px;
+            font-size: 12.5px;
+            font-weight: 600;
+            color: var(--text-muted);
+            border-radius: 6px;
+            cursor: pointer;
+            border: none;
+            background: none;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+        }
+
+        .tab-btn.active {
+            color: #fff;
+            background: rgba(255, 255, 255, 0.08);
+            border-bottom: 2px solid var(--primary);
+        }
+
+        .tab-content {
+            padding: 16px;
+            display: none;
+        }
+
+        .tab-content.active {
+            display: block;
+        }
+
+        .section-title {
+            font-size: 12px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.8px;
+            color: var(--primary);
+            margin: 16px 0 8px 0;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+        .section-title:first-child { margin-top: 0; }
+
+        .control-card {
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid rgba(255, 255, 255, 0.07);
+            border-radius: 10px;
+            padding: 12px;
+            margin-bottom: 12px;
+        }
+
+        .layout-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 8px;
+        }
+
+        .layout-opt {
+            background: rgba(0, 0, 0, 0.3);
+            border: 1.5px solid rgba(255, 255, 255, 0.08);
+            border-radius: 8px;
+            padding: 10px 8px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .layout-opt i {
+            font-size: 20px;
+            color: var(--text-muted);
+            margin-bottom: 6px;
+            display: block;
+        }
+
+        .layout-opt span {
+            font-size: 11.5px;
+            font-weight: 600;
+            color: #cbd5e1;
+            display: block;
+        }
+
+        .layout-opt:hover {
+            border-color: rgba(0, 242, 254, 0.4);
+            background: rgba(0, 242, 254, 0.05);
+        }
+
+        .layout-opt.active {
+            border-color: var(--primary);
+            background: rgba(0, 242, 254, 0.12);
+            box-shadow: 0 0 12px rgba(0, 242, 254, 0.25);
+        }
+        .layout-opt.active i { color: var(--primary); }
+        .layout-opt.active span { color: #fff; font-weight: 700; }
+
+        .form-group {
+            margin-bottom: 10px;
+        }
+
+        .form-group label {
+            display: block;
+            font-size: 11.5px;
+            font-weight: 600;
+            color: #94a3b8;
+            margin-bottom: 4px;
+        }
+
+        .form-control {
+            width: 100%;
+            background: rgba(0, 0, 0, 0.35);
+            border: 1px solid rgba(255, 255, 255, 0.12);
+            border-radius: 6px;
+            padding: 7px 10px;
+            color: #fff;
+            font-size: 13px;
+            outline: none;
+            transition: border-color 0.2s;
+        }
+
+        .form-control:focus {
+            border-color: var(--primary);
+            box-shadow: 0 0 8px rgba(0, 242, 254, 0.25);
+        }
+
+        .form-row {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 8px;
+        }
+
+        .chip-group {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px;
+        }
+
+        .chip {
+            padding: 5px 10px;
+            background: rgba(0, 0, 0, 0.3);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 20px;
+            font-size: 11.5px;
+            cursor: pointer;
+            transition: all 0.2s;
+            color: #cbd5e1;
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+        }
+
+        .chip.active {
+            background: var(--primary);
+            color: #050b14;
+            font-weight: 700;
+            border-color: var(--primary);
+            box-shadow: 0 0 10px rgba(0, 242, 254, 0.4);
+        }
+
+        .node-item {
+            background: rgba(0, 0, 0, 0.25);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            border-radius: 8px;
+            padding: 10px;
+            margin-bottom: 8px;
+            position: relative;
+            transition: border-color 0.2s;
+        }
+
+        .node-item:hover {
+            border-color: rgba(255, 255, 255, 0.2);
+        }
+
+        .node-item-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 6px;
+        }
+
+        .node-badge {
+            font-size: 10.5px;
+            font-weight: 700;
+            padding: 2px 6px;
+            border-radius: 4px;
+            background: rgba(0, 242, 254, 0.15);
+            color: var(--primary);
+        }
+
+        .node-delete-btn {
+            background: none;
+            border: none;
+            color: #ef4444;
+            cursor: pointer;
+            font-size: 12px;
+            padding: 2px 4px;
+            opacity: 0.7;
+        }
+        .node-delete-btn:hover { opacity: 1; }
+
+        .viewport {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            background: #040711;
+            position: relative;
+            align-items: center;
+            justify-content: center;
+            overflow: hidden;
+        }
+
+        .canvas-toolbar {
+            position: absolute;
+            top: 14px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            background: rgba(15, 23, 42, 0.85);
+            border: 1px solid rgba(255, 255, 255, 0.12);
+            padding: 5px 12px;
+            border-radius: 30px;
+            backdrop-filter: blur(10px);
+            z-index: 20;
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.5);
+        }
+
+        .toolbar-btn {
+            background: none;
+            border: none;
+            color: #cbd5e1;
+            font-size: 13px;
+            padding: 5px 8px;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: all 0.2s;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .toolbar-btn:hover {
+            color: var(--primary);
+            background: rgba(255, 255, 255, 0.06);
+        }
+
+        .toolbar-btn.active {
+            color: var(--primary);
+            background: rgba(0, 242, 254, 0.12);
+        }
+
+        .canvas-wrapper {
+            position: relative;
+            box-shadow: 0 25px 60px rgba(0, 0, 0, 0.8), 0 0 40px rgba(0, 242, 254, 0.1);
+            border-radius: 8px;
+            overflow: hidden;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            background: #070b14;
+        }
+
+        #stageCanvas {
+            display: block;
+            background: transparent;
+        }
+
+        .bottom-playback-bar {
+            position: absolute;
+            bottom: 14px;
+            background: rgba(15, 23, 42, 0.92);
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            border-radius: 30px;
+            padding: 6px 18px;
+            display: flex;
+            align-items: center;
+            gap: 14px;
+            backdrop-filter: blur(12px);
+            z-index: 20;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.6);
+        }
+
+        .play-btn {
+            width: 34px;
+            height: 34px;
+            border-radius: 50%;
+            background: var(--primary);
+            color: #050b14;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 14px;
+            border: none;
+            cursor: pointer;
+            box-shadow: 0 0 12px rgba(0, 242, 254, 0.4);
+            transition: transform 0.2s;
+        }
+        .play-btn:hover { transform: scale(1.08); }
+
+        .time-display {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 12px;
+            color: #94a3b8;
+        }
+
+        .slider-control {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 11.5px;
+            color: #94a3b8;
+        }
+        .slider-control input[type=range] {
+            accent-color: var(--primary);
+            width: 70px;
+        }
+
+        .toast {
+            position: fixed;
+            bottom: 30px;
+            right: 30px;
+            background: #0f172a;
+            border: 1px solid var(--primary);
+            color: #fff;
+            padding: 12px 20px;
+            border-radius: 8px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.6), 0 0 15px var(--primary-glow);
+            font-size: 13.5px;
+            font-weight: 500;
+            display: none;
+            align-items: center;
+            gap: 10px;
+            z-index: 9999;
+            animation: fadeIn 0.3s ease;
+        }
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+    </style>
+</head>
+<body>
+
+    <!-- Header -->
+    <header>
+        <div class="header-brand">
+            <i class="fa-solid fa-shapes"></i>
+            <div>
+                <h1>Motion Diagram & Infographic Studio</h1>
+            </div>
+            <span>v1.2 Presentation Pro</span>
+        </div>
+        <div class="header-actions">
+            <button class="btn btn-secondary" id="btnExportPng" title="উচ্চ মানের স্বচ্ছ PNG ছবি হিসেবে সেভ করুন">
+                <i class="fa-solid fa-image"></i> Export PNG
+            </button>
+            <button class="btn btn-secondary" id="btnExportTransparentPng" title="ব্যাকগ্রাউন্ড ছাড়া স্বচ্ছ PNG">
+                <i class="fa-solid fa-file-image"></i> Transparent PNG
+            </button>
+            <button class="btn btn-success" id="btnRecordVideo" title="সিকোয়েন্স অনুযায়ী অ্যানিমেটেড ভিডিও রেকর্ড করুন">
+                <i class="fa-solid fa-video"></i> Export Animated Video
+            </button>
+        </div>
+    </header>
+
+    <!-- Workspace -->
+    <div class="workspace">
+
+        <!-- Sidebar / Settings & Content -->
+        <div class="sidebar">
+            <div class="tab-nav">
+                <button class="tab-btn active" data-tab="tab-layout"><i class="fa-solid fa-network-wired"></i> লেআউট</button>
+                <button class="tab-btn" data-tab="tab-content"><i class="fa-solid fa-pen-to-square"></i> কনটেন্ট</button>
+                <button class="tab-btn" data-tab="tab-styling"><i class="fa-solid fa-palette"></i> সাইজ ও কালার</button>
+                <button class="tab-btn" data-tab="tab-motion"><i class="fa-solid fa-wand-magic-sparkles"></i> মোশন</button>
+            </div>
+
+            <!-- Tab 1: Layout & Style -->
+            <div class="tab-content active" id="tab-layout">
+                <div class="section-title"><i class="fa-solid fa-sitemap"></i> ডায়াগ্রাম টাইপ / লেআউট</div>
+                <div class="layout-grid">
+                    <div class="layout-opt active" data-layout="hub_spoke">
+                        <i class="fa-solid fa-diagram-project"></i>
+                        <span>Hub & Spoke (সেন্টার)</span>
+                    </div>
+                    <div class="layout-opt" data-layout="cycle">
+                        <i class="fa-solid fa-arrows-spin"></i>
+                        <span>Circular Cycle (বৃত্তাকার)</span>
+                    </div>
+                    <div class="layout-opt" data-layout="table">
+                        <i class="fa-solid fa-table-cells"></i>
+                        <span>Animated Table (টেবিল)</span>
+                    </div>
+                    <div class="layout-opt" data-layout="process">
+                        <i class="fa-solid fa-timeline"></i>
+                        <span>Process / Steps (ধাপ ১-৪)</span>
+                    </div>
+                    <div class="layout-opt" data-layout="comparison">
+                        <i class="fa-solid fa-scale-balanced"></i>
+                        <span>Comparison (বনাম / তুলনা)</span>
+                    </div>
+                    <div class="layout-opt" data-layout="grid_cards">
+                        <i class="fa-solid fa-grip"></i>
+                        <span>Grid Cards (কার্ড গ্রিড)</span>
+                    </div>
+                </div>
+
+                <div class="section-title"><i class="fa-solid fa-vector-square"></i> নোড / কার্ডের শেপ (Shape)</div>
+                <div class="chip-group" id="shapeSelector">
+                    <div class="chip active" data-shape="rounded_rect"><i class="fa-regular fa-square"></i> চারকোনা গ্লাস কার্ড</div>
+                    <div class="chip" data-shape="circle"><i class="fa-regular fa-circle"></i> সম্পূর্ণ গোল (Circle)</div>
+                    <div class="chip" data-shape="hexagon"><i class="fa-brands fa-hive"></i> হেক্সাগন (Tech Hex)</div>
+                    <div class="chip" data-shape="pill"><i class="fa-solid fa-capsules"></i> পিল / ক্যাপসুল</div>
+                </div>
+
+                <div class="section-title"><i class="fa-solid fa-palette"></i> কালার থিম ও নিয়ন আলো</div>
+                <div class="chip-group" id="themeSelector">
+                    <div class="chip active" data-theme="cyber_blue" style="border-color:#00f2fe; color:#00f2fe;"><i class="fa-solid fa-bolt"></i> Cyber Neon</div>
+                    <div class="chip" data-theme="emerald" style="border-color:#10b981; color:#10b981;"><i class="fa-solid fa-leaf"></i> Emerald Green</div>
+                    <div class="chip" data-theme="purple_violet" style="border-color:#c084fc; color:#c084fc;"><i class="fa-solid fa-gem"></i> Cyber Violet</div>
+                    <div class="chip" data-theme="golden_amber" style="border-color:#f59e0b; color:#f59e0b;"><i class="fa-solid fa-crown"></i> Golden Tech</div>
+                    <div class="chip" data-theme="monochrome" style="border-color:#e2e8f0; color:#e2e8f0;"><i class="fa-solid fa-circle-half-stroke"></i> Clean Minimal</div>
+                </div>
+
+                <div class="section-title"><i class="fa-solid fa-image"></i> ব্যাকগ্রাউন্ড মোড</div>
+                <div class="chip-group" id="bgSelector">
+                    <div class="chip active" data-bg="circuit"><i class="fa-solid fa-microchip"></i> Cyber Circuit & Grid</div>
+                    <div class="chip" data-bg="gradient"><i class="fa-solid fa-brush"></i> Dark Studio Gradient</div>
+                    <div class="chip" data-bg="green_screen"><i class="fa-solid fa-square" style="color:#00ff00;"></i> Green Screen (Chroma)</div>
+                    <div class="chip" data-bg="transparent"><i class="fa-solid fa-chess-board"></i> 100% Transparent</div>
+                </div>
+            </div>
+
+            <!-- Tab 2: Content / Text -->
+            <div class="tab-content" id="tab-content">
+                <div class="section-title"><i class="fa-solid fa-bullseye"></i> মূল কেন্দ্রীয় বিষয় (Central Hub)</div>
+                <div class="control-card">
+                    <div class="form-group">
+                        <label>শিরোনাম (Center Title):</label>
+                        <input type="text" id="centerTitleInput" class="form-control" value="TICKET">
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>সাবটেক্সট (শীর্ষে ওভারভিউ):</label>
+                            <input type="text" id="centerSubtitleInput" class="form-control" value="TICKET CLASSIFICATION">
+                        </div>
+                        <div class="form-group">
+                            <label>সেন্টার আইকন:</label>
+                            <select id="centerIconInput" class="form-control">
+                                <option value="fa-ticket">🎫 Ticket (টিকেট)</option>
+                                <option value="fa-gear">⚙️ Gear (অটোমেশন)</option>
+                                <option value="fa-laptop-code">💻 Tech / Code</option>
+                                <option value="fa-plane">✈️ Aviation / Flight</option>
+                                <option value="fa-brain">🧠 AI Engine</option>
+                                <option value="fa-layer-group">📚 Hierarchy</option>
+                                <option value="fa-shield-halved">🛡️ Security</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="section-title" style="display:flex; justify-content:space-between; align-items:center;">
+                    <span><i class="fa-solid fa-cubes"></i> শাখা নোডসমূহ (Nodes / Branches)</span>
+                    <button class="btn btn-primary" id="btnAddNode" style="padding:4px 10px; font-size:11px;">
+                        <i class="fa-solid fa-plus"></i> শাখা যোগ করুন
+                    </button>
+                </div>
+
+                <div id="nodesListContainer">
+                    <!-- Dynamic node cards inserted via JS -->
+                </div>
+            </div>
+
+            <!-- Tab 3: Motion & Animation -->
+            
+            <!-- Tab: Size & Colors Customization -->
+            <div class="tab-content" id="tab-styling">
+                
+                <!-- Shape Sizing & Spread -->
+                <div class="section-title"><i class="fa-solid fa-up-right-and-down-left-from-center"></i> শেপ ও কার্ড রিসাইজ (Shape Size)</div>
+                <div class="control-card">
+                    <div class="form-group">
+                        <label style="display:flex; justify-content:space-between;">
+                            <span>সেন্টার হাবের সাইজ (Center Size):</span>
+                            <span id="lblCenterScale" style="color:var(--primary); font-weight:700;">100%</span>
+                        </label>
+                        <input type="range" id="centerScaleSlider" min="0.6" max="1.7" step="0.05" value="1.0" class="form-control" style="accent-color:var(--primary);">
+                    </div>
+                    <div class="form-group">
+                        <label style="display:flex; justify-content:space-between;">
+                            <span>শাখা কার্ডের সাইজ (Branch Size):</span>
+                            <span id="lblNodeScale" style="color:var(--primary); font-weight:700;">100%</span>
+                        </label>
+                        <input type="range" id="nodeScaleSlider" min="0.6" max="1.7" step="0.05" value="1.0" class="form-control" style="accent-color:var(--primary);">
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label style="display:flex; justify-content:space-between;">
+                                <span>ডানে-বামে দূরত্ব:</span>
+                                <span id="lblDistX" style="color:var(--primary); font-weight:700;">440px</span>
+                            </label>
+                            <input type="range" id="distXSlider" min="260" max="620" step="10" value="440" class="form-control" style="accent-color:var(--primary);">
+                        </div>
+                        <div class="form-group">
+                            <label style="display:flex; justify-content:space-between;">
+                                <span>উপরে-নিচে দূরত্ব:</span>
+                                <span id="lblDistY" style="color:var(--primary); font-weight:700;">160px</span>
+                            </label>
+                            <input type="range" id="distYSlider" min="90" max="320" step="10" value="160" class="form-control" style="accent-color:var(--primary);">
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Text Font Sizing -->
+                <div class="section-title"><i class="fa-solid fa-text-height"></i> টেক্সট সাইজ / রিসাইজ (Font Sizes)</div>
+                <div class="control-card">
+                    <div class="form-group">
+                        <label style="display:flex; justify-content:space-between;">
+                            <span>সেন্টার মূল টাইটেল ফন্ট সাইজ:</span>
+                            <span id="lblCenterFontSize" style="color:var(--primary); font-weight:700;">34px</span>
+                        </label>
+                        <input type="range" id="centerFontSizeSlider" min="18" max="56" step="1" value="34" class="form-control" style="accent-color:var(--primary);">
+                    </div>
+                    <div class="form-group">
+                        <label style="display:flex; justify-content:space-between;">
+                            <span>শাখা শিরোনাম (Title) ফন্ট সাইজ:</span>
+                            <span id="lblNodeTitleFontSize" style="color:var(--primary); font-weight:700;">16px</span>
+                        </label>
+                        <input type="range" id="nodeTitleFontSizeSlider" min="12" max="28" step="1" value="16" class="form-control" style="accent-color:var(--primary);">
+                    </div>
+                    <div class="form-group">
+                        <label style="display:flex; justify-content:space-between;">
+                            <span>শাখা বর্ণনা (Subtitle) ফন্ট সাইজ:</span>
+                            <span id="lblNodeSubFontSize" style="color:var(--primary); font-weight:700;">12px</span>
+                        </label>
+                        <input type="range" id="nodeSubFontSizeSlider" min="9" max="20" step="1" value="12" class="form-control" style="accent-color:var(--primary);">
+                    </div>
+                </div>
+
+                <!-- Custom Colors & Palette -->
+                <div class="section-title"><i class="fa-solid fa-eye-dropper"></i> টেক্সট ও নিয়ন কালার কাস্টমাইজেশন</div>
+                <div class="control-card">
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>নিয়ন / প্রাইমারি কালার:</label>
+                            <div style="display:flex; align-items:center; gap:8px;">
+                                <input type="color" id="primaryColorPicker" value="#00f2fe" style="width:40px; height:34px; border:none; border-radius:6px; cursor:pointer; background:none;">
+                                <span id="lblPrimaryColorHex" style="font-family:'JetBrains Mono',monospace; font-size:12px; color:#cbd5e1;">#00f2fe</span>
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <label>কার্ডের ব্যাকগ্রাউন্ড:</label>
+                            <div style="display:flex; align-items:center; gap:8px;">
+                                <input type="color" id="cardBgColorPicker" value="#071226" style="width:40px; height:34px; border:none; border-radius:6px; cursor:pointer; background:none;">
+                                <span id="lblCardBgHex" style="font-family:'JetBrains Mono',monospace; font-size:12px; color:#cbd5e1;">#071226</span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>টাইটেল টেক্সট কালার:</label>
+                            <div style="display:flex; align-items:center; gap:8px;">
+                                <input type="color" id="titleTextColorPicker" value="#ffffff" style="width:40px; height:34px; border:none; border-radius:6px; cursor:pointer; background:none;">
+                                <span id="lblTitleColorHex" style="font-family:'JetBrains Mono',monospace; font-size:12px; color:#cbd5e1;">#ffffff</span>
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <label>সাবটেক্সট কালার:</label>
+                            <div style="display:flex; align-items:center; gap:8px;">
+                                <input type="color" id="subTextColorPicker" value="#93c5fd" style="width:40px; height:34px; border:none; border-radius:6px; cursor:pointer; background:none;">
+                                <span id="lblSubColorHex" style="font-family:'JetBrains Mono',monospace; font-size:12px; color:#cbd5e1;">#93c5fd</span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="form-group" style="margin-top:8px;">
+                        <label>কুইক নিয়ন প্যালেট প্রিসেট:</label>
+                        <div class="chip-group" style="gap:6px;">
+                            <div class="chip quick-color-btn" data-color="#00f2fe" style="background:#00f2fe; color:#050b14; font-weight:700;">Cyan</div>
+                            <div class="chip quick-color-btn" data-color="#10b981" style="background:#10b981; color:#ffffff; font-weight:700;">Emerald</div>
+                            <div class="chip quick-color-btn" data-color="#f59e0b" style="background:#f59e0b; color:#050b14; font-weight:700;">Amber</div>
+                            <div class="chip quick-color-btn" data-color="#c084fc" style="background:#c084fc; color:#050b14; font-weight:700;">Violet</div>
+                            <div class="chip quick-color-btn" data-color="#ef4444" style="background:#ef4444; color:#ffffff; font-weight:700;">Crimson</div>
+                            <div class="chip quick-color-btn" data-color="#ec4899" style="background:#ec4899; color:#ffffff; font-weight:700;">Pink</div>
+                        </div>
+                    </div>
+                    <button class="btn btn-secondary" id="btnResetStyles" style="width:100%; justify-content:center; margin-top:8px; font-size:12px;">
+                        <i class="fa-solid fa-arrow-rotate-left"></i> ডিফল্ট সাইজ ও কালার ফিরিয়ে আনুন
+                    </button>
+                </div>
+
+            </div>
+
+            <div class="tab-content" id="tab-motion">
+                
+                <!-- Sequential Reveal Feature -->
+                <div class="section-title" style="color:#00f2fe;"><i class="fa-solid fa-forward-step"></i> স্টেপ-বাই-স্টেপ এন্ট্রি (Sequential Reveal)</div>
+                <div class="control-card" style="border:1.5px solid rgba(0,242,254,0.35); background:rgba(0,242,254,0.04);">
+                    <div class="form-group">
+                        <label>সিকোয়েন্স মোড নির্বাচন করুন:</label>
+                        <div class="chip-group" id="revealModeSelector">
+                            <div class="chip active" data-mode="auto"><i class="fa-solid fa-play"></i> অটো প্লে (স্বয়ংক্রিয়)</div>
+                            <div class="chip" data-mode="manual"><i class="fa-solid fa-hand-pointer"></i> ম্যানুয়াল (ক্লিক/স্পেসবার)</div>
+                            <div class="chip" data-mode="all"><i class="fa-solid fa-eye"></i> সব একসাথে</div>
+                        </div>
+                    </div>
+
+                    <!-- Auto Sequence Controls -->
+                    <div id="autoSequenceControls" style="margin-top: 14px;">
+                        <div class="form-group">
+                            <label style="display:flex; justify-content:space-between;">
+                                <span>প্রতি শাখার বিরতি (Step Interval):</span>
+                                <span id="lblStepInterval" style="color:var(--primary); font-weight:700;">1.8s</span>
+                            </label>
+                            <input type="range" id="stepIntervalSlider" min="0.8" max="4.0" step="0.1" value="1.8" class="form-control" style="accent-color:var(--primary);">
+                        </div>
+                        <div class="form-group" style="margin-bottom:12px;">
+                            <label style="display:flex; justify-content:space-between; align-items:center; cursor:pointer;">
+                                <span>স্বয়ংক্রিয় লুপে বারবার চলবে (Auto Loop)</span>
+                                <input type="checkbox" id="chkAutoLoop" checked style="accent-color:var(--primary); width:16px; height:16px;">
+                            </label>
+                        </div>
+                        <button class="btn btn-primary" id="btnReplaySequence" style="width:100%; justify-content:center; padding:9px;">
+                            <i class="fa-solid fa-rotate-right"></i> শুরু থেকে প্লে করুন (Play from Start)
+                        </button>
+                    </div>
+
+                    <!-- Manual Step Controls -->
+                    <div id="manualSequenceControls" style="display:none; margin-top: 14px;">
+                        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+                            <span style="font-size:12px; color:#cbd5e1;">বর্তমান সক্রিয় ধাপ:</span>
+                            <span id="manualStepIndicator" style="font-size:12px; font-weight:700; color:#050b14; background:var(--primary); padding:2px 8px; border-radius:4px;">0 / 4 (Center)</span>
+                        </div>
+                        <div style="display:grid; grid-template-columns: 1fr 1fr; gap:6px; margin-bottom:8px;">
+                            <button class="btn btn-secondary" id="btnManualReset" style="justify-content:center; font-size:12px;"><i class="fa-solid fa-backward-fast"></i> শুরুতে যান</button>
+                            <button class="btn btn-secondary" id="btnManualPrev" style="justify-content:center; font-size:12px;"><i class="fa-solid fa-backward-step"></i> আগের ধাপ</button>
+                        </div>
+                        <button class="btn btn-primary" id="btnManualNext" style="width:100%; justify-content:center; padding:10px; font-size:13.5px; box-shadow:0 0 16px var(--primary-glow);">
+                            <i class="fa-solid fa-forward-step"></i> পরবর্তী শাখা উন্মোচন করুন ▶ <span style="font-size:11px; opacity:0.85;">(Space)</span>
+                        </button>
+                        <div style="margin-top:12px;">
+                            <label style="font-size:11px; color:#94a3b8; display:block; margin-bottom:6px;">ধাপসমূহে সরাসরি যেতে ক্লিক করুন:</label>
+                            <div class="chip-group" id="manualStepPills">
+                                <!-- Interactive step pills generated in JS -->
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="section-title"><i class="fa-solid fa-water"></i> ফ্লোটিং অ্যানিমেশন (উপরে-নিচে ভাসা)</div>
+                <div class="control-card">
+                    <div class="form-group">
+                        <label style="display:flex; justify-content:space-between;">
+                            <span>স্মুথ ফ্লোটিং লুপ (Floating Wave)</span>
+                            <input type="checkbox" id="chkFloatingEnabled" checked style="accent-color:var(--primary);">
+                        </label>
+                        <p style="font-size:11.5px; color:#94a3b8; line-height:1.4; margin-top:4px;">
+                            সবগুলো উন্মোচিত নোড পানির ঢেউয়ের মতো হালকা উপরে-নিচে ভাসতে থাকবে।
+                        </p>
+                    </div>
+                    <div class="form-row mt-2">
+                        <div class="form-group">
+                            <label>ভাসার গতি (Speed):</label>
+                            <input type="range" id="floatSpeedSlider" min="0.5" max="3" step="0.1" value="1.2" class="form-control" style="accent-color:var(--primary);">
+                        </div>
+                        <div class="form-group">
+                            <label>ভাসার উচ্চতা (Amplitude):</label>
+                            <input type="range" id="floatAmpSlider" min="2" max="25" step="1" value="8" class="form-control" style="accent-color:var(--primary);">
+                        </div>
+                    </div>
+                </div>
+
+                <div class="section-title"><i class="fa-solid fa-bolt"></i> লেজার এনার্জি পালস (Connector Pulse)</div>
+                <div class="control-card">
+                    <div class="form-group">
+                        <label style="display:flex; justify-content:space-between;">
+                            <span>কানেক্টরে আলো চলাচল (Laser Pulse)</span>
+                            <input type="checkbox" id="chkPulseEnabled" checked style="accent-color:var(--primary);">
+                        </label>
+                        <p style="font-size:11.5px; color:#94a3b8; line-height:1.4; margin-top:4px;">
+                            সেন্টার বক্স থেকে শাখাগুলোতে নিয়ন লেজার কণা ছুটে যেতে থাকবে।
+                        </p>
+                    </div>
+                    <div class="form-group">
+                        <label>কানেক্টর স্টাইল:</label>
+                        <select id="connectorStyleSelect" class="form-control">
+                            <option value="cyber_arrow">Glowing Arrow (স্ক্রিনশটের মতো নিয়ন তীরচিহ্ন)</option>
+                            <option value="smooth_bezier">Curved Circuit Wire (বাঁকানো তার)</option>
+                            <option value="straight_beam">Straight Laser Beam (সোজা লেজার রশ্মি)</option>
+                            <option value="dashed_tech">Dashed Data Stream (ড্যাশড লাইন)</option>
+                        </select>
+                    </div>
+                </div>
+
+            </div>
+
+        </div>
+
+        <!-- Canvas Viewport -->
+        <div class="viewport">
+            <div class="canvas-toolbar">
+                <button class="toolbar-btn active" id="btnToggleRatio" title="অ্যাসপেক্ট রেশিও (16:9 Landscape)">
+                    <i class="fa-solid fa-tv"></i> 16:9 Landscape
+                </button>
+                <div style="width:1px; height:18px; background:rgba(255,255,255,0.15);"></div>
+                <button class="toolbar-btn" id="btnToggleGrid" title="সেফ জোন ও গ্রিড দেখান">
+                    <i class="fa-solid fa-border-all"></i> Guide Grid
+                </button>
+                <button class="toolbar-btn" id="btnResetView" title="জুম ও প্যান রিসেট">
+                    <i class="fa-solid fa-arrows-to-dot"></i> Fit View
+                </button>
+            </div>
+
+            <div class="canvas-wrapper">
+                <canvas id="stageCanvas" width="1920" height="1080"></canvas>
+            </div>
+
+            <!-- Bottom Playback Floating Bar -->
+            <div class="bottom-playback-bar">
+                <button class="play-btn" id="btnPlayPause" title="প্লে / পজ"><i class="fa-solid fa-pause"></i></button>
+                <div class="time-display" id="timeDisplay">00:00.0</div>
+
+                <!-- Quick Step Navigator right on bottom bar -->
+                <div style="width:1px; height:18px; background:rgba(255,255,255,0.15); margin: 0 4px;"></div>
+                <div style="display:flex; align-items:center; gap:6px;">
+                    <button class="btn btn-secondary" id="btnBottomPrevStep" style="padding:4px 8px; font-size:11.5px;" title="পূর্ববর্তী শাখা (Left Arrow)"><i class="fa-solid fa-backward-step"></i></button>
+                    <span id="bottomStepBadge" style="font-size:11.5px; font-weight:700; color:var(--primary); background:rgba(0,242,254,0.12); padding:3px 10px; border-radius:12px; border:1px solid rgba(0,242,254,0.3); min-width:85px; text-align:center;">Step 0/4</span>
+                    <button class="btn btn-primary" id="btnBottomNextStep" style="padding:4px 10px; font-size:11.5px;" title="পরবর্তী শাখা উন্মোচন করুন (Spacebar / Right Arrow)">পরের শাখা <i class="fa-solid fa-forward-step"></i></button>
+                </div>
+
+                <div style="width:1px; height:18px; background:rgba(255,255,255,0.15); margin: 0 4px;"></div>
+                <div class="slider-control">
+                    <i class="fa-solid fa-gauge-high"></i>
+                    <span>স্পিড:</span>
+                    <input type="range" id="globalSpeedSlider" min="0.2" max="2.0" step="0.1" value="1.0">
+                    <span id="speedVal">1.0x</span>
+                </div>
+            </div>
+        </div>
+
+    </div>
+
+    <!-- Toast Notification -->
+    <div class="toast" id="toastBox">
+        <i class="fa-solid fa-circle-check" style="color:var(--primary); font-size:18px;"></i>
+        <span id="toastMsg">ফাইল সফলভাবে তৈরি হয়েছে!</span>
+    </div>
+
+    <script>
+        /* ==========================================================================
+           Motion Diagram Studio Engine — Complete Sequential Reveal & Spring Motion
+           ========================================================================== */
+
+        const state = {
+            layout: 'hub_spoke', // hub_spoke, cycle, table, process, comparison, grid_cards
+            shape: 'rounded_rect', // rounded_rect, circle, hexagon, pill
+            theme: 'cyber_blue',
+            bg: 'circuit', // circuit, gradient, green_screen, transparent
+            center: {
+                title: 'TICKET',
+                subtitle: 'TICKET CLASSIFICATION',
+                icon: 'fa-ticket'
+            },
+            style: {
+                centerScale: 1.0,
+                nodeScale: 1.0,
+                nodeDistX: 440,
+                nodeDistY: 160,
+                centerFontSize: 34,
+                nodeTitleFontSize: 16,
+                nodeSubFontSize: 12,
+                customPrimaryColor: null,
+                customCardBg: null,
+                customTitleColor: null,
+                customSubColor: null
+            },
+            nodes: [
+                { id: 1, title: 'AUTOMATIC', subtitle: 'System-driven routing', icon: 'fa-gear', active: true },
+                { id: 2, title: 'MANUAL', subtitle: 'Human workflow & review', icon: 'fa-hand-pointer', active: true },
+                { id: 3, title: 'FULL TICKET', subtitle: 'Comprehensive full-service', icon: 'fa-ticket-simple', active: true },
+                { id: 4, title: 'HALF TICKET', subtitle: 'Partial or split request', icon: 'fa-receipt', active: true }
+            ],
+            motion: {
+                floating: true,
+                floatSpeed: 1.2,
+                floatAmp: 8,
+                laserPulse: true,
+                connectorStyle: 'cyber_arrow',
+                playbackSpeed: 1.0,
+                isPlaying: true,
+                startTime: performance.now(),
+                elapsedSec: 0,
+                // Sequential Reveal Architecture
+                revealMode: 'auto', // 'auto', 'manual', 'all'
+                stepInterval: 1.8,  // seconds between each node reveal in auto mode
+                autoLoop: true,     // whether auto mode loops
+                manualStep: 0,      // 0 = Center only, 1 = Node 1, 2 = Node 2, ...
+                animNodeProgress: [] // animated 0..1 transition for each node
+            },
+            showGrid: false
+        };
+
+        const themes = {
+            cyber_blue: {
+                primary: '#00f2fe',
+                secondary: '#4facfe',
+                bgGradient: ['#040814', '#081226', '#020612'],
+                cardBg: 'rgba(7, 18, 38, 0.88)',
+                cardBorder: 'rgba(0, 242, 254, 0.55)',
+                cardGlow: 'rgba(0, 242, 254, 0.35)',
+                textMain: '#ffffff',
+                textSub: '#93c5fd',
+                beamColor: '#00f2fe'
+            },
+            emerald: {
+                primary: '#10b981',
+                secondary: '#34d399',
+                bgGradient: ['#02120d', '#06261b', '#020e0a'],
+                cardBg: 'rgba(6, 32, 23, 0.88)',
+                cardBorder: 'rgba(16, 185, 129, 0.55)',
+                cardGlow: 'rgba(16, 185, 129, 0.35)',
+                textMain: '#ffffff',
+                textSub: '#a7f3d0',
+                beamColor: '#10b981'
+            },
+            purple_violet: {
+                primary: '#c084fc',
+                secondary: '#e879f9',
+                bgGradient: ['#12041c', '#240938', '#0c0214'],
+                cardBg: 'rgba(28, 8, 44, 0.88)',
+                cardBorder: 'rgba(192, 132, 252, 0.55)',
+                cardGlow: 'rgba(192, 132, 252, 0.35)',
+                textMain: '#ffffff',
+                textSub: '#e9d5ff',
+                beamColor: '#c084fc'
+            },
+            golden_amber: {
+                primary: '#fbbf24',
+                secondary: '#f59e0b',
+                bgGradient: ['#140c02', '#2a1a05', '#0f0801'],
+                cardBg: 'rgba(34, 21, 5, 0.88)',
+                cardBorder: 'rgba(251, 191, 36, 0.55)',
+                cardGlow: 'rgba(251, 191, 36, 0.35)',
+                textMain: '#ffffff',
+                textSub: '#fde68a',
+                beamColor: '#fbbf24'
+            },
+            monochrome: {
+                primary: '#38bdf8',
+                secondary: '#94a3b8',
+                bgGradient: ['#090d16', '#131b2e', '#090d16'],
+                cardBg: 'rgba(20, 27, 45, 0.92)',
+                cardBorder: 'rgba(255, 255, 255, 0.25)',
+                cardGlow: 'rgba(56, 189, 248, 0.2)',
+                textMain: '#ffffff',
+                textSub: '#cbd5e1',
+                beamColor: '#38bdf8'
+            }
+        };
+
+        const canvas = document.getElementById('stageCanvas');
+        const ctx = canvas.getContext('2d');
+
+        function fitCanvasDisplay() {
+            const wrapper = document.querySelector('.canvas-wrapper');
+            const parent = document.querySelector('.viewport');
+            const maxWidth = parent.clientWidth - 40;
+            const maxHeight = parent.clientHeight - 130;
+
+            let w = maxWidth;
+            let h = w * (9 / 16);
+            if (h > maxHeight) {
+                h = maxHeight;
+                w = h * (16 / 9);
+            }
+            wrapper.style.width = Math.floor(w) + 'px';
+            wrapper.style.height = Math.floor(h) + 'px';
+            canvas.style.width = '100%';
+            canvas.style.height = '100%';
+        }
+        window.addEventListener('resize', fitCanvasDisplay);
+        fitCanvasDisplay();
+
+        // Elastic Spring Ease-Out
+        function easeOutBack(x) {
+            const c1 = 1.6;
+            const c3 = c1 + 1;
+            const t = Math.min(1.0, Math.max(0.0, x));
+            return 1 + c3 * Math.pow(t - 1, 3) + c1 * Math.pow(t - 1, 2);
+        }
+
+        // Compute Center Reveal State
+        function getCenterRevealState(elapsed) {
+            if (state.motion.revealMode === 'all') {
+                return { scale: 1.0, opacity: 1.0 };
+            }
+            if (state.motion.revealMode === 'manual') {
+                return { scale: 1.0, opacity: 1.0 };
+            }
+            // Auto Sequence:
+            const p = Math.min(1.0, elapsed / 0.7);
+            return {
+                scale: easeOutBack(p),
+                opacity: Math.min(1.0, p * 1.5)
+            };
+        }
+
+        // Compute Node Reveal State (Progress, Scale, Opacity, Connector shoot-out)
+        function getNodeRevealState(idx, elapsed) {
+            if (state.motion.revealMode === 'all') {
+                return { visible: true, progress: 1.0, scale: 1.0, opacity: 1.0, connectorProgress: 1.0 };
+            }
+
+            if (state.motion.revealMode === 'manual') {
+                const target = state.motion.manualStep > idx ? 1.0 : 0.0;
+                if (state.motion.animNodeProgress[idx] === undefined) state.motion.animNodeProgress[idx] = 0.0;
+                // Smooth interpolation
+                state.motion.animNodeProgress[idx] += (target - state.motion.animNodeProgress[idx]) * 0.16;
+                const p = state.motion.animNodeProgress[idx];
+                return {
+                    visible: p > 0.01,
+                    progress: p,
+                    scale: p > 0.01 ? easeOutBack(Math.min(1.0, p * 1.15)) : 0.0,
+                    opacity: Math.min(1.0, p * 1.8),
+                    connectorProgress: Math.min(1.0, p * 1.4)
+                };
+            }
+
+            // Auto Sequence Mode
+            const centerDuration = 0.7;
+            const interval = state.motion.stepInterval || 1.8;
+            const nodeStartTime = centerDuration + idx * interval;
+            const connectorDuration = 0.45;
+            const cardDuration = 0.45;
+
+            // Handle Auto Loop reset
+            const totalDuration = centerDuration + state.nodes.length * interval + 1.8;
+            let localTime = elapsed;
+            if (state.motion.autoLoop && elapsed > totalDuration) {
+                localTime = elapsed % totalDuration;
+            }
+
+            if (localTime < nodeStartTime) {
+                return { visible: false, progress: 0.0, scale: 0.0, opacity: 0.0, connectorProgress: 0.0 };
+            }
+
+            const nodeElapsed = localTime - nodeStartTime;
+            const connectorProgress = Math.min(1.0, Math.max(0.0, nodeElapsed / connectorDuration));
+            const cardElapsed = nodeElapsed - (connectorDuration * 0.7);
+            const cardProgress = Math.min(1.0, Math.max(0.0, cardElapsed / cardDuration));
+
+            return {
+                visible: connectorProgress > 0.01,
+                progress: cardProgress,
+                scale: cardProgress > 0 ? easeOutBack(cardProgress) : 0.0,
+                opacity: Math.min(1.0, cardProgress * 1.4),
+                connectorProgress: connectorProgress
+            };
+        }
+
+        // Render Nodes List in Sidebar
+        function renderNodesList() {
+            const container = document.getElementById('nodesListContainer');
+            container.innerHTML = '';
+            state.nodes.forEach((node, idx) => {
+                const div = document.createElement('div');
+                div.className = 'node-item';
+                div.innerHTML = `
+                    <div class="node-item-header">
+                        <div style="display:flex; align-items:center; gap:8px;">
+                            <span class="node-badge" style="background:${node.color ? node.color + '25' : 'rgba(0,242,254,0.15)'}; color:${node.color || 'var(--primary)'};">শাখা #${idx + 1}</span>
+                            <input type="color" value="${node.color || '#00f2fe'}" oninput="updateNode(${node.id}, 'color', this.value)" title="এই শাখার নিজস্ব নিয়ন কালার" style="width:24px; height:22px; border:none; border-radius:4px; cursor:pointer; background:none;">
+                        </div>
+                        ${state.nodes.length > 2 ? `<button class="node-delete-btn" onclick="deleteNode(${node.id})"><i class="fa-solid fa-trash"></i> মুছুন</button>` : ''}
+                    </div>
+                    <div class="form-group">
+                        <label>শিরোনাম (Title):</label>
+                        <input type="text" class="form-control" value="${escapeHtml(node.title)}" oninput="updateNode(${node.id}, 'title', this.value)">
+                    </div>
+                    <div class="form-group">
+                        <label>বর্ণনা / সাবটেক্সট:</label>
+                        <input type="text" class="form-control" value="${escapeHtml(node.subtitle)}" oninput="updateNode(${node.id}, 'subtitle', this.value)">
+                    </div>
+                `;
+                container.appendChild(div);
+            });
+
+            renderManualStepPills();
+        }
+
+        function renderManualStepPills() {
+            const pillsWrap = document.getElementById('manualStepPills');
+            if (!pillsWrap) return;
+            pillsWrap.innerHTML = '';
+
+            // Center pill (Step 0)
+            const centerPill = document.createElement('div');
+            centerPill.className = 'chip ' + (state.motion.manualStep === 0 ? 'active' : '');
+            centerPill.innerHTML = '<i class="fa-solid fa-bullseye"></i> Center';
+            centerPill.onclick = () => setManualStep(0);
+            pillsWrap.appendChild(centerPill);
+
+            // Nodes pills (Step 1..N)
+            state.nodes.forEach((n, idx) => {
+                const step = idx + 1;
+                const pill = document.createElement('div');
+                pill.className = 'chip ' + (state.motion.manualStep === step ? 'active' : '');
+                pill.innerHTML = `#${step} ${escapeHtml(n.title.slice(0, 10))}`;
+                pill.onclick = () => setManualStep(step);
+                pillsWrap.appendChild(pill);
+            });
+
+            updateStepIndicatorUI();
+        }
+
+        function setManualStep(step) {
+            state.motion.manualStep = Math.max(0, Math.min(state.nodes.length, step));
+            renderManualStepPills();
+            showToast(`ধাপ ${state.motion.manualStep} সক্রিয় হয়েছে`);
+        }
+
+        function updateStepIndicatorUI() {
+            const total = state.nodes.length;
+            const cur = state.motion.manualStep;
+            const label = cur === 0 ? 'Center Only' : (state.nodes[cur - 1] ? state.nodes[cur - 1].title : '');
+            
+            const ind = document.getElementById('manualStepIndicator');
+            if (ind) ind.innerText = `${cur} / ${total} (${label})`;
+
+            const bBadge = document.getElementById('bottomStepBadge');
+            if (bBadge) bBadge.innerText = `Step ${cur}/${total}`;
+        }
+
+        window.deleteNode = function(id) {
+            state.nodes = state.nodes.filter(n => n.id !== id);
+            renderNodesList();
+        };
+
+        window.updateNode = function(id, field, val) {
+            const n = state.nodes.find(item => item.id === id);
+            if (n) n[field] = val;
+            renderManualStepPills();
+        };
+
+        document.getElementById('btnAddNode').addEventListener('click', () => {
+            if (state.nodes.length >= 8) {
+                showToast('সর্বোচ্চ ৮টি শাখা যুক্ত করা যাবে।');
+                return;
+            }
+            const newId = Date.now();
+            state.nodes.push({
+                id: newId,
+                title: `FEATURE ${state.nodes.length + 1}`,
+                subtitle: 'Description details here',
+                icon: 'fa-circle-check',
+                active: true
+            });
+            renderNodesList();
+        });
+
+        // Tab Navigation
+        document.querySelectorAll('.tab-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+                document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+                btn.classList.add('active');
+                document.getElementById(btn.dataset.tab).classList.add('active');
+            });
+        });
+
+        // Layout Selector
+        document.querySelectorAll('.layout-opt').forEach(opt => {
+            opt.addEventListener('click', () => {
+                document.querySelectorAll('.layout-opt').forEach(o => o.classList.remove('active'));
+                opt.classList.add('active');
+                state.layout = opt.dataset.layout;
+            });
+        });
+
+        // Shape Selector
+        document.querySelectorAll('#shapeSelector .chip').forEach(chip => {
+            chip.addEventListener('click', () => {
+                document.querySelectorAll('#shapeSelector .chip').forEach(c => c.classList.remove('active'));
+                chip.classList.add('active');
+                state.shape = chip.dataset.shape;
+            });
+        });
+
+        // Theme Selector
+        document.querySelectorAll('#themeSelector .chip').forEach(chip => {
+            chip.addEventListener('click', () => {
+                document.querySelectorAll('#themeSelector .chip').forEach(c => c.classList.remove('active'));
+                chip.classList.add('active');
+                state.theme = chip.dataset.theme;
+            });
+        });
+
+        // Background Selector
+        document.querySelectorAll('#bgSelector .chip').forEach(chip => {
+            chip.addEventListener('click', () => {
+                document.querySelectorAll('#bgSelector .chip').forEach(c => c.classList.remove('active'));
+                chip.classList.add('active');
+                state.bg = chip.dataset.bg;
+            });
+        });
+
+        // Sequential Reveal Mode Selector
+        document.querySelectorAll('#revealModeSelector .chip').forEach(chip => {
+            chip.addEventListener('click', () => {
+                document.querySelectorAll('#revealModeSelector .chip').forEach(c => c.classList.remove('active'));
+                chip.classList.add('active');
+                state.motion.revealMode = chip.dataset.mode;
+
+                const autoBox = document.getElementById('autoSequenceControls');
+                const manualBox = document.getElementById('manualSequenceControls');
+
+                if (state.motion.revealMode === 'auto') {
+                    autoBox.style.display = 'block';
+                    manualBox.style.display = 'none';
+                    state.motion.startTime = performance.now();
+                } else if (state.motion.revealMode === 'manual') {
+                    autoBox.style.display = 'none';
+                    manualBox.style.display = 'block';
+                    setManualStep(state.motion.manualStep || 0);
+                } else {
+                    autoBox.style.display = 'none';
+                    manualBox.style.display = 'none';
+                }
+            });
+        });
+
+        // Step Interval Slider
+        document.getElementById('stepIntervalSlider').addEventListener('input', e => {
+            state.motion.stepInterval = parseFloat(e.target.value);
+            document.getElementById('lblStepInterval').innerText = state.motion.stepInterval.toFixed(1) + 's';
+        });
+
+        // Auto Loop Toggle
+        document.getElementById('chkAutoLoop').addEventListener('change', e => {
+            state.motion.autoLoop = e.target.checked;
+        });
+
+        // Replay Sequence Button
+        document.getElementById('btnReplaySequence').addEventListener('click', () => {
+            state.motion.startTime = performance.now();
+            showToast('শুরু থেকে সিকোয়েন্স প্লে হচ্ছে...');
+        });
+
+        // Manual Step Controls
+        function nextStep() {
+            if (state.motion.revealMode !== 'manual') {
+                // Switch to manual mode if user clicks next
+                document.querySelector('#revealModeSelector .chip[data-mode="manual"]').click();
+            }
+            if (state.motion.manualStep < state.nodes.length) {
+                setManualStep(state.motion.manualStep + 1);
+            } else {
+                showToast('সবগুলো শাখা ইতিমধ্যে উন্মোচিত হয়েছে!');
+            }
+        }
+
+        function prevStep() {
+            if (state.motion.manualStep > 0) {
+                setManualStep(state.motion.manualStep - 1);
+            }
+        }
+
+        function resetStep() {
+            setManualStep(0);
+        }
+
+        document.getElementById('btnManualNext').addEventListener('click', nextStep);
+        document.getElementById('btnManualPrev').addEventListener('click', prevStep);
+        document.getElementById('btnManualReset').addEventListener('click', resetStep);
+        document.getElementById('btnBottomNextStep').addEventListener('click', nextStep);
+        document.getElementById('btnBottomPrevStep').addEventListener('click', prevStep);
+
+        // Keyboard Shortcut Handler (Spacebar, Right Arrow, Left Arrow)
+        window.addEventListener('keydown', e => {
+            // Ignore if typing in an input
+            if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.tagName === 'SELECT') return;
+
+            if (e.code === 'Space' || e.key === 'ArrowRight') {
+                e.preventDefault();
+                nextStep();
+            } else if (e.key === 'ArrowLeft') {
+                e.preventDefault();
+                prevStep();
+            } else if (e.key === 'r' || e.key === 'R') {
+                state.motion.startTime = performance.now();
+                resetStep();
+            }
+        });
+
+        // Other Inputs
+        document.getElementById('centerTitleInput').addEventListener('input', e => state.center.title = e.target.value);
+        document.getElementById('centerSubtitleInput').addEventListener('input', e => state.center.subtitle = e.target.value);
+        document.getElementById('chkFloatingEnabled').addEventListener('change', e => state.motion.floating = e.target.checked);
+        document.getElementById('floatSpeedSlider').addEventListener('input', e => state.motion.floatSpeed = parseFloat(e.target.value));
+        document.getElementById('floatAmpSlider').addEventListener('input', e => state.motion.floatAmp = parseFloat(e.target.value));
+        document.getElementById('chkPulseEnabled').addEventListener('change', e => state.motion.laserPulse = e.target.checked);
+        document.getElementById('connectorStyleSelect').addEventListener('change', e => state.motion.connectorStyle = e.target.value);
+        document.getElementById('btnToggleGrid').addEventListener('click', function() {
+            state.showGrid = !state.showGrid;
+            this.classList.toggle('active', state.showGrid);
+        });
+
+        const playBtn = document.getElementById('btnPlayPause');
+        playBtn.addEventListener('click', () => {
+            state.motion.isPlaying = !state.motion.isPlaying;
+            playBtn.innerHTML = state.motion.isPlaying ? '<i class="fa-solid fa-pause"></i>' : '<i class="fa-solid fa-play"></i>';
+        });
+
+        document.getElementById('globalSpeedSlider').addEventListener('input', e => {
+            state.motion.playbackSpeed = parseFloat(e.target.value);
+            document.getElementById('speedVal').innerText = state.motion.playbackSpeed.toFixed(1) + 'x';
+        });
+
+        /* ==========================================================================
+           Rendering Pipeline
+           ========================================================================== */
+
+        function drawStage(time) {
+            const baseTheme = themes[state.theme] || themes.cyber_blue;
+            const theme = {
+                ...baseTheme,
+                primary: state.style.customPrimaryColor || baseTheme.primary,
+                beamColor: state.style.customPrimaryColor || baseTheme.beamColor,
+                cardBorder: state.style.customPrimaryColor ? (state.style.customPrimaryColor + '99') : baseTheme.cardBorder,
+                cardGlow: state.style.customPrimaryColor ? (state.style.customPrimaryColor + '55') : baseTheme.cardGlow,
+                cardBg: state.style.customCardBg || baseTheme.cardBg,
+                textMain: state.style.customTitleColor || baseTheme.textMain,
+                textSub: state.style.customSubColor || baseTheme.textSub
+            };
+            const elapsed = ((time - state.motion.startTime) / 1000) * state.motion.playbackSpeed;
+            state.motion.elapsedSec = elapsed;
+
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            // 1. Draw Background
+            drawBackground(theme, elapsed);
+
+            // 2. Draw Diagram according to layout
+            const cx = canvas.width / 2;
+            const cy = canvas.height / 2 + 15;
+
+            if (state.layout === 'hub_spoke') {
+                drawHubAndSpoke(cx, cy, theme, elapsed);
+            } else if (state.layout === 'cycle') {
+                drawCircularCycle(cx, cy, theme, elapsed);
+            } else if (state.layout === 'table') {
+                drawAnimatedTable(cx, cy, theme, elapsed);
+            } else if (state.layout === 'process') {
+                drawProcessSteps(cx, cy, theme, elapsed);
+            } else if (state.layout === 'comparison') {
+                drawComparisonLayout(cx, cy, theme, elapsed);
+            } else {
+                drawGridCardsLayout(cx, cy, theme, elapsed);
+            }
+
+            // 3. Guide Grid (if enabled)
+            if (state.showGrid) drawGuideGrid();
+
+            // Update time display
+            const sec = Math.floor(elapsed % 60);
+            const msec = Math.floor((elapsed % 1) * 10);
+            document.getElementById('timeDisplay').innerText = `00:${sec < 10 ? '0' : ''}${sec}.${msec}`;
+
+            if (state.motion.isPlaying) {
+                requestAnimationFrame(drawStage);
+            } else {
+                setTimeout(() => requestAnimationFrame(drawStage), 100);
+            }
+        }
+
+        // --- Background Renderer ---
+        function drawBackground(theme, t) {
+            if (state.bg === 'transparent') {
+                return;
+            }
+            if (state.bg === 'green_screen') {
+                ctx.fillStyle = '#00ff00';
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+                return;
+            }
+
+            const grad = ctx.createRadialGradient(canvas.width / 2, canvas.height / 2, 80, canvas.width / 2, canvas.height / 2, 900);
+            grad.addColorStop(0, theme.bgGradient[1]);
+            grad.addColorStop(0.6, theme.bgGradient[0]);
+            grad.addColorStop(1, theme.bgGradient[2]);
+            ctx.fillStyle = grad;
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            if (state.bg === 'circuit') {
+                ctx.save();
+                ctx.strokeStyle = 'rgba(255, 255, 255, 0.035)';
+                ctx.lineWidth = 1;
+                const gridSize = 48;
+                for (let x = 0; x <= canvas.width; x += gridSize) {
+                    ctx.beginPath();
+                    ctx.moveTo(x, 0);
+                    ctx.lineTo(x, canvas.height);
+                    ctx.stroke();
+                }
+                for (let y = 0; y <= canvas.height; y += gridSize) {
+                    ctx.beginPath();
+                    ctx.moveTo(0, y);
+                    ctx.lineTo(canvas.width, y);
+                    ctx.stroke();
+                }
+
+                ctx.strokeStyle = theme.primary;
+                ctx.globalAlpha = 0.12;
+                ctx.lineWidth = 1.5;
+
+                const offset = (t * 20) % 200;
+                ctx.beginPath();
+                ctx.moveTo(100, 200); ctx.lineTo(300 + offset, 200); ctx.lineTo(400 + offset, 300);
+                ctx.moveTo(canvas.width - 100, 200); ctx.lineTo(canvas.width - 300 - offset, 200); ctx.lineTo(canvas.width - 400 - offset, 300);
+                ctx.stroke();
+                ctx.restore();
+            }
+        }
+
+        // --- Layout 1: Hub & Spoke ---
+        function drawHubAndSpoke(cx, cy, theme, t) {
+            const nodeCount = state.nodes.length;
+            const centerW = 280 * (state.style.centerScale || 1.0);
+            const centerH = 130 * (state.style.centerScale || 1.0);
+
+            // Draw Top Overall Header Title
+            ctx.save();
+            ctx.font = '700 19px "Outfit", sans-serif';
+            ctx.fillStyle = theme.textSub;
+            ctx.textAlign = 'center';
+            ctx.letterSpacing = '3px';
+            ctx.shadowColor = theme.cardGlow;
+            ctx.shadowBlur = 10;
+            ctx.fillText((state.center.subtitle || 'DIAGRAM OVERVIEW').toUpperCase(), cx, 65);
+            ctx.restore();
+
+            const nodePositions = [];
+            const cardW = 260 * (state.style.nodeScale || 1.0);
+            const cardH = 96 * (state.style.nodeScale || 1.0);
+            const distX = state.style.nodeDistX || 440;
+            const distY = state.style.nodeDistY || 160;
+
+            if (nodeCount === 4) {
+                nodePositions.push({ x: cx - distX, y: cy - distY }); // Top-Left
+                nodePositions.push({ x: cx + distX, y: cy - distY }); // Top-Right
+                nodePositions.push({ x: cx - distX, y: cy + distY }); // Bottom-Left
+                nodePositions.push({ x: cx + distX, y: cy + distY }); // Bottom-Right
+            } else if (nodeCount === 2) {
+                nodePositions.push({ x: cx - distX, y: cy });
+                nodePositions.push({ x: cx + distX, y: cy });
+            } else if (nodeCount === 3) {
+                nodePositions.push({ x: cx - distX, y: cy - (distY * 0.8) });
+                nodePositions.push({ x: cx - distX, y: cy + (distY * 0.8) });
+                nodePositions.push({ x: cx + distX, y: cy });
+            } else if (nodeCount === 6) {
+                nodePositions.push({ x: cx - distX, y: cy - distY });
+                nodePositions.push({ x: cx + distX, y: cy - distY });
+                nodePositions.push({ x: cx - (distX * 1.05), y: cy });
+                nodePositions.push({ x: cx + (distX * 1.05), y: cy });
+                nodePositions.push({ x: cx - distX, y: cy + distY });
+                nodePositions.push({ x: cx + distX, y: cy + distY });
+            } else {
+                for (let i = 0; i < nodeCount; i++) {
+                    const angle = (i / nodeCount) * Math.PI * 2 - Math.PI / 2;
+                    nodePositions.push({
+                        x: cx + Math.cos(angle) * distX,
+                        y: cy + Math.sin(angle) * distY
+                    });
+                }
+            }
+
+            // Draw Connectors with sequential progress
+            nodePositions.forEach((pos, idx) => {
+                const node = state.nodes[idx];
+                const reveal = getNodeRevealState(idx, t);
+                const floatY = state.motion.floating && reveal.progress > 0.8 ? Math.sin(t * state.motion.floatSpeed + idx * 1.2) * state.motion.floatAmp : 0;
+                drawConnector(cx, cy, pos.x, pos.y + floatY, theme, t, idx, reveal.connectorProgress);
+            });
+
+            // Draw Branch Nodes with sequential pop & float
+            nodePositions.forEach((pos, idx) => {
+                const node = state.nodes[idx];
+                const reveal = getNodeRevealState(idx, t);
+                const floatY = state.motion.floating && reveal.progress > 0.8 ? Math.sin(t * state.motion.floatSpeed + idx * 1.2) * state.motion.floatAmp : 0;
+                drawCardNode(pos.x, pos.y + floatY, cardW, cardH, node, theme, false, t, idx, reveal);
+            });
+
+            // Draw Central Hub Node with scale & float
+            const centerReveal = getCenterRevealState(t);
+            const centerFloatY = state.motion.floating && centerReveal.scale > 0.8 ? Math.cos(t * state.motion.floatSpeed * 0.8) * (state.motion.floatAmp * 0.6) : 0;
+            drawCenterHub(cx, cy + centerFloatY, centerW, centerH, theme, t, centerReveal);
+        }
+
+        // --- Central Hub Node ---
+        function drawCenterHub(cx, cy, w, h, theme, t, reveal) {
+            if (!reveal || reveal.scale <= 0.01) return;
+
+            ctx.save();
+            ctx.translate(cx, cy);
+            ctx.scale(reveal.scale, reveal.scale);
+            ctx.globalAlpha = reveal.opacity;
+
+            ctx.shadowColor = theme.primary;
+            ctx.shadowBlur = 30 + Math.sin(t * 3) * 8;
+            ctx.strokeStyle = theme.primary;
+            ctx.lineWidth = 2.5;
+
+            if (state.shape === 'circle') {
+                const r = w / 2.2;
+                ctx.fillStyle = theme.cardBg;
+                ctx.beginPath();
+                ctx.arc(0, 0, r, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.stroke();
+
+                ctx.strokeStyle = 'rgba(255,255,255,0.2)';
+                ctx.lineWidth = 1;
+                ctx.beginPath();
+                ctx.arc(0, 0, r - 8, 0, Math.PI * 2);
+                ctx.stroke();
+            } else if (state.shape === 'hexagon') {
+                drawHexagonShape(0, 0, w / 1.7, theme.cardBg, theme.primary, 2.5);
+            } else {
+                roundRect(-w/2, -h/2, w, h, 16);
+                ctx.fillStyle = theme.cardBg;
+                ctx.fill();
+                ctx.stroke();
+
+                ctx.strokeStyle = 'rgba(255, 255, 255, 0.25)';
+                ctx.lineWidth = 1;
+                roundRect(-w/2 + 6, -h/2 + 6, w - 12, h - 12, 12);
+                ctx.stroke();
+
+                ctx.fillStyle = theme.primary;
+                ctx.fillRect(-w/2 + 20, -h/2 - 2, 40, 4);
+                ctx.fillRect(w/2 - 60, h/2 - 2, 40, 4);
+            }
+
+            ctx.shadowColor = theme.primary;
+            ctx.shadowBlur = 15;
+            ctx.fillStyle = state.style.customTitleColor || '#ffffff';
+            ctx.font = '800 ' + (state.style.centerFontSize || 34) + 'px "Outfit", sans-serif';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.letterSpacing = '1.5px';
+            ctx.fillText(state.center.title || 'TICKET', 0, 0);
+
+            ctx.restore();
+        }
+
+        // --- Branch Card Node ---
+        function drawCardNode(x, y, w, h, node, theme, isCenter, t, idx, reveal) {
+            if (!reveal || !reveal.visible || reveal.scale <= 0.01) return;
+
+            ctx.save();
+            ctx.translate(x, y);
+            ctx.scale(reveal.scale, reveal.scale);
+            ctx.globalAlpha = reveal.opacity;
+
+            // Extra bloom when popping in
+            const popBloom = (1.0 - Math.min(1.0, reveal.progress)) * 25;
+            ctx.shadowColor = theme.primary;
+            ctx.shadowBlur = 18 + popBloom;
+            ctx.strokeStyle = theme.cardBorder;
+            ctx.lineWidth = 2;
+            ctx.fillStyle = theme.cardBg;
+
+            if (state.shape === 'circle') {
+                const r = w / 2.6;
+                ctx.beginPath();
+                ctx.arc(0, 0, r, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.stroke();
+
+                ctx.shadowBlur = 0;
+                ctx.fillStyle = theme.primary;
+                ctx.font = '700 16px "Outfit", sans-serif';
+                ctx.textAlign = 'center';
+                ctx.fillText(node.title, 0, -8);
+
+                ctx.fillStyle = theme.textSub;
+                ctx.font = '400 11.5px "Hind Siliguri", sans-serif';
+                ctx.fillText(truncateText(node.subtitle, 20), 0, 14);
+            } else if (state.shape === 'hexagon') {
+                drawHexagonShape(0, 0, w / 2.2, theme.cardBg, theme.cardBorder, 2);
+                ctx.shadowBlur = 0;
+                ctx.fillStyle = '#fff';
+                ctx.font = '700 17px "Outfit", sans-serif';
+                ctx.textAlign = 'center';
+                ctx.fillText(node.title, 0, -8);
+                ctx.fillStyle = theme.textSub;
+                ctx.font = '400 12px "Hind Siliguri", sans-serif';
+                ctx.fillText(truncateText(node.subtitle, 22), 0, 14);
+            } else {
+                const radius = state.shape === 'pill' ? 30 : 14;
+                roundRect(-w/2, -h/2, w, h, radius);
+                ctx.fill();
+                ctx.stroke();
+
+                ctx.strokeStyle = 'rgba(255, 255, 255, 0.2)';
+                ctx.lineWidth = 1;
+                roundRect(-w/2 + 3, -h/2 + 3, w - 6, h - 6, radius - 2);
+                ctx.stroke();
+
+                ctx.shadowBlur = 0;
+                const iconX = -w/2 + 36;
+                const iconY = 0;
+
+                ctx.fillStyle = 'rgba(0, 242, 254, 0.12)';
+                ctx.beginPath();
+                ctx.arc(iconX, iconY, 20, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.strokeStyle = theme.primary;
+                ctx.stroke();
+
+                ctx.fillStyle = theme.primary;
+                ctx.font = '600 14px "JetBrains Mono", monospace';
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                ctx.fillText(`0${idx + 1}`, iconX, iconY);
+
+                ctx.fillStyle = node.color || state.style.customTitleColor || '#ffffff';
+                ctx.font = '700 ' + (state.style.nodeTitleFontSize || 16) + 'px "Outfit", sans-serif';
+                ctx.textAlign = 'left';
+                ctx.textBaseline = 'alphabetic';
+                ctx.fillText(node.title, iconX + 32, -4);
+
+                ctx.fillStyle = state.style.customSubColor || theme.textSub;
+                ctx.font = '400 ' + (state.style.nodeSubFontSize || 12) + 'px "Hind Siliguri", sans-serif';
+                ctx.fillText(truncateText(node.subtitle, 24), iconX + 32, 18);
+            }
+
+            ctx.restore();
+        }
+
+        // --- Connector Arrows with Growth Progress ---
+        function drawConnector(x1, y1, x2, y2, theme, t, idx, progress) {
+            if (progress === undefined) progress = 1.0;
+            if (progress <= 0.01) return;
+
+            ctx.save();
+
+            const dx = x2 - x1;
+            const dy = y2 - y1;
+            const dist = Math.hypot(dx, dy);
+
+            const startOffset = 130;
+            const endOffset = 130;
+            const sx = x1 + (dx / dist) * startOffset;
+            const sy = y1 + (dy / dist) * startOffset;
+            const targetEx = x2 - (dx / dist) * endOffset;
+            const targetEy = y2 - (dy / dist) * endOffset;
+
+            // Interpolate line tip based on progress
+            const curEx = sx + (targetEx - sx) * progress;
+            const curEy = sy + (targetEy - sy) * progress;
+
+            const nodeCol = state.nodes[idx] && state.nodes[idx].color;
+            const finalBeam = nodeCol || theme.beamColor;
+            ctx.shadowColor = finalBeam;
+            ctx.shadowBlur = 12;
+            ctx.strokeStyle = finalBeam;
+            ctx.lineWidth = 2.5;
+
+            if (state.motion.connectorStyle === 'dashed_tech') {
+                ctx.setLineDash([8, 6]);
+                ctx.lineDashOffset = -(t * 30);
+            }
+
+            // Draw Beam
+            ctx.beginPath();
+            ctx.moveTo(sx, sy);
+            ctx.lineTo(curEx, curEy);
+            ctx.stroke();
+
+            // Arrow Head at the current tip
+            const arrowLen = 14;
+            const angle = Math.atan2(curEy - sy, curEx - sx);
+            ctx.fillStyle = finalBeam;
+            ctx.beginPath();
+            ctx.moveTo(curEx, curEy);
+            ctx.lineTo(curEx - arrowLen * Math.cos(angle - Math.PI / 6), curEy - arrowLen * Math.sin(angle - Math.PI / 6));
+            ctx.lineTo(curEx - arrowLen * Math.cos(angle + Math.PI / 6), curEy - arrowLen * Math.sin(angle + Math.PI / 6));
+            ctx.closePath();
+            ctx.fill();
+
+            // Laser Pulse Moving Dot (active when fully connected)
+            if (state.motion.laserPulse && progress >= 0.98) {
+                const pulseT = ((t * 1.5 + idx * 0.25) % 1.0);
+                const px = sx + (targetEx - sx) * pulseT;
+                const py = sy + (targetEy - sy) * pulseT;
+
+                ctx.shadowColor = '#ffffff';
+                ctx.shadowBlur = 15;
+                ctx.fillStyle = '#ffffff';
+                ctx.beginPath();
+                ctx.arc(px, py, 4, 0, Math.PI * 2);
+                ctx.fill();
+            }
+
+            ctx.restore();
+        }
+
+        // --- Layout 2: Circular Cycle ---
+        function drawCircularCycle(cx, cy, theme, t) {
+            const count = state.nodes.length;
+            const radius = (state.style.nodeDistX ? state.style.nodeDistX * 0.7 : 280);
+            const nScale = state.style.nodeScale || 1.0;
+            const cScale = state.style.centerScale || 1.0;
+
+            const centerReveal = getCenterRevealState(t);
+            drawCenterHub(cx, cy, 220 * cScale, 110 * cScale, theme, t, centerReveal);
+
+            ctx.save();
+            ctx.strokeStyle = 'rgba(255, 255, 255, 0.1)';
+            ctx.lineWidth = 2;
+            ctx.setLineDash([6, 8]);
+            ctx.beginPath();
+            ctx.arc(cx, cy, radius, 0, Math.PI * 2);
+            ctx.stroke();
+            ctx.restore();
+
+            state.nodes.forEach((node, i) => {
+                const angle = (i / count) * Math.PI * 2 - Math.PI / 2;
+                const nx = cx + Math.cos(angle) * radius;
+                const ny = cy + Math.sin(angle) * radius;
+                const reveal = getNodeRevealState(i, t);
+                const floatY = state.motion.floating && reveal.progress > 0.8 ? Math.sin(t * state.motion.floatSpeed + i * 1.5) * state.motion.floatAmp : 0;
+
+                drawCardNode(nx, ny + floatY, 220 * nScale, 80 * nScale, node, theme, false, t, i, reveal);
+            });
+        }
+
+        // --- Layout 3: Animated Table ---
+        function drawAnimatedTable(cx, cy, theme, t) {
+            const startX = cx - 460;
+            const startY = cy - 220;
+            const tableW = 920;
+            const headerH = 56;
+            const rowH = 68;
+
+            ctx.save();
+
+            ctx.font = '700 22px "Outfit", sans-serif';
+            ctx.fillStyle = theme.primary;
+            ctx.textAlign = 'center';
+            ctx.fillText((state.center.title || 'CLASSIFICATION MATRIX') + ' — FEATURE TABLE', cx, startY - 24);
+
+            // Header Row
+            roundRect(startX, startY, tableW, headerH, 10);
+            ctx.fillStyle = theme.cardBorder;
+            ctx.fill();
+            ctx.strokeStyle = theme.primary;
+            ctx.stroke();
+
+            ctx.fillStyle = '#050b14';
+            ctx.font = '800 15px "Outfit", sans-serif';
+            ctx.textAlign = 'left';
+            ctx.fillText('NO.', startX + 24, startY + 34);
+            ctx.fillText('CATEGORY / TITLE', startX + 110, startY + 34);
+            ctx.fillText('DESCRIPTION & ATTRIBUTES', startX + 380, startY + 34);
+            ctx.fillText('STATUS', startX + 780, startY + 34);
+
+            // Rows with sequential sliding
+            state.nodes.forEach((node, i) => {
+                const reveal = getNodeRevealState(i, t);
+                if (!reveal.visible || reveal.scale <= 0.01) return;
+
+                const rowY = startY + headerH + 12 + i * (rowH + 10);
+                const floatY = state.motion.floating && reveal.progress > 0.8 ? Math.sin(t * state.motion.floatSpeed + i * 0.8) * 3 : 0;
+
+                ctx.save();
+                ctx.globalAlpha = reveal.opacity;
+                ctx.translate(0, (1.0 - reveal.progress) * 20); // Slide down entry
+
+                roundRect(startX, rowY + floatY, tableW, rowH, 8);
+                ctx.fillStyle = theme.cardBg;
+                ctx.fill();
+                ctx.strokeStyle = 'rgba(255, 255, 255, 0.12)';
+                ctx.stroke();
+
+                ctx.fillStyle = theme.primary;
+                ctx.font = '700 14px "JetBrains Mono", monospace';
+                ctx.fillText(`0${i + 1}`, startX + 24, rowY + floatY + 40);
+
+                ctx.fillStyle = '#ffffff';
+                ctx.font = '700 16px "Outfit", sans-serif';
+                ctx.fillText(node.title, startX + 110, rowY + floatY + 40);
+
+                ctx.fillStyle = theme.textSub;
+                ctx.font = '400 13px "Hind Siliguri", sans-serif';
+                ctx.fillText(truncateText(node.subtitle, 42), startX + 380, rowY + floatY + 40);
+
+                roundRect(startX + 775, rowY + floatY + 20, 95, 28, 14);
+                ctx.fillStyle = 'rgba(0, 242, 254, 0.15)';
+                ctx.fill();
+                ctx.strokeStyle = theme.primary;
+                ctx.stroke();
+
+                ctx.fillStyle = theme.primary;
+                ctx.font = '700 11.5px "Outfit", sans-serif';
+                ctx.textAlign = 'center';
+                ctx.fillText('ACTIVE', startX + 822, rowY + floatY + 38);
+                ctx.textAlign = 'left';
+                ctx.restore();
+            });
+
+            ctx.restore();
+        }
+
+        // --- Layout 4: Process Steps ---
+        function drawProcessSteps(cx, cy, theme, t) {
+            const count = state.nodes.length;
+            const totalW = 1000;
+            const stepW = totalW / count;
+            const startX = cx - totalW / 2 + stepW / 2;
+
+            ctx.save();
+            ctx.strokeStyle = theme.primary;
+            ctx.lineWidth = 3;
+            ctx.shadowColor = theme.primary;
+            ctx.shadowBlur = 10;
+            ctx.beginPath();
+            ctx.moveTo(cx - totalW / 2 + 50, cy);
+            ctx.lineTo(cx + totalW / 2 - 50, cy);
+            ctx.stroke();
+            ctx.restore();
+
+            state.nodes.forEach((node, i) => {
+                const nx = startX + i * stepW;
+                const reveal = getNodeRevealState(i, t);
+                const floatY = state.motion.floating && reveal.progress > 0.8 ? Math.sin(t * state.motion.floatSpeed + i * 1.1) * state.motion.floatAmp : 0;
+
+                if (reveal.visible && reveal.scale > 0.01) {
+                    ctx.save();
+                    ctx.globalAlpha = reveal.opacity;
+                    ctx.shadowColor = theme.primary;
+                    ctx.shadowBlur = 15;
+                    ctx.fillStyle = theme.primary;
+                    ctx.beginPath();
+                    ctx.arc(nx, cy, 22 * reveal.scale, 0, Math.PI * 2);
+                    ctx.fill();
+                    ctx.fillStyle = '#050b14';
+                    ctx.font = '800 14px "JetBrains Mono", monospace';
+                    ctx.textAlign = 'center';
+                    ctx.textBaseline = 'middle';
+                    ctx.fillText(`0${i+1}`, nx, cy);
+                    ctx.restore();
+
+                    const nScale = state.style.nodeScale || 1.0;
+                    const cardY = i % 2 === 0 ? cy - (state.style.nodeDistY || 140) : cy + (state.style.nodeDistY || 140);
+                    drawCardNode(nx, cardY + floatY, 210 * nScale, 84 * nScale, node, theme, false, t, i, reveal);
+                }
+            });
+        }
+
+        // --- Layout 5: Comparison Layout ---
+        function drawComparisonLayout(cx, cy, theme, t) {
+            const nScale = state.style.nodeScale || 1.0;
+            const cardW = 380 * nScale;
+            const cardH = 340 * nScale;
+            const distX = state.style.nodeDistX || 280;
+
+            const centerReveal = getCenterRevealState(t);
+            if (centerReveal.scale > 0.01) {
+                ctx.save();
+                ctx.globalAlpha = centerReveal.opacity;
+                ctx.shadowColor = theme.primary;
+                ctx.shadowBlur = 20;
+                ctx.fillStyle = theme.primary;
+                ctx.beginPath();
+                ctx.arc(cx, cy, 40 * centerReveal.scale, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.fillStyle = '#050b14';
+                ctx.font = '900 24px "Outfit", sans-serif';
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                ctx.fillText('VS', cx, cy);
+                ctx.restore();
+            }
+
+            const leftNode = state.nodes[0] || { title: 'OPTION A', subtitle: 'Standard Method' };
+            const rightNode = state.nodes[1] || { title: 'OPTION B', subtitle: 'Advanced Method' };
+
+            const leftReveal = getNodeRevealState(0, t);
+            const rightReveal = getNodeRevealState(1, t);
+
+            const floatLeft = state.motion.floating && leftReveal.progress > 0.8 ? Math.sin(t * state.motion.floatSpeed) * 6 : 0;
+            const floatRight = state.motion.floating && rightReveal.progress > 0.8 ? Math.cos(t * state.motion.floatSpeed) * 6 : 0;
+
+            drawCardNode(cx - distX, cy + floatLeft, cardW, cardH, leftNode, theme, false, t, 0, leftReveal);
+            drawCardNode(cx + distX, cy + floatRight, cardW, cardH, rightNode, theme, false, t, 1, rightReveal);
+        }
+
+        // --- Layout 6: Grid Cards Layout ---
+        function drawGridCardsLayout(cx, cy, theme, t) {
+            const count = state.nodes.length;
+            const cols = count > 4 ? 3 : 2;
+            const rows = Math.ceil(count / cols);
+            const nScale = state.style.nodeScale || 1.0;
+            const cardW = 320 * nScale;
+            const cardH = 110 * nScale;
+            const gapX = 40;
+            const gapY = 30;
+
+            const totalW = cols * cardW + (cols - 1) * gapX;
+            const totalH = rows * cardH + (rows - 1) * gapY;
+            const startX = cx - totalW / 2 + cardW / 2;
+            const startY = cy - totalH / 2 + cardH / 2;
+
+            state.nodes.forEach((node, i) => {
+                const c = i % cols;
+                const r = Math.floor(i / cols);
+                const nx = startX + c * (cardW + gapX);
+                const ny = startY + r * (cardH + gapY);
+                const reveal = getNodeRevealState(i, t);
+                const floatY = state.motion.floating && reveal.progress > 0.8 ? Math.sin(t * state.motion.floatSpeed + i * 0.9) * state.motion.floatAmp : 0;
+                drawCardNode(nx, ny + floatY, cardW, cardH, node, theme, false, t, i, reveal);
+            });
+        }
+
+        function roundRect(x, y, w, h, r) {
+            if (w < 2 * r) r = w / 2;
+            if (h < 2 * r) r = h / 2;
+            ctx.beginPath();
+            ctx.moveTo(x + r, y);
+            ctx.arcTo(x + w, y, x + w, y + h, r);
+            ctx.arcTo(x + w, y + h, x, y + h, r);
+            ctx.arcTo(x, y + h, x, y, r);
+            ctx.arcTo(x, y, x + w, y, r);
+            ctx.closePath();
+        }
+
+        function drawHexagonShape(x, y, r, fill, stroke, strokeWidth) {
+            ctx.beginPath();
+            for (let i = 0; i < 6; i++) {
+                const a = (i * Math.PI / 3) - Math.PI / 6;
+                const px = x + r * Math.cos(a);
+                const py = y + r * Math.sin(a);
+                if (i === 0) ctx.moveTo(px, py);
+                else ctx.lineTo(px, py);
+            }
+            ctx.closePath();
+            ctx.fillStyle = fill;
+            ctx.fill();
+            ctx.strokeStyle = stroke;
+            ctx.lineWidth = strokeWidth;
+            ctx.stroke();
+        }
+
+        function truncateText(text, max) {
+            if (!text) return '';
+            return text.length > max ? text.slice(0, max) + '...' : text;
+        }
+
+        function drawGuideGrid() {
+            ctx.save();
+            ctx.strokeStyle = 'rgba(239, 68, 68, 0.4)';
+            ctx.lineWidth = 1;
+            ctx.setLineDash([5, 5]);
+
+            ctx.beginPath();
+            ctx.moveTo(canvas.width / 2, 0); ctx.lineTo(canvas.width / 2, canvas.height);
+            ctx.moveTo(0, canvas.height / 2); ctx.lineTo(canvas.width, canvas.height / 2);
+            ctx.stroke();
+
+            const padX = canvas.width * 0.05;
+            const padY = canvas.height * 0.05;
+            ctx.strokeRect(padX, padY, canvas.width - padX * 2, canvas.height - padY * 2);
+            ctx.restore();
+        }
+
+        function escapeHtml(str) {
+            return String(str || '').replace(/[&<>"']/g, m => ({
+                '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;'
+            })[m]);
+        }
+
+        function showToast(msg) {
+            const toast = document.getElementById('toastBox');
+            document.getElementById('toastMsg').innerText = msg;
+            toast.style.display = 'flex';
+            setTimeout(() => { toast.style.display = 'none'; }, 3200);
+        }
+
+        /* ==========================================================================
+           Export Engine
+           ========================================================================== */
+
+        document.getElementById('btnExportPng').addEventListener('click', () => {
+            const a = document.createElement('a');
+            a.download = `motion_diagram_${Date.now()}.png`;
+            a.href = canvas.toDataURL('image/png');
+            a.click();
+            showToast('High-Res PNG সফলভাবে ডাউনলোড হয়েছে!');
+        });
+
+        document.getElementById('btnExportTransparentPng').addEventListener('click', () => {
+            const oldBg = state.bg;
+            state.bg = 'transparent';
+            drawStage(performance.now());
+
+            setTimeout(() => {
+                const a = document.createElement('a');
+                a.download = `diagram_transparent_${Date.now()}.png`;
+                a.href = canvas.toDataURL('image/png');
+                a.click();
+
+                state.bg = oldBg;
+                showToast('স্বচ্ছ (Transparent) PNG ডাউনলোড হয়েছে!');
+            }, 100);
+        });
+
+        document.getElementById('btnRecordVideo').addEventListener('click', () => {
+            const recordBtn = document.getElementById('btnRecordVideo');
+            recordBtn.disabled = true;
+
+            // Compute total sequence duration
+            let durationSec = 7;
+            if (state.motion.revealMode === 'auto') {
+                durationSec = Math.ceil(0.8 + state.nodes.length * state.motion.stepInterval + 1.5);
+            }
+            recordBtn.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> ${durationSec}s সিকোয়েন্স রেকর্ড হচ্ছে...`;
+
+            // Reset start time to record from clean start
+            state.motion.startTime = performance.now();
+
+            const stream = canvas.captureStream(60);
+            let mime = 'video/webm;codecs=vp9';
+            if (!MediaRecorder.isTypeSupported(mime)) {
+                mime = 'video/webm';
+            }
+
+            const recorder = new MediaRecorder(stream, {
+                mimeType: mime,
+                videoBitsPerSecond: 12000000
+            });
+
+            const chunks = [];
+            recorder.ondataavailable = e => { if (e.data.size > 0) chunks.push(e.data); };
+
+            recorder.onstop = () => {
+                const blob = new Blob(chunks, { type: mime });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.download = `sequential_diagram_${Date.now()}.webm`;
+                a.href = url;
+                a.click();
+                URL.revokeObjectURL(url);
+
+                recordBtn.disabled = false;
+                recordBtn.innerHTML = '<i class="fa-solid fa-video"></i> Export Animated Video';
+                showToast('অ্যানিমেটেড ভিডিও (.webm) সফলভাবে ডাউনলোড হয়েছে!');
+            };
+
+            recorder.start();
+            setTimeout(() => {
+                recorder.stop();
+            }, durationSec * 1000);
+        });
+
+        // Size & Color Customization Event Listeners
+        const centerScaleSlider = document.getElementById('centerScaleSlider');
+        const nodeScaleSlider = document.getElementById('nodeScaleSlider');
+        const distXSlider = document.getElementById('distXSlider');
+        const distYSlider = document.getElementById('distYSlider');
+
+        const centerFontSizeSlider = document.getElementById('centerFontSizeSlider');
+        const nodeTitleFontSizeSlider = document.getElementById('nodeTitleFontSizeSlider');
+        const nodeSubFontSizeSlider = document.getElementById('nodeSubFontSizeSlider');
+
+        const primaryColorPicker = document.getElementById('primaryColorPicker');
+        const cardBgColorPicker = document.getElementById('cardBgColorPicker');
+        const titleTextColorPicker = document.getElementById('titleTextColorPicker');
+        const subTextColorPicker = document.getElementById('subTextColorPicker');
+
+        if (centerScaleSlider) {
+            centerScaleSlider.addEventListener('input', e => {
+                state.style.centerScale = parseFloat(e.target.value);
+                document.getElementById('lblCenterScale').innerText = Math.round(state.style.centerScale * 100) + '%';
+            });
+        }
+
+        if (nodeScaleSlider) {
+            nodeScaleSlider.addEventListener('input', e => {
+                state.style.nodeScale = parseFloat(e.target.value);
+                document.getElementById('lblNodeScale').innerText = Math.round(state.style.nodeScale * 100) + '%';
+            });
+        }
+
+        if (distXSlider) {
+            distXSlider.addEventListener('input', e => {
+                state.style.nodeDistX = parseInt(e.target.value);
+                document.getElementById('lblDistX').innerText = state.style.nodeDistX + 'px';
+            });
+        }
+
+        if (distYSlider) {
+            distYSlider.addEventListener('input', e => {
+                state.style.nodeDistY = parseInt(e.target.value);
+                document.getElementById('lblDistY').innerText = state.style.nodeDistY + 'px';
+            });
+        }
+
+        if (centerFontSizeSlider) {
+            centerFontSizeSlider.addEventListener('input', e => {
+                state.style.centerFontSize = parseInt(e.target.value);
+                document.getElementById('lblCenterFontSize').innerText = state.style.centerFontSize + 'px';
+            });
+        }
+
+        if (nodeTitleFontSizeSlider) {
+            nodeTitleFontSizeSlider.addEventListener('input', e => {
+                state.style.nodeTitleFontSize = parseInt(e.target.value);
+                document.getElementById('lblNodeTitleFontSize').innerText = state.style.nodeTitleFontSize + 'px';
+            });
+        }
+
+        if (nodeSubFontSizeSlider) {
+            nodeSubFontSizeSlider.addEventListener('input', e => {
+                state.style.nodeSubFontSize = parseInt(e.target.value);
+                document.getElementById('lblNodeSubFontSize').innerText = state.style.nodeSubFontSize + 'px';
+            });
+        }
+
+        if (primaryColorPicker) {
+            primaryColorPicker.addEventListener('input', e => {
+                state.style.customPrimaryColor = e.target.value;
+                document.getElementById('lblPrimaryColorHex').innerText = e.target.value;
+            });
+        }
+
+        if (cardBgColorPicker) {
+            cardBgColorPicker.addEventListener('input', e => {
+                state.style.customCardBg = e.target.value;
+                document.getElementById('lblCardBgHex').innerText = e.target.value;
+            });
+        }
+
+        if (titleTextColorPicker) {
+            titleTextColorPicker.addEventListener('input', e => {
+                state.style.customTitleColor = e.target.value;
+                document.getElementById('lblTitleColorHex').innerText = e.target.value;
+            });
+        }
+
+        if (subTextColorPicker) {
+            subTextColorPicker.addEventListener('input', e => {
+                state.style.customSubColor = e.target.value;
+                document.getElementById('lblSubColorHex').innerText = e.target.value;
+            });
+        }
+
+        // Quick Palette Swatches
+        document.querySelectorAll('.quick-color-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                const hex = btn.dataset.color;
+                state.style.customPrimaryColor = hex;
+                if (primaryColorPicker) primaryColorPicker.value = hex;
+                document.getElementById('lblPrimaryColorHex').innerText = hex;
+                showToast(hex + ' নিয়ন কালার সক্রিয় হয়েছে');
+            });
+        });
+
+        // Reset Styles Button
+        const btnResetStyles = document.getElementById('btnResetStyles');
+        if (btnResetStyles) {
+            btnResetStyles.addEventListener('click', () => {
+                state.style.centerScale = 1.0;
+                state.style.nodeScale = 1.0;
+                state.style.nodeDistX = 440;
+                state.style.nodeDistY = 160;
+                state.style.centerFontSize = 34;
+                state.style.nodeTitleFontSize = 16;
+                state.style.nodeSubFontSize = 12;
+                state.style.customPrimaryColor = null;
+                state.style.customCardBg = null;
+                state.style.customTitleColor = null;
+                state.style.customSubColor = null;
+
+                if (centerScaleSlider) centerScaleSlider.value = 1.0;
+                if (nodeScaleSlider) nodeScaleSlider.value = 1.0;
+                if (distXSlider) distXSlider.value = 440;
+                if (distYSlider) distYSlider.value = 160;
+                if (centerFontSizeSlider) centerFontSizeSlider.value = 34;
+                if (nodeTitleFontSizeSlider) nodeTitleFontSizeSlider.value = 16;
+                if (nodeSubFontSizeSlider) nodeSubFontSizeSlider.value = 12;
+
+                document.getElementById('lblCenterScale').innerText = '100%';
+                document.getElementById('lblNodeScale').innerText = '100%';
+                document.getElementById('lblDistX').innerText = '440px';
+                document.getElementById('lblDistY').innerText = '160px';
+                document.getElementById('lblCenterFontSize').innerText = '34px';
+                document.getElementById('lblNodeTitleFontSize').innerText = '16px';
+                document.getElementById('lblNodeSubFontSize').innerText = '12px';
+
+                showToast('ডিফল্ট সাইজ ও কালার রিস্টোর হয়েছে!');
+            });
+        }
+
+        // Initialize UI
+        renderNodesList();
+        requestAnimationFrame(drawStage);
+    </script>
+</body>
+</html>
