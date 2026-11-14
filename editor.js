@@ -19737,6 +19737,10 @@ document.addEventListener('DOMContentLoaded', () => {
     function getItemImageDrawable(item, currentTime) {
         if (item && item.gifParsed && item.gifParsed.frames && item.gifParsed.frames.length > 0) {
             const frames = item.gifParsed.frames;
+            const isValidDrawable = (c) => c && (typeof HTMLCanvasElement !== 'undefined' && c instanceof HTMLCanvasElement || typeof ImageBitmap !== 'undefined' && c instanceof ImageBitmap || typeof HTMLImageElement !== 'undefined' && c instanceof HTMLImageElement || (c.width && c.height && typeof c.getContext === 'function'));
+            if (!isValidDrawable(frames[0]?.canvas)) {
+                return (item && item.imageImg && isValidDrawable(item.imageImg)) ? item.imageImg : null;
+            }
             if (frames.length === 1) return frames[0].canvas;
             const totalDurationMs = item.gifParsed.totalDurationMs || 1000;
             if (totalDurationMs <= 0) return frames[0].canvas;
@@ -19765,9 +19769,9 @@ document.addEventListener('DOMContentLoaded', () => {
             let accum = 0;
             for (let i = 0; i < frames.length; i++) {
                 accum += frames[i].delayMs;
-                if (relMs < accum) return frames[i].canvas;
+                if (relMs < accum) return isValidDrawable(frames[i].canvas) ? frames[i].canvas : null;
             }
-            return frames[frames.length - 1].canvas;
+            return isValidDrawable(frames[frames.length - 1].canvas) ? frames[frames.length - 1].canvas : null;
         }
         return item ? item.imageImg : null;
     }
@@ -25067,12 +25071,19 @@ document.addEventListener('DOMContentLoaded', () => {
                 const brollCopy = {...broll};
                 delete brollCopy.imageImg;
                 delete brollCopy.file;
+                delete brollCopy.gifParsed;
 
                 if (broll.type === 'image' || broll.type === 'gif') {
                     if (broll.imageUrl && broll.imageUrl.startsWith('data:image/')) {
                         brollCopy.imageBase64 = broll.imageUrl;
                     } else if (broll.file) {
                         brollCopy.imageBase64 = await embedBlobAsBase64(broll.file);
+                    } else if (broll.imageUrl && broll.imageUrl.startsWith('blob:')) {
+                        try {
+                            const res = await fetch(broll.imageUrl);
+                            const bBlob = await res.blob();
+                            brollCopy.imageBase64 = await embedBlobAsBase64(bBlob);
+                        } catch (_) {}
                     }
                 }
                 data.brollOverlays.push(brollCopy);

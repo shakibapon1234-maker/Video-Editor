@@ -1259,6 +1259,9 @@ app.post('/api/fast-direct-render', express.json({ limit: '2048mb' }), async (re
             clips,
             audioBase64,
             blurRegions,
+            duckIntervals,
+            textOverlays,
+            extraTracks: extraTracksReq,
             filename: reqFilename,
             totalDuration,
             quality,
@@ -1430,6 +1433,117 @@ app.post('/api/fast-direct-render', express.json({ limit: '2048mb' }), async (re
                         finalVideoLabel = currentVLabel;
                     }
                 }
+
+                // ══════════════════════════════════════════════════════════════════
+                // Ultra-Fast: Extra Track Image / Video Overlays
+                // ══════════════════════════════════════════════════════════════════
+                const extraTrackList = Array.isArray(extraTracksReq) ? extraTracksReq : [];
+                const extraTrackInputPaths = [];
+
+                for (let eti = 0; eti < extraTrackList.length; eti++) {
+                    const et = extraTrackList[eti];
+                    if (!et) continue;
+                    let etPath = '';
+                    if (et.filePath && fs.existsSync(et.filePath)) {
+                        etPath = et.filePath;
+                    } else if (et.base64) {
+                        const ext = et.type === 'image' ? '.jpg' : '.mp4';
+                        etPath = path.join(tempDir, `extra_${eti}${ext}`);
+                        const cleanB64 = et.base64.replace(/^data:[^;]+;base64,/, '');
+                        fs.writeFileSync(etPath, Buffer.from(cleanB64, 'base64'));
+                    }
+                    if (etPath) {
+                        extraTrackInputPaths.push({ path: etPath, meta: et });
+                    }
+                }
+
+                // Apply extra track overlays on top of finalVideoLabel
+                // Each extra track clip is overlaid with time-based enable expressions
+                for (let eti = 0; eti < extraTrackInputPaths.length; eti++) {
+                    const { path: etPath, meta: et } = extraTrackInputPaths[eti];
+                    const etInputIdx = inputPaths.length + (audioPath && fs.existsSync(audioPath) ? 1 : 0) + eti;
+                    const etStart = Math.max(0, parseFloat(et.timelineOffset) || 0);
+                    const etSrcStart = Math.max(0, parseFloat(et.sourceStart) || 0);
+                    const etSrcEnd = Math.max(etSrcStart + 0.1, parseFloat(et.sourceEnd) || 5);
+                    const etDur = etSrcEnd - etSrcStart;
+                    const etEnd = etStart + etDur;
+
+                    // Calculate pixel position from normalized transform
+                    const hasTransform = !!et.hasTransform;
+                    const cx = typeof et.transformX === 'number' ? et.transformX : 0.5;
+                    const cy = typeof et.transformY === 'number' ? et.transformY : 0.5;
+                    const cw = Math.max(0.05, typeof et.transformW === 'number' ? et.transformW : 1.0);
+                    const overlayW = Math.round(cw * targetW / 2) * 2;
+                    const overlayPos = hasTransform
+                        ? `(W*${cx.toFixed(4)}-w/2):(H*${cy.toFixed(4)}-h/2)`
+                        : '0:0';
+
+                    const nextLabel = `[etv_${eti}]`;
+                    const scaledLabel = `[etscaled_${eti}]`;
+
+                    if (et.type === 'image') {
+                        // Static image: loop it indefinitely across the timeline
+                        if (hasTransform) {
+                            filterParts.push(`[${etInputIdx}:v]loop=loop=-1:size=1:start=0,scale=${overlayW}:-2:flags=lanczos${scaledLabel}`);
+                            filterParts.push(`${finalVideoLabel}${scaledLabel}overlay=${overlayPos}:enable='between(t,${etStart.toFixed(3)},${etEnd.toFixed(3)})'${nextLabel}`);
+                        } else {
+                            // Full-cover: scale to fill canvas and center-crop
+                            filterParts.push(`[${etInputIdx}:v]loop=loop=-1:size=1:start=0,scale=${targetW}:${targetH}:force_original_aspect_ratio=increase,crop=${targetW}:${targetH},setsar=1${scaledLabel}`);
+                            filterParts.push(`${finalVideoLabel}${scaledLabel}overlay=0:0:enable='between(t,${etStart.toFixed(3)},${etEnd.toFixed(3)})'${nextLabel}`);
+                        }
+                    } else {
+                        // Video clip: trim, then overlay
+                        if (hasTransform) {
+                            filterParts.push(`[${etInputIdx}:v]trim=start=${etSrcStart.toFixed(3)}:end=${etSrcEnd.toFixed(3)},setpts=PTS-STARTPTS,scale=${overlayW}:-2:flags=lanczos${scaledLabel}`);
+                            filterParts.push(`${finalVideoLabel}${scaledLabel}overlay=${overlayPos}:enable='between(t,${etStart.toFixed(3)},${etEnd.toFixed(3)})'${nextLabel}`);
+                        } else {
+                            filterParts.push(`[${etInputIdx}:v]trim=start=${etSrcStart.toFixed(3)}:end=${etSrcEnd.toFixed(3)},setpts=PTS-STARTPTS,scale=${targetW}:${targetH}:force_original_aspect_ratio=increase,crop=${targetW}:${targetH},setsar=1${scaledLabel}`);
+                            filterParts.push(`${finalVideoLabel}${scaledLabel}overlay=0:0:enable='between(t,${etStart.toFixed(3)},${etEnd.toFixed(3)})'${nextLabel}`);
+                        }
+                    }
+                    finalVideoLabel = nextLabel;
+                }
+
+                // ══════════════════════════════════════════════════════════════════
+                // Ultra-Fast: Normal Text Overlays (FFmpeg drawtext filter)
+                // Only simple/solid-color text with no animation/box/curve
+                // ══════════════════════════════════════════════════════════════════
+                const textOverlayList = Array.isArray(textOverlays) ? textOverlays : [];
+                for (let toi = 0; toi < textOverlayList.length; toi++) {
+                    const to = textOverlayList[toi];
+                    if (!to || !to.text) continue;
+
+                    // Convert normalized x/y (0-1 canvas fraction) to pixel position
+                    const toX = Math.round((parseFloat(to.x) || 0.5) * targetW);
+                    const toY = Math.round((parseFloat(to.y) || 0.5) * targetH);
+                    const toFontSize = Math.round((parseFloat(to.fontSize) || 36) * (targetW / 1280));
+                    const toStartSec = Math.max(0, parseFloat(to.startSec) || 0);
+                    const toEndSec = Math.max(toStartSec + 0.1, parseFloat(to.endSec) || 9999);
+
+                    // Sanitize color: FFmpeg wants 0xRRGGBB or 0xAARRGGBB format
+                    let toColor = (to.color || '#ffffff').replace('#', '0x');
+                    if (toColor.length === 4) toColor = '0x' + toColor[2] + toColor[2] + toColor[3] + toColor[3] + toColor[4] + toColor[4]; // expand short hex
+                    
+                    // Sanitize text: escape FFmpeg special chars
+                    const toText = String(to.text || '')
+                        .replace(/\\/g, '\\\\')
+                        .replace(/'/g, "\\'")
+                        .replace(/:/g, '\\:')
+                        .replace(/,/g, '\\,')
+                        .replace(/\[/g, '\\[')
+                        .replace(/]/g, '\\]');
+
+                    const isBold = !!to.isBold ? 1 : 0;
+                    const isItalic = !!to.isItalic ? 1 : 0;
+
+                    // FFmpeg drawtext: x/y relative to output canvas (anchor=center via x-tw/2, y-th/2)
+                    const drawtextFilter = `drawtext=text='${toText}':fontsize=${toFontSize}:fontcolor=${toColor}:x=(w*${(parseFloat(to.x)||0.5).toFixed(4)}-tw/2):y=(h*${(parseFloat(to.y)||0.5).toFixed(4)}-th/2):enable='between(t,${toStartSec.toFixed(3)},${toEndSec.toFixed(3)})'`;
+
+                    const nextTLabel = `[txt_${toi}]`;
+                    filterParts.push(`${finalVideoLabel}${drawtextFilter}${nextTLabel}`);
+                    finalVideoLabel = nextTLabel;
+                }
+
                 filterParts.push(`${audioLabels.join('')}concat=n=${inputPaths.length}:v=0:a=1[aclipout]`);
 
                 let currentALabel = '[aclipout]';
@@ -1486,6 +1600,8 @@ app.post('/api/fast-direct-render', express.json({ limit: '2048mb' }), async (re
                 if (audioPath && fs.existsSync(audioPath)) {
                     cmd.input(audioPath);
                 }
+                // Add extra track image/video inputs
+                extraTrackInputPaths.forEach(et => cmd.input(et.path));
 
                 const estDuration = Math.max(0.1, parseFloat(totalDuration) || 0);
 

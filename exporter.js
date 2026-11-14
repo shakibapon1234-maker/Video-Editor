@@ -373,13 +373,43 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
 
-        const hasVisualOverlays = (Array.isArray(state.brollOverlays) && state.brollOverlays.length > 0) ||
-                                  (Array.isArray(state.textOverlays) && state.textOverlays.length > 0) ||
-                                  (Array.isArray(state.symbolOverlays) && state.symbolOverlays.length > 0) ||
-                                  (Array.isArray(state.shapeOverlays) && state.shapeOverlays.length > 0) ||
-                                  (Array.isArray(state.subtitles) && state.subtitles.length > 0);
-        if (hasVisualOverlays) {
-            const proceed = confirm("⚠️ আপনার ভিডিওতে বিরোল ছবি/টেক্সট/সাবটাইটেল রয়েছে।\n\n⚡ আল্ট্রা-ফাস্ট মোডে (Ultra-Fast Direct Export) শুধুমাত্র ট্রিম করা ক্লিপ ও ব্লার (Blur) এক্সপোর্ট হয়, ক্যানভাস বিরোল বা টেক্সট আসে না।\n\nবিরোল ও টেক্সট সহ ফুল কোয়ালিটি রেন্ডার পেতে 'Frame-by-Frame Canvas Render' ব্যবহার করা আবশ্যক।\n\nআপনি কি তবুও আল্ট্রা-ফাস্ট মোডে (বিরোল/টেক্সট ছাড়া শুধু ব্লার ও ক্লিপ) রেন্ডার করতে চান?");
+        // Check which overlays are "complex" (need Canvas) vs "simple" (Ultra-Fast FFmpeg can handle)
+        const simpleTextCount = (Array.isArray(state.textOverlays) ? state.textOverlays : [])
+            .filter(t => t && t.text
+                && (!t.animStyle || t.animStyle === 'none' || t.animStyle === '')
+                && (!t.textAnimStyle || t.textAnimStyle === 'none' || t.textAnimStyle === '')
+                && (!t.boxStyle || t.boxStyle === 'none')
+                && (!t.colorMode || t.colorMode === 'solid')
+                && (!t.curve || t.curve === 0)
+                && t.visualTemplate === 'standard').length;
+        const complexTextCount = (Array.isArray(state.textOverlays) ? state.textOverlays.length : 0) - simpleTextCount;
+
+        const simpleExtraTrackCount = (Array.isArray(state.extraTracks) ? state.extraTracks : [])
+            .filter(t => t && (t.type === 'image' || t.type === 'video')
+                && !t.muted
+                && (t.clips || []).some(c => {
+                    const d = c.imageDesign || c.visualTemplate || 'standard';
+                    return d === 'standard' || d === 'shadow';
+                })).length;
+
+        const hasBrollOverlays = Array.isArray(state.brollOverlays) && state.brollOverlays.length > 0;
+        const hasSymbolOverlays = Array.isArray(state.symbolOverlays) && state.symbolOverlays.length > 0;
+        const hasShapeOverlays = Array.isArray(state.shapeOverlays) && state.shapeOverlays.length > 0;
+        const hasSubtitles = Array.isArray(state.subtitles) && state.subtitles.length > 0;
+
+        const hasComplexOverlays = hasBrollOverlays || complexTextCount > 0 || hasSymbolOverlays || hasShapeOverlays || hasSubtitles;
+
+        if (hasComplexOverlays) {
+            let msg = "⚠️ আপনার ভিডিওতে এমন কিছু আছে যা ⚡ Ultra-Fast-এ সম্পূর্ণ আসবে না:\n\n";
+            if (hasBrollOverlays) msg += "\u274c বিরোল ছবি (B-Roll) — আসবে না\n";
+            if (complexTextCount > 0) msg += `\u274c ${complexTextCount}টি অ্যানিমেটেড/বক্স টেক্সট — আসবে না\n`;
+            if (hasSymbolOverlays) msg += "\u274c Symbol/Sticker — আসবে না\n";
+            if (hasShapeOverlays) msg += "\u274c Shape Overlay — আসবে না\n";
+            if (hasSubtitles) msg += "\u274c Subtitle — আসবে না\n";
+            if (simpleTextCount > 0) msg += `\n\u2705 ${simpleTextCount}টি সাধারণ টেক্সট — Ultra-Fast-এ আসবে\n`;
+            if (simpleExtraTrackCount > 0) msg += `\u2705 ${simpleExtraTrackCount}টি Multi-Track Image/Video — Ultra-Fast-এ আসবে\n`;
+            msg += "\nফুল কোয়ালিটি পেতে Frame-by-Frame Canvas Render ব্যবহার করুন।\n\nতবুও Ultra-Fast-এ রেন্ডার করবেন?";
+            const proceed = confirm(msg);
             if (!proceed) return;
         }
 
@@ -597,7 +627,92 @@ document.addEventListener('DOMContentLoaded', () => {
             const timestamp = new Date().toISOString().slice(0, 16).replace('T', '_').replace(':', '-');
             const defaultFilename = `video_edited_${timestamp}.mp4`;
 
-            const duckIntervals = (typeof window.getMultitrackAudioDuckingIntervals === 'function')
+            
+            // --- Collect Text Overlays for Ultra-Fast FFmpeg drawtext ---
+            const textOverlaysPayload = (Array.isArray(state.textOverlays) ? state.textOverlays : [])
+                .filter(t => t && t.text && (!t.animStyle || t.animStyle === 'none' || t.animStyle === '')
+                           && (!t.textAnimStyle || t.textAnimStyle === 'none' || t.textAnimStyle === '')
+                           && (!t.boxStyle || t.boxStyle === 'none')
+                           && (!t.colorMode || t.colorMode === 'solid')
+                           && (!t.curve || t.curve === 0)
+                           && (!t.curvePoints || t.curvePoints.length === 0)
+                           && t.visualTemplate === 'standard')
+                .map(t => ({
+                    text: String(t.text || ''),
+                    x: typeof t.x === 'number' ? t.x : 0.5,
+                    y: typeof t.y === 'number' ? t.y : 0.5,
+                    fontSize: Math.round(t.fontSize || 36),
+                    color: t.color || '#ffffff',
+                    isBold: !!t.isBold,
+                    isItalic: !!t.isItalic,
+                    font: t.font || 'Arial',
+                    startSec: typeof t.startSec === 'number' ? t.startSec : 0,
+                    endSec: typeof t.endSec === 'number' ? t.endSec : 9999,
+                    clipId: t.clipId || 'all'
+                }));
+
+            // --- Collect Extra Track Image/Video overlays for Ultra-Fast FFmpeg overlay ---
+            const extraTracksPayload = [];
+            if (Array.isArray(state.extraTracks)) {
+                for (let ti = 0; ti < state.extraTracks.length; ti++) {
+                    const track = state.extraTracks[ti];
+                    if (!track || track.type === 'audio') continue; // audio handled separately
+                    if (track.muted) continue;
+                    for (let ci = 0; ci < (track.clips || []).length; ci++) {
+                        const eclip = track.clips[ci];
+                        if (!eclip) continue;
+                        // Skip 3D design frames - those need Canvas
+                        const design = eclip.imageDesign || eclip.visualTemplate || 'standard';
+                        if (design !== 'standard' && design !== 'shadow') {
+                            // Complex design - cannot do in FFmpeg, skip for Ultra-Fast
+                            continue;
+                        }
+                        // Resolve file path
+                        let eclipFilePath = '';
+                        if (eclip.file) {
+                            try {
+                                if (window.electronAPI && typeof window.electronAPI.getPathForFile === 'function') {
+                                    eclipFilePath = window.electronAPI.getPathForFile(eclip.file) || '';
+                                }
+                                if (!eclipFilePath && eclip.file.path) eclipFilePath = eclip.file.path;
+                            } catch (_) {}
+                        }
+                        let eclipBase64 = null;
+                        if (!eclipFilePath && eclip.url) {
+                            try {
+                                const blob = await fetch(eclip.url).then(r => r.blob()).catch(() => null);
+                                if (blob) {
+                                    eclipBase64 = await new Promise(res => {
+                                        const rdr = new FileReader();
+                                        rdr.onloadend = () => res(rdr.result);
+                                        rdr.readAsDataURL(blob);
+                                    });
+                                }
+                            } catch (_) {}
+                        }
+                        const transform = eclip.transform || null;
+                        extraTracksPayload.push({
+                            type: eclip.type || track.type,
+                            name: eclip.name || `track_${ti}_${ci}.mp4`,
+                            filePath: eclipFilePath,
+                            base64: eclipBase64,
+                            timelineOffset: typeof eclip.timelineOffset === 'number' ? eclip.timelineOffset : 0,
+                            sourceStart: typeof eclip.sourceStart === 'number' ? eclip.sourceStart : 0,
+                            sourceEnd: typeof eclip.sourceEnd === 'number' ? eclip.sourceEnd : (eclip.duration || 10),
+                            duration: eclip.duration || 5,
+                            // Transform: x/y = center fraction of canvas, w = width fraction of canvas
+                            transformX: transform ? transform.x : 0.5,
+                            transformY: transform ? transform.y : 0.5,
+                            transformW: transform ? transform.w : 1.0,
+                            hasTransform: !!transform,
+                            volume: (typeof track.volume === 'number' ? track.volume : 1.0),
+                            design: design
+                        });
+                    }
+                }
+            }
+
+const duckIntervals = (typeof window.getMultitrackAudioDuckingIntervals === 'function')
                 ? window.getMultitrackAudioDuckingIntervals()
                 : [];
 
@@ -609,6 +724,8 @@ document.addEventListener('DOMContentLoaded', () => {
                     audioBase64,
                     blurRegions: blurRegionsPayload,
                     duckIntervals,
+                    textOverlays: textOverlaysPayload,
+                    extraTracks: extraTracksPayload,
                     totalDuration,
                     filename: defaultFilename,
                     quality: selectedQuality,
@@ -1682,7 +1799,12 @@ document.addEventListener('DOMContentLoaded', () => {
                 ? `সংরক্ষিত ${finalFilename}! (পরবর্তী...)`
                 : `Saved ${finalFilename}! Proceeding...`;
             await new Promise(resolve => setTimeout(resolve, 1000));
-            return;
+            // Browser WASM mode: return blob URL so phase9 can display a Download button
+            if (compileOutput instanceof Blob) {
+                const blobUrl = URL.createObjectURL(compileOutput);
+                return { blobUrl, filename: finalFilename };
+            }
+            return null;
         }
 
         setProgress(100);

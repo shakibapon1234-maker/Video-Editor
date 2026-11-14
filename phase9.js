@@ -2092,13 +2092,31 @@ document.addEventListener('DOMContentLoaded', () => {
         const savedBackgroundMode = state.backgroundMode;
 
         // Check if project has animated text overlays, intro/outro, or extra video tracks
-        const hasTextOverlays = Array.isArray(state.textOverlays) && state.textOverlays.length > 0;
         const hasBrollOverlays = Array.isArray(state.brollOverlays) && state.brollOverlays.length > 0;
         const hasSymbolOverlays = Array.isArray(state.symbolOverlays) && state.symbolOverlays.length > 0;
         const hasShapeOverlays = Array.isArray(state.shapeOverlays) && state.shapeOverlays.length > 0;
         const hasSubtitles = Array.isArray(state.subtitles) && state.subtitles.length > 0;
         const hasIntroOutro = !!(state.introEnabled || state.outroEnabled);
-        const hasExtraVideoTracks = Array.isArray(state.extraTracks) && state.extraTracks.some(t => t.type === 'video' && (t.clips || []).length > 0);
+        // Simple (animation-free, solid-color, no-box) text can be rendered via FFmpeg drawtext in Ultra-Fast
+        const simpleTextOverlays = (Array.isArray(state.textOverlays) ? state.textOverlays : [])
+            .filter(t => t && t.text
+                && (!t.animStyle || t.animStyle === 'none' || t.animStyle === '')
+                && (!t.textAnimStyle || t.textAnimStyle === 'none' || t.textAnimStyle === '')
+                && (!t.boxStyle || t.boxStyle === 'none')
+                && (!t.colorMode || t.colorMode === 'solid')
+                && (!t.curve || t.curve === 0)
+                && t.visualTemplate === 'standard');
+        const hasComplexTextOverlays = (Array.isArray(state.textOverlays) ? state.textOverlays.length : 0) > simpleTextOverlays.length
+            || (Array.isArray(state.textOverlays) && state.textOverlays.length > 0 && simpleTextOverlays.length === 0 && state.textOverlays.length > 0);
+        const hasTextOverlays = hasComplexTextOverlays; // only complex text forces Canvas pipeline now
+        // Simple image/video extra tracks (standard/shadow design) can go through Ultra-Fast
+        const hasExtraVideoTracks = Array.isArray(state.extraTracks) && state.extraTracks.some(t => {
+            if (t.type !== 'video' && t.type !== 'image') return false;
+            return (t.clips || []).some(c => {
+                const d = c.imageDesign || c.visualTemplate || 'standard';
+                return d !== 'standard' && d !== 'shadow'; // complex 3D/circle frames force Canvas
+            });
+        });
         const needsCanvasPipeline = hasTextOverlays || hasBrollOverlays || hasSymbolOverlays || hasShapeOverlays || hasSubtitles || hasIntroOutro || hasExtraVideoTracks;
 
         const exportedResults = [];
@@ -2358,15 +2376,18 @@ document.addEventListener('DOMContentLoaded', () => {
                     };
 
                     const exportFilename = `video_${ratio}_${quality}`;
-                    await window.runExportPipeline(totalDuration, true, exportFilename, i + 1, items.length, quality);
+                    const pipelineResult = await window.runExportPipeline(totalDuration, true, exportFilename, i + 1, items.length, quality);
 
+                    // In browser WASM mode, pipelineResult may contain { blobUrl, filename }
+                    const wasmBlobUrl = (pipelineResult && pipelineResult.blobUrl) ? pipelineResult.blobUrl : null;
                     exportedResults.push({
                         ratio,
                         ratioTitle,
                         modeLabel,
                         dims,
-                        filename: `${exportFilename}_edited.mp4`,
-                        downloadUrl: `/exports/${exportFilename}_edited.mp4`
+                        filename: (pipelineResult && pipelineResult.filename) || `${exportFilename}_edited.mp4`,
+                        downloadUrl: wasmBlobUrl || `/exports/${exportFilename}_edited.mp4`,
+                        isBlobUrl: !!wasmBlobUrl
                     });
                 }
 
@@ -2418,9 +2439,11 @@ document.addEventListener('DOMContentLoaded', () => {
                         downloadBtn.style.cssText = 'padding: 6px 12px; font-size: 12px; font-weight: 600; display: inline-flex; align-items: center; gap: 5px;';
                         downloadBtn.innerHTML = '<i class="fa-solid fa-download"></i> Save / Download';
                         downloadBtn.onclick = async () => {
-                            if (isElectron) {
+                            if (isElectron && !res.isBlobUrl) {
                                 await window.electronAPI.saveExportedVideo(res.downloadUrl, res.filename);
                             } else {
+                                // In browser WASM mode (res.isBlobUrl=true) or Electron with blob URL:
+                                // downloadUrl is already a valid blob: URL — just trigger download
                                 const a = document.createElement('a');
                                 a.href = res.downloadUrl;
                                 a.download = res.filename;
