@@ -2083,6 +2083,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!file) return;
         
         state.logoFile = file;
+        state.logoGifParsed = null;
         const fileURL = URL.createObjectURL(file);
         const img = new Image();
         img.src = fileURL;
@@ -2094,11 +2095,31 @@ document.addEventListener('DOMContentLoaded', () => {
             logoFilename.innerText = file.name;
             logoDropzone.style.display = 'none';
             logoControlCard.style.display = 'block';
+            const step1Controls = document.getElementById('step1-logo-controls-box');
+            if (step1Controls) step1Controls.style.display = 'block';
             
             // Set initial logo sizing based on aspect ratio
-            state.logoX = 0.8; // top right
-            state.logoY = 0.1;
+            if (state.logoX === undefined || state.logoX === null) state.logoX = 0.77; // top right
+            if (state.logoY === undefined || state.logoY === null) state.logoY = 0.08;
+            if (!state.logoSize) state.logoSize = 18;
             
+            // Check if file is animated GIF -> parse frames so it cycles continuously!
+            const isGif = file.type === 'image/gif' || (file.name && file.name.toLowerCase().endsWith('.gif'));
+            if (isGif && typeof parseGifFrames === 'function') {
+                file.arrayBuffer().then(buf => {
+                    try {
+                        const parsed = parseGifFrames(buf);
+                        if (parsed && parsed.frames.length > 0) {
+                            state.logoGifParsed = parsed;
+                            console.log('Logo GIF parsed frame-by-frame! Total frames:', parsed.frames.length);
+                            ensureAnimatedGifPreview();
+                        }
+                    } catch (e) {
+                        console.warn('Logo GIF parse notice:', e);
+                    }
+                }).catch(() => {});
+            }
+
             drawFrame();
             if (window.captureUndoCheckpoint) window.captureUndoCheckpoint();
             if (window.recordEditorHistory) {
@@ -3592,7 +3613,8 @@ document.addEventListener('DOMContentLoaded', () => {
     window.shapeOverlayBelongsToActiveClip = shapeOverlayBelongsToActiveClip;
 
     function refreshAnimatedGifPreview() {
-        const hasVisibleGif = state.brollOverlays.some((item) => {
+        const hasVisibleLogoGif = !!(state.logoGifParsed && state.logoImg);
+        const hasVisibleGif = hasVisibleLogoGif || state.brollOverlays.some((item) => {
             if (item.type !== 'gif' || (!item.imageImg && !item.gifParsed)) return false;
             const isActivelyManipulated = !state.isPlaying && item.id === state.selectedBrollId && (state.isDraggingBroll || state.isResizingBroll || state.isRotatingBroll);
             const _clock = getEditorTimelineClock ? getEditorTimelineClock() : { current: state.currentTime || 0, total: 1000 };
@@ -3621,6 +3643,8 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     window.ensureAnimatedGifPreview = ensureAnimatedGifPreview;
+    window.parseGifFrames = parseGifFrames;
+    window.getItemImageDrawable = getItemImageDrawable;
     
     // Redraw canvas whenever the video's current frame changes while paused (e.g. after seek)
     state.video.addEventListener('seeked', () => {
@@ -10987,18 +11011,39 @@ document.addEventListener('DOMContentLoaded', () => {
             
             state.ctx.save();
             state.ctx.globalAlpha = state.logoOpacity;
-            state.ctx.drawImage(state.logoImg, x, y, logoW, logoH);
+            // If the logo is an animated GIF, cycle frames continuously!
+            let drawable = state.logoImg;
+            if (state.logoGifParsed && state.logoGifParsed.frames && state.logoGifParsed.frames.length > 0) {
+                if (typeof getItemImageDrawable === 'function') {
+                    drawable = getItemImageDrawable({ gifParsed: state.logoGifParsed }, state.currentTime || 0);
+                }
+            }
+            state.ctx.drawImage(drawable, x, y, logoW, logoH);
             state.ctx.restore();
             
-            if (state.currentStep === 2) {
+            // Show interactive bounding box & resize handle in Step 1, Step 2, or during manipulation
+            if (!state.isExportingVideo && (state.currentStep === 1 || state.currentStep === 2 || state.isDraggingLogo || state.isResizingLogo)) {
                 state.ctx.save();
-                state.ctx.strokeStyle = 'rgba(79, 70, 229, 0.8)';
+                state.ctx.strokeStyle = '#38bdf8';
                 state.ctx.lineWidth = 2;
+                state.ctx.setLineDash([5, 4]);
                 state.ctx.strokeRect(x, y, logoW, logoH);
-                state.ctx.fillStyle = '#ffffff';
-                state.ctx.fillRect(x + logoW - 6, y + logoH - 6, 12, 12);
-                state.ctx.strokeStyle = '#4f46e5';
-                state.ctx.strokeRect(x + logoW - 6, y + logoH - 6, 12, 12);
+                state.ctx.setLineDash([]);
+                
+                // Bottom-right resize anchor
+                state.ctx.fillStyle = '#38bdf8';
+                state.ctx.fillRect(x + logoW - 7, y + logoH - 7, 14, 14);
+                state.ctx.strokeStyle = '#ffffff';
+                state.ctx.lineWidth = 1.5;
+                state.ctx.strokeRect(x + logoW - 7, y + logoH - 7, 14, 14);
+
+                // Top label pill
+                state.ctx.fillStyle = 'rgba(15, 23, 42, 0.88)';
+                state.ctx.fillRect(x, Math.max(0, y - 20), 130, 18);
+                state.ctx.fillStyle = '#38bdf8';
+                state.ctx.font = 'bold 11px sans-serif';
+                state.ctx.fillText('লোগো (Drag to Move)', x + 6, Math.max(13, y - 6));
+
                 state.ctx.restore();
             }
         }
@@ -13082,7 +13127,7 @@ document.addEventListener('DOMContentLoaded', () => {
     function handlePointerDown(e) {
         if (window.__mtCanvasPointerDown && window.__mtCanvasPointerDown(e)) return;
 
-        if (state.currentStep !== 2 && state.currentStep !== 3) return;
+        if (state.currentStep !== 1 && state.currentStep !== 2 && state.currentStep !== 3) return;
 
         if (state.isDrawingTextBox) {
             const coords = getCanvasCoords(e);
@@ -15156,7 +15201,7 @@ document.addEventListener('DOMContentLoaded', () => {
     function handlePointerMove(e) {
         if (window.__mtCanvasPointerMove && window.__mtCanvasPointerMove(e)) return;
 
-        if (state.currentStep !== 2 && state.currentStep !== 3) return;
+        if (state.currentStep !== 1 && state.currentStep !== 2 && state.currentStep !== 3) return;
 
         if (state.isDraggingDrawTextBox && state.drawTextBoxStartCoords) {
             state.drawTextBoxCurrentCoords = getCanvasCoords(e);
@@ -28938,3 +28983,123 @@ document.addEventListener('DOMContentLoaded', () => {
         btnQuickContact.addEventListener('click', () => addGdsBrandingOverlay('contact'));
     }
 
+
+
+    // --- Step 1 Quick Action Wireups & Logo Movement Handlers ---
+    (function initStep1QuickActions() {
+        // Step 1: Intro & Outro Button
+        const step1IntroOutroBtn = document.getElementById('step1-add-intro-outro-btn');
+        if (step1IntroOutroBtn) {
+            step1IntroOutroBtn.addEventListener('click', () => {
+                if (typeof window.attachDefaultIntroAndOutro === 'function') {
+                    window.attachDefaultIntroAndOutro({ showToastNotice: true });
+                }
+            });
+        }
+
+        // Step 1: Auto-Intro/Outro Toggle Sync
+        const step1AutoToggle = document.getElementById('step1-auto-intro-outro-toggle');
+        const mainAutoToggle = document.getElementById('auto-attach-intro-outro-toggle');
+        if (step1AutoToggle) {
+            const isAuto = localStorage.getItem('sf_auto_attach_intro_outro') === 'true';
+            step1AutoToggle.checked = isAuto;
+            step1AutoToggle.addEventListener('change', () => {
+                localStorage.setItem('sf_auto_attach_intro_outro', step1AutoToggle.checked ? 'true' : 'false');
+                if (mainAutoToggle) mainAutoToggle.checked = step1AutoToggle.checked;
+                if (typeof showToast === 'function') {
+                    showToast(step1AutoToggle.checked ? 'নতুন ভিডিও লোড করলেই অটোমেটিক ইন্ট্রো/আউট্রো যোগ হবে।' : 'অটো-ইন্ট্রো/আউট্রো বন্ধ করা হয়েছে।', 'info');
+                }
+            });
+            if (mainAutoToggle) {
+                mainAutoToggle.addEventListener('change', () => {
+                    step1AutoToggle.checked = mainAutoToggle.checked;
+                });
+            }
+        }
+
+        // Step 1: Quick Branding Badges
+        const step1QuickLogo = document.getElementById('step1-quick-logo-btn');
+        if (step1QuickLogo) {
+            step1QuickLogo.addEventListener('click', () => {
+                if (typeof window.addGdsBrandingOverlay === 'function') window.addGdsBrandingOverlay('logo');
+            });
+        }
+        const step1QuickTutorial = document.getElementById('step1-quick-tutorial-btn');
+        if (step1QuickTutorial) {
+            step1QuickTutorial.addEventListener('click', () => {
+                if (typeof window.addGdsBrandingOverlay === 'function') window.addGdsBrandingOverlay('tutorial');
+            });
+        }
+        const step1QuickContact = document.getElementById('step1-quick-contact-btn');
+        if (step1QuickContact) {
+            step1QuickContact.addEventListener('click', () => {
+                if (typeof window.addGdsBrandingOverlay === 'function') window.addGdsBrandingOverlay('contact');
+            });
+        }
+
+        // Step 1: Logo Position Presets (Top-Left, Top-Right, Bottom-Left, Bottom-Right)
+        document.querySelectorAll('.logo-pos-preset-btn').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                const pos = e.currentTarget.dataset.pos;
+                const sizeFrac = (state.logoSize || 18) / 100;
+                if (pos === 'top-left') {
+                    state.logoX = 0.04;
+                    state.logoY = 0.05;
+                } else if (pos === 'top-right') {
+                    state.logoX = Math.max(0.04, 1.0 - sizeFrac - 0.04);
+                    state.logoY = 0.05;
+                } else if (pos === 'bottom-left') {
+                    state.logoX = 0.04;
+                    state.logoY = Math.max(0.05, 1.0 - (sizeFrac * 0.9) - 0.06);
+                } else if (pos === 'bottom-right') {
+                    state.logoX = Math.max(0.04, 1.0 - sizeFrac - 0.04);
+                    state.logoY = Math.max(0.05, 1.0 - (sizeFrac * 0.9) - 0.06);
+                }
+                drawFrame();
+                if (window.recordEditorHistory) window.recordEditorHistory('Logo position preset ' + pos);
+                if (typeof showToast === 'function') showToast('লোগো সরানো হয়েছে: ' + pos);
+            });
+        });
+
+        // Step 1: Logo Nudge Buttons (Up, Down, Left, Right)
+        document.querySelectorAll('.logo-nudge-btn').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                const dir = e.currentTarget.dataset.dir;
+                const delta = 0.025; // 2.5% step
+                if (dir === 'up') state.logoY = Math.max(0.01, (state.logoY || 0.08) - delta);
+                else if (dir === 'down') state.logoY = Math.min(0.92, (state.logoY || 0.08) + delta);
+                else if (dir === 'left') state.logoX = Math.max(0.01, (state.logoX || 0.77) - delta);
+                else if (dir === 'right') state.logoX = Math.min(0.92, (state.logoX || 0.77) + delta);
+                drawFrame();
+                if (window.recordEditorHistory) window.recordEditorHistory('Logo moved ' + dir);
+            });
+        });
+
+        // Step 1: Logo Size Slider Sync
+        const step1SizeSlider = document.getElementById('step1-logo-size-slider');
+        const step1SizeVal = document.getElementById('step1-logo-size-val');
+        if (step1SizeSlider) {
+            step1SizeSlider.addEventListener('input', (e) => {
+                const val = parseInt(e.target.value);
+                state.logoSize = val;
+                if (step1SizeVal) step1SizeVal.innerText = val + '%';
+                if (logoSizeSlider) logoSizeSlider.value = val;
+                if (logoSizeVal) logoSizeVal.innerText = val + '%';
+                drawFrame();
+            });
+        }
+
+        // Step 1: Logo Opacity Slider Sync
+        const step1OpacitySlider = document.getElementById('step1-logo-opacity-slider');
+        const step1OpacityVal = document.getElementById('step1-logo-opacity-val');
+        if (step1OpacitySlider) {
+            step1OpacitySlider.addEventListener('input', (e) => {
+                const val = parseInt(e.target.value);
+                state.logoOpacity = val / 100;
+                if (step1OpacityVal) step1OpacityVal.innerText = val + '%';
+                if (logoOpacitySlider) logoOpacitySlider.value = val;
+                if (logoOpacityVal) logoOpacityVal.innerText = val + '%';
+                drawFrame();
+            });
+        }
+    })();

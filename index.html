@@ -387,6 +387,51 @@
                             </div>
                         </div>
 
+                        <!-- Step 1: Intro & Outro 1-Click Card -->
+                        <div class="card mt-3" style="border: 1px solid rgba(129, 140, 248, 0.4); background: linear-gradient(135deg, rgba(30, 27, 75, 0.4), rgba(49, 46, 129, 0.3)); border-radius: 10px; box-shadow: 0 4px 15px rgba(0,0,0,0.25);">
+                            <div class="card-header" style="display:flex; justify-content:space-between; align-items:center; border-bottom: 1px solid rgba(129, 140, 248, 0.2); padding: 10px 14px;">
+                                <div style="display:flex; align-items:center; gap:8px;">
+                                    <i class="fa-solid fa-wand-magic-sparkles" style="color:#a78bfa;"></i>
+                                    <h3 style="margin:0; font-size:13.5px; color:#e0e7ff; font-weight:700;">ইন্ট্রো ও আউট্রো (Intro & Outro)</h3>
+                                </div>
+                                <span class="badge" style="background:#4338ca; color:#e0e7ff; font-size:10px; padding: 2px 8px; border-radius: 4px;">১-ক্লিক</span>
+                            </div>
+                            <div class="card-body" style="padding: 12px 14px;">
+                                <p class="help-text" style="font-size:11.5px; color:#cbd5e1; margin-bottom:10px; line-height: 1.4;">
+                                    শুরুতে <strong>Intro</strong> (10.3s) এবং শেষে <strong>Outro</strong> (15s) সম্পূর্ণ অরিজিনাল কোয়ালিটিতে এক ক্লিকে যুক্ত করুন।
+                                </p>
+                                <button type="button" id="step1-add-intro-outro-btn" class="btn btn-primary btn-block" style="background: linear-gradient(135deg, #6366f1, #8b5cf6); font-weight:700; padding:8px 12px; font-size:12.5px; display:flex; align-items:center; justify-content:center; gap:8px;">
+                                    <i class="fa-solid fa-plus-circle"></i> + এক ক্লিকে Intro ও Outro যোগ করুন
+                                </button>
+                                <label style="display:flex; align-items:center; gap:8px; font-size:11.5px; color:#cbd5e1; cursor:pointer; margin-top:8px;">
+                                    <input type="checkbox" id="step1-auto-intro-outro-toggle" style="cursor:pointer; accent-color:#818cf8;">
+                                    <span>নতুন ভিডিও ওপেন হলে অটোমেটিক যোগ করুন</span>
+                                </label>
+                            </div>
+                        </div>
+
+                        <!-- Step 1: Quick Branding Badges Card -->
+                        <div class="card mt-3" style="border: 1px solid rgba(56, 189, 248, 0.35); background: linear-gradient(135deg, rgba(15, 23, 42, 0.5), rgba(7, 24, 39, 0.6)); border-radius: 10px;">
+                            <div class="card-header" style="display:flex; justify-content:space-between; align-items:center; border-bottom: 1px solid rgba(56, 189, 248, 0.2); padding: 10px 14px;">
+                                <div style="display:flex; align-items:center; gap:8px;">
+                                    <i class="fa-solid fa-crown" style="color:#f59e0b;"></i>
+                                    <h3 style="margin:0; font-size:13.5px; color:#e0f2fe; font-weight:700;">দ্রুত ব্র্যান্ডিং ব্যাজ (Quick Badges)</h3>
+                                </div>
+                                <span class="badge" style="background:rgba(245, 158, 11, 0.2); color:#fbbf24; border:1px solid rgba(245, 158, 11, 0.4); font-size:10px; padding: 2px 8px; border-radius: 4px;">অ্যানিমেটেড</span>
+                            </div>
+                            <div class="card-body" style="padding: 12px 14px; display:flex; flex-direction:column; gap:8px;">
+                                <button type="button" id="step1-quick-logo-btn" class="btn btn-sm" style="background: rgba(239, 68, 68, 0.2); border: 1px solid #ef4444; color: #fca5a5; font-weight:600; font-size:12px; display:flex; align-items:center; justify-content:flex-start; gap:8px; padding:7px 10px;">
+                                    <i class="fa-solid fa-rotate" style="color: #ef4444;"></i> <span>+ রেড অ্যানিমেটেড লোগো (ঘুরতে থাকবে)</span>
+                                </button>
+                                <button type="button" id="step1-quick-tutorial-btn" class="btn btn-sm" style="background: rgba(245, 158, 11, 0.2); border: 1px solid #f59e0b; color: #fde68a; font-weight:600; font-size:12px; display:flex; align-items:center; justify-content:flex-start; gap:8px; padding:7px 10px;">
+                                    <i class="fa-solid fa-triangle-exclamation" style="color: #f59e0b;"></i> <span>+ টিউটোরিয়াল নোটিস ব্যানার</span>
+                                </button>
+                                <button type="button" id="step1-quick-contact-btn" class="btn btn-sm" style="background: rgba(16, 185, 129, 0.2); border: 1px solid #10b981; color: #a7f3d0; font-weight:600; font-size:12px; display:flex; align-items:center; justify-content:flex-start; gap:8px; padding:7px 10px;">
+                                    <i class="fa-solid fa-phone" style="color: #10b981;"></i> <span>+ যোগাযোগ ও হেল্পলাইন (01757-208244)</span>
+                                </button>
+                            </div>
+                        </div>
+
                         <div class="card mt-4">
                             <div class="card-header">
                                 <i class="fa-solid fa-square-poll-horizontal card-icon"></i>
@@ -406,6 +451,54 @@
                                             <button id="remove-logo-btn" class="btn-text-danger"><i class="fa-solid fa-trash"></i> Remove</button>
                                         </div>
                                     </div>
+                                <!-- Step 1 Integrated Logo Movement & Position Controls -->
+                                <div id="step1-logo-controls-box" style="display: none; margin-top: 14px; padding-top: 12px; border-top: 1px solid rgba(255, 255, 255, 0.1);">
+                                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 8px;">
+                                        <label style="font-size:12px; font-weight:700; color:#38bdf8; display:flex; align-items:center; gap:6px;">
+                                            <i class="fa-solid fa-arrows-up-down-left-right"></i> লোগো পজিশন ও মুভমেন্ট
+                                        </label>
+                                        <span style="font-size:11px; color:#94a3b8;">স্ক্রিনে সরাসরি ড্র্যাগও করতে পারেন</span>
+                                    </div>
+
+                                    <!-- Preset Corner Positions -->
+                                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-bottom: 10px;">
+                                        <button type="button" class="btn btn-xs btn-outline logo-pos-preset-btn" data-pos="top-left" style="font-size:11px; padding: 5px;">↖ টপ-বাম</button>
+                                        <button type="button" class="btn btn-xs btn-primary logo-pos-preset-btn" data-pos="top-right" style="font-size:11px; padding: 5px; background:#0284c7;">↗ টপ-ডান (ডিফল্ট)</button>
+                                        <button type="button" class="btn btn-xs btn-outline logo-pos-preset-btn" data-pos="bottom-left" style="font-size:11px; padding: 5px;">↙ বটম-বাম</button>
+                                        <button type="button" class="btn btn-xs btn-outline logo-pos-preset-btn" data-pos="bottom-right" style="font-size:11px; padding: 5px;">↘ বটম-ডান</button>
+                                    </div>
+
+                                    <!-- Nudge Arrows for Precise Moving -->
+                                    <div style="background: rgba(0,0,0,0.25); border-radius: 8px; padding: 8px; margin-bottom: 10px; border: 1px solid rgba(255,255,255,0.06);">
+                                        <div style="font-size:11px; color:#cbd5e1; text-align:center; margin-bottom:6px; font-weight:600;">ধীরে ধীরে ডানে / বামে / উপরে / নিচে সরান:</div>
+                                        <div style="display: flex; justify-content: center; gap: 6px; margin-bottom: 5px;">
+                                            <button type="button" class="btn btn-xs btn-outline logo-nudge-btn" data-dir="up" style="padding: 4px 14px; font-weight:700;" title="উপরে সরান"><i class="fa-solid fa-arrow-up"></i> উপরে</button>
+                                        </div>
+                                        <div style="display: flex; justify-content: center; gap: 8px;">
+                                            <button type="button" class="btn btn-xs btn-outline logo-nudge-btn" data-dir="left" style="padding: 4px 14px; font-weight:700;" title="বামে সরান"><i class="fa-solid fa-arrow-left"></i> বামে</button>
+                                            <button type="button" class="btn btn-xs btn-outline logo-nudge-btn" data-dir="down" style="padding: 4px 14px; font-weight:700;" title="নিচে সরান"><i class="fa-solid fa-arrow-down"></i> নিচে</button>
+                                            <button type="button" class="btn btn-xs btn-outline logo-nudge-btn" data-dir="right" style="padding: 4px 14px; font-weight:700;" title="ডানে সরান"><i class="fa-solid fa-arrow-right"></i> ডানে</button>
+                                        </div>
+                                    </div>
+
+                                    <!-- Size Slider -->
+                                    <div class="control-group" style="margin-bottom:8px;">
+                                        <div style="display:flex; justify-content:space-between; font-size:11.5px; color:#cbd5e1; margin-bottom:3px;">
+                                            <span>লোগোর আকার (Size):</span>
+                                            <span id="step1-logo-size-val" style="font-weight:700; color:#38bdf8;">18%</span>
+                                        </div>
+                                        <input type="range" id="step1-logo-size-slider" min="5" max="50" value="18" style="width:100%; accent-color:#38bdf8;">
+                                    </div>
+
+                                    <!-- Opacity Slider -->
+                                    <div class="control-group">
+                                        <div style="display:flex; justify-content:space-between; font-size:11.5px; color:#cbd5e1; margin-bottom:3px;">
+                                            <span>স্বচ্ছতা (Opacity):</span>
+                                            <span id="step1-logo-opacity-val" style="font-weight:700; color:#38bdf8;">100%</span>
+                                        </div>
+                                        <input type="range" id="step1-logo-opacity-slider" min="10" max="100" value="100" style="width:100%; accent-color:#38bdf8;">
+                                    </div>
+                                </div>
                                 </div>
                             </div>
                         </div>

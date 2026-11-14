@@ -101,6 +101,24 @@
         img.crossOrigin = 'anonymous';
         img.onload = function () {
             state.logoImg = img;
+            state.logoGifParsed = null;
+            if (src.indexOf('.gif') !== -1) {
+                fetch(src)
+                    .then(function(r) { return r.arrayBuffer(); })
+                    .then(function(buf) {
+                        var parser = (typeof parseGifFrames === 'function') ? parseGifFrames : window.parseGifFrames;
+                        if (parser) {
+                            var parsed = parser(buf);
+                            if (parsed && parsed.frames && parsed.frames.length > 0) {
+                                state.logoGifParsed = parsed;
+                                console.log('GDS GIF Logo loaded & cycling frames:', parsed.frames.length);
+                            }
+                        }
+                        if (window.ensureAnimatedGifPreview) window.ensureAnimatedGifPreview();
+                        if (typeof window.drawEditorFrame === 'function') window.drawEditorFrame();
+                    })
+                    .catch(function(e) { console.warn('GDS Logo GIF parse buffer notice:', e); });
+            }
             state.logoX = 0.77; // Top-right standard placement
             state.logoY = 0.08;
             state.logoSize = 18; // 18% width of canvas
@@ -132,6 +150,8 @@
             if (dropzone) dropzone.style.display = 'none';
             if (filename) filename.innerText = src.indexOf('.gif') !== -1 ? 'GDS-Logo.gif' : 'GDS-Logo.png';
             if (controlCard) controlCard.style.display = 'block';
+            var s1Box = document.getElementById('step1-logo-controls-box');
+            if (s1Box) s1Box.style.display = 'block';
             if (sizeSlider) sizeSlider.value = 18;
             if (sizeVal) sizeVal.innerText = '18%';
             if (opacitySlider) opacitySlider.value = 100;

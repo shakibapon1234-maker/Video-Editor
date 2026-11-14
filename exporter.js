@@ -723,7 +723,81 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
             }
 
-const duckIntervals = (typeof window.getMultitrackAudioDuckingIntervals === 'function')
+// --- Map Active Branding Overlays & Watermark Logo into Ultra-Fast Render ---
+            if (Array.isArray(state.brollOverlays)) {
+                for (let bi = 0; bi < state.brollOverlays.length; bi++) {
+                    const b = state.brollOverlays[bi];
+                    if (!b) continue;
+                    let bFilePath = '';
+                    if (b.filePath && (b.filePath.endsWith('.gif') || b.filePath.endsWith('.png'))) {
+                        bFilePath = b.filePath;
+                    } else if (b.name && /logo/i.test(b.name)) {
+                        bFilePath = 'assets/branding/logo.gif';
+                    } else if (b.name && /tutorial/i.test(b.name)) {
+                        bFilePath = 'assets/branding/banner_tutorial.gif';
+                    } else if (b.name && /helpline|contact/i.test(b.name)) {
+                        bFilePath = 'assets/branding/banner_contact.gif';
+                    }
+                    if (bFilePath) {
+                        const bW = Math.max(0.08, Math.min(1.0, (b.size || 20) / 100));
+                        const bX = Math.max(0, Math.min(1, (b.x !== undefined ? b.x : 0.5) + bW / 2));
+                        const bY = Math.max(0, Math.min(1, (b.y !== undefined ? b.y : 0.5) + (bW * 0.3) / 2));
+                        extraTracksPayload.push({
+                            type: 'image',
+                            name: b.name || `branding_${bi}.gif`,
+                            filePath: bFilePath,
+                            base64: null,
+                            timelineOffset: typeof b.startSec === 'number' ? b.startSec : 0,
+                            sourceStart: 0,
+                            sourceEnd: typeof b.endSec === 'number' ? b.endSec : totalDuration,
+                            duration: totalDuration,
+                            transformX: bX,
+                            transformY: bY,
+                            transformW: bW,
+                            hasTransform: true,
+                            volume: 1.0,
+                            design: 'standard'
+                        });
+                    }
+                }
+            }
+
+            // Also include watermark logo if active
+            if (state.logoImg && (state.logoFile || state.logoGifParsed)) {
+                let logoPath = '';
+                if (state.logoFile && state.logoFile.path) {
+                    logoPath = state.logoFile.path;
+                } else if (state.logoFile && /logo\.gif/i.test(state.logoFile.name)) {
+                    logoPath = 'assets/branding/logo.gif';
+                } else if (state.logoFile && /logo\.png/i.test(state.logoFile.name)) {
+                    logoPath = 'assets/branding/logo.png';
+                } else if (state.logoGifParsed) {
+                    logoPath = 'assets/branding/logo.gif';
+                }
+                if (logoPath) {
+                    const lW = Math.max(0.05, Math.min(0.5, (state.logoSize || 18) / 100));
+                    const lX = Math.max(0, Math.min(1, (state.logoX !== undefined ? state.logoX : 0.77) + lW / 2));
+                    const lY = Math.max(0, Math.min(1, (state.logoY !== undefined ? state.logoY : 0.08) + lW / 2));
+                    extraTracksPayload.push({
+                        type: 'image',
+                        name: (state.logoFile && state.logoFile.name) || 'logo.gif',
+                        filePath: logoPath,
+                        base64: null,
+                        timelineOffset: 0,
+                        sourceStart: 0,
+                        sourceEnd: totalDuration,
+                        duration: totalDuration,
+                        transformX: lX,
+                        transformY: lY,
+                        transformW: lW,
+                        hasTransform: true,
+                        volume: 1.0,
+                        design: 'standard'
+                    });
+                }
+            }
+
+            const duckIntervals = (typeof window.getMultitrackAudioDuckingIntervals === 'function')
                 ? window.getMultitrackAudioDuckingIntervals()
                 : [];
 
