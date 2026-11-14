@@ -8737,15 +8737,6 @@ document.addEventListener('DOMContentLoaded', () => {
             state.brollOverlays.forEach((item) => {
                 if (item.type !== 'text' && item.type !== 'cash' && item.type !== 'built-in' && !item.imageImg) return;
 
-                // Reset one-shot sound-effect flags whenever playback is well before
-                // this item's start, so re-playing/looping over it triggers the
-                // whoosh/pop/click again instead of only ever firing once.
-                if (state.isPlaying && effectiveCurrentTime < item.startSec - 0.05) {
-                    item._sfxEnterPlayed = false;
-                    item._sfxExitPlayed = false;
-                    item._lastSfxCycle = -1;
-                }
-
                 // While paused in Step 3 we always show the overlay being EDITED (the
                 // currently selected one) so it can be positioned/sized regardless of
                 // where the playhead sits. Other, non-selected overlays still respect
@@ -8764,6 +8755,17 @@ document.addEventListener('DOMContentLoaded', () => {
                     : Math.max(0, ((currentTime || 0) - (activeClip ? (activeClip.start || 0) : 0))) / Math.max(0.5, Math.min(2, Number(activeClip?.speed) || 1));
                 const isAllClips = !item.clipId || item.clipId === 'all';
                 const effectiveCurrentTime = isAllClips ? _brollTimelineTime : activeClipElapsed;
+
+                // Reset one-shot sound-effect flags whenever playback is well before
+                // this item's start, so re-playing/looping over it triggers the
+                // whoosh/pop/click again instead of only ever firing once. This must
+                // run after effectiveCurrentTime is calculated; referring to that
+                // `const` before its declaration stops the B-roll render loop.
+                if (state.isPlaying && effectiveCurrentTime < item.startSec - 0.05) {
+                    item._sfxEnterPlayed = false;
+                    item._sfxExitPlayed = false;
+                    item._lastSfxCycle = -1;
+                }
 
                 // When paused in Step 3, only force visibility IF the user is actively dragging/resizing/rotating this item on canvas.
                 // When simply paused or scrubbing to inspect frames, strictly respect item.startSec and item.endSec so the preview
