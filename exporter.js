@@ -462,8 +462,19 @@ document.addEventListener('DOMContentLoaded', () => {
                     } catch (_) {}
                     if (!resolvedPath && c.file.path) resolvedPath = c.file.path;
                 }
-                if (!resolvedPath && state.clips[0] && state.clips[0].filePath) {
-                    resolvedPath = state.clips[0].filePath;
+                if (!resolvedPath) {
+                    if (c.name && /intro/i.test(c.name)) {
+                        resolvedPath = 'assets/branding/intro.mp4';
+                    } else if (c.name && /outro/i.test(c.name)) {
+                        resolvedPath = 'assets/branding/outro.mp4';
+                    } else {
+                        const mainClip = state.clips.find(clip => clip.filePath && !/intro|outro/i.test(clip.name || ''));
+                        if (mainClip && mainClip.filePath) {
+                            resolvedPath = mainClip.filePath;
+                        } else if (state.clips[0] && state.clips[0].filePath) {
+                            resolvedPath = state.clips[0].filePath;
+                        }
+                    }
                 }
                 if (resolvedPath) c.filePath = resolvedPath;
 

@@ -478,10 +478,10 @@ function getFfmpegEncodingOptions(quality = '1080p', enhanceQuality = false, isD
         bufsize = '10M';
         audioBitrate = '160k';
     } else { // 1080p or default
-        crf = enhanceQuality ? 16 : 18;
-        maxrate = enhanceQuality ? '15M' : '12M';
-        bufsize = enhanceQuality ? '24M' : '20M';
-        audioBitrate = '192k';
+        crf = enhanceQuality ? 15 : 17;
+        maxrate = enhanceQuality ? '18M' : '15M';
+        bufsize = enhanceQuality ? '28M' : '24M';
+        audioBitrate = '320k';
     }
 
     return {
@@ -1327,8 +1327,22 @@ app.post('/api/fast-direct-render', express.json({ limit: '2048mb' }), async (re
                 const inputPaths = [];
                 for (let i = 0; i < clips.length; i++) {
                     const c = clips[i];
+                    let resolvedClipPath = null;
                     if (c.filePath && fs.existsSync(c.filePath)) {
-                        inputPaths.push(c.filePath);
+                        resolvedClipPath = c.filePath;
+                    } else if (c.filePath) {
+                        const candidate = path.resolve(__dirname, c.filePath);
+                        if (fs.existsSync(candidate)) resolvedClipPath = candidate;
+                    }
+                    if (!resolvedClipPath) {
+                        if (c.name && /intro/i.test(c.name) && fs.existsSync(path.join(__dirname, 'assets', 'branding', 'intro.mp4'))) {
+                            resolvedClipPath = path.join(__dirname, 'assets', 'branding', 'intro.mp4');
+                        } else if (c.name && /outro/i.test(c.name) && fs.existsSync(path.join(__dirname, 'assets', 'branding', 'outro.mp4'))) {
+                            resolvedClipPath = path.join(__dirname, 'assets', 'branding', 'outro.mp4');
+                        }
+                    }
+                    if (resolvedClipPath && fs.existsSync(resolvedClipPath)) {
+                        inputPaths.push(resolvedClipPath);
                     } else if (c.base64) {
                         const ext = path.extname(c.name || 'clip.mp4') || '.mp4';
                         const p = path.join(tempDir, `clip_${i}${ext}`);

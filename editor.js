@@ -1850,6 +1850,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
                 isVideoLoading = false;
                 triggerAutoSave();
+                if (localStorage.getItem('sf_auto_attach_intro_outro') === 'true') {
+                    setTimeout(() => { if (typeof window.attachDefaultIntroAndOutro === 'function') window.attachDefaultIntroAndOutro({ showToastNotice: true }); }, 350);
+                }
             };
             img.onerror = (error) => {
                 console.error('Image import failed:', error);
@@ -3591,8 +3594,7 @@ document.addEventListener('DOMContentLoaded', () => {
     function refreshAnimatedGifPreview() {
         const hasVisibleGif = state.brollOverlays.some((item) => {
             if (item.type !== 'gif' || (!item.imageImg && !item.gifParsed)) return false;
-            const isActivelyManipulated = state.currentStep === 3 && !state.isPlaying && item.id === state.selectedBrollId &&
-                (state.isDraggingBroll || state.isResizingBroll || state.isRotatingBroll);
+            const isActivelyManipulated = !state.isPlaying && item.id === state.selectedBrollId && (state.isDraggingBroll || state.isResizingBroll || state.isRotatingBroll);
             const _clock = getEditorTimelineClock ? getEditorTimelineClock() : { current: state.currentTime || 0, total: 1000 };
             const activeClip = (state.clips || []).find(c => c.id === state.activeClipId);
             const activeClipElapsed = activeClip && window.getClipOutputElapsedForSourceTime
@@ -4362,6 +4364,140 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     window.renderClipTimeline = renderClipTimeline;
+
+    // --- GDS Training Hub: Lossless 1-Click & Auto Intro/Outro ---
+    async function attachDefaultIntroAndOutro(options = { showToastNotice: true }) {
+        if (!state.clips || state.clips.length === 0) {
+            if (typeof showToast === 'function') showToast('আগে একটি মূল ভিডিও যোগ করুন, তারপর ইন্ট্রো/আউট্রো যুক্ত করুন।', 'warning');
+            return false;
+        }
+
+        const hasIntro = state.clips.some(c => /intro/i.test(c.name || ''));
+        const hasOutro = state.clips.some(c => /outro/i.test(c.name || ''));
+
+        if (hasIntro && hasOutro) {
+            if (options.showToastNotice && typeof showToast === 'function') {
+                showToast('ইন্ট্রো এবং আউট্রো ইতিমধ্যে টাইমলাইনে যোগ করা আছে!', 'info');
+            }
+            return true;
+        }
+
+        try {
+            // 1. Attach Intro if missing
+            if (!hasIntro) {
+                const introBlob = await fetch('/assets/branding/intro.mp4').then(r => {
+                    if (!r.ok) throw new Error('Intro video not found in /assets/branding/intro.mp4');
+                    return r.blob();
+                });
+                const introFile = new File([introBlob], 'Intro (GDS Training Hub).mp4', { type: 'video/mp4' });
+                const introUrl = URL.createObjectURL(introBlob);
+
+                const probeIntro = await new Promise((res, rej) => {
+                    const v = document.createElement('video');
+                    v.preload = 'metadata';
+                    v.src = introUrl;
+                    v.onloadedmetadata = () => res(v);
+                    v.onerror = () => rej(new Error('Intro decode failed'));
+                });
+
+                const introClip = {
+                    id: Date.now() + 1,
+                    file: introFile,
+                    filePath: 'assets/branding/intro.mp4',
+                    url: introUrl,
+                    name: 'Intro (GDS Training Hub)',
+                    duration: probeIntro.duration || 10.3,
+                    start: 0,
+                    end: probeIntro.duration || 10.3,
+                    cropX: 0, cropY: 0, cropW: 1, cropH: 1,
+                    speed: 1,
+                    transitionType: 'none',
+                    transitionDuration: 0.5,
+                    videoWidth: probeIntro.videoWidth || 1920,
+                    videoHeight: probeIntro.videoHeight || 1080
+                };
+                state.clips.unshift(introClip);
+            }
+
+            // 2. Attach Outro if missing
+            if (!hasOutro) {
+                const outroBlob = await fetch('/assets/branding/outro.mp4').then(r => {
+                    if (!r.ok) throw new Error('Outro video not found in /assets/branding/outro.mp4');
+                    return r.blob();
+                });
+                const outroFile = new File([outroBlob], 'Outro (GDS Training Hub).mp4', { type: 'video/mp4' });
+                const outroUrl = URL.createObjectURL(outroBlob);
+
+                const probeOutro = await new Promise((res, rej) => {
+                    const v = document.createElement('video');
+                    v.preload = 'metadata';
+                    v.src = outroUrl;
+                    v.onloadedmetadata = () => res(v);
+                    v.onerror = () => rej(new Error('Outro decode failed'));
+                });
+
+                const outroClip = {
+                    id: Date.now() + 2,
+                    file: outroFile,
+                    filePath: 'assets/branding/outro.mp4',
+                    url: outroUrl,
+                    name: 'Outro (GDS Training Hub)',
+                    duration: probeOutro.duration || 15.0,
+                    start: 0,
+                    end: probeOutro.duration || 15.0,
+                    cropX: 0, cropY: 0, cropW: 1, cropH: 1,
+                    speed: 1,
+                    transitionType: 'none',
+                    transitionDuration: 0.5,
+                    videoWidth: probeOutro.videoWidth || 1920,
+                    videoHeight: probeOutro.videoHeight || 1080
+                };
+                state.clips.push(outroClip);
+            }
+
+            // Recalculate total duration
+            state.duration = state.clips.reduce((sum, c) => sum + (Math.max(0, c.end - c.start) / Math.max(0.25, Number(c.speed) || 1)), 0);
+            state.endTime = state.duration;
+
+            if (typeof renderClipTimeline === 'function') renderClipTimeline();
+            if (typeof drawFrame === 'function') drawFrame();
+            if (typeof updatePlayhead === 'function') updatePlayhead();
+            if (window.recordEditorHistory) window.recordEditorHistory('Intro & Outro added');
+            if (typeof triggerAutoSave === 'function') triggerAutoSave();
+
+            if (options.showToastNotice && typeof showToast === 'function') {
+                showToast('GDS Training Hub ইন্ট্রো ও আউট্রো ১০০% অরিজিনাল কোয়ালিটিতে যুক্ত হয়েছে!', 'success');
+            }
+            return true;
+        } catch (err) {
+            console.error('attachDefaultIntroAndOutro error:', err);
+            if (options.showToastNotice && typeof showToast === 'function') {
+                showToast('ইন্ট্রো/আউট্রো যুক্ত করা যায়নি: ' + err.message, 'error');
+            }
+            return false;
+        }
+    }
+    window.attachDefaultIntroAndOutro = attachDefaultIntroAndOutro;
+
+    const quickAddIntroOutroBtn = document.getElementById('quick-add-intro-outro-btn');
+    if (quickAddIntroOutroBtn) {
+        quickAddIntroOutroBtn.addEventListener('click', () => {
+            attachDefaultIntroAndOutro({ showToastNotice: true });
+        });
+    }
+
+    const autoIntroOutroToggle = document.getElementById('auto-attach-intro-outro-toggle');
+    if (autoIntroOutroToggle) {
+        const isAuto = localStorage.getItem('sf_auto_attach_intro_outro') === 'true';
+        autoIntroOutroToggle.checked = isAuto;
+        autoIntroOutroToggle.addEventListener('change', () => {
+            localStorage.setItem('sf_auto_attach_intro_outro', autoIntroOutroToggle.checked ? 'true' : 'false');
+            if (typeof showToast === 'function') {
+                showToast(autoIntroOutroToggle.checked ? 'নতুন ভিডিও লোড করলেই অটোমেটিক ইন্ট্রো/আউট্রো যোগ হবে।' : 'অটো-ইন্ট্রো/আউট্রো নিষ্ক্রিয় করা হয়েছে।', 'info');
+            }
+        });
+    }
+
 
     trimStart.addEventListener('input', (e) => {
         const val = parseFloat(e.target.value);
@@ -10645,7 +10781,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 // Selection outline + resize handles in Step 3.
                 // Shown for PiP always, and for Fullscreen (any size) so the
                 // user can drag-resize the image even when it covers the full frame.
-                if (state.currentStep === 3 && (item.mode === 'pip' || item.mode === 'fullscreen') && item.id === state.selectedBrollId) {
+                if (!state.isExportingVideo && (item.mode === 'pip' || item.mode === 'fullscreen') && item.id === state.selectedBrollId) {
                     // Dashed outline
                     state.ctx.strokeStyle = 'rgba(79, 70, 229, 0.9)';
                     state.ctx.lineWidth = 2;
@@ -13604,7 +13740,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         // B-roll resize handle check (must come BEFORE drag check)
-        if (state.currentStep === 3 && state.selectedBrollId !== null) {
+        if (state.selectedBrollId !== null) {
             const resizeHandle = findBrollResizeHandle(coords);
             if (resizeHandle) {
                 const item = state.brollOverlays.find(b => b.id === state.selectedBrollId);
@@ -13729,8 +13865,7 @@ document.addEventListener('DOMContentLoaded', () => {
             // the underlying image clip gets a chance to start its own drag.
             if (item.type !== 'text' && item.type !== 'cash' && item.type !== 'built-in' && !item.imageImg && !item.gifParsed) continue;
 
-            const isActivelyManipulated = state.currentStep === 3 && !state.isPlaying && item.id === state.selectedBrollId &&
-                (state.isDraggingBroll || state.isResizingBroll || state.isRotatingBroll);
+            const isActivelyManipulated = !state.isPlaying && item.id === state.selectedBrollId && (state.isDraggingBroll || state.isResizingBroll || state.isRotatingBroll);
             const _clock = getEditorTimelineClock ? getEditorTimelineClock() : { current: currentTime, total: 1000 };
             const activeClip = (state.clips || []).find(c => c.id === state.activeClipId);
             const activeClipElapsed = activeClip && window.getClipOutputElapsedForSourceTime
@@ -28674,3 +28809,132 @@ document.addEventListener('DOMContentLoaded', () => {
     window.renderSymbolList = renderSymbolList;
     window.renderShapeOverlayList = renderShapeOverlayList;
 });
+
+
+    // --- GDS Training Hub: 1-Click Interactive Branding GIFs (Logo & Banners) ---
+    async function addGdsBrandingOverlay(type) {
+        let gifPath, name, defaultX, defaultY, defaultW;
+        if (type === 'logo') {
+            gifPath = '/assets/branding/logo.gif';
+            name = 'GDS Red Logo (Animated)';
+            defaultX = 0.80; // Top-Right corner
+            defaultY = 0.05;
+            defaultW = 16;   // 16% of canvas width
+        } else if (type === 'tutorial') {
+            gifPath = '/assets/branding/banner_tutorial.gif';
+            name = 'Tutorial Purpose Notice';
+            defaultX = 0.25; // Centered near top
+            defaultY = 0.06;
+            defaultW = 50;   // 50% of canvas width
+        } else if (type === 'contact') {
+            gifPath = '/assets/branding/banner_contact.gif';
+            name = 'GDS Training Helpline';
+            defaultX = 0.25; // Centered near bottom
+            defaultY = 0.80;
+            defaultW = 50;   // 50% of canvas width
+        } else {
+            return;
+        }
+
+        try {
+            if (typeof showToast === 'function') {
+                showToast(`${name} লোড হচ্ছে...`, 'info');
+            }
+
+            const resp = await fetch(gifPath);
+            if (!resp.ok) throw new Error(`GIF ফাইল পাওয়া যায়নি: ${gifPath}`);
+            const blob = await resp.blob();
+            const buf = await blob.arrayBuffer();
+
+            let parsed = null;
+            if (typeof parseGifFrames === 'function') {
+                try {
+                    parsed = parseGifFrames(buf);
+                } catch (e) {
+                    console.warn('GIF parsing notice:', e);
+                }
+            }
+
+            const img = new Image();
+            const blobUrl = URL.createObjectURL(blob);
+            await new Promise((resolve) => {
+                img.onload = resolve;
+                img.onerror = resolve;
+                img.src = blobUrl;
+            });
+
+            const file = new File([blob], `${type}.gif`, { type: 'image/gif' });
+
+            const maxTotalSec = state.clips && state.clips.length > 0
+                ? state.clips.reduce((sum, c) => sum + (Math.max(0, c.end - c.start) / Math.max(0.25, Number(c.speed) || 1)), 0)
+                : (state.duration || 99999);
+
+            const newItem = {
+                id: 'gds_' + type + '_' + Date.now(),
+                name: name,
+                type: 'gif',
+                file: file,
+                filePath: gifPath.replace(/^\//, ''),
+                imageUrl: blobUrl,
+                imageImg: img,
+                gifParsed: parsed,
+                mode: 'pip',
+                clipId: 'all', // Show across ALL clips for the full tutorial video
+                startSec: 0,
+                endSec: Math.max(maxTotalSec, 99999),
+                x: defaultX,
+                y: defaultY,
+                size: defaultW,
+                rotation: 0,
+                scale: 1,
+                opacity: 100,
+                animationStyle: 'none',
+                soundEffect: 'none',
+                fitMode: 'contain',
+                transparentBg: true,
+                visualTemplate: 'standard'
+            };
+
+            state.brollOverlays = state.brollOverlays || [];
+            // If already present with same type, replace or notify
+            const existingIdx = state.brollOverlays.findIndex(b => b.id && b.id.startsWith('gds_' + type));
+            if (existingIdx !== -1) {
+                state.brollOverlays.splice(existingIdx, 1);
+            }
+
+            state.brollOverlays.push(newItem);
+            state.selectedBrollId = newItem.id;
+
+            if (typeof renderBrollList === 'function') renderBrollList();
+            if (typeof showBrollTimingFor === 'function') showBrollTimingFor(newItem.id);
+            if (typeof drawFrame === 'function') drawFrame();
+            if (typeof ensureAnimatedGifPreview === 'function') ensureAnimatedGifPreview();
+            if (typeof triggerAutoSave === 'function') triggerAutoSave();
+            if (window.recordEditorHistory) window.recordEditorHistory(`${name} added`);
+
+            if (typeof showToast === 'function') {
+                showToast(`${name} যুক্ত হয়েছে! প্রিভিউ স্ক্রিনে ক্লিক করে ড্র্যাগ করে যেকোনো জায়গায় বসাতে পারেন।`, 'success');
+            }
+        } catch (err) {
+            console.error('addGdsBrandingOverlay error:', err);
+            if (typeof showToast === 'function') {
+                showToast('ব্যানার লোড করতে সমস্যা হয়েছে: ' + err.message, 'error');
+            }
+        }
+    }
+    window.addGdsBrandingOverlay = addGdsBrandingOverlay;
+
+    // Bind Quick Branding Buttons
+    const btnQuickLogo = document.getElementById('quick-add-gds-logo-btn');
+    if (btnQuickLogo) {
+        btnQuickLogo.addEventListener('click', () => addGdsBrandingOverlay('logo'));
+    }
+    const btnQuickTutorial = document.getElementById('quick-add-tutorial-banner-btn');
+    if (btnQuickTutorial) {
+        btnQuickTutorial.addEventListener('click', () => addGdsBrandingOverlay('tutorial'));
+    }
+    const btnQuickContact = document.getElementById('quick-add-contact-banner-btn');
+    if (btnQuickContact) {
+        btnQuickContact.addEventListener('click', () => addGdsBrandingOverlay('contact'));
+    }
+

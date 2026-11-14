@@ -313,8 +313,17 @@
 
                         <!-- Multi-Clip Timeline (Phase 2B) -->
                         <div class="clip-timeline-container mt-3">
-                            <div class="clip-timeline-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; font-size: 13px; font-weight: 600; color: var(--text-secondary);">
-                                <span>ভিডিও ক্লিপ সমূহ (Video Clips)</span>
+                            <div class="clip-timeline-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; font-size: 13px; font-weight: 600; color: var(--text-secondary); flex-wrap: wrap; gap: 8px;">
+                                <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
+                                    <span>ভিডিও ক্লিপ সমূহ (Video Clips)</span>
+                                    <button id="quick-add-intro-outro-btn" class="btn btn-xs" title="শুরুতে ইন্ট্রো এবং শেষে আউট্রো যোগ করুন (Lossless Quality)" style="background: linear-gradient(135deg, rgba(99, 102, 241, 0.25), rgba(168, 85, 247, 0.25)); border: 1px solid #818cf8; color: #e0e7ff; padding: 4px 10px; border-radius: 4px; font-size: 11px; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; font-weight: 600;" type="button">
+                                        <i class="fa-solid fa-wand-magic-sparkles"></i> <span>+ Intro & Outro যোগ করুন</span>
+                                    </button>
+                                    <label id="auto-attach-intro-outro-label" title="নতুন টিউটোরিয়াল ভিডিও আনলে শুরুতেই ইন্ট্রো এবং শেষে আউট্রো স্বয়ংক্রিয়ভাবে যোগ হবে" style="font-size: 11px; color: #94a3b8; display: inline-flex; align-items: center; gap: 5px; cursor: pointer; user-select: none;">
+                                        <input type="checkbox" id="auto-attach-intro-outro-toggle" style="accent-color: var(--primary); cursor: pointer;">
+                                        <span>অটো-ইন্ট্রো/আউট্রো</span>
+                                    </label>
+                                </div>
                                 <div style="display: flex; align-items: center; gap: 8px;">
                                     <button id="quick-apply-duration-all-btn" class="btn btn-xs" title="বর্তমান সিলেক্ট করা ছবির সময়কাল বাকি সব ছবিতে প্রয়োগ করুন" style="background: rgba(99, 102, 241, 0.2); border: 1px solid #818cf8; color: #c7d2fe; padding: 4px 10px; border-radius: 4px; font-size: 11px; cursor: pointer; display: none; font-weight: 600;" type="button">
                                         <i class="fa-solid fa-clone"></i> সব ছবিতে বর্তমান দৈর্ঘ্য দিন
@@ -322,6 +331,26 @@
                                     <span id="clip-timeline-total-duration" style="color: var(--primary); font-weight: bold; background: rgba(255, 255, 255, 0.05); padding: 4px 8px; border-radius: 4px; border: 1px solid rgba(255, 255, 255, 0.1);">
                                         মোট সময় (Total): 00:00.0 (0.0s)
                                     </span>
+                                </div>
+                            </div>
+                            <!-- GDS Quick Branding Badges Toolbar -->
+                            <div class="gds-branding-quickbar" style="display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; margin-bottom: 10px; padding: 7px 12px; background: rgba(15, 23, 42, 0.65); border-radius: 8px; border: 1px solid rgba(56, 189, 248, 0.25); box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);">
+                                <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+                                    <span style="font-size: 11.5px; font-weight: 700; color: #f1f5f9; display: inline-flex; align-items: center; gap: 5px;">
+                                        <i class="fa-solid fa-crown" style="color: #f59e0b;"></i> দ্রুত ব্র্যান্ডিং (Quick Badges):
+                                    </span>
+                                    <button id="quick-add-gds-logo-btn" class="btn btn-xs" title="অ্যানিমেটেড রেড জিফ লোগো যোগ করুন (যেকোনো জায়গায় ড্র্যাগ ও রিসাইজ করা যায়)" style="background: rgba(239, 68, 68, 0.22); border: 1px solid #ef4444; color: #fca5a5; padding: 4px 10px; border-radius: 5px; font-size: 11px; font-weight: 600; cursor: pointer; display: inline-flex; align-items: center; gap: 6px;" type="button">
+                                        <i class="fa-solid fa-circle" style="color: #ef4444; font-size: 9px;"></i> <span>+ রেড লোগো (Animated)</span>
+                                    </button>
+                                    <button id="quick-add-tutorial-banner-btn" class="btn btn-xs" title="টিউটোরিয়াল পারপাস অ্যানিমেটেড ব্যানার যোগ করুন" style="background: rgba(245, 158, 11, 0.22); border: 1px solid #f59e0b; color: #fde68a; padding: 4px 10px; border-radius: 5px; font-size: 11px; font-weight: 600; cursor: pointer; display: inline-flex; align-items: center; gap: 6px;" type="button">
+                                        <i class="fa-solid fa-triangle-exclamation" style="color: #f59e0b;"></i> <span>+ টিউটোরিয়াল নোটিস ব্যানার</span>
+                                    </button>
+                                    <button id="quick-add-contact-banner-btn" class="btn btn-xs" title="GDS Training Mode যোগাযোগ ও ফোন নাম্বার ব্যানার যোগ করুন" style="background: rgba(16, 185, 129, 0.22); border: 1px solid #10b981; color: #a7f3d0; padding: 4px 10px; border-radius: 5px; font-size: 11px; font-weight: 600; cursor: pointer; display: inline-flex; align-items: center; gap: 6px;" type="button">
+                                        <i class="fa-solid fa-phone" style="color: #10b981;"></i> <span>+ যোগাযোগ ও হেল্পলাইন</span>
+                                    </button>
+                                </div>
+                                <div style="font-size: 11px; color: #94a3b8; font-style: italic;">
+                                    💡 ক্লিক করে প্রিভিউ স্ক্রিনে ইচ্ছামতো ড্র্যাগ বা রিসাইজ করুন
                                 </div>
                             </div>
                             <div class="clip-timeline-list" id="clip-timeline-list">
