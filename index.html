@@ -432,6 +432,61 @@
                             </div>
                         </div>
 
+                        <!-- Step 1: Banner Timing, Duration & Multiple Use Controls -->
+                        <div class="card mt-3" id="step1-banner-timing-card" style="display: none; border: 1px solid rgba(245, 158, 11, 0.4); background: linear-gradient(135deg, rgba(30, 20, 10, 0.6), rgba(15, 23, 42, 0.8)); border-radius: 10px; box-shadow: 0 4px 15px rgba(0,0,0,0.3);">
+                            <div class="card-header" style="display:flex; justify-content:space-between; align-items:center; border-bottom: 1px solid rgba(245, 158, 11, 0.2); padding: 10px 14px;">
+                                <div style="display:flex; align-items:center; gap:8px;">
+                                    <i class="fa-solid fa-clock" style="color:#f59e0b;"></i>
+                                    <h3 style="margin:0; font-size:13px; color:#fef08a; font-weight:700;">ব্যানার টাইমিং ও সময়কাল (Timing)</h3>
+                                </div>
+                                <span id="step1-timing-banner-badge" class="badge" style="background:rgba(245, 158, 11, 0.2); color:#fef08a; font-size:10px; padding: 2px 8px; border-radius: 4px;">সিলেক্টেড</span>
+                            </div>
+                            <div class="card-body" style="padding: 12px 14px; display:flex; flex-direction:column; gap:10px;">
+                                <div style="display:flex; justify-content:space-between; align-items:center;">
+                                    <span style="font-size:11.5px; color:#94a3b8;">ব্যানারের নাম:</span>
+                                    <strong id="step1-timing-banner-name" style="font-size:12px; color:#38bdf8;">—</strong>
+                                </div>
+
+                                <!-- Start Time & End Time -->
+                                <div style="display:grid; grid-template-columns: 1fr 1fr; gap:8px;">
+                                    <div>
+                                        <label style="font-size:11px; color:#cbd5e1; margin-bottom:3px; display:block;">শুরুর সময় (Start):</label>
+                                        <input type="text" id="step1-banner-start-val" class="form-input" style="height:30px; font-size:12px; text-align:center; background:rgba(0,0,0,0.4); border:1px solid rgba(56,189,248,0.4); color:#fff; border-radius:4px; padding:2px;" value="00:10.5">
+                                    </div>
+                                    <div>
+                                        <label style="font-size:11px; color:#cbd5e1; margin-bottom:3px; display:block;">শেষের সময় (End):</label>
+                                        <input type="text" id="step1-banner-end-val" class="form-input" style="height:30px; font-size:12px; text-align:center; background:rgba(0,0,0,0.4); border:1px solid rgba(56,189,248,0.4); color:#fff; border-radius:4px; padding:2px;" value="00:20.5">
+                                    </div>
+                                </div>
+
+                                <button type="button" id="step1-banner-set-current-time-btn" class="btn btn-xs btn-outline" style="font-size:11px; padding:5px; border-color:rgba(56,189,248,0.4); color:#e0f2fe; display:flex; align-items:center; justify-content:center; gap:5px;">
+                                    <i class="fa-solid fa-location-crosshairs"></i> ⏱️ প্লেহেডের বর্তমান সময় থেকে শুরু করুন
+                                </button>
+
+                                <!-- Duration Presets -->
+                                <div>
+                                    <label style="font-size:11px; color:#cbd5e1; margin-bottom:5px; display:block;">কতক্ষণ দেখাবে (Duration Presets):</label>
+                                    <div style="display:flex; gap:6px; flex-wrap:wrap;">
+                                        <button type="button" class="btn btn-xs btn-outline step1-banner-dur-btn" data-dur="5" style="flex:1; padding:4px;">৫ সেকেন্ড</button>
+                                        <button type="button" class="btn btn-xs btn-primary step1-banner-dur-btn" data-dur="10" style="flex:1; padding:4px; background:#0284c7;">১০ সেকেন্ড</button>
+                                        <button type="button" class="btn btn-xs btn-outline step1-banner-dur-btn" data-dur="20" style="flex:1; padding:4px;">২০ সেকেন্ড</button>
+                                        <button type="button" class="btn btn-xs btn-outline step1-banner-dur-btn" data-dur="clip" style="flex:1.2; padding:4px;">বর্তমান ক্লিপ</button>
+                                        <button type="button" class="btn btn-xs btn-outline step1-banner-dur-btn" data-dur="main" style="flex:1.6; padding:4px; border-color:#f59e0b; color:#fde68a;">পুরো ভিডিও (ইন্ট্রো ছাড়া)</button>
+                                    </div>
+                                </div>
+
+                                <!-- Actions: Duplicate & Delete -->
+                                <div style="display:flex; gap:8px; margin-top:4px;">
+                                    <button type="button" id="step1-banner-duplicate-btn" class="btn btn-xs btn-outline" style="flex:1; padding:6px; font-size:11px; color:#a5b4fc; border-color:rgba(129,140,248,0.4);">
+                                        <i class="fa-solid fa-copy"></i> আবার যোগ করুন (+1)
+                                    </button>
+                                    <button type="button" id="step1-banner-delete-btn" class="btn btn-xs btn-outline" style="flex:1; padding:6px; font-size:11px; color:#f87171; border-color:rgba(239,68,68,0.4);">
+                                        <i class="fa-solid fa-trash-can"></i> ব্যানারটি মুছুন
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+
                         <div class="card mt-4">
                             <div class="card-header">
                                 <i class="fa-solid fa-square-poll-horizontal card-icon"></i>

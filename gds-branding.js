@@ -418,10 +418,7 @@
                     <i class="fa-solid fa-film"></i> Use GIF Logo
                 </button>
             </div>
-            <label style="display:flex; align-items:center; gap:8px; font-size:11.5px; color:#cbd5e1; cursor:pointer; margin-top:2px;">
-                <input type="checkbox" id="gds-auto-logo-checkbox" ${cfg.autoLogo ? 'checked' : ''} style="cursor:pointer; accent-color:#38bdf8;">
-                <span>নতুন ভিডিও ওপেন হলে অটোমেটিক এই লোগো সেট রাখুন</span>
-            </label>
+            <!-- Auto-logo checkbox removed -->
         `;
 
         logoContainer.parentNode.insertBefore(bar, logoContainer.nextSibling);
@@ -733,17 +730,8 @@
 
     // ── Auto-apply on Video Load ────────────────────────────────────────────────
     function setupAutoLogoListener() {
-        var videoInput = document.getElementById('video-input');
-        if (videoInput) {
-            videoInput.addEventListener('change', function () {
-                var cfg = getConfig();
-                if (cfg.autoLogo) {
-                    setTimeout(function () {
-                        loadGdsLogo(null, true);
-                    }, 700);
-                }
-            });
-        }
+        // Auto-logo strictly disabled per user request
+        return;
     }
 
     function init() {
@@ -755,11 +743,7 @@
         // Check if video is already present on load
         var cfg = getConfig();
         var state = ve();
-        if (cfg.autoLogo && state && (!state.logoImg && (state.video || (state.clips && state.clips.length > 0)))) {
-            setTimeout(function () {
-                loadGdsLogo(null, true);
-            }, 1000);
-        }
+        // Auto-load on init disabled per user request
         // Global keyboard shortcut: Delete or Backspace to delete selected text overlay
         document.addEventListener('keydown', function (e) {
             var activeTag = document.activeElement ? document.activeElement.tagName.toLowerCase() : '';

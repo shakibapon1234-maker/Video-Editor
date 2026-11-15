@@ -2133,18 +2133,33 @@ document.addEventListener('DOMContentLoaded', () => {
         handleLogoFile(e.target.files[0]);
     });
     
-    removeLogoBtn.addEventListener('click', () => {
+    removeLogoBtn.addEventListener('click', async () => {
         state.logoImg = null;
         state.logoFile = null;
+        state.logoGifParsed = null;
         logoPreviewBox.style.display = 'none';
         logoDropzone.style.display = 'flex';
         logoControlCard.style.display = 'none';
+        const s1Controls = document.getElementById('step1-logo-controls-box');
+        if (s1Controls) s1Controls.style.display = 'none';
         logoInput.value = '';
+        
+        // Permanently clear logo from IndexedDB so it never re-appears on reload
+        try {
+            const db = await getDB();
+            const tx = db.transaction(STORE_NAME, 'readwrite');
+            const store = tx.objectStore(STORE_NAME);
+            store.delete('logo');
+            if (activeProjId) store.delete('logo_' + activeProjId);
+        } catch(e) {}
+
+        if (typeof triggerAutoSave === 'function') triggerAutoSave();
         drawFrame();
         if (window.captureUndoCheckpoint) window.captureUndoCheckpoint();
         if (window.recordEditorHistory) {
             window.recordEditorHistory('Logo removed');
         }
+        if (typeof showToast === 'function') showToast('লোগো সম্পূর্ণ রিমুভ করা হয়েছে।');
     });
     
     // Logo styling controls
@@ -28863,25 +28878,26 @@ document.addEventListener('DOMContentLoaded', () => {
         const renderBrollList = window.renderBrollList || function(){};
         const ensureAnimatedGifPreview = window.ensureAnimatedGifPreview || function(){};
         const triggerAutoSave = window.triggerAutoSave || function(){};
+
         let gifPath, name, defaultX, defaultY, defaultW;
         if (type === 'logo') {
-            gifPath = '/assets/branding/logo.gif';
+            gifPath = 'assets/branding/logo.gif';
             name = 'GDS Red Logo (Animated)';
-            defaultX = 0.80; // Top-Right corner
+            defaultX = 0.78; // Top-Right corner
             defaultY = 0.05;
             defaultW = 16;   // 16% of canvas width
         } else if (type === 'tutorial') {
-            gifPath = '/assets/branding/banner_tutorial.gif';
+            gifPath = 'assets/branding/banner_tutorial.gif';
             name = 'Tutorial Purpose Notice';
-            defaultX = 0.25; // Centered near top
+            defaultX = 0.22; // Centered near top
             defaultY = 0.06;
-            defaultW = 50;   // 50% of canvas width
+            defaultW = 56;   // 56% of canvas width
         } else if (type === 'contact') {
-            gifPath = '/assets/branding/banner_contact.gif';
-            name = 'GDS Training Helpline';
-            defaultX = 0.25; // Centered near bottom
-            defaultY = 0.80;
-            defaultW = 50;   // 50% of canvas width
+            gifPath = 'assets/branding/banner_contact.gif';
+            name = 'GDS Helpline (01757-208244)';
+            defaultX = 0.16; // Centered near bottom
+            defaultY = 0.74;
+            defaultW = 68;   // 68% of canvas width
         } else {
             return;
         }
@@ -28903,6 +28919,10 @@ document.addEventListener('DOMContentLoaded', () => {
                 } catch (e) {
                     console.warn('GIF parsing notice:', e);
                 }
+            } else if (window.parseGifFrames) {
+                try {
+                    parsed = window.parseGifFrames(buf);
+                } catch (e) {}
             }
 
             const img = new Image();
@@ -28915,23 +28935,47 @@ document.addEventListener('DOMContentLoaded', () => {
 
             const file = new File([blob], `${type}.gif`, { type: 'image/gif' });
 
-            const maxTotalSec = state.clips && state.clips.length > 0
+            // Calculate intelligent Start Time and End Time so it NEVER covers the Intro
+            let introDuration = 0;
+            if (state.clips && state.clips.length > 0) {
+                const firstClip = state.clips[0];
+                if (firstClip && /intro/i.test(firstClip.name || '')) {
+                    introDuration = Math.max(0, (firstClip.end - firstClip.start) / Math.max(0.25, Number(firstClip.speed) || 1));
+                }
+            }
+
+            const totalDuration = state.clips && state.clips.length > 0
                 ? state.clips.reduce((sum, c) => sum + (Math.max(0, c.end - c.start) / Math.max(0.25, Number(c.speed) || 1)), 0)
                 : (state.duration || 99999);
 
+            // Default Start: if currently scrubbed past intro, use current time; otherwise start right after intro!
+            let startSec = introDuration;
+            if (state.currentTime && state.currentTime > introDuration + 0.5) {
+                startSec = Math.floor(state.currentTime * 10) / 10;
+            }
+
+            // Default Duration: 10 seconds (for banners) or full main video (for logo)
+            let endSec;
+            if (type === 'logo') {
+                endSec = totalDuration;
+            } else {
+                endSec = Math.min(totalDuration, startSec + 10.0);
+            }
+
+            const instanceId = 'gds_' + type + '_' + Date.now();
             const newItem = {
-                id: 'gds_' + type + '_' + Date.now(),
+                id: instanceId,
                 name: name,
                 type: 'gif',
                 file: file,
-                filePath: gifPath.replace(/^\//, ''),
+                filePath: gifPath,
                 imageUrl: blobUrl,
                 imageImg: img,
                 gifParsed: parsed,
                 mode: 'pip',
-                clipId: 'all', // Show across ALL clips for the full tutorial video
-                startSec: 0,
-                endSec: Math.max(maxTotalSec, 99999),
+                clipId: 'all',
+                startSec: startSec,
+                endSec: endSec,
                 x: defaultX,
                 y: defaultY,
                 size: defaultW,
@@ -28946,24 +28990,22 @@ document.addEventListener('DOMContentLoaded', () => {
             };
 
             state.brollOverlays = state.brollOverlays || [];
-            // If already present with same type, replace or notify
-            const existingIdx = state.brollOverlays.findIndex(b => b.id && b.id.startsWith('gds_' + type));
-            if (existingIdx !== -1) {
-                state.brollOverlays.splice(existingIdx, 1);
-            }
-
             state.brollOverlays.push(newItem);
             state.selectedBrollId = newItem.id;
 
+            // Sync timing UI
+            if (window.syncStep1BannerTimingUI) {
+                window.syncStep1BannerTimingUI(newItem);
+            }
+
             if (typeof renderBrollList === 'function') renderBrollList();
-            if (typeof showBrollTimingFor === 'function') showBrollTimingFor(newItem.id);
-            if (typeof drawFrame === 'function') drawFrame();
-            if (typeof ensureAnimatedGifPreview === 'function') ensureAnimatedGifPreview();
-            if (typeof triggerAutoSave === 'function') triggerAutoSave();
-            if (window.recordEditorHistory) window.recordEditorHistory(`${name} added`);
+            drawFrame();
+            ensureAnimatedGifPreview();
+            if (window.recordEditorHistory) window.recordEditorHistory('Branding badge added: ' + name);
+            triggerAutoSave();
 
             if (typeof showToast === 'function') {
-                showToast(`${name} যুক্ত হয়েছে! প্রিভিউ স্ক্রিনে ক্লিক করে ড্র্যাগ করে যেকোনো জায়গায় বসাতে পারেন।`, 'success');
+                showToast(`${name} যুক্ত হয়েছে! (${startSec.toFixed(1)}s থেকে ${endSec.toFixed(1)}s পর্যন্ত)`, 'success');
             }
         } catch (err) {
             console.error('addGdsBrandingOverlay error:', err);
@@ -29107,6 +29149,171 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (logoOpacitySlider) logoOpacitySlider.value = val;
                 if (logoOpacityVal) logoOpacityVal.innerText = val + '%';
                 drawFrame();
+            });
+        }
+    })();
+
+
+    // --- Step 1 Banner Timing Card Synchronization & Handlers ---
+    function syncStep1BannerTimingUI(item) {
+        const card = document.getElementById('step1-banner-timing-card');
+        if (!card) return;
+        if (!item || !item.id || !item.id.startsWith('gds_')) {
+            card.style.display = 'none';
+            return;
+        }
+
+        card.style.display = 'block';
+        const nameEl = document.getElementById('step1-timing-banner-name');
+        if (nameEl) nameEl.innerText = item.name || 'Branding Overlay';
+
+        const startInput = document.getElementById('step1-banner-start-val');
+        const endInput = document.getElementById('step1-banner-end-val');
+        if (startInput) startInput.value = formatSecToMinSec(item.startSec || 0);
+        if (endInput) endInput.value = formatSecToMinSec(item.endSec || 10);
+    }
+    window.syncStep1BannerTimingUI = syncStep1BannerTimingUI;
+
+    function formatSecToMinSec(sec) {
+        const m = Math.floor(sec / 60);
+        const s = (sec % 60).toFixed(1);
+        return String(m).padStart(2, '0') + ':' + (s < 10 ? '0' : '') + s;
+    }
+
+    function parseMinSecToSec(str) {
+        if (!str) return 0;
+        const parts = str.split(':');
+        if (parts.length === 2) {
+            return parseFloat(parts[0]) * 60 + parseFloat(parts[1]);
+        }
+        return parseFloat(str) || 0;
+    }
+
+    (function initBannerTimingHandlers() {
+        const state = window.VideoEditor;
+        const drawFrame = window.drawEditorFrame || function(){};
+
+        // When user types start or end time
+        const startInput = document.getElementById('step1-banner-start-val');
+        if (startInput) {
+            startInput.addEventListener('change', () => {
+                const item = (state.brollOverlays || []).find(b => b.id === state.selectedBrollId);
+                if (item) {
+                    item.startSec = Math.max(0, parseMinSecToSec(startInput.value));
+                    if (item.endSec < item.startSec) item.endSec = item.startSec + 5;
+                    drawFrame();
+                    if (window.triggerAutoSave) window.triggerAutoSave();
+                }
+            });
+        }
+
+        const endInput = document.getElementById('step1-banner-end-val');
+        if (endInput) {
+            endInput.addEventListener('change', () => {
+                const item = (state.brollOverlays || []).find(b => b.id === state.selectedBrollId);
+                if (item) {
+                    item.endSec = Math.max(item.startSec + 0.5, parseMinSecToSec(endInput.value));
+                    drawFrame();
+                    if (window.triggerAutoSave) window.triggerAutoSave();
+                }
+            });
+        }
+
+        // Set start time to current playhead
+        const setPlayheadBtn = document.getElementById('step1-banner-set-current-time-btn');
+        if (setPlayheadBtn) {
+            setPlayheadBtn.addEventListener('click', () => {
+                const item = (state.brollOverlays || []).find(b => b.id === state.selectedBrollId);
+                if (item) {
+                    const dur = Math.max(3, (item.endSec - item.startSec) || 10);
+                    item.startSec = Math.floor((state.currentTime || 0) * 10) / 10;
+                    item.endSec = item.startSec + dur;
+                    syncStep1BannerTimingUI(item);
+                    drawFrame();
+                    if (window.triggerAutoSave) window.triggerAutoSave();
+                    if (typeof showToast === 'function') showToast('শুরুর সময় প্লেহেডে সেট হয়েছে: ' + formatSecToMinSec(item.startSec));
+                }
+            });
+        }
+
+        // Duration presets
+        document.querySelectorAll('.step1-banner-dur-btn').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                const item = (state.brollOverlays || []).find(b => b.id === state.selectedBrollId);
+                if (!item) return;
+                const durType = e.currentTarget.dataset.dur;
+                const start = item.startSec || 0;
+
+                let introDur = 0;
+                if (state.clips && state.clips.length > 0 && /intro/i.test(state.clips[0].name || '')) {
+                    introDur = Math.max(0, (state.clips[0].end - state.clips[0].start) / Math.max(0.25, Number(state.clips[0].speed) || 1));
+                }
+
+                const totalDur = state.clips && state.clips.length > 0
+                    ? state.clips.reduce((sum, c) => sum + (Math.max(0, c.end - c.start) / Math.max(0.25, Number(c.speed) || 1)), 0)
+                    : (state.duration || 99999);
+
+                if (durType === '5') {
+                    item.endSec = start + 5;
+                } else if (durType === '10') {
+                    item.endSec = start + 10;
+                } else if (durType === '20') {
+                    item.endSec = start + 20;
+                } else if (durType === 'clip') {
+                    const activeClip = (state.clips || []).find(c => c.id === state.activeClipId);
+                    if (activeClip) {
+                        item.clipId = activeClip.id;
+                        item.startSec = 0;
+                        item.endSec = Math.max(0, (activeClip.end - activeClip.start) / Math.max(0.25, Number(activeClip.speed) || 1));
+                    }
+                } else if (durType === 'main') {
+                    item.clipId = 'all';
+                    item.startSec = introDur;
+                    item.endSec = totalDur;
+                }
+
+                syncStep1BannerTimingUI(item);
+                drawFrame();
+                if (window.triggerAutoSave) window.triggerAutoSave();
+                if (typeof showToast === 'function') showToast('সময়কাল আপডেট করা হয়েছে');
+            });
+        });
+
+        // Duplicate button (add another copy of this banner at another time)
+        const dupBtn = document.getElementById('step1-banner-duplicate-btn');
+        if (dupBtn) {
+            dupBtn.addEventListener('click', () => {
+                const item = (state.brollOverlays || []).find(b => b.id === state.selectedBrollId);
+                if (item) {
+                    const newItem = Object.assign({}, item, {
+                        id: 'gds_dup_' + Date.now(),
+                        startSec: Math.floor((state.currentTime || item.endSec + 1) * 10) / 10,
+                        endSec: Math.floor((state.currentTime || item.endSec + 1) * 10) / 10 + Math.max(5, (item.endSec - item.startSec) || 10)
+                    });
+                    state.brollOverlays.push(newItem);
+                    state.selectedBrollId = newItem.id;
+                    syncStep1BannerTimingUI(newItem);
+                    drawFrame();
+                    if (window.triggerAutoSave) window.triggerAutoSave();
+                    if (typeof showToast === 'function') showToast('ব্যানারটি আরেকবার যোগ করা হয়েছে! (নতুন সময়ে সেট করুন)');
+                }
+            });
+        }
+
+        // Delete button
+        const delBtn = document.getElementById('step1-banner-delete-btn');
+        if (delBtn) {
+            delBtn.addEventListener('click', () => {
+                const idx = (state.brollOverlays || []).findIndex(b => b.id === state.selectedBrollId);
+                if (idx !== -1) {
+                    state.brollOverlays.splice(idx, 1);
+                    state.selectedBrollId = null;
+                    const card = document.getElementById('step1-banner-timing-card');
+                    if (card) card.style.display = 'none';
+                    drawFrame();
+                    if (window.triggerAutoSave) window.triggerAutoSave();
+                    if (typeof showToast === 'function') showToast('ব্যানারটি মুছে ফেলা হয়েছে।');
+                }
             });
         }
     })();
