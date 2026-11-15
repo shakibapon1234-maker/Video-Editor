@@ -28858,6 +28858,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // --- GDS Training Hub: 1-Click Interactive Branding GIFs (Logo & Banners) ---
     async function addGdsBrandingOverlay(type) {
+        const state = window.VideoEditor;
+        const drawFrame = window.drawEditorFrame || function(){};
+        const renderBrollList = window.renderBrollList || function(){};
+        const ensureAnimatedGifPreview = window.ensureAnimatedGifPreview || function(){};
+        const triggerAutoSave = window.triggerAutoSave || function(){};
         let gifPath, name, defaultX, defaultY, defaultW;
         if (type === 'logo') {
             gifPath = '/assets/branding/logo.gif';
@@ -28987,6 +28992,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // --- Step 1 Quick Action Wireups & Logo Movement Handlers ---
     (function initStep1QuickActions() {
+        const state = window.VideoEditor;
+        const drawFrame = window.drawEditorFrame || function(){};
         // Step 1: Intro & Outro Button
         const step1IntroOutroBtn = document.getElementById('step1-add-intro-outro-btn');
         if (step1IntroOutroBtn) {
