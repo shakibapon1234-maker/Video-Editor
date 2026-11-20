@@ -173,9 +173,16 @@
                 var items = wordToItems[r.word];
                 var first = items && items[0];
                 var state = window.VideoEditor;
-                if (first && typeof first.startSec === 'number' && state.video) {
-                    state.video.currentTime = first.startSec;
-                    state.currentTime = first.startSec;
+                if (first && typeof first.startSec === 'number') {
+                    if (typeof window.seekEditorTimelineTo === 'function') {
+                        var isAll = !first.clipId || first.clipId === 'all';
+                        var slot = (typeof window.getClipSlot === 'function') ? window.getClipSlot(first.clipId) : { start: 0 };
+                        var targetTime = isAll ? first.startSec : (slot.start + first.startSec);
+                        window.seekEditorTimelineTo(targetTime);
+                    } else if (state && state.video) {
+                        state.video.currentTime = first.startSec;
+                        state.currentTime = first.startSec;
+                    }
                 }
                 if (typeof window.drawEditorFrame === 'function') window.drawEditorFrame();
             });

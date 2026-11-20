@@ -3863,7 +3863,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         item.startSec = Math.max(0, item.startSec - cutDur);
                         item.endSec = Math.max(item.startSec + 0.1, item.endSec - cutDur);
                     }
-                } else if (item.clipId === 'all') {
+                } else if (!item.clipId || item.clipId === 'all') {
                     const res = shiftIntervalAfterCut(item.startSec, item.endSec, timelineCutStart, cutDur);
                     if (!res.keep) {
                         arr.splice(i, 1);
@@ -3875,7 +3875,7 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         });
 
-        // Shift global timeline items: blur regions, fill regions, subtitles, bgMusic
+        // Shift global timeline items: blur regions, fill regions, highlights, subtitles, bgMusic
         const shiftGlobalArray = (arr) => {
             if (!arr || !arr.length) return;
             for (let i = arr.length - 1; i >= 0; i--) {
@@ -3892,10 +3892,16 @@ document.addEventListener('DOMContentLoaded', () => {
 
         shiftGlobalArray(state.blurRegions);
         shiftGlobalArray(state.fillRegions);
+        shiftGlobalArray(state.highlights);
         shiftGlobalArray(state.subtitles);
         shiftGlobalArray(state.bgMusicTracks);
 
         if (typeof renderBlurRegionList === 'function') renderBlurRegionList();
+        if (typeof renderSymbolList === 'function') renderSymbolList();
+        if (typeof renderShapeOverlayList === 'function') renderShapeOverlayList();
+        if (typeof renderTextOverlayList === 'function') renderTextOverlayList();
+        if (typeof renderBrollList === 'function') renderBrollList();
+        if (typeof renderHighlightList === 'function') renderHighlightList();
     }
 
     // Update playhead UI position
@@ -4363,6 +4369,12 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (state.clips.length <= 1) {
                     alert('At least one clip is required.');
                     return;
+                }
+                const slot = (typeof getClipSlot === 'function') ? getClipSlot(clip.id) : { start: 0, duration: 0 };
+                const cutStart = slot.start || 0;
+                const cutDur = slot.duration || 0;
+                if (typeof adjustOverlaysAfterClipCut === 'function' && cutDur > 0) {
+                    adjustOverlaysAfterClipCut(clip.id, null, null, 0, cutDur, cutStart);
                 }
                 const wasActive = clip.id === state.activeClipId;
                 state.clips = state.clips.filter(c => c.id !== clip.id);
@@ -12105,7 +12117,8 @@ document.addEventListener('DOMContentLoaded', () => {
         // --- Step E2: Video Highlights / Callouts (rendered AFTER B-roll so highlights
         // appear on top of B-roll images, text overlays and any other canvas content) ---
         if (state.highlights && state.highlights.length > 0) {
-            const currentTime = state.currentTime || 0;
+            const _hlClock = (typeof getEditorTimelineClock === 'function') ? getEditorTimelineClock() : { current: state.currentTime || 0, total: state.duration || 1000 };
+            const currentTime = state.isExportingVideo ? (state.exportTickerTime ?? _hlClock.current) : _hlClock.current;
             // Re-read drawX/drawW from the current bounds so coordinates still map
             // correctly even when the layout changes between the two render steps.
             const hBounds = getRenderedVideoBounds();
@@ -13360,7 +13373,9 @@ document.addEventListener('DOMContentLoaded', () => {
             const lineWidth = parseInt(document.getElementById('highlight-line-width')?.value || '6');
             const fillOpacity = parseInt(document.getElementById('highlight-fill-opacity')?.value || '16');
             const drawDuration = parseFloat(document.getElementById('highlight-draw-speed')?.value || '0.6');
-            const now = Math.max(0, state.currentTime || 0);
+            const _hlClock = (typeof getEditorTimelineClock === 'function') ? getEditorTimelineClock() : { current: state.currentTime || 0, total: state.duration || 1000 };
+            const now = Math.max(0, parseFloat((_hlClock.current || 0).toFixed(1)));
+            const hlTotalDur = _hlClock.total || state.duration || 1000;
             const startPoint = { x: (clampedX - bounds.x) / bounds.w, y: (clampedY - bounds.y) / bounds.h };
             const selected = state.highlights.find(h => h.id === state.selectedHighlightId);
             if (shape === 'freehand') {
@@ -13372,7 +13387,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     if (Math.hypot(startPoint.x - endpoint.x, startPoint.y - endpoint.y) < 0.035) item = selected;
                 }
                 if (!item) {
-                    item = { id: Date.now(), shape, color, lineWidth, fillOpacity, drawDuration, x: startPoint.x, y: startPoint.y, w: 0, h: 0, points: [startPoint], isClosed: false, startSec: now, endSec: Math.max(now + 1, state.endTime || state.duration || 5) };
+                    item = { id: Date.now(), shape, color, lineWidth, fillOpacity, drawDuration, x: startPoint.x, y: startPoint.y, w: 0, h: 0, points: [startPoint], isClosed: false, startSec: now, endSec: Math.max(now + 1, hlTotalDur) };
                     state.highlights.push(item);
                     state.selectedHighlightId = item.id;
                 }
@@ -13386,7 +13401,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 e.preventDefault();
                 return;
             }
-            const item = { id: Date.now(), shape, color, lineWidth, fillOpacity, drawDuration, x: startPoint.x, y: startPoint.y, w: 0, h: 0, points: shape === 'freehand' ? [startPoint] : undefined, isClosed: false, startSec: now, endSec: Math.max(now + 1, state.endTime || state.duration || 5) };
+            const item = { id: Date.now(), shape, color, lineWidth, fillOpacity, drawDuration, x: startPoint.x, y: startPoint.y, w: 0, h: 0, points: shape === 'freehand' ? [startPoint] : undefined, isClosed: false, startSec: now, endSec: Math.max(now + 1, hlTotalDur) };
             state.highlights.push(item);
             state.selectedHighlightId = item.id;
             state.isDrawingNewHighlight = true;
@@ -14222,7 +14237,8 @@ document.addEventListener('DOMContentLoaded', () => {
     function findSymbolAt(coords) {
         const canvasW = state.canvas.width;
         const canvasH = state.canvas.height;
-        const now = Math.max(0, state.currentTime || 0);
+        const _symClock = (typeof getEditorTimelineClock === 'function') ? getEditorTimelineClock() : { current: state.currentTime || 0 };
+        const now = Math.max(0, _symClock.current || 0);
         const inEditMode = state.currentStep === 3 && !state.isPlaying;
         for (let i = state.symbolOverlays.length - 1; i >= 0; i--) {
             const item = state.symbolOverlays[i];
@@ -14584,7 +14600,10 @@ document.addEventListener('DOMContentLoaded', () => {
         let facing = 'right';
         if (item.shapeType === 'plane' && item.flightPath && item.flightPath !== 'static') {
             const span = (item.endSec - item.startSec) || 1;
-            const progress = ((state.currentTime || 0) - item.startSec) / span;
+            const isAll = !item.clipId || item.clipId === 'all';
+            const _clock = (typeof getEditorTimelineClock === 'function') ? getEditorTimelineClock() : { current: state.currentTime || 0 };
+            const curTime = isAll ? _clock.current : ((typeof getActiveClipElapsed === 'function') ? getActiveClipElapsed() : (state.currentTime || 0));
+            const progress = (curTime - item.startSec) / span;
             const flight = getPlaneFlightPos(item, progress);
             cx = flight.x * canvasW;
             cy = flight.y * canvasH;
@@ -14601,7 +14620,8 @@ document.addEventListener('DOMContentLoaded', () => {
     function findShapeOverlayAt(coords) {
         const canvasW = state.canvas.width;
         const canvasH = state.canvas.height;
-        const now = Math.max(0, state.currentTime || 0);
+        const _shpClock = (typeof getEditorTimelineClock === 'function') ? getEditorTimelineClock() : { current: state.currentTime || 0 };
+        const now = Math.max(0, _shpClock.current || 0);
         const inEditMode = state.currentStep === 3 && !state.isPlaying;
         for (let i = state.shapeOverlays.length - 1; i >= 0; i--) {
             const item = state.shapeOverlays[i];
@@ -16181,8 +16201,19 @@ document.addEventListener('DOMContentLoaded', () => {
                         textAnimLoop: textOverlayAnimLoopEnabled ? !!textOverlayAnimLoopEnabled.checked : false,
                         textAnimLoopSec: textOverlayAnimLoopSecSlider ? parseFloat(textOverlayAnimLoopSecSlider.value) || 5 : 5,
                         boxAnimStyle: textOverlayBoxAnimSelect ? textOverlayBoxAnimSelect.value : 'none',
-                        startSec: Math.max(0, state.currentTime || 0),
-                        endSec: Math.min(state.duration || 5, (state.currentTime || 0) + 12.5)
+                        startSec: (() => {
+                            const clipElapsed = (typeof getActiveClipElapsed === 'function') ? getActiveClipElapsed() : 0;
+                            const slot = (typeof getClipSlot === 'function') ? getClipSlot(state.activeClipId) : { duration: 1000 };
+                            const clipDur = slot.duration || state.endTime || state.duration || 1000;
+                            return Math.min(Math.max(0, clipDur - 0.5), parseFloat(clipElapsed.toFixed(1)));
+                        })(),
+                        endSec: (() => {
+                            const clipElapsed = (typeof getActiveClipElapsed === 'function') ? getActiveClipElapsed() : 0;
+                            const slot = (typeof getClipSlot === 'function') ? getClipSlot(state.activeClipId) : { duration: 1000 };
+                            const clipDur = slot.duration || state.endTime || state.duration || 1000;
+                            const start = Math.min(Math.max(0, clipDur - 0.5), parseFloat(clipElapsed.toFixed(1)));
+                            return Math.min(clipDur, parseFloat((start + 12.5).toFixed(1)));
+                        })()
                     };
                     if (!state.textOverlays) state.textOverlays = [];
                     state.textOverlays.push(newItem);
@@ -16787,10 +16818,14 @@ document.addEventListener('DOMContentLoaded', () => {
             jumpBtn.addEventListener('click', (ev) => {
                 ev.stopPropagation();
                 if (region.startSec !== undefined) {
-                    if (state.video) state.video.currentTime = region.startSec;
-                    state.currentTime = region.startSec;
-                    if (typeof updatePlayhead === 'function') updatePlayhead();
-                    drawFrame();
+                    if (typeof seekEditorTimelineTo === 'function') {
+                        seekEditorTimelineTo(region.startSec);
+                    } else {
+                        if (state.video) state.video.currentTime = region.startSec;
+                        state.currentTime = region.startSec;
+                        if (typeof updatePlayhead === 'function') updatePlayhead();
+                        drawFrame();
+                    }
                 }
             });
 
@@ -16826,9 +16861,14 @@ document.addEventListener('DOMContentLoaded', () => {
 
                 // Automatically seek to region start time if currently outside so user immediately sees the box
                 if (region.startSec !== undefined && (_clock.current < region.startSec || _clock.current > (region.endSec ?? Infinity))) {
-                    if (state.video) state.video.currentTime = region.startSec;
-                    state.currentTime = region.startSec;
-                    if (typeof updatePlayhead === 'function') updatePlayhead();
+                    if (typeof seekEditorTimelineTo === 'function') {
+                        seekEditorTimelineTo(region.startSec);
+                    } else {
+                        if (state.video) state.video.currentTime = region.startSec;
+                        state.currentTime = region.startSec;
+                        if (typeof updatePlayhead === 'function') updatePlayhead();
+                        drawFrame();
+                    }
                 }
                 drawFrame();
             });
@@ -17206,12 +17246,28 @@ document.addEventListener('DOMContentLoaded', () => {
     function renderHighlightList() {
         if (!highlightListEl) return;
         highlightListEl.innerHTML = '';
+        const _hlClock = (typeof getEditorTimelineClock === 'function') ? getEditorTimelineClock() : { current: 0, total: state.duration || 1000 };
+        const hlTotal = _hlClock.total || state.duration || 1000;
         state.highlights.forEach((item, index) => {
+            if (hlTotal > 0 && item.startSec > hlTotal) {
+                item.startSec = Math.max(0, Math.min(hlTotal - 1, parseFloat((_hlClock.current || 0).toFixed(1))));
+                item.endSec = Math.min(hlTotal, parseFloat((item.startSec + 3).toFixed(1)));
+            }
             const row = document.createElement('div');
             row.className = 'text-overlay-list-item' + (item.id === state.selectedHighlightId ? ' active' : '');
             row.style.cssText = `display:flex;align-items:center;justify-content:space-between;padding:8px 12px;border-radius:6px;margin-bottom:6px;cursor:pointer;background:${item.id === state.selectedHighlightId ? 'rgba(0,229,255,.12)' : 'rgba(255,255,255,.04)'};border:1px solid ${item.id === state.selectedHighlightId ? '#00e5ff' : 'transparent'};`;
             row.innerHTML = `<span style="font-size:13px"><i class="fa-solid fa-highlighter" style="color:${item.color}"></i> Highlight ${index + 1} · ${item.shape}</span><span style="font-size:11px;opacity:.6">${item.startSec.toFixed(1)}s–${item.endSec.toFixed(1)}s</span>`;
-            row.addEventListener('click', () => { state.selectedHighlightId = item.id; showHighlightControls(item.id); renderHighlightList(); drawFrame(); });
+            row.addEventListener('click', () => {
+                state.selectedHighlightId = item.id;
+                showHighlightControls(item.id);
+                renderHighlightList();
+                const cur = (typeof getEditorTimelineClock === 'function') ? getEditorTimelineClock().current : (state.currentTime || 0);
+                if (cur < item.startSec || cur > item.endSec) {
+                    if (typeof seekEditorTimelineTo === 'function') seekEditorTimelineTo(item.startSec);
+                } else {
+                    drawFrame();
+                }
+            });
             highlightListEl.appendChild(row);
         });
     }
@@ -17219,12 +17275,21 @@ document.addEventListener('DOMContentLoaded', () => {
         const item = state.highlights.find(h => h.id === id);
         if (!item) { highlightTimingContainer.style.display = 'none'; return; }
         highlightTimingContainer.style.display = 'block';
+        const _hlClock = (typeof getEditorTimelineClock === 'function') ? getEditorTimelineClock() : { current: 0, total: state.duration || 1000 };
+        const hlTotal = _hlClock.total || state.duration || 1000;
         highlightShapeSelect.value = item.shape; highlightColorInput.value = item.color;
         highlightColorVal.innerText = item.color.toUpperCase();
         highlightLineWidth.value = item.lineWidth; highlightLineWidthVal.innerText = item.lineWidth + 'px';
         highlightFillOpacity.value = item.fillOpacity; highlightFillOpacityVal.innerText = item.fillOpacity + '%';
         highlightDrawSpeed.value = item.drawDuration ?? 0.6; highlightDrawSpeedVal.innerText = (item.drawDuration ?? 0.6).toFixed(1) + 's';
-        highlightStartInput.value = item.startSec; highlightEndInput.value = item.endSec;
+        if (highlightStartInput) {
+            highlightStartInput.max = hlTotal.toFixed(1);
+            highlightStartInput.value = item.startSec.toFixed(1);
+        }
+        if (highlightEndInput) {
+            highlightEndInput.max = hlTotal.toFixed(1);
+            highlightEndInput.value = item.endSec.toFixed(1);
+        }
     }
     if (highlightToolToggle) highlightToolToggle.addEventListener('change', () => {
         state.isAddingHighlight = highlightToolToggle.checked;
@@ -18531,8 +18596,15 @@ document.addEventListener('DOMContentLoaded', () => {
         if (item) {
             item.textAnimStyle = e.target.value;
             item.animStyle = e.target.value; // legacy fallback field, kept in sync
-            state.currentTime = item.startSec;
-            if (typeof updatePlayhead === 'function') updatePlayhead();
+            const isAll = !item.clipId || item.clipId === 'all';
+            const slot = (typeof getClipSlot === 'function') ? getClipSlot(item.clipId) : { start: 0 };
+            const targetTime = isAll ? item.startSec : (slot.start + item.startSec);
+            if (typeof seekEditorTimelineTo === 'function') {
+                seekEditorTimelineTo(targetTime);
+            } else {
+                state.currentTime = targetTime;
+                if (typeof updatePlayhead === 'function') updatePlayhead();
+            }
             drawFrame();
             if (window.triggerAutoSave) window.triggerAutoSave();
         }
@@ -18543,8 +18615,15 @@ document.addEventListener('DOMContentLoaded', () => {
             const item = getSelectedTextOverlay();
             if (item) {
                 item.boxAnimStyle = e.target.value;
-                state.currentTime = item.startSec;
-                if (typeof updatePlayhead === 'function') updatePlayhead();
+                const isAll = !item.clipId || item.clipId === 'all';
+                const slot = (typeof getClipSlot === 'function') ? getClipSlot(item.clipId) : { start: 0 };
+                const targetTime = isAll ? item.startSec : (slot.start + item.startSec);
+                if (typeof seekEditorTimelineTo === 'function') {
+                    seekEditorTimelineTo(targetTime);
+                } else {
+                    state.currentTime = targetTime;
+                    if (typeof updatePlayhead === 'function') updatePlayhead();
+                }
                 drawFrame();
                 if (window.triggerAutoSave) window.triggerAutoSave();
             }
@@ -20748,8 +20827,11 @@ document.addEventListener('DOMContentLoaded', () => {
         const slot = (typeof getClipSlot === 'function') ? getClipSlot(original.clipId) : { duration: 100 };
         const maxVal = (original.clipId === 'all') ? (clock.total || state.duration || 100) : (slot.duration || state.endTime || state.duration || 100);
         
-        let newStart = (state.currentTime != null && state.currentTime > 0)
-            ? state.currentTime
+        const currentElapsed = (original.clipId === 'all')
+            ? (clock.current || 0)
+            : ((typeof getActiveClipElapsed === 'function') ? getActiveClipElapsed() : 0);
+        let newStart = (currentElapsed > 0)
+            ? currentElapsed
             : (original.endSec + 1);
         if (newStart >= maxVal) newStart = Math.max(0, maxVal - dur);
         let newEnd = Math.min(maxVal, newStart + dur);
@@ -22094,10 +22176,16 @@ document.addEventListener('DOMContentLoaded', () => {
     let symbolIdCounter = 1;
 
     function addSymbol(type) {
-        const start = Math.max(0, state.currentTime || 0);
-        const end = Math.min(state.duration || (start + 3), start + 3);
+        const _symAddClock = (typeof getEditorTimelineClock === 'function')
+            ? getEditorTimelineClock()
+            : { current: state.currentTime || 0, total: state.duration || 1000 };
+        const timelineNow = Math.max(0, parseFloat((_symAddClock.current || 0).toFixed(1)));
+        const timelineTotal = _symAddClock.total || state.duration || 1000;
+        const start = Math.min(Math.max(0, timelineTotal - 0.5), timelineNow);
+        const end = Math.min(timelineTotal, parseFloat((start + 3).toFixed(1)));
         const newItem = {
             id: symbolIdCounter++,
+            clipId: 'all',
             symbolType: type,
             x: 0.5,
             y: 0.5,
@@ -22105,7 +22193,7 @@ document.addEventListener('DOMContentLoaded', () => {
             rotation: 0,
             color: '#ff3b30',
             startSec: start,
-            endSec: end > start ? end : start + 3
+            endSec: end > start ? end : Math.min(timelineTotal, start + 3)
         };
         state.symbolOverlays.push(newItem);
         state.selectedSymbolId = newItem.id;
@@ -22127,7 +22215,14 @@ document.addEventListener('DOMContentLoaded', () => {
     function renderSymbolList() {
         if (!symbolListEl) return;
         symbolListEl.innerHTML = '';
+        const _symListClock = (typeof getEditorTimelineClock === 'function') ? getEditorTimelineClock() : { current: 0, total: state.duration || 1000 };
+        const timelineTotal = _symListClock.total || state.duration || 1000;
         state.symbolOverlays.forEach((item) => {
+            if (!item.clipId) item.clipId = 'all';
+            if (item.clipId === 'all' && timelineTotal > 0 && item.startSec > timelineTotal) {
+                item.startSec = Math.max(0, Math.min(timelineTotal - 1, parseFloat((_symListClock.current || 0).toFixed(1))));
+                item.endSec = Math.min(timelineTotal, parseFloat((item.startSec + 3).toFixed(1)));
+            }
             const row = document.createElement('div');
             row.className = 'sticker-list-item' + (item.id === state.selectedSymbolId ? ' active' : '');
             row.style.display = 'flex';
@@ -22182,13 +22277,23 @@ document.addEventListener('DOMContentLoaded', () => {
             if (symbolControlsContainer) symbolControlsContainer.style.display = 'none';
             return;
         }
+        const _symClock = (typeof getEditorTimelineClock === 'function')
+            ? getEditorTimelineClock()
+            : { current: 0, total: state.duration || 1000 };
+        const timelineTotal = _symClock.total || state.duration || 1000;
         if (symbolControlsContainer) symbolControlsContainer.style.display = 'block';
         if (symbolSizeSlider) symbolSizeSlider.value = Math.round(item.size);
         if (symbolSizeVal) symbolSizeVal.innerText = Math.round(item.size) + '%';
         if (symbolColorInput) symbolColorInput.value = item.color;
         if (symbolColorVal) symbolColorVal.innerText = item.color;
-        if (symbolStartInput) symbolStartInput.value = item.startSec.toFixed(1);
-        if (symbolEndInput) symbolEndInput.value = item.endSec.toFixed(1);
+        if (symbolStartInput) {
+            symbolStartInput.max = timelineTotal.toFixed(1);
+            symbolStartInput.value = item.startSec.toFixed(1);
+        }
+        if (symbolEndInput) {
+            symbolEndInput.max = timelineTotal.toFixed(1);
+            symbolEndInput.value = item.endSec.toFixed(1);
+        }
     }
 
     if (symbolSizeSlider) {
@@ -22218,10 +22323,15 @@ document.addEventListener('DOMContentLoaded', () => {
         symbolStartInput.addEventListener('change', (e) => {
             const item = state.symbolOverlays.find(s => s.id === state.selectedSymbolId);
             if (item) {
+                const _symClock = (typeof getEditorTimelineClock === 'function')
+                    ? getEditorTimelineClock()
+                    : { current: 0, total: state.duration || 1000 };
+                const timelineTotal = _symClock.total || state.duration || 1000;
                 let v = Math.max(0, parseFloat(e.target.value) || 0);
+                if (timelineTotal && v > timelineTotal) v = timelineTotal;
                 if (v >= item.endSec) v = Math.max(0, item.endSec - 0.1);
-                item.startSec = v;
-                e.target.value = v.toFixed(1);
+                item.startSec = parseFloat(v.toFixed(1));
+                e.target.value = item.startSec.toFixed(1);
                 renderSymbolList();
                 drawFrame();
             }
@@ -22232,11 +22342,15 @@ document.addEventListener('DOMContentLoaded', () => {
         symbolEndInput.addEventListener('change', (e) => {
             const item = state.symbolOverlays.find(s => s.id === state.selectedSymbolId);
             if (item) {
+                const _symClock = (typeof getEditorTimelineClock === 'function')
+                    ? getEditorTimelineClock()
+                    : { current: 0, total: state.duration || 1000 };
+                const timelineTotal = _symClock.total || state.duration || 1000;
                 let v = parseFloat(e.target.value) || (item.startSec + 1);
-                if (state.duration) v = Math.min(v, state.duration);
-                if (v <= item.startSec) v = item.startSec + 0.1;
-                item.endSec = v;
-                e.target.value = v.toFixed(1);
+                if (timelineTotal) v = Math.min(v, timelineTotal);
+                if (v <= item.startSec) v = Math.min(timelineTotal, item.startSec + 0.1);
+                item.endSec = parseFloat(v.toFixed(1));
+                e.target.value = item.endSec.toFixed(1);
                 renderSymbolList();
                 drawFrame();
             }
@@ -22317,12 +22431,17 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function addShapeOverlay(type) {
         const isPlane = type === 'plane';
-        const start = Math.max(0, state.currentTime || 0);
+        const _shpAddClock = (typeof getEditorTimelineClock === 'function')
+            ? getEditorTimelineClock()
+            : { current: state.currentTime || 0, total: state.duration || 1000 };
+        const timelineNow = Math.max(0, parseFloat((_shpAddClock.current || 0).toFixed(1)));
+        const timelineTotal = _shpAddClock.total || state.duration || 1000;
         const defaultDur = isPlane ? 5 : 3;
-        const end = Math.min(state.duration || (start + defaultDur), start + defaultDur);
+        const start = Math.min(Math.max(0, timelineTotal - 0.5), timelineNow);
+        const end = Math.min(timelineTotal, parseFloat((start + defaultDur).toFixed(1)));
         const newItem = {
             id: generateUniqueShapeOverlayId(),
-            clipId: state.activeClipId,
+            clipId: 'all',
             shapeType: type,
             text: isPlane ? 'YOUR TEXT HERE' : 'আপনার টেক্সট',
             x: 0.5,
@@ -22340,7 +22459,7 @@ document.addEventListener('DOMContentLoaded', () => {
             font: 'Hind Siliguri',
             flightPath: isPlane ? 'ltr' : 'static',
             startSec: start,
-            endSec: end > start ? end : start + defaultDur
+            endSec: end > start ? end : Math.min(timelineTotal, start + defaultDur)
         };
         state.shapeOverlays.push(newItem);
         state.selectedShapeOverlayId = newItem.id;
@@ -22362,7 +22481,14 @@ document.addEventListener('DOMContentLoaded', () => {
     function renderShapeOverlayList() {
         if (!shapeOverlayListEl) return;
         shapeOverlayListEl.innerHTML = '';
+        const _shpListClock = (typeof getEditorTimelineClock === 'function') ? getEditorTimelineClock() : { current: 0, total: state.duration || 1000 };
+        const timelineTotal = _shpListClock.total || state.duration || 1000;
         state.shapeOverlays.filter(shapeOverlayBelongsToActiveClip).forEach((item) => {
+            if (!item.clipId) item.clipId = 'all';
+            if (item.clipId === 'all' && timelineTotal > 0 && item.startSec > timelineTotal) {
+                item.startSec = Math.max(0, Math.min(timelineTotal - 1, parseFloat((_shpListClock.current || 0).toFixed(1))));
+                item.endSec = Math.min(timelineTotal, parseFloat((item.startSec + 3).toFixed(1)));
+            }
             const row = document.createElement('div');
             row.className = 'sticker-list-item' + (item.id === state.selectedShapeOverlayId ? ' active' : '');
             row.style.display = 'flex';
@@ -22434,8 +22560,18 @@ document.addEventListener('DOMContentLoaded', () => {
         if (shapeOverlayFontSizeVal) shapeOverlayFontSizeVal.innerText = item.fontSize + 'px';
         if (shapeOverlaySizeSlider) shapeOverlaySizeSlider.value = Math.round(item.size);
         if (shapeOverlaySizeVal) shapeOverlaySizeVal.innerText = Math.round(item.size) + '%';
-        if (shapeOverlayStartInput) shapeOverlayStartInput.value = item.startSec.toFixed(1);
-        if (shapeOverlayEndInput) shapeOverlayEndInput.value = item.endSec.toFixed(1);
+        const _shpClock = (typeof getEditorTimelineClock === 'function')
+            ? getEditorTimelineClock()
+            : { current: 0, total: state.duration || 1000 };
+        const timelineTotal = _shpClock.total || state.duration || 1000;
+        if (shapeOverlayStartInput) {
+            shapeOverlayStartInput.max = timelineTotal.toFixed(1);
+            shapeOverlayStartInput.value = item.startSec.toFixed(1);
+        }
+        if (shapeOverlayEndInput) {
+            shapeOverlayEndInput.max = timelineTotal.toFixed(1);
+            shapeOverlayEndInput.value = item.endSec.toFixed(1);
+        }
         if (shapeOverlayFlightPathGroup) {
             shapeOverlayFlightPathGroup.style.display = (item.shapeType === 'plane') ? 'block' : 'none';
         }
@@ -22554,10 +22690,15 @@ document.addEventListener('DOMContentLoaded', () => {
         shapeOverlayStartInput.addEventListener('change', (e) => {
             const item = state.shapeOverlays.find(s => s.id === state.selectedShapeOverlayId);
             if (item) {
+                const _shpClock = (typeof getEditorTimelineClock === 'function')
+                    ? getEditorTimelineClock()
+                    : { current: 0, total: state.duration || 1000 };
+                const timelineTotal = _shpClock.total || state.duration || 1000;
                 let v = Math.max(0, parseFloat(e.target.value) || 0);
+                if (timelineTotal && v > timelineTotal) v = timelineTotal;
                 if (v >= item.endSec) v = Math.max(0, item.endSec - 0.1);
-                item.startSec = v;
-                e.target.value = v.toFixed(1);
+                item.startSec = parseFloat(v.toFixed(1));
+                e.target.value = item.startSec.toFixed(1);
                 renderShapeOverlayList();
                 drawFrame();
             }
@@ -22568,11 +22709,15 @@ document.addEventListener('DOMContentLoaded', () => {
         shapeOverlayEndInput.addEventListener('change', (e) => {
             const item = state.shapeOverlays.find(s => s.id === state.selectedShapeOverlayId);
             if (item) {
+                const _shpClock = (typeof getEditorTimelineClock === 'function')
+                    ? getEditorTimelineClock()
+                    : { current: 0, total: state.duration || 1000 };
+                const timelineTotal = _shpClock.total || state.duration || 1000;
                 let v = parseFloat(e.target.value) || (item.startSec + 1);
-                if (state.duration) v = Math.min(v, state.duration);
-                if (v <= item.startSec) v = item.startSec + 0.1;
-                item.endSec = v;
-                e.target.value = v.toFixed(1);
+                if (timelineTotal) v = Math.min(v, timelineTotal);
+                if (v <= item.startSec) v = Math.min(timelineTotal, item.startSec + 0.1);
+                item.endSec = parseFloat(v.toFixed(1));
+                e.target.value = item.endSec.toFixed(1);
                 renderShapeOverlayList();
                 drawFrame();
             }
@@ -28949,9 +29094,10 @@ document.addEventListener('DOMContentLoaded', () => {
                 : (state.duration || 99999);
 
             // Default Start: if currently scrubbed past intro, use current time; otherwise start right after intro!
+            const _gdsClock = (typeof getEditorTimelineClock === 'function') ? getEditorTimelineClock() : { current: state.currentTime || 0, total: totalDuration };
             let startSec = introDuration;
-            if (state.currentTime && state.currentTime > introDuration + 0.5) {
-                startSec = Math.floor(state.currentTime * 10) / 10;
+            if (_gdsClock.current && _gdsClock.current > introDuration + 0.5) {
+                startSec = Math.floor(_gdsClock.current * 10) / 10;
             }
 
             // Default Duration: 10 seconds (for banners) or full main video (for logo)
@@ -29226,7 +29372,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 const item = (state.brollOverlays || []).find(b => b.id === state.selectedBrollId);
                 if (item) {
                     const dur = Math.max(3, (item.endSec - item.startSec) || 10);
-                    item.startSec = Math.floor((state.currentTime || 0) * 10) / 10;
+                    const _gdsClock = (typeof getEditorTimelineClock === 'function') ? getEditorTimelineClock() : { current: state.currentTime || 0 };
+                    item.startSec = Math.floor((_gdsClock.current || 0) * 10) / 10;
                     item.endSec = item.startSec + dur;
                     syncStep1BannerTimingUI(item);
                     drawFrame();
@@ -29287,8 +29434,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (item) {
                     const newItem = Object.assign({}, item, {
                         id: 'gds_dup_' + Date.now(),
-                        startSec: Math.floor((state.currentTime || item.endSec + 1) * 10) / 10,
-                        endSec: Math.floor((state.currentTime || item.endSec + 1) * 10) / 10 + Math.max(5, (item.endSec - item.startSec) || 10)
+                        startSec: Math.floor((((typeof getEditorTimelineClock === 'function') ? getEditorTimelineClock().current : (state.currentTime || 0)) || item.endSec + 1) * 10) / 10,
+                        endSec: Math.floor((((typeof getEditorTimelineClock === 'function') ? getEditorTimelineClock().current : (state.currentTime || 0)) || item.endSec + 1) * 10) / 10 + Math.max(5, (item.endSec - item.startSec) || 10)
                     });
                     state.brollOverlays.push(newItem);
                     state.selectedBrollId = newItem.id;

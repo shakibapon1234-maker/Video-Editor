@@ -104,9 +104,16 @@
             // it in context before deciding to replace.
             row.addEventListener('click', function () {
                 var state = window.VideoEditor;
-                if (typeof m.item.startSec === 'number' && state.video) {
-                    state.video.currentTime = m.item.startSec;
-                    state.currentTime = m.item.startSec;
+                if (typeof m.item.startSec === 'number') {
+                    if (typeof window.seekEditorTimelineTo === 'function') {
+                        var isAll = !m.item.clipId || m.item.clipId === 'all';
+                        var slot = (typeof window.getClipSlot === 'function') ? window.getClipSlot(m.item.clipId) : { start: 0 };
+                        var targetTime = isAll ? m.item.startSec : (slot.start + m.item.startSec);
+                        window.seekEditorTimelineTo(targetTime);
+                    } else if (state && state.video) {
+                        state.video.currentTime = m.item.startSec;
+                        state.currentTime = m.item.startSec;
+                    }
                 }
                 if (m.source === 'overlay') {
                     state.selectedTextOverlayId = m.item.id;

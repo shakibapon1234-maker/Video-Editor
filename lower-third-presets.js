@@ -304,9 +304,12 @@
 
         if (!preset) return;
 
-        var startSec = Math.max(0, state.currentTime || 0);
-        var endSec = Math.min(state.endTime || state.duration || 5, startSec + 4);
-        if (endSec <= startSec) endSec = startSec + 4;
+        var clipElapsed = (typeof window.getActiveClipElapsed === 'function') ? window.getActiveClipElapsed() : 0;
+        var slot = (typeof window.getClipSlot === 'function') ? window.getClipSlot(state.activeClipId) : { duration: 1000 };
+        var clipDur = slot.duration || state.endTime || state.duration || 1000;
+        var startSec = Math.min(Math.max(0, clipDur - 0.5), parseFloat(clipElapsed.toFixed(1)));
+        var endSec = Math.min(clipDur, parseFloat((startSec + 4).toFixed(1)));
+        if (endSec <= startSec) endSec = Math.min(clipDur, startSec + 1);
 
         if (!state.textOverlays) state.textOverlays = [];
         var createdIds = [];
