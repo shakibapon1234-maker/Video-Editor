@@ -19,11 +19,14 @@
                 if (t !== 'dark') document.documentElement.setAttribute('data-theme', t);
             } catch (e) {}
         })();
-        function openShortcutsModal() {
+        function openShortcutsModal(tab) {
             var modal = document.getElementById('shortcuts-modal');
             if (modal) {
                 modal.style.setProperty('display', 'flex', 'important');
                 modal.style.setProperty('z-index', '9999999', 'important');
+                if (typeof window.switchShortcutsTab === 'function') {
+                    window.switchShortcutsTab(tab || 'shortcuts');
+                }
             }
         }
         function closeShortcutsModal() {
@@ -587,6 +590,10 @@
                             </div>
                             <div class="card-body">
                                 <p class="help-text">ভিডিওর অডিও ট্র্যাক বিশ্লেষণ করে কথা না থাকা নীরব অংশগুলো স্বয়ংক্রিয়ভাবে চিহ্নিত করে কেটে বাদ দিন।</p>
+                                <div style="margin: 8px 0 12px 0; padding: 8px 12px; background: rgba(56, 189, 248, 0.08); border-left: 3px solid #38bdf8; border-radius: 4px; font-size: 12px; color: #bae6fd; line-height: 1.4;">
+                                    <i class="fa-solid fa-circle-info" style="color: #38bdf8; margin-right: 5px;"></i>
+                                    <b>টিপস:</b> ভিডিও না কেটে যদি শুধু নীরব/বিরতির অংশগুলোর অডিও সম্পূর্ণ মিউট (সাইলেন্ট) করতে চান, তবে <b>Step 4 (Audio &amp; Voice)</b> এ গিয়ে <b>Noise Cancellation &amp; Voice Gate</b> অন করুন।
+                                </div>
                                 
                                 <div class="silence-trimmer-settings" style="border-bottom: 1px solid rgba(255,255,255,0.06); padding-bottom: 12px; margin-bottom: 12px;">
                                     <div class="control-group">
@@ -3706,6 +3713,27 @@
 
                     <!-- Step 4: Audio & Voice -->
                     <div class="step-panel" id="panel-4">
+                        <!-- Standalone Instant Silence Muter Tool Card -->
+                        <div class="card mt-3" style="border: 1.5px solid rgba(16,185,129,0.35); background: linear-gradient(135deg, rgba(16,185,129,0.06) 0%, rgba(15,23,42,0.6) 100%);">
+                            <div class="card-header" style="display: flex; justify-content: space-between; align-items: center;">
+                                <div style="display: flex; align-items: center; gap: 10px;">
+                                    <i class="fa-solid fa-microphone-slash card-icon" style="color: #10b981; font-size: 18px;"></i>
+                                    <h3 style="margin: 0; font-size: 15px;">Instant Silence Muter &amp; Voice Gate (স্বাধীন সাইলেন্স মিউটার)</h3>
+                                </div>
+                                <span style="background: rgba(16,185,129,0.15); color: #34d399; font-size: 11px; padding: 2px 8px; border-radius: 4px; font-weight: 600;">⚡ স্বাধীন টুল</span>
+                            </div>
+                            <div class="card-body">
+                                <p style="font-size: 13px; color: #cbd5e1; margin-bottom: 12px; line-height: 1.5;">
+                                    ঘণ্টার পর ঘণ্টা ফ্রেম রেন্ডারিং ছাড়া যেকোনো বড় ভিডিও বা অডিওর কথার মাঝের নীরব অংশগুলোকে মাত্র <b>৫-১০ সেকেন্ডে</b> সম্পূর্ণ নিঃশব্দ (মিউট) করুন! ভিডিওর গুণমান ১০০% অক্ষুণ্ণ থাকবে (Lossless Stream Copy)।
+                                </p>
+                                <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+                                    <button type="button" id="open-silence-muter-modal-btn" class="btn btn-primary" style="background: linear-gradient(135deg, #10b981, #059669); border: none; display: flex; align-items: center; gap: 8px; font-weight: 600;">
+                                        <i class="fa-solid fa-bolt"></i> ⚡ সাইলেন্স মিউটার ওপেন করুন
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+
                         <!-- Standalone Audio to Text Tool Card -->
                         <div class="card" style="border: 1px solid rgba(56,189,248,0.3); background: linear-gradient(135deg, rgba(56,189,248,0.06) 0%, rgba(15,23,42,0.6) 100%);">
                             <div class="card-header" style="display: flex; justify-content: space-between; align-items: center;">
@@ -3734,8 +3762,8 @@
                             <div class="card-body">
                                 <div class="toggle-control">
                                     <div class="toggle-label">
-                                        <h4>Noise Cancellation (নয়েজ ফিল্টার)</h4>
-                                        <p>ফ্রি local voice cleanup: fan hum, room hiss ও নীরব অংশের noise কমায়। কথার সাথে মিশে থাকা traffic/fan noise পুরো সরাতে ভবিষ্যতে AI denoise লাগবে।</p>
+                                        <h4>Noise Cancellation &amp; Voice Gate (নয়েজ ফিল্টার ও ভয়েস গেট)</h4>
+                                        <p>কথা বলার সময় ভয়েস স্বাভাবিক রাখবে, আর কথা ছাড়া নীরব/বিরতির অংশে ফ্যান ও ব্যাকগ্রাউন্ড নয়েজ সম্পূর্ণ মিউট (সাইলেন্ট) করে দিবে।</p>
                                     </div>
                                     <label class="switch">
                                         <input type="checkbox" id="noise-cancel-toggle">
@@ -3743,7 +3771,7 @@
                                     </label>
                                 </div>
                                 <div class="control-group mt-3" id="noise-level-container" style="display: none;">
-                                    <label>Noise Gate Threshold <span class="help-text">(কম হলে নরম কথা বেশি থাকে; বেশি হলে বিরতির noise বেশি কাটে)</span></label>
+                                    <label>Noise Gate Threshold (ভয়েস গেট সংবেদনশীলতা) <span class="help-text">(ডিফল্ট -38 dB; কম হলে মৃদু কথাও থাকবে, বেশি হলে বিরতির নয়েজ সম্পূর্ণ সাইলেন্ট হবে)</span></label>
                                     <div class="slider-val-container">
                                         <input type="range" id="noise-gate-threshold" min="-80" max="-20" value="-38" step="1">
                                         <span id="noise-gate-val">-38 dB</span>
@@ -4740,6 +4768,11 @@
                                 <button id="render-btn" class="btn btn-primary btn-block mt-2" style="font-size: 13px; opacity: 0.85;">
                                     <i class="fa-solid fa-wand-magic-sparkles"></i> Frame-by-Frame Canvas Render (টেক্সট এনিমেশন ও ওভারলের জন্য)
                                 </button>
+                                <div style="text-align: center; margin-top: 10px;">
+                                    <button type="button" class="btn btn-sm" style="background: rgba(99, 102, 241, 0.15); border: 1px solid rgba(99, 102, 241, 0.35); color: #c7d2fe; font-size: 12px; border-radius: 6px; padding: 7px 14px; cursor: pointer; width: 100%; font-weight: 600;" onclick="openShortcutsModal('export-guide');">
+                                        <i class="fa-solid fa-circle-question" style="color: #818cf8; margin-right: 6px;"></i> কোন এক্সপোর্ট অপশন কখন ব্যবহার করবেন? (এক্সপোর্ট গাইড দেখুন)
+                                    </button>
+                                </div>
 
                                 <!-- Rendering Progress -->
                                 <div class="render-progress-box mt-4" id="render-progress-box" style="display: none;">
@@ -5922,34 +5955,157 @@
         }
     </script>
     <div id="shortcuts-modal" class="modal-overlay" style="display: none; z-index: 9999999;" onclick="if(event.target === this) closeShortcutsModal();">
-        <div class="modal-card" style="max-width: 600px; width: 90%;">
-            <div class="modal-header">
-                <h3><i class="fa-solid fa-keyboard" style="color: #818cf8; margin-right: 8px;"></i> কীবোর্ড শর্টকাট কি (Keyboard Shortcuts)</h3>
+        <div class="modal-card" style="max-width: 760px; width: 94%; max-height: 90vh; display: flex; flex-direction: column;">
+            <div class="modal-header" style="border-bottom: 1px solid rgba(255,255,255,0.1); padding: 14px 20px;">
+                <div style="display: flex; align-items: center; gap: 10px;">
+                    <i class="fa-solid fa-circle-info" style="color: #818cf8; font-size: 18px;"></i>
+                    <h3 style="margin: 0; font-size: 16px;">সহায়িকা ও গাইড (Help & Guides)</h3>
+                </div>
                 <button id="close-shortcuts-modal" class="modal-close" type="button" onclick="closeShortcutsModal();"><i class="fa-solid fa-xmark"></i></button>
             </div>
-            <div class="modal-body" style="padding: 20px;">
-                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 14px; font-size: 13px;">
-                    <div style="background: rgba(255,255,255,0.04); padding: 12px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.08);">
-                        <div style="color: #a5b4fc; font-weight: 600; margin-bottom: 8px;">🚀 কুইক নেভিগেশন:</div>
-                        <div style="display: flex; justify-content: space-between; margin-bottom: 6px;"><span>🔤 টেক্সট ওভারলে:</span><kbd style="background: #334155; color: #fff; padding: 2px 6px; border-radius: 4px; font-family: monospace;">T / Alt+T</kbd></div>
-                        <div style="display: flex; justify-content: space-between; margin-bottom: 6px;"><span>🎞️ B-roll মিডিয়া:</span><kbd style="background: #334155; color: #fff; padding: 2px 6px; border-radius: 4px; font-family: monospace;">B / Alt+B</kbd></div>
-                        <div style="display: flex; justify-content: space-between; margin-bottom: 6px;"><span>🎬 এক্সপোর্ট / রেন্ডার:</span><kbd style="background: #334155; color: #fff; padding: 2px 6px; border-radius: 4px; font-family: monospace;">E / Alt+E</kbd></div>
-                        <div style="display: flex; justify-content: space-between;"><span>📌 স্টেপ ১-৫ পরিবর্তন:</span><kbd style="background: #334155; color: #fff; padding: 2px 6px; border-radius: 4px; font-family: monospace;">Alt + 1 ~ 5</kbd></div>
+            
+            <!-- Modal Tabs -->
+            <div style="display: flex; gap: 8px; padding: 10px 20px; background: rgba(0,0,0,0.25); border-bottom: 1px solid rgba(255,255,255,0.06);">
+                <button type="button" id="tab-btn-shortcuts" onclick="switchShortcutsTab('shortcuts');" style="flex: 1; padding: 8px 14px; border-radius: 6px; font-weight: 600; font-size: 13px; cursor: pointer; border: 1px solid rgba(129, 140, 248, 0.4); background: #4f46e5; color: #ffffff;">
+                    <i class="fa-solid fa-keyboard" style="margin-right: 6px;"></i> কীবোর্ড শর্টকাট (Shortcuts)
+                </button>
+                <button type="button" id="tab-btn-export-guide" onclick="switchShortcutsTab('export-guide');" style="flex: 1; padding: 8px 14px; border-radius: 6px; font-weight: 600; font-size: 13px; cursor: pointer; border: 1px solid rgba(255,255,255,0.1); background: transparent; color: #94a3b8;">
+                    <i class="fa-solid fa-bolt" style="color: #34d399; margin-right: 6px;"></i> 🚀 কোন এক্সপোর্ট কখন করবেন? (Export Guide)
+                </button>
+            </div>
+
+            <div class="modal-body" style="padding: 16px 20px; overflow-y: auto; flex: 1;">
+                <!-- Tab 1: Keyboard Shortcuts -->
+                <div id="tab-shortcuts-content">
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 14px; font-size: 13px;">
+                        <div style="background: rgba(255,255,255,0.04); padding: 14px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.08);">
+                            <div style="color: #a5b4fc; font-weight: 600; margin-bottom: 10px; font-size: 14px;">🚀 কুইক নেভিগেশন:</div>
+                            <div style="display: flex; justify-content: space-between; margin-bottom: 8px;"><span>🔤 টেক্সট ওভারলে:</span><kbd style="background: #334155; color: #fff; padding: 2px 7px; border-radius: 4px; font-family: monospace;">T / Alt+T</kbd></div>
+                            <div style="display: flex; justify-content: space-between; margin-bottom: 8px;"><span>🎞️ B-roll মিডিয়া:</span><kbd style="background: #334155; color: #fff; padding: 2px 7px; border-radius: 4px; font-family: monospace;">B / Alt+B</kbd></div>
+                            <div style="display: flex; justify-content: space-between; margin-bottom: 8px;"><span>🎬 এক্সপোর্ট / রেন্ডার:</span><kbd style="background: #334155; color: #fff; padding: 2px 7px; border-radius: 4px; font-family: monospace;">E / Alt+E</kbd></div>
+                            <div style="display: flex; justify-content: space-between;"><span>📌 স্টেপ ১-৫ পরিবর্তন:</span><kbd style="background: #334155; color: #fff; padding: 2px 7px; border-radius: 4px; font-family: monospace;">Alt + 1 ~ 5</kbd></div>
+                        </div>
+                        <div style="background: rgba(255,255,255,0.04); padding: 14px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.08);">
+                            <div style="color: #a5b4fc; font-weight: 600; margin-bottom: 10px; font-size: 14px;">⏪ এডিটিং ও প্লেব্যাক:</div>
+                            <div style="display: flex; justify-content: space-between; margin-bottom: 8px;"><span>↩️ আনডু (Undo):</span><kbd style="background: #334155; color: #fff; padding: 2px 7px; border-radius: 4px; font-family: monospace;">Ctrl + Z</kbd></div>
+                            <div style="display: flex; justify-content: space-between; margin-bottom: 8px;"><span>↪️ রিডু (Redo):</span><kbd style="background: #334155; color: #fff; padding: 2px 7px; border-radius: 4px; font-family: monospace;">Ctrl + Y</kbd></div>
+                            <div style="display: flex; justify-content: space-between; margin-bottom: 8px;"><span>▶️ প্লে / পজ:</span><kbd style="background: #334155; color: #fff; padding: 2px 7px; border-radius: 4px; font-family: monospace;">Spacebar</kbd></div>
+                            <div style="display: flex; justify-content: space-between;"><span>✂️ ট্রিম In / Out:</span><kbd style="background: #334155; color: #fff; padding: 2px 7px; border-radius: 4px; font-family: monospace;">I / O</kbd></div>
+                        </div>
                     </div>
-                    <div style="background: rgba(255,255,255,0.04); padding: 12px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.08);">
-                        <div style="color: #a5b4fc; font-weight: 600; margin-bottom: 8px;">⏪ এডিটিং ও প্লেব্যাক:</div>
-                        <div style="display: flex; justify-content: space-between; margin-bottom: 6px;"><span>↩️ আনডু (Undo):</span><kbd style="background: #334155; color: #fff; padding: 2px 6px; border-radius: 4px; font-family: monospace;">Ctrl + Z</kbd></div>
-                        <div style="display: flex; justify-content: space-between; margin-bottom: 6px;"><span>↪️ রিডু (Redo):</span><kbd style="background: #334155; color: #fff; padding: 2px 6px; border-radius: 4px; font-family: monospace;">Ctrl + Y</kbd></div>
-                        <div style="display: flex; justify-content: space-between; margin-bottom: 6px;"><span>▶️ প্লে / পজ:</span><kbd style="background: #334155; color: #fff; padding: 2px 6px; border-radius: 4px; font-family: monospace;">Spacebar</kbd></div>
-                        <div style="display: flex; justify-content: space-between;"><span>✂️ ট্রিম In / Out:</span><kbd style="background: #334155; color: #fff; padding: 2px 6px; border-radius: 4px; font-family: monospace;">I / O</kbd></div>
+                </div>
+
+                <!-- Tab 2: Export Options Comprehensive Guide -->
+                <div id="tab-export-guide-content" style="display: none; font-size: 13px;">
+                    <div style="display: flex; flex-direction: column; gap: 14px;">
+                        
+                        <!-- Option 1: Ultra-Fast Direct Export -->
+                        <div style="background: rgba(16, 185, 129, 0.08); border: 1px solid rgba(16, 185, 129, 0.35); border-radius: 8px; padding: 14px;">
+                            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px;">
+                                <div style="color: #34d399; font-weight: 700; font-size: 15px;">
+                                    <i class="fa-solid fa-bolt" style="margin-right: 6px;"></i> ১. ⚡ Ultra-Fast Direct Export (১-৩ মিনিটে রেন্ডার)
+                                </div>
+                                <span style="background: #065f46; color: #a7f3d0; font-size: 11px; padding: 3px 8px; border-radius: 12px; font-weight: 600;">সুপার ফাস্ট</span>
+                            </div>
+                            <p style="color: #cbd5e1; margin-bottom: 8px; line-height: 1.5;">
+                                <strong>কখন ব্যবহার করবেন:</strong> ৩০ মিনিট বা বড় ভিডিওর সাধারণ এডিটিং চোখের পলকে ১-৩ মিনিটে হাই-স্পিড FFmpeg দিয়ে এক্সপোর্ট করার জন্য।
+                            </p>
+                            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; font-size: 12px;">
+                                <div style="background: rgba(0,0,0,0.25); padding: 8px 10px; border-radius: 6px;">
+                                    <div style="color: #4ade80; font-weight: 600; margin-bottom: 4px;">✅ সম্পূর্ণভাবে সাপোর্ট করে:</div>
+                                    <ul style="margin: 0; padding-left: 18px; color: #94a3b8; line-height: 1.6;">
+                                        <li>ভিডিও ক্লিপ ট্রিম, কাট ও জোড়া (Trim/Cut)</li>
+                                        <li>লোগো ও ব্র্যান্ডিং (GIF ও PNG ইমেজ)</li>
+                                        <li>B-Roll ইমেজ ওভারলে (যেমন ইউটিউব থাম্বনেইল)</li>
+                                        <li>মাল্টি-ট্র্যাক (Extra Video & Image Tracks)</li>
+                                        <li>অডিও নয়েজ ক্যানসেল ও ভয়েস গেট (Voice Gate)</li>
+                                        <li>ব্লার রিজিয়ন (সংবেদনশীল অংশ ব্লার)</li>
+                                        <li>BGM মিউজিক, ভয়েসওভার ও অডিও ডাকিং</li>
+                                        <li>সাধারণ সলিড কালার টেক্সট ওভারলে</li>
+                                    </ul>
+                                </div>
+                                <div style="background: rgba(0,0,0,0.25); padding: 8px 10px; border-radius: 6px;">
+                                    <div style="color: #f87171; font-weight: 600; margin-bottom: 4px;">❌ এতে আসবে না (Canvas দরকার):</div>
+                                    <ul style="margin: 0; padding-left: 18px; color: #94a3b8; line-height: 1.6;">
+                                        <li>শেপ ওভারলে (Plane banner, badge shape)</li>
+                                        <li>সিম্বল ও স্টিকার (Symbols / Stickers)</li>
+                                        <li>সাবটাইটেল জেনারেটর (Subtitles)</li>
+                                        <li>জটিল ৩D / গ্লাস ইফেক্ট টেক্সট এনিমেশন</li>
+                                    </ul>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Option 2: Frame-by-Frame Canvas Render -->
+                        <div style="background: rgba(99, 102, 241, 0.08); border: 1px solid rgba(99, 102, 241, 0.35); border-radius: 8px; padding: 14px;">
+                            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px;">
+                                <div style="color: #818cf8; font-weight: 700; font-size: 15px;">
+                                    <i class="fa-solid fa-wand-magic-sparkles" style="margin-right: 6px;"></i> ২. 🎬 Frame-by-Frame Canvas Render (ধীরগতির, ২-৪ ঘণ্টা)
+                                </div>
+                                <span style="background: #312e81; color: #c7d2fe; font-size: 11px; padding: 3px 8px; border-radius: 12px; font-weight: 600;">১০০% ক্যানভাস হুবহু</span>
+                            </div>
+                            <p style="color: #cbd5e1; margin-bottom: 8px; line-height: 1.5;">
+                                <strong>কখন ব্যবহার করবেন:</strong> আপনার ভিডিওতে যদি শেপ ওভারলে (যেমন প্লেন এনিমেশন), স্টিকার বা সাবটাইটেল থাকে যা শুধু ব্রাউজার ক্যানভাসেই রেন্ডার হয়।
+                            </p>
+                            <p style="color: #94a3b8; margin: 0; font-size: 12px;">
+                                <i class="fa-solid fa-triangle-exclamation" style="color: #f59e0b; margin-right: 4px;"></i> <strong>সতর্কতা:</strong> এটি ব্রাউজারের প্রতিটি ফ্রেম আলাদাভাবে ড্র করে এনকোড করে, তাই ৩০ মিনিটের বড় ভিডিওতে ২ থেকে ৪ ঘণ্টা পর্যন্ত সময় লাগতে পারে।
+                            </p>
+                        </div>
+
+                        <!-- Option 3: Fast Join Finished Clips -->
+                        <div style="background: rgba(56, 189, 248, 0.08); border: 1px solid rgba(56, 189, 248, 0.35); border-radius: 8px; padding: 14px;">
+                            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px;">
+                                <div style="color: #38bdf8; font-weight: 700; font-size: 15px;">
+                                    <i class="fa-solid fa-link" style="margin-right: 6px;"></i> ৩. 🔗 Fast Join Finished Clips (সেকেন্ডে ক্লিপ জোড়া লাগানো)
+                                </div>
+                                <span style="background: #0369a1; color: #e0f2fe; font-size: 11px; padding: 3px 8px; border-radius: 12px; font-weight: 600;">৫-১০ সেকেন্ড</span>
+                            </div>
+                            <p style="color: #cbd5e1; margin: 0; line-height: 1.5;">
+                                <strong>কখন ব্যবহার করবেন:</strong> যদি আপনার কাছে আগে থেকে এক্সপোর্ট করা একাধিক ভিডিও ফাইল থাকে (যেমন: Part 1, Part 2, Intro ইত্যাদি) এবং কোনো নতুন এডিটিং ছাড়া শুধু ফাইলগুলো পরপর জুড়ে দিতে চান (Lossless Stream Copy, কোনো কোয়ালিটি লস নেই)।
+                            </p>
+                        </div>
+
                     </div>
                 </div>
             </div>
-            <div class="modal-footer" style="padding: 12px 20px; text-align: right;">
+
+            <div class="modal-footer" style="padding: 12px 20px; border-top: 1px solid rgba(255,255,255,0.08); display: flex; justify-content: space-between; align-items: center;">
+                <span style="font-size: 12px; color: #64748b;">কীবোর্ড শর্টকাট দেখতে উপরে ট্যাব পরিবর্তন করুন</span>
                 <button id="close-shortcuts-modal-btn" class="btn btn-primary" type="button" onclick="closeShortcutsModal();">ঠিক আছে (Got it)</button>
             </div>
         </div>
     </div>
+
+    <script>
+        function switchShortcutsTab(tabName) {
+            const tabShortcuts = document.getElementById('tab-shortcuts-content');
+            const tabGuide = document.getElementById('tab-export-guide-content');
+            const btnShortcuts = document.getElementById('tab-btn-shortcuts');
+            const btnGuide = document.getElementById('tab-btn-export-guide');
+            if (!tabShortcuts || !tabGuide || !btnShortcuts || !btnGuide) return;
+
+            if (tabName === 'export-guide') {
+                tabShortcuts.style.display = 'none';
+                tabGuide.style.display = 'block';
+                btnGuide.style.background = '#4f46e5';
+                btnGuide.style.color = '#ffffff';
+                btnGuide.style.borderColor = 'rgba(129, 140, 248, 0.4)';
+                btnShortcuts.style.background = 'transparent';
+                btnShortcuts.style.color = '#94a3b8';
+                btnShortcuts.style.borderColor = 'rgba(255,255,255,0.1)';
+            } else {
+                tabShortcuts.style.display = 'block';
+                tabGuide.style.display = 'none';
+                btnShortcuts.style.background = '#4f46e5';
+                btnShortcuts.style.color = '#ffffff';
+                btnShortcuts.style.borderColor = 'rgba(129, 140, 248, 0.4)';
+                btnGuide.style.background = 'transparent';
+                btnGuide.style.color = '#94a3b8';
+                btnGuide.style.borderColor = 'rgba(255,255,255,0.1)';
+            }
+        }
+        window.switchShortcutsTab = switchShortcutsTab;
+    </script>
 
     <!-- Snapshot Modal (Canvas Preview Snapshot) -->
     <div class="modal-overlay" id="snapshot-modal" style="display: none; z-index: 999999;">
@@ -6141,6 +6297,81 @@
         </div>
     </div>
 
+    <!-- Standalone Instant Silence Muter Modal -->
+    <div class="modal-overlay" id="silence-muter-modal" style="display: none; z-index: 9999999; backdrop-filter: blur(8px); background: rgba(0,0,0,0.85); align-items: center; justify-content: center;">
+        <div class="modal-card" style="max-width: 660px; width: 92%; background: #0f172a; border: 1.5px solid rgba(16, 185, 129, 0.4); border-radius: 16px; box-shadow: 0 20px 50px rgba(0,0,0,0.8), 0 0 30px rgba(16, 185, 129, 0.2); overflow: hidden;">
+            <div class="modal-header" style="background: linear-gradient(135deg, rgba(16,185,129,0.2) 0%, rgba(15,23,42,0.95) 100%); padding: 18px 24px; border-bottom: 1px solid rgba(255,255,255,0.1); display: flex; justify-content: space-between; align-items: center;">
+                <h3 style="margin: 0; font-size: 17px; font-weight: 700; color: #fff; display: flex; align-items: center; gap: 10px;">
+                    <i class="fa-solid fa-microphone-slash" style="color: #10b981; font-size: 20px;"></i>
+                    <span>Instant Silence Muter &amp; Voice Gate (স্বাধীন সাইলেন্স মিউটার)</span>
+                </h3>
+                <button type="button" class="modal-close" id="silence-muter-close-x" style="background: none; border: none; color: #94a3b8; font-size: 18px; cursor: pointer;"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+            <div class="modal-body" style="padding: 22px 24px; max-height: 80vh; overflow-y: auto;">
+                <p style="font-size: 13px; color: #94a3b8; margin: 0 0 16px 0; line-height: 1.5;">
+                    যেকোনো বড় ভিডিও বা অডিও ফাইলে কথার মাঝের নীরব বিরতিগুলো মাত্র <b>৫-১০ সেকেন্ডে</b> নিঃশব্দ করুন। ভিডিও কাটবে না এবং কোনো ফ্রেম রি-এনকোডিং ছাড়াই ১০০% মূল কোয়ালিটিতে এক্সপোর্ট হবে!
+                </p>
+
+                <!-- Upload dropzone -->
+                <div id="sm-dropzone" style="border: 2px dashed rgba(16,185,129,0.4); border-radius: 12px; padding: 28px 20px; text-align: center; background: rgba(16,185,129,0.03); cursor: pointer; transition: all 0.2s ease;">
+                    <i class="fa-solid fa-cloud-arrow-up" style="font-size: 40px; color: #10b981; margin-bottom: 12px;"></i>
+                    <h4 id="sm-dropzone-text" style="margin: 0 0 6px 0; font-size: 15px; color: #f1f5f9; font-weight: 600;">এখানে ভিডিও বা অডিও ফাইল ড্রপ করুন অথবা ব্রাউজ করতে ক্লিক করুন</h4>
+                    <p style="margin: 0 0 10px 0; font-size: 12.5px; color: #94a3b8;">
+                        সমর্থিত ভিডিও ও অডিও: <b>MP4, MKV, MOV, WEBM, AVI, MP3, WAV, M4A, AAC, OPUS, OGG</b>
+                    </p>
+                    <span style="display: inline-block; background: rgba(16,185,129,0.15); color: #34d399; font-size: 11px; padding: 4px 12px; border-radius: 20px; font-weight: 600;">
+                        ⚡ Lossless Video Copy (-c:v copy) — ভিডিও কোয়ালিটি ১০০% অটুট থাকবে
+                    </span>
+                    <input type="file" id="sm-file-input" accept="video/*,audio/*,.mp4,.mkv,.mov,.webm,.avi,.mp3,.wav,.m4a,.aac,.opus,.ogg" style="display: none;">
+                </div>
+
+                <!-- Settings -->
+                <div style="margin-top: 18px; padding: 14px 16px; background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08); border-radius: 10px;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                        <label style="font-size: 13px; font-weight: 600; color: #e2e8f0; margin: 0;">Silence Threshold (নীরবতার সীমা)</label>
+                        <span id="sm-threshold-val" style="font-weight: 700; color: #34d399; font-size: 13px;">-38 dB</span>
+                    </div>
+                    <input type="range" id="sm-threshold-slider" min="-60" max="-20" value="-38" step="1" style="width: 100%;">
+                    <p style="font-size: 11.5px; color: #94a3b8; margin: 6px 0 0 0;">
+                        ডিফল্ট <b>-38 dB</b> রাখা আছে। নীরব অংশের ফ্যান বা হিস নয়েজ শক্তভাবে কাটতে স্লাইডার ডানদিকে (-32 dB) নিন।
+                    </p>
+                </div>
+
+                <div style="margin-top: 16px;">
+                    <button type="button" id="sm-process-btn" class="btn btn-success btn-block" style="background: linear-gradient(135deg, #10b981, #059669); border: none; font-weight: 700; padding: 12px; font-size: 14px; width: 100%; cursor: pointer;" disabled>
+                        <i class="fa-solid fa-wand-magic-sparkles"></i> ⚡ নীরব অংশ মিউট ও এক্সপোর্ট করুন
+                    </button>
+                </div>
+
+                <!-- Progress container -->
+                <div id="sm-progress-container" style="display: none; margin-top: 18px; text-align: center; padding: 20px; background: rgba(255,255,255,0.03); border-radius: 12px; border: 1px solid rgba(16,185,129,0.2);">
+                    <i class="fa-solid fa-circle-notch fa-spin" style="font-size: 30px; color: #10b981; margin-bottom: 12px;"></i>
+                    <p id="sm-status-text" style="font-size: 13.5px; color: #e2e8f0; margin: 0 0 10px 0; font-weight: 500;">প্রসেসিং হচ্ছে...</p>
+                    <div style="width: 100%; height: 6px; background: rgba(255,255,255,0.1); border-radius: 3px; overflow: hidden;">
+                        <div id="sm-progress-bar" style="width: 25%; height: 100%; background: linear-gradient(90deg, #10b981, #059669); transition: width 0.3s ease;"></div>
+                    </div>
+                </div>
+
+                <!-- Result container -->
+                <div id="sm-result-container" style="display: none; margin-top: 18px; padding: 18px; background: rgba(16,185,129,0.08); border: 1.5px solid rgba(16,185,129,0.3); border-radius: 12px; text-align: center;">
+                    <i class="fa-solid fa-circle-check" style="font-size: 32px; color: #34d399; margin-bottom: 8px;"></i>
+                    <h4 style="margin: 0 0 6px 0; font-size: 15px; color: #fff; font-weight: 600;">সফলভাবে নীরব অংশ মিউট করা হয়েছে!</h4>
+                    <p id="sm-result-file-info" style="font-size: 12.5px; color: #cbd5e1; margin: 0 0 14px 0;"></p>
+                    <button type="button" id="sm-download-btn" class="btn btn-primary" style="background: linear-gradient(135deg, #0284c7, #0369a1); border: none; padding: 10px 24px; font-weight: 700; font-size: 14px; border-radius: 8px; cursor: pointer;">
+                        <i class="fa-solid fa-download"></i> ফাইলটি ডাউনলোড করুন
+                    </button>
+                </div>
+            </div>
+            <div class="modal-footer" style="padding: 14px 24px; border-top: 1px solid rgba(255,255,255,0.1); display: flex; justify-content: space-between; align-items: center; background: rgba(0,0,0,0.2);">
+                <span style="font-size: 12px; color: #64748b;">
+                    💡 স্বাধীন টুল হিসেবে ডেস্কটপ থেকে চালাতে প্রজেক্ট ফোল্ডারের <b>run_audio_silence_muter.bat</b> রান করুন
+                </span>
+                <button type="button" class="btn btn-secondary btn-sm" id="silence-muter-close-btn">বন্ধ করুন</button>
+            </div>
+        </div>
+    </div>
+
     <script src="audio-to-text.js?v=1"></script>
+    <script src="silence-muter-tool.js?v=1"></script>
 </body>
 </html>

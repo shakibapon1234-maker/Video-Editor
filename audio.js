@@ -1619,12 +1619,9 @@ document.addEventListener('DOMContentLoaded', () => {
                         if (noiseGateIsOpen && db < closeAt) noiseGateIsOpen = false;
                         else if (!noiseGateIsOpen && db > openAt) noiseGateIsOpen = true;
 
-                        // Keep a small residual signal rather than hard-zeroing it;
-                        // -34 dB is deep enough to hide room/fan noise in pauses while
-                        // avoiding audible digital-looking cuts. Smooth ramps preserve
-                        // consonant onsets and word tails.
-                        const targetGateGain = noiseGateIsOpen ? 1.0 : 0.02;
-                        const timeConstant = noiseGateIsOpen ? 0.012 : 0.16;
+                        // Fully silence during pauses (0.0 volume), preserving voice cleanly with smooth exponential ramp
+                        const targetGateGain = noiseGateIsOpen ? 1.0 : 0.0;
+                        const timeConstant = noiseGateIsOpen ? 0.012 : 0.12;
                         noiseGateGainNode.gain.setTargetAtTime(targetGateGain, audioCtx.currentTime, timeConstant);
                     } else if (noiseGateGainNode) {
                         noiseGateIsOpen = true;
@@ -1774,6 +1771,9 @@ document.addEventListener('DOMContentLoaded', () => {
     
     // --- 2. DSP Settings Changes (Noise Cancel) ---
     function applyNoiseCancelSettings() {
+        if (noiseLevelContainer) {
+            noiseLevelContainer.style.display = state.isNoiseCancelActive ? 'block' : 'none';
+        }
         if (!audioCtx || !highpassNode || !lowpassNode || !compressorNode) return;
         
         if (state.isNoiseCancelActive) {
@@ -1787,8 +1787,6 @@ document.addEventListener('DOMContentLoaded', () => {
             compressorNode.threshold.setValueAtTime(-20, audioCtx.currentTime);
             compressorNode.ratio.setValueAtTime(3, audioCtx.currentTime);
             noiseGateIsOpen = true;
-            
-            noiseLevelContainer.style.display = 'block';
         } else {
             // Bypass filters
             highpassNode.frequency.setValueAtTime(10, audioCtx.currentTime);
@@ -1799,21 +1797,28 @@ document.addEventListener('DOMContentLoaded', () => {
             compressorNode.ratio.setValueAtTime(3, audioCtx.currentTime);
             noiseGateIsOpen = true;
             if (state.isAiDenoiseActive) setAIDenoiseEnabled(false);
-            
-            noiseLevelContainer.style.display = 'none';
         }
     }
 
     noiseCancelToggle.addEventListener('change', (e) => {
         state.isNoiseCancelActive = e.target.checked;
+        if (noiseLevelContainer) {
+            noiseLevelContainer.style.display = e.target.checked ? 'block' : 'none';
+        }
+        if (e.target.checked && !audioCtx && typeof window.initializeAudioSource === 'function') {
+            try { window.initializeAudioSource(); } catch (_) {}
+        }
         applyNoiseCancelSettings();
     });
     
     noiseGateSlider.addEventListener('input', (e) => {
         state.noiseGateThreshold = parseInt(e.target.value);
         noiseGateVal.innerText = state.noiseGateThreshold + ' dB';
-        
     });
+
+    if (noiseLevelContainer && noiseCancelToggle) {
+        noiseLevelContainer.style.display = (state.isNoiseCancelActive || noiseCancelToggle.checked) ? 'block' : 'none';
+    }
 
     if (aiDenoiseToggle) {
         aiDenoiseToggle.addEventListener('change', async (e) => {
@@ -3871,8 +3876,12 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (gateOpen && maxRms < threshold) gateOpen = false;
                 else if (!gateOpen && maxRms > openAt) gateOpen = true;
                 
-                const targetGate = gateOpen ? 1.0 : 0.02;
-                speechGate.gain.setValueAtTime(targetGate, t);
+                const targetGate = gateOpen ? 1.0 : 0.0;
+                if (typeof speechGate.gain.setTargetAtTime === 'function') {
+                    speechGate.gain.setTargetAtTime(targetGate, t, gateOpen ? 0.012 : 0.08);
+                } else {
+                    speechGate.gain.setValueAtTime(targetGate, t);
+                }
             }
             makeup.gain.setValueAtTime(1.5, 0); // compensation for compressor
         }

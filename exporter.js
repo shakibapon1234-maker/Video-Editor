@@ -392,23 +392,41 @@ document.addEventListener('DOMContentLoaded', () => {
                     return d === 'standard' || d === 'shadow';
                 })).length;
 
-        const hasBrollOverlays = Array.isArray(state.brollOverlays) && state.brollOverlays.length > 0;
+        const brollCount = Array.isArray(state.brollOverlays) ? state.brollOverlays.length : 0;
+        const complexBrollCount = (Array.isArray(state.brollOverlays) ? state.brollOverlays : [])
+            .filter(b => b && (
+                b.animationStyle === 'hanging-sign-swing' ||
+                b.animationStyle === 'plane-banner-trail' ||
+                b.visualTemplate === 'phone' ||
+                b.visualTemplate === 'laptop' ||
+                b.visualTemplate === 'word-circle' ||
+                (b.visualTemplate && b.visualTemplate.includes('3d'))
+            )).length;
         const hasSymbolOverlays = Array.isArray(state.symbolOverlays) && state.symbolOverlays.length > 0;
         const hasShapeOverlays = Array.isArray(state.shapeOverlays) && state.shapeOverlays.length > 0;
         const hasSubtitles = Array.isArray(state.subtitles) && state.subtitles.length > 0;
 
-        const hasComplexOverlays = hasBrollOverlays || complexTextCount > 0 || hasSymbolOverlays || hasShapeOverlays || hasSubtitles;
+        // B-Roll images & GIFs are 100% supported via FFmpeg extraTracks overlay pipeline!
+        const hasComplexOverlays = complexTextCount > 0 || hasSymbolOverlays || hasShapeOverlays || hasSubtitles || complexBrollCount > 0;
 
         if (hasComplexOverlays) {
-            let msg = "⚠️ আপনার ভিডিওতে এমন কিছু আছে যা ⚡ Ultra-Fast-এ সম্পূর্ণ আসবে না:\n\n";
-            if (hasBrollOverlays) msg += "\u274c বিরোল ছবি (B-Roll) — আসবে না\n";
-            if (complexTextCount > 0) msg += `\u274c ${complexTextCount}টি অ্যানিমেটেড/বক্স টেক্সট — আসবে না\n`;
-            if (hasSymbolOverlays) msg += "\u274c Symbol/Sticker — আসবে না\n";
-            if (hasShapeOverlays) msg += "\u274c Shape Overlay — আসবে না\n";
-            if (hasSubtitles) msg += "\u274c Subtitle — আসবে না\n";
-            if (simpleTextCount > 0) msg += `\n\u2705 ${simpleTextCount}টি সাধারণ টেক্সট — Ultra-Fast-এ আসবে\n`;
-            if (simpleExtraTrackCount > 0) msg += `\u2705 ${simpleExtraTrackCount}টি Multi-Track Image/Video — Ultra-Fast-এ আসবে\n`;
-            msg += "\nফুল কোয়ালিটি পেতে Frame-by-Frame Canvas Render ব্যবহার করুন।\n\nতবুও Ultra-Fast-এ রেন্ডার করবেন?";
+            let msg = "⚠️ আপনার ভিডিওতে এমন কিছু বিশেষ উপাদান আছে যা ⚡ Ultra-Fast-এ ১০০% হুবহু আসবে না:\n\n";
+            if (complexTextCount > 0) msg += `❌ ${complexTextCount}টি বিশেষ এনিমেটেড/গ্রেডিয়েন্ট টেক্সট (Ultra-Fast-এ সাধারণ স্থির লেখা হিসেবে আসবে)\n`;
+            if (hasSymbolOverlays) msg += "❌ Symbol / Sticker (স্টিকার)\n";
+            if (hasShapeOverlays) msg += "❌ Shape Overlay (যেমন: উড়ন্ত প্লেন বা ব্যাজ শেইপ)\n";
+            if (hasSubtitles) msg += "❌ Subtitles (সাবটাইটেল ট্র্যাক)\n";
+            if (complexBrollCount > 0) msg += `❌ ${complexBrollCount}টি বিশেষ ফ্রেম/সুইং এনিমেশনের B-roll (Ultra-Fast-এ স্থির ছবি হিসেবে আসবে)\n`;
+
+            msg += "\n----------------------------------------\n";
+            msg += "✅ যা যা Ultra-Fast এ সম্পূর্ণ আসবে:\n";
+            if (brollCount > 0) msg += `• ${brollCount}টি বি-রোল ছবি ও লোগো\n`;
+            if (simpleTextCount > 0) msg += `• ${simpleTextCount}টি সাধারণ টেক্সট\n`;
+            if (simpleExtraTrackCount > 0) msg += `• ${simpleExtraTrackCount}টি Multi-Track উপাদান\n`;
+            msg += "• অডিও নয়েজ ক্যানসেল ও ভয়েস গেট\n";
+            msg += "• ট্রিম ও ব্লার রিজিয়ন\n\n";
+            msg += "👉 [Cancel / বাতিল]: বাতিল করে Frame-by-Frame Canvas Render দিন (সব এনিমেশন সহ আসবে, সময় ২-৩ ঘণ্টা লাগবে)।\n\n";
+            msg += "👉 [OK / ঠিক আছে]: ওই বিশেষ এনিমেশনগুলো ছাড়া বাকি সবকিছু দিয়ে মাত্র ১-২ মিনিটে সুপার-ফাস্ট রেন্ডার করুন।";
+
             const proceed = confirm(msg);
             if (!proceed) return;
         }
@@ -426,7 +444,8 @@ document.addEventListener('DOMContentLoaded', () => {
             const hasVoiceover = !!(state.voiceoverRecorded && state.voiceoverBlob);
             const hasBgMusic = Array.isArray(state.bgMusicTracks) && state.bgMusicTracks.length > 0;
             const hasExtraTracks = Array.isArray(state.extraTracks) && state.extraTracks.some(t => t.type === 'audio' && (t.clips || []).length > 0);
-            const hasExtraAudio = hasVoiceover || hasBgMusic || hasExtraTracks;
+            const hasAudioEffects = !!(state.isNoiseCancelActive || state.isAiDenoiseActive || (state.videoVoiceChanger && state.videoVoiceChanger !== 'normal'));
+            const hasExtraAudio = hasVoiceover || hasBgMusic || hasExtraTracks || hasAudioEffects;
 
             if (hasExtraAudio && window.renderAudioOffline) {
                 try {
@@ -639,6 +658,16 @@ document.addEventListener('DOMContentLoaded', () => {
             const defaultFilename = `video_edited_${timestamp}.mp4`;
 
             
+            // --- Build a map of clipId -> globalTimelineStartSec for clip-relative overlay offsets ---
+            const _clipGlobalStartMap = {};
+            if (typeof window.getClipsTimelineSlots === 'function') {
+                try {
+                    window.getClipsTimelineSlots().forEach(slot => {
+                        _clipGlobalStartMap[slot.clipId] = slot.start;
+                    });
+                } catch (_) {}
+            }
+
             // --- Collect Text Overlays for Ultra-Fast FFmpeg drawtext ---
             const textOverlaysPayload = (Array.isArray(state.textOverlays) ? state.textOverlays : [])
                 .filter(t => t && t.text && (!t.animStyle || t.animStyle === 'none' || t.animStyle === '')
@@ -648,19 +677,26 @@ document.addEventListener('DOMContentLoaded', () => {
                            && (!t.curve || t.curve === 0)
                            && (!t.curvePoints || t.curvePoints.length === 0)
                            && t.visualTemplate === 'standard')
-                .map(t => ({
-                    text: String(t.text || ''),
-                    x: typeof t.x === 'number' ? t.x : 0.5,
-                    y: typeof t.y === 'number' ? t.y : 0.5,
-                    fontSize: Math.round(t.fontSize || 36),
-                    color: t.color || '#ffffff',
-                    isBold: !!t.isBold,
-                    isItalic: !!t.isItalic,
-                    font: t.font || 'Arial',
-                    startSec: typeof t.startSec === 'number' ? t.startSec : 0,
-                    endSec: typeof t.endSec === 'number' ? t.endSec : 9999,
-                    clipId: t.clipId || 'all'
-                }));
+                .map(t => {
+                    const tClipGlobalOff = (t.clipId && t.clipId !== 'all')
+                        ? (_clipGlobalStartMap[t.clipId] || 0)
+                        : 0;
+                    const tStartGlobal = Math.max(0, (typeof t.startSec === 'number' ? t.startSec : 0) + tClipGlobalOff);
+                    const tEndGlobal   = Math.max(tStartGlobal + 0.1, (typeof t.endSec === 'number' ? t.endSec : 9999) + tClipGlobalOff);
+                    return {
+                        text: String(t.text || ''),
+                        x: typeof t.x === 'number' ? t.x : 0.5,
+                        y: typeof t.y === 'number' ? t.y : 0.5,
+                        fontSize: Math.round(t.fontSize || 36),
+                        color: t.color || '#ffffff',
+                        isBold: !!t.isBold,
+                        isItalic: !!t.isItalic,
+                        font: t.font || 'Arial',
+                        startSec: tStartGlobal,
+                        endSec: tEndGlobal,
+                        clipId: t.clipId || 'all'
+                    };
+                });
 
             // --- Collect Extra Track Image/Video overlays for Ultra-Fast FFmpeg overlay ---
             const extraTracksPayload = [];
@@ -723,38 +759,83 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
             }
 
-// --- Map Active Branding Overlays & Watermark Logo into Ultra-Fast Render ---
+// --- Map Active Branding Overlays, B-Roll Images & Watermark Logo into Ultra-Fast Render ---
             if (Array.isArray(state.brollOverlays)) {
                 for (let bi = 0; bi < state.brollOverlays.length; bi++) {
                     const b = state.brollOverlays[bi];
                     if (!b) continue;
-                    let bFilePath = '';
-                    if (b.filePath && (b.filePath.endsWith('.gif') || b.filePath.endsWith('.png'))) {
-                        bFilePath = b.filePath;
-                    } else if (b.name && /logo/i.test(b.name)) {
-                        bFilePath = 'assets/branding/logo.gif';
-                    } else if (b.name && /tutorial/i.test(b.name)) {
-                        bFilePath = 'assets/branding/banner_tutorial.gif';
-                    } else if (b.name && /helpline|contact/i.test(b.name)) {
-                        bFilePath = 'assets/branding/banner_contact.gif';
+                    let bFilePath = b.filePath || (b.file && b.file.path) || '';
+                    if (!bFilePath && b.name) {
+                        if (/logo/i.test(b.name)) bFilePath = 'assets/branding/logo.gif';
+                        else if (/tutorial/i.test(b.name)) bFilePath = 'assets/branding/banner_tutorial.gif';
+                        else if (/helpline|contact/i.test(b.name)) bFilePath = 'assets/branding/banner_contact.gif';
                     }
-                    if (bFilePath) {
-                        const bW = Math.max(0.08, Math.min(1.0, (b.size || 20) / 100));
-                        const bX = Math.max(0, Math.min(1, (b.x !== undefined ? b.x : 0.5) + bW / 2));
-                        const bY = Math.max(0, Math.min(1, (b.y !== undefined ? b.y : 0.5) + (bW * 0.3) / 2));
+                    let bBase64 = null;
+                    if (!bFilePath) {
+                        // imageImg is the property name set in editor.js for brollOverlay images
+                        const bImg = b.imageImg || b.img || null;
+                        if (bImg && bImg.src && bImg.src.startsWith('data:')) {
+                            bBase64 = bImg.src;
+                        } else if (bImg && bImg.complete && bImg.naturalWidth > 0) {
+                            try {
+                                const tempC = document.createElement('canvas');
+                                tempC.width = bImg.naturalWidth;
+                                tempC.height = bImg.naturalHeight;
+                                const tctx = tempC.getContext('2d');
+                                tctx.drawImage(bImg, 0, 0);
+                                bBase64 = tempC.toDataURL('image/png');
+                            } catch (_) {}
+                        } else if (b.file && typeof FileReader !== 'undefined') {
+                            try {
+                                bBase64 = await new Promise(res => {
+                                    const r = new FileReader();
+                                    r.onloadend = () => res(r.result);
+                                    r.readAsDataURL(b.file);
+                                });
+                            } catch (_) {}
+                        }
+                    }
+
+                    if (bFilePath || bBase64) {
+                        const bSizePercent = (typeof b.size === 'number' ? b.size : 100);
+                        const isFullscreen100 = (b.mode === 'fullscreen' && bSizePercent >= 99.9 && !b._fsPosSet);
+                        const bW = Math.max(0.05, Math.min(1.0, bSizePercent / 100));
+
+                        // Exact top-left normalized coordinates matching editor canvas (boxX = b.x * canvasW, boxY = b.y * canvasH)
+                        const bX = (typeof b.x === 'number') ? b.x : (isFullscreen100 ? 0 : 0.05);
+                        const bY = (typeof b.y === 'number') ? b.y : (isFullscreen100 ? 0 : 0.5);
+
+                        // GIF files need special FFmpeg handling (ignore_loop, palette)
+                        const bIsGif = b.type === 'gif' || /\.gif$/i.test(b.name || '') || /\.gif$/i.test(bFilePath || '');
+
+                        // Convert clip-relative startSec/endSec → global timeline absolute seconds.
+                        // brollOverlay.clipId tells us which clip the overlay belongs to.
+                        // If clipId === 'all', the times are already global (whole-video overlay).
+                        const bClipGlobalOff = (b.clipId && b.clipId !== 'all')
+                            ? (_clipGlobalStartMap[b.clipId] || 0)
+                            : 0;
+                        const bStartGlobal = Math.max(0, (typeof b.startSec === 'number' ? b.startSec : 0) + bClipGlobalOff);
+                        const bEndGlobal   = Math.max(bStartGlobal + 0.1, (typeof b.endSec === 'number' ? b.endSec : totalDuration) + bClipGlobalOff);
+                        const bDur         = bEndGlobal - bStartGlobal;
+
                         extraTracksPayload.push({
-                            type: 'image',
-                            name: b.name || `branding_${bi}.gif`,
+                            type: bIsGif ? 'gif' : 'image',
+                            name: b.name || `broll_${bi}.png`,
                             filePath: bFilePath,
-                            base64: null,
-                            timelineOffset: typeof b.startSec === 'number' ? b.startSec : 0,
+                            base64: bBase64,
+                            timelineOffset: bStartGlobal,
                             sourceStart: 0,
-                            sourceEnd: typeof b.endSec === 'number' ? b.endSec : totalDuration,
+                            sourceEnd: bDur,
                             duration: totalDuration,
+                            posX: bX,
+                            posY: bY,
+                            posW: bW,
+                            isTopLeft: true,
+                            hasTransform: !isFullscreen100,
+                            opacity: (typeof b.opacity === 'number' ? b.opacity / 100 : 1.0),
                             transformX: bX,
                             transformY: bY,
                             transformW: bW,
-                            hasTransform: true,
                             volume: 1.0,
                             design: 'standard'
                         });
@@ -767,30 +848,62 @@ document.addEventListener('DOMContentLoaded', () => {
                 let logoPath = '';
                 if (state.logoFile && state.logoFile.path) {
                     logoPath = state.logoFile.path;
-                } else if (state.logoFile && /logo\.gif/i.test(state.logoFile.name)) {
+                } else if (state.logoFile && window.electronAPI && typeof window.electronAPI.getPathForFile === 'function') {
+                    try {
+                        logoPath = window.electronAPI.getPathForFile(state.logoFile) || '';
+                    } catch (_) {}
+                }
+                if (!logoPath && state.logoFile && /logo\.gif/i.test(state.logoFile.name)) {
                     logoPath = 'assets/branding/logo.gif';
-                } else if (state.logoFile && /logo\.png/i.test(state.logoFile.name)) {
+                } else if (!logoPath && state.logoFile && /logo\.png/i.test(state.logoFile.name)) {
                     logoPath = 'assets/branding/logo.png';
-                } else if (state.logoGifParsed) {
+                } else if (!logoPath && state.logoGifParsed) {
                     logoPath = 'assets/branding/logo.gif';
                 }
-                if (logoPath) {
-                    const lW = Math.max(0.05, Math.min(0.5, (state.logoSize || 18) / 100));
-                    const lX = Math.max(0, Math.min(1, (state.logoX !== undefined ? state.logoX : 0.77) + lW / 2));
-                    const lY = Math.max(0, Math.min(1, (state.logoY !== undefined ? state.logoY : 0.08) + lW / 2));
+
+                let logoBase64 = null;
+                if (!logoPath && state.logoImg) {
+                    if (state.logoImg.src && state.logoImg.src.startsWith('data:')) {
+                        logoBase64 = state.logoImg.src;
+                    } else if (state.logoImg.complete && state.logoImg.naturalWidth > 0) {
+                        try {
+                            const tempC = document.createElement('canvas');
+                            tempC.width = state.logoImg.naturalWidth;
+                            tempC.height = state.logoImg.naturalHeight;
+                            const tctx = tempC.getContext('2d');
+                            tctx.drawImage(state.logoImg, 0, 0);
+                            logoBase64 = tempC.toDataURL('image/png');
+                        } catch (_) {}
+                    }
+                }
+
+                if (logoPath || logoBase64) {
+                    const lW = Math.max(0.02, Math.min(1.0, (state.logoSize || 18) / 100));
+                    // Exact top-left normalized coordinates matching editor canvas (x = state.logoX * canvasW, y = state.logoY * canvasH)
+                    const lX = typeof state.logoX === 'number' ? state.logoX : 0.77;
+                    const lY = typeof state.logoY === 'number' ? state.logoY : 0.08;
+                    const lOpacity = typeof state.logoOpacity === 'number' ? state.logoOpacity : 1.0;
+                    const logoName = (state.logoFile && state.logoFile.name) || 'logo.gif';
+                    const logoIsGif = /\.gif$/i.test(logoPath) || /\.gif$/i.test(logoName) || !!state.logoGifParsed;
+
                     extraTracksPayload.push({
-                        type: 'image',
-                        name: (state.logoFile && state.logoFile.name) || 'logo.gif',
+                        type: logoIsGif ? 'gif' : 'image',
+                        name: logoName,
                         filePath: logoPath,
-                        base64: null,
+                        base64: logoBase64,
                         timelineOffset: 0,
                         sourceStart: 0,
                         sourceEnd: totalDuration,
                         duration: totalDuration,
+                        posX: lX,
+                        posY: lY,
+                        posW: lW,
+                        isTopLeft: true,
+                        hasTransform: true,
+                        opacity: lOpacity,
                         transformX: lX,
                         transformY: lY,
                         transformW: lW,
-                        hasTransform: true,
                         volume: 1.0,
                         design: 'standard'
                     });

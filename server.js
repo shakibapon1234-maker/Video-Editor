@@ -1460,8 +1460,14 @@ app.post('/api/fast-direct-render', express.json({ limit: '2048mb' }), async (re
                     let etPath = '';
                     if (et.filePath && fs.existsSync(et.filePath)) {
                         etPath = et.filePath;
-                    } else if (et.base64) {
-                        const ext = et.type === 'image' ? '.jpg' : '.mp4';
+                    } else if (et.filePath) {
+                        const candidate = path.resolve(__dirname, et.filePath);
+                        if (fs.existsSync(candidate)) etPath = candidate;
+                    }
+                    if (!etPath && et.base64) {
+                        let ext = '.mp4';
+                        if (et.type === 'gif') ext = '.gif';
+                        else if (et.type === 'image') ext = '.png';
                         etPath = path.join(tempDir, `extra_${eti}${ext}`);
                         const cleanB64 = et.base64.replace(/^data:[^;]+;base64,/, '');
                         fs.writeFileSync(etPath, Buffer.from(cleanB64, 'base64'));
@@ -1482,36 +1488,59 @@ app.post('/api/fast-direct-render', express.json({ limit: '2048mb' }), async (re
                     const etDur = etSrcEnd - etSrcStart;
                     const etEnd = etStart + etDur;
 
-                    // Calculate pixel position from normalized transform
+                    // Calculate pixel position: support exact Top-Left (matching Canvas coordinate system)
+                    // or legacy center-anchored positioning.
                     const hasTransform = !!et.hasTransform;
-                    const cx = typeof et.transformX === 'number' ? et.transformX : 0.5;
-                    const cy = typeof et.transformY === 'number' ? et.transformY : 0.5;
-                    const cw = Math.max(0.05, typeof et.transformW === 'number' ? et.transformW : 1.0);
+                    const isTopLeft = !!et.isTopLeft || (typeof et.posX === 'number' && typeof et.posY === 'number');
+
+                    const cw = Math.max(0.02, typeof et.posW === 'number' ? et.posW : (typeof et.transformW === 'number' ? et.transformW : 1.0));
                     const overlayW = Math.round(cw * targetW / 2) * 2;
-                    const overlayPos = hasTransform
-                        ? `(W*${cx.toFixed(4)}-w/2):(H*${cy.toFixed(4)}-h/2)`
-                        : '0:0';
+
+                    let overlayPos = '0:0';
+                    if (isTopLeft) {
+                        // Exact top-left normalized coordinates (0,0 is top-left, matching Canvas exactly)
+                        const px = Math.max(-0.5, Math.min(1.5, typeof et.posX === 'number' ? et.posX : (et.transformX || 0)));
+                        const py = Math.max(-0.5, Math.min(1.5, typeof et.posY === 'number' ? et.posY : (et.transformY || 0)));
+                        overlayPos = `(W*${px.toFixed(4)}):(H*${py.toFixed(4)})`;
+                    } else if (hasTransform) {
+                        const cx = typeof et.transformX === 'number' ? et.transformX : 0.5;
+                        const cy = typeof et.transformY === 'number' ? et.transformY : 0.5;
+                        overlayPos = `(W*${cx.toFixed(4)}-w/2):(H*${cy.toFixed(4)}-h/2)`;
+                    }
+
+                    const opacity = (typeof et.opacity === 'number' && et.opacity >= 0 && et.opacity <= 1.0) ? et.opacity : 1.0;
+                    const opacityFilter = (opacity < 0.99) ? `,colorchannelmixer=aa=${opacity.toFixed(2)}` : '';
 
                     const nextLabel = `[etv_${eti}]`;
                     const scaledLabel = `[etscaled_${eti}]`;
 
-                    if (et.type === 'image') {
-                        // Static image: loop it indefinitely across the timeline
+                    if (et.type === 'gif') {
+                        // Animated GIF: scale with lanczos + format=rgba + optional opacity
+                        // GIF inputs are added with -ignore_loop 0 -stream_loop -1 via inputOptions
                         if (hasTransform) {
-                            filterParts.push(`[${etInputIdx}:v]loop=loop=-1:size=1:start=0,scale=${overlayW}:-2:flags=lanczos${scaledLabel}`);
+                            filterParts.push(`[${etInputIdx}:v]scale=${overlayW}:-2:flags=lanczos,format=rgba${opacityFilter}${scaledLabel}`);
+                            filterParts.push(`${finalVideoLabel}${scaledLabel}overlay=${overlayPos}:enable='between(t,${etStart.toFixed(3)},${etEnd.toFixed(3)})'${nextLabel}`);
+                        } else {
+                            filterParts.push(`[${etInputIdx}:v]scale=${targetW}:${targetH}:force_original_aspect_ratio=increase,crop=${targetW}:${targetH},format=rgba${opacityFilter},setsar=1${scaledLabel}`);
+                            filterParts.push(`${finalVideoLabel}${scaledLabel}overlay=0:0:enable='between(t,${etStart.toFixed(3)},${etEnd.toFixed(3)})'${nextLabel}`);
+                        }
+                    } else if (et.type === 'image') {
+                        // Static image: loop + monotonic PTS + scale + format=rgba + optional opacity
+                        if (hasTransform) {
+                            filterParts.push(`[${etInputIdx}:v]loop=loop=-1:size=1:start=0,setpts=N/FRAME_RATE/TB,scale=${overlayW}:-2:flags=lanczos,format=rgba${opacityFilter}${scaledLabel}`);
                             filterParts.push(`${finalVideoLabel}${scaledLabel}overlay=${overlayPos}:enable='between(t,${etStart.toFixed(3)},${etEnd.toFixed(3)})'${nextLabel}`);
                         } else {
                             // Full-cover: scale to fill canvas and center-crop
-                            filterParts.push(`[${etInputIdx}:v]loop=loop=-1:size=1:start=0,scale=${targetW}:${targetH}:force_original_aspect_ratio=increase,crop=${targetW}:${targetH},setsar=1${scaledLabel}`);
+                            filterParts.push(`[${etInputIdx}:v]loop=loop=-1:size=1:start=0,setpts=N/FRAME_RATE/TB,scale=${targetW}:${targetH}:force_original_aspect_ratio=increase,crop=${targetW}:${targetH},format=rgba${opacityFilter},setsar=1${scaledLabel}`);
                             filterParts.push(`${finalVideoLabel}${scaledLabel}overlay=0:0:enable='between(t,${etStart.toFixed(3)},${etEnd.toFixed(3)})'${nextLabel}`);
                         }
                     } else {
-                        // Video clip: trim, then overlay
+                        // Video clip: trim, offset PTS, scale, format=rgba
                         if (hasTransform) {
-                            filterParts.push(`[${etInputIdx}:v]trim=start=${etSrcStart.toFixed(3)}:end=${etSrcEnd.toFixed(3)},setpts=PTS-STARTPTS,scale=${overlayW}:-2:flags=lanczos${scaledLabel}`);
+                            filterParts.push(`[${etInputIdx}:v]trim=start=${etSrcStart.toFixed(3)}:end=${etSrcEnd.toFixed(3)},setpts=PTS-STARTPTS+${etStart.toFixed(3)}/TB,scale=${overlayW}:-2:flags=lanczos,format=rgba${opacityFilter}${scaledLabel}`);
                             filterParts.push(`${finalVideoLabel}${scaledLabel}overlay=${overlayPos}:enable='between(t,${etStart.toFixed(3)},${etEnd.toFixed(3)})'${nextLabel}`);
                         } else {
-                            filterParts.push(`[${etInputIdx}:v]trim=start=${etSrcStart.toFixed(3)}:end=${etSrcEnd.toFixed(3)},setpts=PTS-STARTPTS,scale=${targetW}:${targetH}:force_original_aspect_ratio=increase,crop=${targetW}:${targetH},setsar=1${scaledLabel}`);
+                            filterParts.push(`[${etInputIdx}:v]trim=start=${etSrcStart.toFixed(3)}:end=${etSrcEnd.toFixed(3)},setpts=PTS-STARTPTS+${etStart.toFixed(3)}/TB,scale=${targetW}:${targetH}:force_original_aspect_ratio=increase,crop=${targetW}:${targetH},format=rgba${opacityFilter},setsar=1${scaledLabel}`);
                             filterParts.push(`${finalVideoLabel}${scaledLabel}overlay=0:0:enable='between(t,${etStart.toFixed(3)},${etEnd.toFixed(3)})'${nextLabel}`);
                         }
                     }
@@ -1615,7 +1644,15 @@ app.post('/api/fast-direct-render', express.json({ limit: '2048mb' }), async (re
                     cmd.input(audioPath);
                 }
                 // Add extra track image/video inputs
-                extraTrackInputPaths.forEach(et => cmd.input(et.path));
+                // GIF files need -ignore_loop 0 and -stream_loop -1 so they animate properly
+                extraTrackInputPaths.forEach(et => {
+                    const isGifInput = et.meta && et.meta.type === 'gif';
+                    if (isGifInput) {
+                        cmd.input(et.path).inputOptions(['-ignore_loop', '0', '-stream_loop', '-1']);
+                    } else {
+                        cmd.input(et.path);
+                    }
+                });
 
                 const estDuration = Math.max(0.1, parseFloat(totalDuration) || 0);
 
@@ -2074,6 +2111,128 @@ app.post('/api/audio-to-text', (req, res) => {
                     stdout: stdout,
                     stderr: stderr
                 });
+            }
+        });
+    });
+
+    req.pipe(out);
+});
+
+// ==========================================
+// Standalone Silence Muter & Voice Gate API
+// Fast lossless video stream copy (-c:v copy) + agate audio filter
+// Supports: MP4, MKV, MOV, WEBM, AVI, MP3, WAV, M4A, AAC, etc.
+// ==========================================
+app.post('/api/silence-muter-direct', (req, res) => {
+    const { filePath, filename, threshold } = req.body || {};
+    if (!filePath || !fs.existsSync(filePath)) {
+        return res.status(400).json({ error: 'ফাইলটি ডিস্কে পাওয়া যায়নি।' });
+    }
+
+    const originalName = filename || path.basename(filePath);
+    const thresholdDb = parseFloat(threshold || '-38') || -38;
+    const safeExt = (path.extname(originalName) || '.mp4').replace(/[^\.\w]/g, '').slice(0, 8) || '.mp4';
+    const baseName = path.basename(originalName, safeExt);
+
+    let outFilename = `${baseName}_silence_muted${safeExt}`;
+    let finalDest = path.join(OUTPUT_DIR, outFilename);
+    let counter = 1;
+    while (fs.existsSync(finalDest)) {
+        outFilename = `${baseName}_silence_muted_${counter}${safeExt}`;
+        finalDest = path.join(OUTPUT_DIR, outFilename);
+        counter++;
+    }
+
+    const scriptPath = path.join(__dirname, 'audio_silence_muter.py');
+    const proc = cp.spawn('python', [scriptPath, filePath, String(thresholdDb)], {
+        cwd: __dirname,
+        env: { ...process.env, PYTHONIOENCODING: 'utf-8' }
+    });
+
+    let stdout = '';
+    let stderr = '';
+    proc.stdout.on('data', d => { stdout += d.toString(); });
+    proc.stderr.on('data', d => { stderr += d.toString(); });
+
+    proc.on('close', code => {
+        const inputDir = path.dirname(filePath);
+        const generatedPath = path.join(inputDir, `${baseName}_silence_muted${safeExt}`);
+
+        if (fs.existsSync(generatedPath)) {
+            try { fs.copyFileSync(generatedPath, finalDest); } catch (_) {}
+            res.json({
+                success: true,
+                downloadUrl: `/exports/${encodeURIComponent(outFilename)}`,
+                filename: outFilename,
+                localPath: generatedPath
+            });
+        } else {
+            console.error('silence-muter-direct failed:', stdout, stderr);
+            res.status(500).json({ error: 'প্রসেসিং সম্পন্ন করা যায়নি।', details: stderr || stdout });
+        }
+    });
+});
+
+app.post('/api/silence-muter', (req, res) => {
+    const originalName = decodeURIComponent(req.query.filename || 'media.mp4');
+    const thresholdDb = parseFloat(req.query.threshold || '-38') || -38;
+    const safeExt = (path.extname(originalName) || '.mp4').replace(/[^\.\w]/g, '').slice(0, 8) || '.mp4';
+    const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'sf_silence_muter_'));
+    const inputPath = path.join(tempDir, `input_${Date.now()}${safeExt}`);
+    const out = fs.createWriteStream(inputPath);
+    let failed = false;
+
+    const fail = (err) => {
+        if (failed) return;
+        failed = true;
+        console.error('silence-muter error:', err);
+        try { out.destroy(); } catch (_) {}
+        try { fs.rmSync(tempDir, { recursive: true, force: true }); } catch (_) {}
+        if (!res.headersSent) res.status(500).json({ error: String(err && err.message ? err.message : err) });
+    };
+
+    req.on('error', fail);
+    out.on('error', fail);
+    out.on('finish', () => {
+        if (failed) return;
+        const scriptPath = path.join(__dirname, 'audio_silence_muter.py');
+        const proc = cp.spawn('python', [scriptPath, inputPath, String(thresholdDb)], {
+            cwd: __dirname,
+            env: { ...process.env, PYTHONIOENCODING: 'utf-8' }
+        });
+
+        let stdout = '';
+        let stderr = '';
+        proc.stdout.on('data', d => { stdout += d.toString(); });
+        proc.stderr.on('data', d => { stderr += d.toString(); });
+
+        proc.on('close', code => {
+            const base = inputPath.replace(/\.[^/.]+$/, "");
+            const outPath = `${base}_silence_muted${safeExt}`;
+
+            if (fs.existsSync(outPath)) {
+                const baseName = path.basename(originalName, safeExt);
+                let outFilename = `${baseName}_silence_muted${safeExt}`;
+                let finalDest = path.join(OUTPUT_DIR, outFilename);
+                let counter = 1;
+                while (fs.existsSync(finalDest)) {
+                    outFilename = `${baseName}_silence_muted_${counter}${safeExt}`;
+                    finalDest = path.join(OUTPUT_DIR, outFilename);
+                    counter++;
+                }
+
+                fs.copyFileSync(outPath, finalDest);
+                try { fs.rmSync(tempDir, { recursive: true, force: true }); } catch (_) {}
+
+                res.json({
+                    success: true,
+                    downloadUrl: `/exports/${encodeURIComponent(outFilename)}`,
+                    filename: outFilename
+                });
+            } else {
+                console.error('silence-muter failed. Stdout:', stdout, 'Stderr:', stderr);
+                try { fs.rmSync(tempDir, { recursive: true, force: true }); } catch (_) {}
+                res.status(500).json({ error: 'প্রসেসিং সম্পন্ন করা যায়নি। ফাইলটি চেক করুন।' });
             }
         });
     });
