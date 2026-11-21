@@ -500,6 +500,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 const clipObj = {
                     id: c.id,
                     name: c.name || `clip_${i + 1}.mp4`,
+                    size: (c.file && c.file.size) || c.size || 0,
                     start: c.start || 0,
                     end: c.end || c.duration,
                     speed: c.speed || 1,
@@ -640,8 +641,8 @@ document.addEventListener('DOMContentLoaded', () => {
                         y: ry,
                         w: rw,
                         h: rh,
-                        startSec: typeof r.startSec === 'number' ? r.startSec : 0,
-                        endSec: typeof r.endSec === 'number' ? r.endSec : 999999,
+                        startSec: typeof r.startSec === 'number' ? r.startSec : (typeof r.start === 'number' ? r.start : 0),
+                        endSec: typeof r.endSec === 'number' ? r.endSec : (typeof r.end === 'number' ? r.end : 999999),
                         intensity: r.intensity || 25
                     };
                 })

@@ -256,8 +256,12 @@ if (!gotLock) {
             const localDataDir = process.env.SF_DATA_DIR || __dirname;
             const candidatePaths = [
                 path.join(localDataDir, 'exports', filenameOnServer),
+                path.join(localDataDir, 'userData', 'exports', filenameOnServer),
+                path.join(path.dirname(localDataDir), 'userData', 'exports', filenameOnServer),
+                path.join(path.dirname(localDataDir), 'exports', filenameOnServer),
                 path.join(__dirname, 'exports', filenameOnServer),
                 path.join(localDataDir, 'exports', cleanName),
+                path.join(localDataDir, 'userData', 'exports', cleanName),
                 path.join(__dirname, 'exports', cleanName)
             ];
 

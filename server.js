@@ -465,7 +465,7 @@ function getFfmpegEncodingOptions(quality = '1080p', enhanceQuality = false, isD
     let maxrate = '12M';
     let bufsize = '20M';
     let audioBitrate = '192k';
-    let preset = isDirect ? 'fast' : (enhanceQuality ? 'slow' : 'medium');
+    let preset = isDirect ? 'veryfast' : (enhanceQuality ? 'slow' : 'medium');
 
     if (q === '480p') {
         crf = enhanceQuality ? 20 : 22;
@@ -1335,10 +1335,48 @@ app.post('/api/fast-direct-render', express.json({ limit: '2048mb' }), async (re
                         if (fs.existsSync(candidate)) resolvedClipPath = candidate;
                     }
                     if (!resolvedClipPath) {
+                        const baseName = path.basename(c.filePath || c.name || '');
+                        const candidates = [
+                            path.join(require('os').homedir(), 'Downloads', baseName),
+                            path.join(OUTPUT_DIR, baseName),
+                            path.join(DATA_DIR, 'exports', baseName),
+                            path.join(__dirname, 'assets', 'branding', baseName)
+                        ];
+                        for (const cand of candidates) {
+                            if (cand && fs.existsSync(cand)) {
+                                resolvedClipPath = cand;
+                                break;
+                            }
+                        }
+                    }
+                    if (!resolvedClipPath) {
                         if (c.name && /intro/i.test(c.name) && fs.existsSync(path.join(__dirname, 'assets', 'branding', 'intro.mp4'))) {
                             resolvedClipPath = path.join(__dirname, 'assets', 'branding', 'intro.mp4');
                         } else if (c.name && /outro/i.test(c.name) && fs.existsSync(path.join(__dirname, 'assets', 'branding', 'outro.mp4'))) {
                             resolvedClipPath = path.join(__dirname, 'assets', 'branding', 'outro.mp4');
+                        }
+                    }
+                    if (!resolvedClipPath && c.size) {
+                        const blobBase = path.join(DATA_DIR, 'IndexedDB', 'http_localhost_4000.indexeddb.blob');
+                        if (fs.existsSync(blobBase)) {
+                            const findBlobBySize = (dir, targetSize) => {
+                                try {
+                                    const entries = fs.readdirSync(dir, { withFileTypes: true });
+                                    for (const entry of entries) {
+                                        const full = path.join(dir, entry.name);
+                                        if (entry.isDirectory()) {
+                                            const sub = findBlobBySize(full, targetSize);
+                                            if (sub) return sub;
+                                        } else if (entry.isFile()) {
+                                            const st = fs.statSync(full);
+                                            if (st.size === targetSize) return full;
+                                        }
+                                    }
+                                } catch (_) {}
+                                return null;
+                            };
+                            const matchBlob = findBlobBySize(blobBase, c.size);
+                            if (matchBlob) resolvedClipPath = matchBlob;
                         }
                     }
                     if (resolvedClipPath && fs.existsSync(resolvedClipPath)) {
@@ -1431,8 +1469,8 @@ app.post('/api/fast-direct-render', express.json({ limit: '2048mb' }), async (re
 
                         if (rw < 4 || rh < 4) return;
 
-                        const sSec = Math.max(0, parseFloat(br.startSec) || 0);
-                        const eSec = Math.max(sSec + 0.05, parseFloat(br.endSec) || 999999);
+                        const sSec = Math.max(0, parseFloat(br.startSec !== undefined ? br.startSec : (br.start !== undefined ? br.start : 0)) || 0);
+                        const eSec = Math.max(sSec + 0.05, parseFloat(br.endSec !== undefined ? br.endSec : (br.end !== undefined ? br.end : 999999)) || 999999);
                         const rawIntensity = parseFloat(br.intensity) || 25;
                         const blurSize = Math.max(8, Math.min(Math.min(rw, rh), Math.round(rawIntensity * (targetW / 1280))));
 
