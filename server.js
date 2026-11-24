@@ -1474,10 +1474,59 @@ app.post('/api/fast-direct-render', express.json({ limit: '2048mb' }), async (re
                         const rawIntensity = parseFloat(br.intensity) || 25;
                         const blurSize = Math.max(8, Math.min(Math.min(rw, rh), Math.round(rawIntensity * (targetW / 1280))));
 
+                        // --- Tracking Keyframes: build dynamic x/y FFmpeg expressions ---
+                        const kfs = Array.isArray(br.trackKeyframes) && br.trackKeyframes.length >= 2
+                            ? br.trackKeyframes.slice().sort((a, b) => a.t - b.t)
+                            : null;
+
+                        let cropXExpr, cropYExpr, overlayXExpr, overlayYExpr;
+
+                        if (kfs) {
+                            // Build piecewise-linear FFmpeg expression for x and y
+                            // FFmpeg expression: if(lt(t,t1), lerp(x0,x1,t), if(lt(t,t2), lerp(x1,x2,t), ...))
+                            // We use: x0 + (x1-x0)*(t-t0)/(t1-t0) clamped to segment bounds
+                            const buildExpr = (axis) => {
+                                // Build from innermost outward (last segment first)
+                                let expr = String(Math.round(kfs[kfs.length - 1][axis] / 2) * 2);
+                                for (let ki = kfs.length - 2; ki >= 0; ki--) {
+                                    const a = kfs[ki], b = kfs[ki + 1];
+                                    const ax = Math.round(a[axis] / 2) * 2;
+                                    const bx = Math.round(b[axis] / 2) * 2;
+                                    const span = b.t - a.t;
+                                    if (span <= 0) continue;
+                                    // Linear interp: ax + (bx-ax)*(t-at)/span
+                                    const delta = bx - ax;
+                                    const interpExpr = delta === 0
+                                        ? String(ax)
+                                        : `(${ax}+${delta}*(t-${a.t.toFixed(3)})/${span.toFixed(3)})`;
+                                    expr = `if(between(t,${a.t.toFixed(3)},${b.t.toFixed(3)}),${interpExpr},${expr})`;
+                                }
+                                // Before first keyframe: use first kf value
+                                const firstVal = Math.round(kfs[0][axis] / 2) * 2;
+                                expr = `if(lt(t,${kfs[0].t.toFixed(3)}),${firstVal},${expr})`;
+                                return expr;
+                            };
+                            cropXExpr = buildExpr('x');
+                            cropYExpr = buildExpr('y');
+                            overlayXExpr = cropXExpr;
+                            overlayYExpr = cropYExpr;
+                        } else {
+                            cropXExpr = String(rx);
+                            cropYExpr = String(ry);
+                            overlayXExpr = String(rx);
+                            overlayYExpr = String(ry);
+                        }
+
                         const nextVLabel = `[vblur_${validBlurCount}]`;
                         filterParts.push(`${currentVLabel}split=2[vb_${validBlurCount}][vc_${validBlurCount}]`);
-                        filterParts.push(`[vc_${validBlurCount}]crop=${rw}:${rh}:${rx}:${ry},avgblur=sizeX=${blurSize}:sizeY=${blurSize}[vbl_${validBlurCount}]`);
-                        filterParts.push(`[vb_${validBlurCount}][vbl_${validBlurCount}]overlay=${rx}:${ry}:enable='between(t,${sSec.toFixed(3)},${eSec.toFixed(3)})'${nextVLabel}`);
+                        if (kfs) {
+                            // Dynamic crop: use 'x' and 'y' as eval expressions
+                            filterParts.push(`[vc_${validBlurCount}]crop=${rw}:${rh}:${cropXExpr}:${cropYExpr}:exact=1,avgblur=sizeX=${blurSize}:sizeY=${blurSize}[vbl_${validBlurCount}]`);
+                            filterParts.push(`[vb_${validBlurCount}][vbl_${validBlurCount}]overlay=${overlayXExpr}:${overlayYExpr}:enable='between(t,${sSec.toFixed(3)},${eSec.toFixed(3)})'${nextVLabel}`);
+                        } else {
+                            filterParts.push(`[vc_${validBlurCount}]crop=${rw}:${rh}:${rx}:${ry},avgblur=sizeX=${blurSize}:sizeY=${blurSize}[vbl_${validBlurCount}]`);
+                            filterParts.push(`[vb_${validBlurCount}][vbl_${validBlurCount}]overlay=${rx}:${ry}:enable='between(t,${sSec.toFixed(3)},${eSec.toFixed(3)})'${nextVLabel}`);
+                        }
                         currentVLabel = nextVLabel;
                         validBlurCount++;
                     });
@@ -2276,6 +2325,148 @@ app.post('/api/silence-muter', (req, res) => {
     });
 
     req.pipe(out);
+});
+
+// ==========================================
+// Blur Template Tracking API
+// Accepts: { videoPath, templateBase64, regionX, regionY, regionW, regionH,
+//            startSec, endSec, searchMargin, sampleRate }
+// Returns job id; poll /api/blur-track/status/:jobId
+// ==========================================
+const blurTrackJobs = new Map();
+
+app.post('/api/blur-track/start', express.json({ limit: '20mb' }), (req, res) => {
+    try {
+        const {
+            videoPath, templateBase64,
+            regionX, regionY, regionW, regionH,
+            startSec = 0, endSec = 999999,
+            searchMargin = 400, sampleRate = 0.25
+        } = req.body || {};
+
+        if (!videoPath || !fs.existsSync(videoPath)) {
+            return res.status(400).json({ error: 'ভিডিও ফাইল পাওয়া যায়নি।' });
+        }
+        if (!templateBase64) {
+            return res.status(400).json({ error: 'Template image দেওয়া হয়নি।' });
+        }
+
+        // Write template PNG to temp file
+        const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'sf_blur_track_'));
+        const templatePath = path.join(tempDir, 'template.png');
+        const cleanB64 = templateBase64.replace(/^data:[^;]+;base64,/, '');
+        fs.writeFileSync(templatePath, Buffer.from(cleanB64, 'base64'));
+
+        const jobId = `blurtrack_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
+        const job = {
+            status: 'running',
+            percent: 0,
+            message: 'ট্র্যাকিং শুরু হচ্ছে...',
+            keyframes: [],
+            error: null,
+            process: null,
+            tempDir,
+            createdAt: Date.now()
+        };
+        blurTrackJobs.set(jobId, job);
+        setTimeout(() => blurTrackJobs.delete(jobId), 60 * 60 * 1000);
+
+        const scriptPath = path.join(__dirname, 'blur_template_track.py');
+        const args = [
+            scriptPath,
+            '--video', videoPath,
+            '--template', templatePath,
+            '--region-x', String(Math.round(regionX || 0)),
+            '--region-y', String(Math.round(regionY || 0)),
+            '--region-w', String(Math.round(regionW || 100)),
+            '--region-h', String(Math.round(regionH || 50)),
+            '--start-sec', String(parseFloat(startSec) || 0),
+            '--end-sec', String(parseFloat(endSec) || 999999),
+            '--search-margin', String(parseInt(searchMargin) || 400),
+            '--sample-rate', String(parseFloat(sampleRate) || 0.25),
+        ];
+
+        const pyProc = cp.spawn('python', args, {
+            cwd: __dirname,
+            windowsHide: true,
+            env: { ...process.env, PYTHONUTF8: '1', PYTHONIOENCODING: 'utf-8' }
+        });
+        job.process = pyProc;
+
+        let outputBuffer = '';
+        pyProc.stdout.on('data', (chunk) => {
+            const lines = chunk.toString().split('\n');
+            for (const line of lines) {
+                const trimmed = line.trim();
+                if (!trimmed) continue;
+                if (trimmed.startsWith('{') && trimmed.includes('"progress"')) {
+                    try {
+                        const parsed = JSON.parse(trimmed);
+                        job.percent = parsed.progress || job.percent;
+                        if (parsed.message) job.message = parsed.message;
+                    } catch (_) {}
+                } else {
+                    outputBuffer += trimmed + '\n';
+                }
+            }
+        });
+        pyProc.stderr.on('data', (d) => {
+            console.warn('[BlurTrack PyStderr]', d.toString().slice(0, 300));
+        });
+        pyProc.on('close', (code) => {
+            try { fs.rmSync(tempDir, { recursive: true, force: true }); } catch (_) {}
+            const startMarker = outputBuffer.indexOf('###RESULT_START###');
+            const endMarker = outputBuffer.indexOf('###RESULT_END###');
+            if (startMarker !== -1 && endMarker !== -1) {
+                const jsonStr = outputBuffer.slice(startMarker + 18, endMarker).trim();
+                try {
+                    const result = JSON.parse(jsonStr);
+                    if (result.status === 'success') {
+                        job.status = 'done';
+                        job.keyframes = result.keyframes || [];
+                        job.percent = 100;
+                        job.message = `সম্পন্ন! ${job.keyframes.length}টি ট্র্যাকিং পয়েন্ট।`;
+                    } else {
+                        job.status = 'error';
+                        job.error = result.error || 'অজানা ত্রুটি';
+                    }
+                } catch (e) {
+                    job.status = 'error';
+                    job.error = 'JSON parse error: ' + e.message;
+                }
+            } else {
+                job.status = code === 0 ? 'done' : 'error';
+                job.error = code !== 0 ? `Python exited with code ${code}` : null;
+            }
+        });
+
+        res.json({ ok: true, jobId });
+    } catch (err) {
+        console.error('[BlurTrack] Route error:', err);
+        res.status(500).json({ error: err.message });
+    }
+});
+
+app.get('/api/blur-track/status/:jobId', (req, res) => {
+    const job = blurTrackJobs.get(req.params.jobId);
+    if (!job) return res.status(404).json({ error: 'Job not found or expired.' });
+    res.json({
+        status: job.status,
+        percent: job.percent,
+        message: job.message,
+        keyframes: job.keyframes,
+        error: job.error
+    });
+});
+
+app.post('/api/blur-track/cancel/:jobId', (req, res) => {
+    const job = blurTrackJobs.get(req.params.jobId);
+    if (job) {
+        job.status = 'cancelled';
+        if (job.process) { try { job.process.kill('SIGKILL'); } catch (_) {} }
+        blurTrackJobs.delete(req.params.jobId);
+    }
+    res.json({ ok: true });
 });
 
 // Serve downloads folder

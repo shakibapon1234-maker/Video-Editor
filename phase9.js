@@ -2266,6 +2266,24 @@ document.addEventListener('DOMContentLoaded', () => {
                             rw = Math.max(4, Math.min(dims.w - rx, rw));
                             rh = Math.max(4, Math.min(dims.h - ry, rh));
 
+                            // Build tracking keyframes scaled to output pixel coords
+                            let trackKfs = null;
+                            if (Array.isArray(r.trackKeyframes) && r.trackKeyframes.length > 0) {
+                                trackKfs = r.trackKeyframes.map(kf => {
+                                    let kfRawX = kf.x !== undefined ? Number(kf.x) : rawX;
+                                    let kfRawY = kf.y !== undefined ? Number(kf.y) : rawY;
+                                    let kfRx = Math.round(outDrawX + kfRawX * outDrawW);
+                                    let kfRy = Math.round(outDrawY + kfRawY * outDrawH);
+                                    kfRx = Math.max(0, Math.min(dims.w - 4, kfRx));
+                                    kfRy = Math.max(0, Math.min(dims.h - 4, kfRy));
+                                    return {
+                                        t: typeof kf.t === 'number' ? kf.t : 0,
+                                        x: Math.floor(kfRx / 2) * 2,
+                                        y: Math.floor(kfRy / 2) * 2
+                                    };
+                                });
+                            }
+
                             return {
                                 x: Math.floor(rx / 2) * 2,
                                 y: Math.floor(ry / 2) * 2,
@@ -2273,7 +2291,8 @@ document.addEventListener('DOMContentLoaded', () => {
                                 h: Math.floor(rh / 2) * 2,
                                 startSec: typeof r.startSec === 'number' ? r.startSec : 0,
                                 endSec: typeof r.endSec === 'number' ? r.endSec : 999999,
-                                intensity: r.intensity || 25
+                                intensity: r.intensity || 25,
+                                trackKeyframes: trackKfs
                             };
                         })
                         .filter(Boolean);

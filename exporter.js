@@ -636,6 +636,18 @@ document.addEventListener('DOMContentLoaded', () => {
                     rw = Math.floor(rw / 2) * 2;
                     rh = Math.floor(rh / 2) * 2;
 
+                    // Export tracking keyframes scaled to output pixel coords
+                    let trackKfs = null;
+                    if (Array.isArray(r.trackKeyframes) && r.trackKeyframes.length > 0) {
+                        trackKfs = r.trackKeyframes.map(kf => {
+                            let kfRx = Math.round(outDrawX + Number(kf.x || rawX) * outDrawW);
+                            let kfRy = Math.round(outDrawY + Number(kf.y || rawY) * outDrawH);
+                            kfRx = Math.floor(Math.max(0, Math.min(targetW - 4, kfRx)) / 2) * 2;
+                            kfRy = Math.floor(Math.max(0, Math.min(targetH - 4, kfRy)) / 2) * 2;
+                            return { t: typeof kf.t === 'number' ? kf.t : 0, x: kfRx, y: kfRy };
+                        });
+                    }
+
                     return {
                         x: rx,
                         y: ry,
@@ -643,7 +655,8 @@ document.addEventListener('DOMContentLoaded', () => {
                         h: rh,
                         startSec: typeof r.startSec === 'number' ? r.startSec : (typeof r.start === 'number' ? r.start : 0),
                         endSec: typeof r.endSec === 'number' ? r.endSec : (typeof r.end === 'number' ? r.end : 999999),
-                        intensity: r.intensity || 25
+                        intensity: r.intensity || 25,
+                        trackKeyframes: trackKfs
                     };
                 })
                 .filter(Boolean);
